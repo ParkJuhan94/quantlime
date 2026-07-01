@@ -1,0 +1,6 @@
+rootProject.name = 'quantlab'
+
+include 'api'
+include 'core'
+include 'common'
+include 'event'
