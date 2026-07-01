@@ -1,0 +1,35 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: quantlab-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-quantlab}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-quantlab}
+    ports:
+      - "3308:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    restart: always
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --default-time-zone=+09:00
+
+  redis:
+    image: redis:7-alpine
+    container_name: quantlab-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: always
+
+volumes:
+  mysql_data:
+  redis_data:

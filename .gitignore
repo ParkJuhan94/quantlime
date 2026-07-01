@@ -1,0 +1,35 @@
+# Java
+build/
+*.class
+*.jar
+*.war
+
+# Gradle
+.gradle/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Generated
+**/src/main/generated/
+
+# Gradle build output
+**/build/
+
+# Python
+__pycache__/
+*.pyc
+venv/
+
+# Environment
+.env
+*.env.local
+
+# Node
+node_modules/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
