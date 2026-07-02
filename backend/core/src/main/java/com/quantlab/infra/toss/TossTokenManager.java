@@ -11,6 +11,7 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 @Slf4j
@@ -67,6 +68,8 @@ public class TossTokenManager {
             return response.accessToken();
         } catch (ExternalApiException e) {
             throw e;
+        } catch (HttpClientErrorException.TooManyRequests e) {
+            throw new ExternalApiException(TossApiErrorCode.RATE_LIMIT_EXCEEDED, e);
         } catch (Exception e) {
             throw new ExternalApiException(TossApiErrorCode.TOKEN_ISSUANCE_FAILED, e);
         }

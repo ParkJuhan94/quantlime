@@ -7,6 +7,7 @@ import com.quantlab.infra.toss.exception.TossApiErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 @Slf4j
@@ -45,6 +46,8 @@ public class TossApiClient {
             return response;
         } catch (ExternalApiException e) {
             throw e;
+        } catch (HttpClientErrorException.TooManyRequests e) {
+            throw new ExternalApiException(TossApiErrorCode.RATE_LIMIT_EXCEEDED, e);
         } catch (Exception e) {
             throw new ExternalApiException(TossApiErrorCode.CANDLE_INQUIRY_FAILED, e);
         }
@@ -70,6 +73,8 @@ public class TossApiClient {
             return response;
         } catch (ExternalApiException e) {
             throw e;
+        } catch (HttpClientErrorException.TooManyRequests e) {
+            throw new ExternalApiException(TossApiErrorCode.RATE_LIMIT_EXCEEDED, e);
         } catch (Exception e) {
             throw new ExternalApiException(TossApiErrorCode.PRICE_INQUIRY_FAILED, e);
         }
