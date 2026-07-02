@@ -21,32 +21,25 @@ public class DailyPriceService {
     private final TossApiClient tossApiClient;
 
     @Transactional
-    public void collectDailyPrice(String stockCode, LocalDate targetDate) {
-        if (dailyPriceRepository.existsByStockCodeAndTradeDate(stockCode, targetDate)) {
-            log.debug("이미 수집된 데이터: stockCode={}, date={}", stockCode, targetDate);
-            return;
-        }
-
+    public void collectDailyPrice(String stockCode) {
         TossCandleResponse response = tossApiClient.getDailyCandles(stockCode, 1, null);
 
         List<TossCandleResponse.TossCandle> candles = response.result().candles();
         if (candles == null || candles.isEmpty()) {
-            log.warn("시세 데이터 없음: stockCode={}, date={}", stockCode, targetDate);
+            log.warn("시세 데이터 없음: stockCode={}", stockCode);
             return;
         }
 
-        List<DailyPrice> prices = candles.stream()
-            .filter(c -> TossPriceMapper.toLocalDate(c.timestamp()).equals(targetDate))
-            .map(c -> TossPriceMapper.toDailyPrice(stockCode, c))
-            .toList();
+        TossCandleResponse.TossCandle latest = candles.get(0);
+        LocalDate tradeDate = TossPriceMapper.toLocalDate(latest.timestamp());
 
-        if (prices.isEmpty()) {
-            log.warn("대상 날짜 시세 없음: stockCode={}, date={}", stockCode, targetDate);
+        if (dailyPriceRepository.existsByStockCodeAndTradeDate(stockCode, tradeDate)) {
+            log.debug("이미 수집된 데이터: stockCode={}, date={}", stockCode, tradeDate);
             return;
         }
 
-        dailyPriceRepository.saveAll(prices);
-        log.info("일별 시세 수집 완료: stockCode={}, count={}", stockCode, prices.size());
+        dailyPriceRepository.save(TossPriceMapper.toDailyPrice(stockCode, latest));
+        log.info("일별 시세 수집 완료: stockCode={}, date={}", stockCode, tradeDate);
     }
 
     @Transactional(readOnly = true)
