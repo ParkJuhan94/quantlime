@@ -9,6 +9,8 @@ import com.quantlab.stock.repository.StockRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,5 +50,12 @@ public class StockMasterService {
     public void bulkRegisterStocks(List<Stock> stocks) {
         stockRepository.saveAll(stocks);
         log.info("종목 마스터 일괄 등록 완료: count={}", stocks.size());
+    }
+
+    @Transactional(readOnly = true)
+    public Slice<Stock> searchStocks(String keyword, Pageable pageable) {
+        String trimmedKeyword = keyword.trim();
+        return stockRepository.findByStockNameContainingIgnoreCaseOrStockCodeContaining(
+            trimmedKeyword, trimmedKeyword, pageable);
     }
 }

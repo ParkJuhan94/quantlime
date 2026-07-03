@@ -1,5 +1,6 @@
 package com.quantlab.common.exception;
 
+import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -20,6 +21,18 @@ public class GlobalExceptionHandler {
             .map(fieldError -> fieldError.getDefaultMessage())
             .orElse("잘못된 요청입니다.");
         log.warn("유효성 검증 실패: message={}", message);
+        return new ErrorResponseTemplate(message, "VALIDATION_ERROR");
+    }
+
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ErrorResponseTemplate handleConstraintViolationException(
+        ConstraintViolationException e) {
+        String message = e.getConstraintViolations().stream()
+            .findFirst()
+            .map(violation -> violation.getMessage())
+            .orElse("잘못된 요청입니다.");
+        log.warn("파라미터 검증 실패: message={}", message);
         return new ErrorResponseTemplate(message, "VALIDATION_ERROR");
     }
 
