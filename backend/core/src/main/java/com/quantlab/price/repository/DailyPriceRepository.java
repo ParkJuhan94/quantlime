@@ -16,4 +16,6 @@ public interface DailyPriceRepository extends JpaRepository<DailyPrice, Long> {
 
     boolean existsByStockCodeAndTradeDate(
         String stockCode, LocalDate tradeDate);
+
+    long countByStockCode(String stockCode);
 }
