@@ -54,6 +54,15 @@ public class GlobalExceptionHandler {
         return new ErrorResponseTemplate(e.getMessage(), e.getCode());
     }
 
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    @ExceptionHandler(UnauthorizedException.class)
+    public ErrorResponseTemplate handleUnauthorizedException(
+        UnauthorizedException e) {
+        log.warn("인증 실패: message={}, code={}",
+            e.getMessage(), e.getCode());
+        return new ErrorResponseTemplate(e.getMessage(), e.getCode());
+    }
+
     @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
     @ExceptionHandler(ExternalApiException.class)
     public ErrorResponseTemplate handleExternalApiException(
