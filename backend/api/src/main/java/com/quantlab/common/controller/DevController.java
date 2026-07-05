@@ -6,18 +6,23 @@ import com.quantlab.auth.jwt.JwtTokenProvider;
 import com.quantlab.auth.token.RefreshTokenStore;
 import com.quantlab.infra.oauth.dto.OAuthUserInfo;
 import com.quantlab.price.scheduler.OhlcvCollectorScheduler;
+import com.quantlab.price.service.DailyPriceService;
+import com.quantlab.stock.domain.Stock;
+import com.quantlab.stock.service.StockMasterService;
 import com.quantlab.user.domain.OAuthProvider;
 import com.quantlab.user.domain.User;
 import com.quantlab.user.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+@Slf4j
 @Tag(name = "개발용 API")
 @Profile("dev")
 @RestController
@@ -28,6 +33,8 @@ public class DevController {
     private static final String DEV_TEST_PROVIDER_ID = "dev-test-user";
 
     private final OhlcvCollectorScheduler ohlcvCollectorScheduler;
+    private final StockMasterService stockMasterService;
+    private final DailyPriceService dailyPriceService;
     private final UserService userService;
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenStore refreshTokenStore;
@@ -37,6 +44,20 @@ public class DevController {
     public ResponseEntity<String> triggerOhlcvCollect() {
         ohlcvCollectorScheduler.collectDailyOhlcv();
         return ResponseEntity.ok("OHLCV 수집 완료");
+    }
+
+    @PostMapping("/ohlcv/backfill")
+    @Operation(summary = "[개발용] 전체 상장 종목 이력 OHLCV 일괄 백필(종목당 200일)")
+    public ResponseEntity<String> triggerBackfill() {
+        for (Stock stock : stockMasterService.getAllListedStocks()) {
+            try {
+                dailyPriceService.backfillHistoryIfNeeded(stock.getStockCode());
+            } catch (Exception e) {
+                log.error("백필 실패: stockCode={}, error={}",
+                    stock.getStockCode(), e.getMessage(), e);
+            }
+        }
+        return ResponseEntity.ok("백필 완료");
     }
 
     @PostMapping("/auth/token")
