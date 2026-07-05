@@ -2,6 +2,7 @@ package com.quantlab.watchlist.service;
 
 import com.quantlab.common.exception.NotFoundException;
 import com.quantlab.common.exception.ValidationException;
+import com.quantlab.price.service.DailyPriceService;
 import com.quantlab.stock.StockFixture;
 import com.quantlab.stock.domain.Stock;
 import com.quantlab.stock.service.StockMasterService;
@@ -23,6 +24,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verify;
 
 @Tag("unit")
@@ -37,6 +39,9 @@ class WatchlistServiceTest {
 
     @Mock
     private WatchlistRepository watchlistRepository;
+
+    @Mock
+    private DailyPriceService dailyPriceService;
 
     @InjectMocks
     private WatchlistService watchlistService;
@@ -97,6 +102,48 @@ class WatchlistServiceTest {
         // when & then
         assertThatThrownBy(() -> watchlistService.addWatchlist(userId, stockCode))
             .isInstanceOf(ValidationException.class);
+    }
+
+    @Test
+    @DisplayName("[관심 종목 등록 시 이력 백필을 트리거한다]")
+    void addWatchlist_success_triggersHistoryBackfill() {
+        // given
+        Long userId = 1L;
+        String stockCode = stock.getStockCode();
+        given(userService.getById(userId)).willReturn(user);
+        given(stockMasterService.getStockByCode(stockCode)).willReturn(stock);
+        given(watchlistRepository.existsByUser_IdAndStock_StockCode(userId, stockCode))
+            .willReturn(false);
+        given(watchlistRepository.save(org.mockito.ArgumentMatchers.any(Watchlist.class)))
+            .willAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        watchlistService.addWatchlist(userId, stockCode);
+
+        // then
+        verify(dailyPriceService).backfillHistoryIfNeeded(stockCode);
+    }
+
+    @Test
+    @DisplayName("[이력 백필이 실패해도 관심 종목 등록 자체는 성공한다]")
+    void addWatchlist_backfillFails_registrationStillSucceeds() {
+        // given
+        Long userId = 1L;
+        String stockCode = stock.getStockCode();
+        given(userService.getById(userId)).willReturn(user);
+        given(stockMasterService.getStockByCode(stockCode)).willReturn(stock);
+        given(watchlistRepository.existsByUser_IdAndStock_StockCode(userId, stockCode))
+            .willReturn(false);
+        given(watchlistRepository.save(org.mockito.ArgumentMatchers.any(Watchlist.class)))
+            .willAnswer(invocation -> invocation.getArgument(0));
+        willThrow(new RuntimeException("토스 API 장애"))
+            .given(dailyPriceService).backfillHistoryIfNeeded(stockCode);
+
+        // when
+        Watchlist result = watchlistService.addWatchlist(userId, stockCode);
+
+        // then
+        assertThat(result.getStock()).isEqualTo(stock);
     }
 
     @Test
