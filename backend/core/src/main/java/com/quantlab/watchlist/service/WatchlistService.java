@@ -2,6 +2,7 @@ package com.quantlab.watchlist.service;
 
 import com.quantlab.common.exception.NotFoundException;
 import com.quantlab.common.exception.ValidationException;
+import com.quantlab.price.service.DailyPriceService;
 import com.quantlab.stock.domain.Stock;
 import com.quantlab.stock.service.StockMasterService;
 import com.quantlab.user.domain.User;
@@ -24,8 +25,13 @@ public class WatchlistService {
     private final UserService userService;
     private final StockMasterService stockMasterService;
     private final WatchlistRepository watchlistRepository;
+    private final DailyPriceService dailyPriceService;
 
-    @Transactional
+    // 이 메서드는 의도적으로 @Transactional을 붙이지 않는다. 등록 자체의 동시성
+    // 안전장치는 트랜잭션 격리가 아니라 DB 유니크 제약 + DataIntegrityViolationException
+    // 캐치이므로(TOCTOU 방어), 트랜잭션으로 감쌀 실익이 없다. 반면 아래에서 호출하는
+    // 이력 백필은 외부 API 호출/재시도 대기가 있어, 여기에 @Transactional을 걸면
+    // 그 시간만큼 DB 커넥션을 불필요하게 붙잡게 된다.
     public Watchlist addWatchlist(Long userId, String stockCode) {
         User user = userService.getById(userId);
         Stock stock = stockMasterService.getStockByCode(stockCode);
@@ -34,12 +40,26 @@ public class WatchlistService {
             throw new ValidationException(WatchlistErrorCode.ALREADY_EXISTS_WATCHLIST);
         }
 
+        Watchlist watchlist;
         try {
-            Watchlist watchlist = watchlistRepository.save(Watchlist.of(user, stock));
+            watchlist = watchlistRepository.save(Watchlist.of(user, stock));
             log.info("관심종목 등록 완료: userId={}, stockCode={}", userId, stockCode);
-            return watchlist;
         } catch (DataIntegrityViolationException e) {
             throw new ValidationException(WatchlistErrorCode.ALREADY_EXISTS_WATCHLIST);
+        }
+
+        backfillHistorySafely(stockCode);
+        return watchlist;
+    }
+
+    private void backfillHistorySafely(String stockCode) {
+        try {
+            dailyPriceService.backfillHistoryIfNeeded(stockCode);
+        } catch (Exception e) {
+            // 백필 실패가 관심종목 등록 자체를 막지 않도록 로그만 남기고 넘어간다.
+            // (스케줄러나 /dev/ohlcv/backfill로 나중에 재시도 가능)
+            log.error("관심종목 등록 시 이력 백필 실패: stockCode={}, error={}",
+                stockCode, e.getMessage(), e);
         }
     }
 
