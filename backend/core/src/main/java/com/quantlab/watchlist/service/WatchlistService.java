@@ -3,6 +3,7 @@ package com.quantlab.watchlist.service;
 import com.quantlab.common.exception.NotFoundException;
 import com.quantlab.common.exception.ValidationException;
 import com.quantlab.price.service.DailyPriceService;
+import com.quantlab.score.service.ScoreService;
 import com.quantlab.stock.domain.Stock;
 import com.quantlab.stock.service.StockMasterService;
 import com.quantlab.user.domain.User;
@@ -26,6 +27,7 @@ public class WatchlistService {
     private final StockMasterService stockMasterService;
     private final WatchlistRepository watchlistRepository;
     private final DailyPriceService dailyPriceService;
+    private final ScoreService scoreService;
 
     // 이 메서드는 의도적으로 @Transactional을 붙이지 않는다. 등록 자체의 동시성
     // 안전장치는 트랜잭션 격리가 아니라 DB 유니크 제약 + DataIntegrityViolationException
@@ -49,6 +51,7 @@ public class WatchlistService {
         }
 
         backfillHistorySafely(stockCode);
+        recalculateScoreSafely(stockCode);
         return watchlist;
     }
 
@@ -59,6 +62,18 @@ public class WatchlistService {
             // 백필 실패가 관심종목 등록 자체를 막지 않도록 로그만 남기고 넘어간다.
             // (스케줄러나 /dev/ohlcv/backfill로 나중에 재시도 가능)
             log.error("관심종목 등록 시 이력 백필 실패: stockCode={}, error={}",
+                stockCode, e.getMessage(), e);
+        }
+    }
+
+    private void recalculateScoreSafely(String stockCode) {
+        try {
+            scoreService.recalculateScore(stockCode);
+        } catch (Exception e) {
+            // 스코어 계산 실패(퀀트 엔진 장애 등)가 관심종목 등록 자체를 막지
+            // 않도록 로그만 남기고 넘어간다. 저장된 이전 스코어가 없다면 조회
+            // API가 NOT_FOUND_SCORE를 반환할 뿐, 등록 자체는 그대로 성공이다.
+            log.error("관심종목 등록 시 스코어 계산 실패: stockCode={}, error={}",
                 stockCode, e.getMessage(), e);
         }
     }
