@@ -16,4 +16,7 @@ public interface WatchlistRepository extends JpaRepository<Watchlist, Long> {
     @Query("select w from Watchlist w join fetch w.stock "
         + "where w.user.id = :userId order by w.createdAt desc, w.id desc")
     List<Watchlist> findAllWithStockByUserId(@Param("userId") Long userId);
+
+    @Query("select distinct w.stock.stockCode from Watchlist w")
+    List<String> findDistinctStockCodes();
 }
