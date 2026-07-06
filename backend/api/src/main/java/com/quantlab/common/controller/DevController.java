@@ -7,6 +7,7 @@ import com.quantlab.auth.token.RefreshTokenStore;
 import com.quantlab.infra.oauth.dto.OAuthUserInfo;
 import com.quantlab.price.scheduler.OhlcvCollectorScheduler;
 import com.quantlab.price.service.DailyPriceService;
+import com.quantlab.score.service.ScoreService;
 import com.quantlab.stock.domain.Stock;
 import com.quantlab.stock.service.StockMasterService;
 import com.quantlab.user.domain.OAuthProvider;
@@ -35,6 +36,7 @@ public class DevController {
     private final OhlcvCollectorScheduler ohlcvCollectorScheduler;
     private final StockMasterService stockMasterService;
     private final DailyPriceService dailyPriceService;
+    private final ScoreService scoreService;
     private final UserService userService;
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenStore refreshTokenStore;
@@ -58,6 +60,13 @@ public class DevController {
             }
         }
         return ResponseEntity.ok("백필 완료");
+    }
+
+    @PostMapping("/scores/recalculate")
+    @Operation(summary = "[개발용] 관심 종목 전체 스코어 일괄 재계산 수동 트리거")
+    public ResponseEntity<String> triggerScoreRecalculate() {
+        scoreService.recalculateWatchlistedScores();
+        return ResponseEntity.ok("스코어 재계산 완료");
     }
 
     @PostMapping("/auth/token")
