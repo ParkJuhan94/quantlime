@@ -3,6 +3,7 @@ package com.quantlab.watchlist.service;
 import com.quantlab.common.exception.NotFoundException;
 import com.quantlab.common.exception.ValidationException;
 import com.quantlab.price.service.DailyPriceService;
+import com.quantlab.score.service.ScoreService;
 import com.quantlab.stock.StockFixture;
 import com.quantlab.stock.domain.Stock;
 import com.quantlab.stock.service.StockMasterService;
@@ -42,6 +43,9 @@ class WatchlistServiceTest {
 
     @Mock
     private DailyPriceService dailyPriceService;
+
+    @Mock
+    private ScoreService scoreService;
 
     @InjectMocks
     private WatchlistService watchlistService;
@@ -138,6 +142,48 @@ class WatchlistServiceTest {
             .willAnswer(invocation -> invocation.getArgument(0));
         willThrow(new RuntimeException("토스 API 장애"))
             .given(dailyPriceService).backfillHistoryIfNeeded(stockCode);
+
+        // when
+        Watchlist result = watchlistService.addWatchlist(userId, stockCode);
+
+        // then
+        assertThat(result.getStock()).isEqualTo(stock);
+    }
+
+    @Test
+    @DisplayName("[관심 종목 등록 시 스코어 재계산을 트리거한다]")
+    void addWatchlist_success_triggersScoreRecalculation() {
+        // given
+        Long userId = 1L;
+        String stockCode = stock.getStockCode();
+        given(userService.getById(userId)).willReturn(user);
+        given(stockMasterService.getStockByCode(stockCode)).willReturn(stock);
+        given(watchlistRepository.existsByUser_IdAndStock_StockCode(userId, stockCode))
+            .willReturn(false);
+        given(watchlistRepository.save(org.mockito.ArgumentMatchers.any(Watchlist.class)))
+            .willAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        watchlistService.addWatchlist(userId, stockCode);
+
+        // then
+        verify(scoreService).recalculateScore(stockCode);
+    }
+
+    @Test
+    @DisplayName("[스코어 재계산이 실패해도 관심 종목 등록 자체는 성공한다]")
+    void addWatchlist_scoreRecalculationFails_registrationStillSucceeds() {
+        // given
+        Long userId = 1L;
+        String stockCode = stock.getStockCode();
+        given(userService.getById(userId)).willReturn(user);
+        given(stockMasterService.getStockByCode(stockCode)).willReturn(stock);
+        given(watchlistRepository.existsByUser_IdAndStock_StockCode(userId, stockCode))
+            .willReturn(false);
+        given(watchlistRepository.save(org.mockito.ArgumentMatchers.any(Watchlist.class)))
+            .willAnswer(invocation -> invocation.getArgument(0));
+        willThrow(new RuntimeException("퀀트 엔진 장애"))
+            .given(scoreService).recalculateScore(stockCode);
 
         // when
         Watchlist result = watchlistService.addWatchlist(userId, stockCode);
