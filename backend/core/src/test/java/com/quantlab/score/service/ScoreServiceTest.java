@@ -10,6 +10,7 @@ import com.quantlab.infra.python.dto.ScoreBatchApiResponse.StockScoreApiResponse
 import com.quantlab.infra.python.exception.PythonEngineErrorCode;
 import com.quantlab.price.domain.DailyPrice;
 import com.quantlab.price.service.DailyPriceService;
+import com.quantlab.score.domain.Divergence;
 import com.quantlab.score.domain.Score;
 import com.quantlab.score.dto.response.ScoreResponse;
 import com.quantlab.score.repository.ScoreRepository;
@@ -21,6 +22,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -28,7 +30,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -46,6 +48,9 @@ class ScoreServiceTest {
     private PythonEngineClient pythonEngineClient;
 
     @Mock
+    private ScorePersistenceService scorePersistenceService;
+
+    @Mock
     private ScoreRepository scoreRepository;
 
     @Mock
@@ -58,7 +63,7 @@ class ScoreServiceTest {
     @DisplayName("[OHLCV 이력이 없으면 퀀트 엔진을 호출하지 않는다]")
     void recalculateScore_noDailyPrices_skipsPythonCall() {
         // given
-        given(dailyPriceService.getDailyPrices(anyString(), any(), any()))
+        given(dailyPriceService.getDailyPrices(anyList(), any(), any()))
             .willReturn(List.of());
 
         // when
@@ -66,52 +71,32 @@ class ScoreServiceTest {
 
         // then
         verify(pythonEngineClient, never()).calculateScoreBatch(any());
+        verify(scorePersistenceService, never()).saveAll(any());
     }
 
     @Test
-    @DisplayName("[해당 날짜의 스코어가 없으면 새로 저장한다]")
-    void recalculateScore_noExistingScoreToday_savesNewScore() {
+    @DisplayName("[OHLCV 이력이 있으면 퀀트 엔진을 호출하고 결과를 저장에 위임한다]")
+    void recalculateScore_hasDailyPrices_callsPythonAndDelegatesPersistence() {
         // given
-        given(dailyPriceService.getDailyPrices(anyString(), any(), any()))
+        given(dailyPriceService.getDailyPrices(anyList(), any(), any()))
             .willReturn(List.of(dailyPrice(LocalDate.of(2026, 7, 3))));
+        ScoreBatchApiResponse response =
+            new ScoreBatchApiResponse(List.of(successResponse(STOCK_CODE, 82.0)));
         given(pythonEngineClient.calculateScoreBatch(any(ScoreBatchApiRequest.class)))
-            .willReturn(new ScoreBatchApiResponse(List.of(successResponse(STOCK_CODE, 82.0))));
-        given(scoreRepository.findByStockCodeAndScoreDate(STOCK_CODE, LocalDate.now()))
-            .willReturn(Optional.empty());
+            .willReturn(response);
 
         // when
         scoreService.recalculateScore(STOCK_CODE);
 
         // then
-        verify(scoreRepository).save(any(Score.class));
+        verify(scorePersistenceService).saveAll(response.scores());
     }
 
     @Test
-    @DisplayName("[같은 날 재계산이면 기존 행을 갱신하고 새로 저장하지 않는다]")
-    void recalculateScore_existingScoreToday_updatesInPlaceWithoutSave() {
+    @DisplayName("[퀀트 엔진 호출이 실패하면 예외가 그대로 전파되고 저장은 위임되지 않는다]")
+    void recalculateScore_pythonEngineFails_propagatesAndSkipsPersistence() {
         // given
-        Score existing = Score.of(STOCK_CODE, LocalDate.now(), 50.0, 50.0, 50.0,
-            null, false, null, "이전 코멘트", false);
-        given(dailyPriceService.getDailyPrices(anyString(), any(), any()))
-            .willReturn(List.of(dailyPrice(LocalDate.of(2026, 7, 3))));
-        given(pythonEngineClient.calculateScoreBatch(any(ScoreBatchApiRequest.class)))
-            .willReturn(new ScoreBatchApiResponse(List.of(successResponse(STOCK_CODE, 91.5))));
-        given(scoreRepository.findByStockCodeAndScoreDate(STOCK_CODE, LocalDate.now()))
-            .willReturn(Optional.of(existing));
-
-        // when
-        scoreService.recalculateScore(STOCK_CODE);
-
-        // then: 기존 엔티티가 새 값으로 갱신되고, 새 행은 저장되지 않는다
-        assertThat(existing.getCompositeScore()).isEqualTo(91.5);
-        verify(scoreRepository, never()).save(any(Score.class));
-    }
-
-    @Test
-    @DisplayName("[퀀트 엔진 호출이 실패하면 예외가 그대로 전파되고 DB는 변경되지 않는다]")
-    void recalculateScore_pythonEngineFails_propagatesAndLeavesHistoryUntouched() {
-        // given
-        given(dailyPriceService.getDailyPrices(anyString(), any(), any()))
+        given(dailyPriceService.getDailyPrices(anyList(), any(), any()))
             .willReturn(List.of(dailyPrice(LocalDate.of(2026, 7, 3))));
         given(pythonEngineClient.calculateScoreBatch(any(ScoreBatchApiRequest.class)))
             .willThrow(new ExternalApiException(PythonEngineErrorCode.SCORE_CALCULATION_FAILED));
@@ -119,7 +104,7 @@ class ScoreServiceTest {
         // when & then: 예외는 상위(WatchlistService/스케줄러)에서 잡으므로 여기선 전파돼야 함
         assertThatThrownBy(() -> scoreService.recalculateScore(STOCK_CODE))
             .isInstanceOf(ExternalApiException.class);
-        verify(scoreRepository, never()).save(any(Score.class));
+        verify(scorePersistenceService, never()).saveAll(any());
     }
 
     @Test
@@ -136,25 +121,50 @@ class ScoreServiceTest {
     }
 
     @Test
-    @DisplayName("[관심 종목이 있으면 일괄 조회 후 결과를 모두 저장한다]")
-    void recalculateWatchlistedScores_withWatchlist_savesAllResults() {
+    @DisplayName("[관심 종목이 있으면 일괄 조회 후 결과 저장을 위임한다]")
+    void recalculateWatchlistedScores_withWatchlist_delegatesPersistenceOfAllResults() {
         // given
         String secondCode = "000660";
         given(watchlistRepository.findDistinctStockCodes())
             .willReturn(List.of(STOCK_CODE, secondCode));
-        given(dailyPriceService.getDailyPrices(anyString(), any(), any()))
-            .willReturn(List.of(dailyPrice(LocalDate.of(2026, 7, 3))));
+        given(dailyPriceService.getDailyPrices(anyList(), any(), any()))
+            .willReturn(List.of(dailyPrice(STOCK_CODE), dailyPrice(secondCode)));
+        ScoreBatchApiResponse response = new ScoreBatchApiResponse(List.of(
+            successResponse(STOCK_CODE, 70.0), successResponse(secondCode, 60.0)));
         given(pythonEngineClient.calculateScoreBatch(any(ScoreBatchApiRequest.class)))
-            .willReturn(new ScoreBatchApiResponse(List.of(
-                successResponse(STOCK_CODE, 70.0), successResponse(secondCode, 60.0))));
-        given(scoreRepository.findByStockCodeAndScoreDate(anyString(), any()))
-            .willReturn(Optional.empty());
+            .willReturn(response);
 
         // when
         scoreService.recalculateWatchlistedScores();
 
         // then
-        verify(scoreRepository, org.mockito.Mockito.times(2)).save(any(Score.class));
+        verify(scorePersistenceService).saveAll(response.scores());
+    }
+
+    @Test
+    @DisplayName("[일부 종목만 OHLCV 이력이 있으면 이력 없는 종목은 배치 요청에서 제외한다]")
+    void recalculateWatchlistedScores_someStocksHaveNoHistory_excludesThemFromRequest() {
+        // given: 방금 등록되어 백필이 아직 안 끝난 종목은 이력이 0건일 수 있다.
+        // 이걸 그대로 요청에 포함하면 퀀트 엔진이 빈 OHLCV 때문에 실패해
+        // 같은 배치의 다른 종목 스코어까지 갱신되지 못하므로, 사전에 제외해야 한다.
+        String noHistoryCode = "000660";
+        given(watchlistRepository.findDistinctStockCodes())
+            .willReturn(List.of(STOCK_CODE, noHistoryCode));
+        given(dailyPriceService.getDailyPrices(anyList(), any(), any()))
+            .willReturn(List.of(dailyPrice(STOCK_CODE)));
+        given(pythonEngineClient.calculateScoreBatch(any(ScoreBatchApiRequest.class)))
+            .willReturn(new ScoreBatchApiResponse(List.of(successResponse(STOCK_CODE, 70.0))));
+
+        // when
+        scoreService.recalculateWatchlistedScores();
+
+        // then
+        ArgumentCaptor<ScoreBatchApiRequest> requestCaptor =
+            ArgumentCaptor.forClass(ScoreBatchApiRequest.class);
+        verify(pythonEngineClient).calculateScoreBatch(requestCaptor.capture());
+        assertThat(requestCaptor.getValue().stocks())
+            .extracting(ScoreBatchApiRequest.StockScoreApiRequest::stockCode)
+            .containsExactly(STOCK_CODE);
     }
 
     @Test
@@ -162,7 +172,7 @@ class ScoreServiceTest {
     void getScore_found_returnsResponse() {
         // given
         Score score = Score.of(STOCK_CODE, LocalDate.now(), 80.0, 40.0, 65.0,
-            null, false, null, "코멘트", false);
+            null, Divergence.of(false, null), "코멘트", false);
         given(scoreRepository.findTopByStockCodeOrderByScoreDateDesc(STOCK_CODE))
             .willReturn(Optional.of(score));
 
@@ -188,6 +198,11 @@ class ScoreServiceTest {
 
     private DailyPrice dailyPrice(LocalDate tradeDate) {
         return DailyPrice.of(STOCK_CODE, tradeDate, 70000L, 71000L, 69000L, 70500L, 1000000L);
+    }
+
+    private DailyPrice dailyPrice(String stockCode) {
+        return DailyPrice.of(stockCode, LocalDate.of(2026, 7, 3),
+            70000L, 71000L, 69000L, 70500L, 1000000L);
     }
 
     private StockScoreApiResponse successResponse(String stockCode, double compositeScore) {
