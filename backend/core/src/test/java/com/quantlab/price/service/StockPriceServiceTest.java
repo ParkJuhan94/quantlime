@@ -3,14 +3,17 @@ package com.quantlab.price.service;
 import com.quantlab.infra.toss.TossApiClient;
 import com.quantlab.infra.toss.dto.TossPriceResponse;
 import com.quantlab.price.DailyPriceFixture;
+import com.quantlab.price.cache.PriceCacheStore;
 import com.quantlab.price.domain.DailyPrice;
 import com.quantlab.price.dto.response.CurrentPriceResponse;
 import com.quantlab.price.dto.response.DailyChartResponse;
+import com.quantlab.price.dto.response.PriceBroadcastMessage;
 import com.quantlab.stock.StockFixture;
 import com.quantlab.stock.domain.Stock;
 import com.quantlab.stock.service.StockMasterService;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -22,6 +25,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
@@ -36,17 +41,38 @@ class StockPriceServiceTest {
     @Mock
     private DailyPriceService dailyPriceService;
 
+    @Mock
+    private PriceCacheStore priceCacheStore;
+
     @InjectMocks
     private StockPriceService stockPriceService;
 
     private final Stock stock = StockFixture.createStock();
 
     @Test
-    @DisplayName("[현재가가 있으면 정상 매핑된 응답을 반환한다]")
-    void getCurrentPrice_withPrice_returnsMappedResponse() {
+    @DisplayName("[캐시에 스냅샷이 있으면 Toss를 호출하지 않고 캐시 값을 반환한다]")
+    void getCurrentPrice_cacheHit_returnsCachedResponseWithoutCallingToss() {
         // given
         String stockCode = stock.getStockCode();
         given(stockMasterService.getStockByCode(stockCode)).willReturn(stock);
+        given(priceCacheStore.find(stockCode)).willReturn(Optional.of(
+            new PriceBroadcastMessage(stockCode, 70000L, 1.5, "2026-07-06T09:00:00+09:00")));
+
+        // when
+        CurrentPriceResponse response = stockPriceService.getCurrentPrice(stockCode);
+
+        // then
+        assertThat(response.price()).isEqualTo(70000L);
+        verify(tossApiClient, never()).getCurrentPrices(stockCode);
+    }
+
+    @Test
+    @DisplayName("[캐시 미스면 Toss를 직접 호출해 정상 매핑된 응답을 반환한다]")
+    void getCurrentPrice_cacheMiss_callsTossAndReturnsMappedResponse() {
+        // given
+        String stockCode = stock.getStockCode();
+        given(stockMasterService.getStockByCode(stockCode)).willReturn(stock);
+        given(priceCacheStore.find(stockCode)).willReturn(Optional.empty());
         TossPriceResponse.TossPrice tossPrice = new TossPriceResponse.TossPrice(
             stockCode, "2026-07-06T09:00:00+09:00", "70000", "KRW");
         given(tossApiClient.getCurrentPrices(stockCode))
@@ -61,11 +87,12 @@ class StockPriceServiceTest {
     }
 
     @Test
-    @DisplayName("[토스 응답의 result가 비어있으면 price=null 응답을 반환한다]")
+    @DisplayName("[캐시 미스이고 토스 응답의 result도 비어있으면 price=null 응답을 반환한다]")
     void getCurrentPrice_emptyResult_returnsNullPrice() {
         // given
         String stockCode = stock.getStockCode();
         given(stockMasterService.getStockByCode(stockCode)).willReturn(stock);
+        given(priceCacheStore.find(stockCode)).willReturn(Optional.empty());
         given(tossApiClient.getCurrentPrices(stockCode))
             .willReturn(new TossPriceResponse(List.of()));
 
