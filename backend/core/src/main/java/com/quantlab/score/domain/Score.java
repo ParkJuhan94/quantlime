@@ -2,6 +2,7 @@ package com.quantlab.score.domain;
 
 import com.quantlab.common.domain.TimeBaseEntity;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -58,11 +59,8 @@ public class Score extends TimeBaseEntity {
     @Column(name = "grade", length = 10)
     private Grade grade;
 
-    @Column(name = "divergence_flag")
-    private Boolean divergenceFlag;
-
-    @Column(name = "divergence_message", length = 200)
-    private String divergenceMessage;
+    @Embedded
+    private Divergence divergence;
 
     @Column(name = "comment", nullable = false, length = 500)
     private String comment;
@@ -73,8 +71,7 @@ public class Score extends TimeBaseEntity {
     @Builder
     private Score(String stockCode, LocalDate scoreDate, Double trendScore,
                   Double meanReversionScore, Double compositeScore, Grade grade,
-                  Boolean divergenceFlag, String divergenceMessage,
-                  String comment, boolean insufficientData) {
+                  Divergence divergence, String comment, boolean insufficientData) {
         validateScore(stockCode, scoreDate, comment);
         this.stockCode = stockCode;
         this.scoreDate = scoreDate;
@@ -82,16 +79,14 @@ public class Score extends TimeBaseEntity {
         this.meanReversionScore = meanReversionScore;
         this.compositeScore = compositeScore;
         this.grade = grade;
-        this.divergenceFlag = divergenceFlag;
-        this.divergenceMessage = divergenceMessage;
+        this.divergence = divergence;
         this.comment = comment;
         this.insufficientData = insufficientData;
     }
 
     public static Score of(String stockCode, LocalDate scoreDate, Double trendScore,
                            Double meanReversionScore, Double compositeScore, Grade grade,
-                           Boolean divergenceFlag, String divergenceMessage,
-                           String comment, boolean insufficientData) {
+                           Divergence divergence, String comment, boolean insufficientData) {
         return Score.builder()
             .stockCode(stockCode)
             .scoreDate(scoreDate)
@@ -99,8 +94,7 @@ public class Score extends TimeBaseEntity {
             .meanReversionScore(meanReversionScore)
             .compositeScore(compositeScore)
             .grade(grade)
-            .divergenceFlag(divergenceFlag)
-            .divergenceMessage(divergenceMessage)
+            .divergence(divergence)
             .comment(comment)
             .insufficientData(insufficientData)
             .build();
@@ -113,15 +107,13 @@ public class Score extends TimeBaseEntity {
      */
     public void updateFrom(Double trendScore, Double meanReversionScore,
                            Double compositeScore, Grade grade,
-                           Boolean divergenceFlag, String divergenceMessage,
-                           String comment, boolean insufficientData) {
+                           Divergence divergence, String comment, boolean insufficientData) {
         Assert.hasText(comment, "코멘트는 필수입니다.");
         this.trendScore = trendScore;
         this.meanReversionScore = meanReversionScore;
         this.compositeScore = compositeScore;
         this.grade = grade;
-        this.divergenceFlag = divergenceFlag;
-        this.divergenceMessage = divergenceMessage;
+        this.divergence = divergence;
         this.comment = comment;
         this.insufficientData = insufficientData;
     }

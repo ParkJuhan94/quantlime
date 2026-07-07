@@ -1,6 +1,8 @@
 package com.quantlab.score.dto.mapper;
 
+import com.quantlab.infra.python.dto.ScoreBatchApiResponse.DivergenceApiResponse;
 import com.quantlab.infra.python.dto.ScoreBatchApiResponse.StockScoreApiResponse;
+import com.quantlab.score.domain.Divergence;
 import com.quantlab.score.domain.Grade;
 import com.quantlab.score.domain.Score;
 import com.quantlab.score.dto.response.ScoreRankingResponse;
@@ -22,8 +24,7 @@ public final class ScoreMapper {
             apiResponse.meanReversionScore(),
             apiResponse.compositeScore(),
             extractGrade(apiResponse),
-            extractDivergenceFlag(apiResponse),
-            extractDivergenceMessage(apiResponse),
+            extractDivergence(apiResponse),
             apiResponse.comment(),
             apiResponse.insufficientData()
         );
@@ -35,8 +36,7 @@ public final class ScoreMapper {
             apiResponse.meanReversionScore(),
             apiResponse.compositeScore(),
             extractGrade(apiResponse),
-            extractDivergenceFlag(apiResponse),
-            extractDivergenceMessage(apiResponse),
+            extractDivergence(apiResponse),
             apiResponse.comment(),
             apiResponse.insufficientData()
         );
@@ -50,8 +50,8 @@ public final class ScoreMapper {
             score.getMeanReversionScore(),
             score.getCompositeScore(),
             gradeLabel(score.getGrade()),
-            score.getDivergenceFlag(),
-            score.getDivergenceMessage(),
+            divergenceFlag(score.getDivergence()),
+            divergenceMessage(score.getDivergence()),
             score.getComment(),
             score.isInsufficientData()
         );
@@ -74,15 +74,20 @@ public final class ScoreMapper {
         return apiResponse.grade() != null ? Grade.of(apiResponse.grade()) : null;
     }
 
-    private static Boolean extractDivergenceFlag(StockScoreApiResponse apiResponse) {
-        return apiResponse.divergence() != null ? apiResponse.divergence().flag() : null;
-    }
-
-    private static String extractDivergenceMessage(StockScoreApiResponse apiResponse) {
-        return apiResponse.divergence() != null ? apiResponse.divergence().message() : null;
+    private static Divergence extractDivergence(StockScoreApiResponse apiResponse) {
+        DivergenceApiResponse divergence = apiResponse.divergence();
+        return divergence != null ? Divergence.of(divergence.flag(), divergence.message()) : null;
     }
 
     private static String gradeLabel(Grade grade) {
         return grade != null ? grade.getLabel() : null;
+    }
+
+    private static Boolean divergenceFlag(Divergence divergence) {
+        return divergence != null ? divergence.getFlag() : null;
+    }
+
+    private static String divergenceMessage(Divergence divergence) {
+        return divergence != null ? divergence.getMessage() : null;
     }
 }
