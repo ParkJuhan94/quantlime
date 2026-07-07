@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import {
   useStockChartQuery,
@@ -10,11 +10,17 @@ import { useStockPriceSocket } from '../hooks/useStockPriceSocket'
 import { LoadingSpinner } from '../components/common/LoadingSpinner'
 import { ErrorState } from '../components/common/ErrorState'
 import { EmptyState } from '../components/common/EmptyState'
-import { CandleChart } from '../components/chart/CandleChart'
 import { ChartPeriodSelector } from '../components/chart/ChartPeriodSelector'
 import { ScoreCard } from '../components/score/ScoreCard'
 import { getErrorMessage, isNotFoundStatus } from '../api/errors'
 import { changeRateColorClass, formatChangeRate, formatPrice } from '../utils/priceFormat'
+
+// lightweight-charts는 이 페이지에서만 쓰이는데도 기본적으로는 전체
+// 초기 번들(관심종목/로그인 등 다른 페이지 포함)에 함께 실려 500KB+
+// 청크 경고를 유발했다 - 종목 상세 진입 시에만 불러오도록 지연 로딩.
+const CandleChart = lazy(() =>
+  import('../components/chart/CandleChart').then((module) => ({ default: module.CandleChart })),
+)
 
 const DEFAULT_CHART_DAYS = 90
 
@@ -69,7 +75,11 @@ export function StockDetailPage() {
           <ErrorState message={getErrorMessage(chartQuery.error, '차트를 불러오지 못했습니다.')} />
         )}
         {chartQuery.data && chartQuery.data.length === 0 && <EmptyState message="차트 데이터가 없습니다." />}
-        {chartQuery.data && chartQuery.data.length > 0 && <CandleChart data={chartQuery.data} />}
+        {chartQuery.data && chartQuery.data.length > 0 && (
+          <Suspense fallback={<LoadingSpinner />}>
+            <CandleChart data={chartQuery.data} />
+          </Suspense>
+        )}
       </section>
 
       <section>
