@@ -4,6 +4,7 @@ import { PlaceholderPage } from './components/common/PlaceholderPage'
 import { LoginPage } from './pages/LoginPage'
 import { OAuthCallbackPage } from './pages/OAuthCallbackPage'
 import { WatchlistPage } from './pages/WatchlistPage'
+import { StockDetailPage } from './pages/StockDetailPage'
 import { ProtectedRoute } from './auth/ProtectedRoute'
 
 function App() {
@@ -14,7 +15,7 @@ function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/oauth/callback/:provider" element={<OAuthCallbackPage />} />
-          <Route path="/stocks/:stockCode" element={<PlaceholderPage title="종목 상세" />} />
+          <Route path="/stocks/:stockCode" element={<StockDetailPage />} />
           <Route element={<ProtectedRoute />}>
             <Route path="/" element={<WatchlistPage />} />
             <Route path="/dashboard" element={<PlaceholderPage title="대시보드" />} />
