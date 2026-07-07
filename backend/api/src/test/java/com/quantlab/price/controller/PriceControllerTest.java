@@ -3,6 +3,7 @@ package com.quantlab.price.controller;
 import com.quantlab.infra.toss.TossApiClient;
 import com.quantlab.infra.toss.dto.TossPriceResponse;
 import com.quantlab.price.DailyPriceFixture;
+import com.quantlab.price.cache.PriceCacheStore;
 import com.quantlab.price.repository.DailyPriceRepository;
 import com.quantlab.stock.StockFixture;
 import com.quantlab.stock.domain.Stock;
@@ -10,6 +11,7 @@ import com.quantlab.stock.repository.StockRepository;
 import com.quantlab.support.ApiTestSupport;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -17,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.mock.mockito.MockBean;
 
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -34,11 +37,21 @@ class PriceControllerTest extends ApiTestSupport {
     @MockBean
     private TossApiClient tossApiClient;
 
+    // 이 테스트는 실제 로컬 Redis(TestContainerSupport가 Redis는 격리하지
+    // 않음)를 공유한다. 실시간 시세 브로드캐스트 스케줄러 등이 이미 채워둔
+    // price:current:{stockCode} 캐시가 남아있으면 캐시 히트로 응답이
+    // 갈려 아래 TossApiClient 목 스텁이 무시되므로, 이 컨트롤러 테스트는
+    // 캐시를 미스로 고정해 Toss 응답 매핑 자체만 검증한다(캐시 히트
+    // 경로는 StockPriceServiceTest에서 별도 검증).
+    @MockBean
+    private PriceCacheStore priceCacheStore;
+
     private Stock stock;
 
     @BeforeEach
     void setUp() {
         stock = stockRepository.save(StockFixture.createStock());
+        given(priceCacheStore.find(anyString())).willReturn(Optional.empty());
     }
 
     @Test
