@@ -42,7 +42,7 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final ObjectMapper objectMapper;
 
-    @Value("${app.cors.allowed-origin:http://localhost:3000}")
+    @Value("${app.cors.allowed-origin:http://localhost:3001}")
     private String allowedOrigin;
 
     @Bean

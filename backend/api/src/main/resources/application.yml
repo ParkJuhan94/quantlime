@@ -28,7 +28,7 @@ server:
 
 app:
   cors:
-    allowed-origin: ${APP_CORS_ALLOWED_ORIGIN:http://localhost:3000}
+    allowed-origin: ${APP_CORS_ALLOWED_ORIGIN:http://localhost:3001}
 
 toss:
   client-id: ${TOSS_CLIENT_ID:}
