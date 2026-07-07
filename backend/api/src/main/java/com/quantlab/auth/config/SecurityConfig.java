@@ -69,10 +69,16 @@ public class SecurityConfig {
     }
 
     /**
-     * 프론트엔드(Vite 개발 서버, 기본 포트 3000)가 별도 오리진에서
-     * /api/**를 호출할 수 있도록 허용한다. 토큰은 쿠키가 아니라
-     * Authorization 헤더로 실어 보내므로 자격증명 공유(allowCredentials)는
-     * 불필요 - 와일드카드 오리진과의 충돌도 피할 수 있다.
+     * 프론트엔드(Vite 개발 서버, 기본 포트 3001)가 별도 오리진에서
+     * /api/**·/ws/**를 호출할 수 있도록 허용한다.
+     *
+     * <p>allowCredentials(true)가 필요한 이유: REST 인증 자체는 쿠키가
+     * 아니라 Authorization 헤더를 쓰지만, SockJS 클라이언트의 XHR
+     * 폴백 트랜스포트(/ws/stocks/info 등)가 기본적으로
+     * withCredentials=true로 요청을 보낸다. 이 경우 브라우저는 응답에
+     * Access-Control-Allow-Credentials: true가 없으면 오리진이 일치해도
+     * 응답 자체를 차단한다. 오리진을 특정 값 하나로 고정해뒀으므로
+     * (와일드카드가 아님) allowCredentials(true)와 조합해도 안전하다.
      */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
@@ -80,7 +86,7 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(List.of(allowedOrigin));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
-        configuration.setAllowCredentials(false);
+        configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
