@@ -1,12 +1,15 @@
 import { Link } from 'react-router-dom'
 import type { WatchlistResponse } from '../../types/watchlist'
+import type { PriceBroadcastMessage } from '../../types/realtime'
+import { changeRateColorClass, formatChangeRate, formatPrice } from '../../utils/priceFormat'
 
 interface WatchlistRowProps {
   item: WatchlistResponse
+  livePrice?: PriceBroadcastMessage
   onRemove: (stockCode: string) => void
 }
 
-export function WatchlistRow({ item, onRemove }: WatchlistRowProps) {
+export function WatchlistRow({ item, livePrice, onRemove }: WatchlistRowProps) {
   return (
     <tr className="border-b border-gray-100">
       <td className="py-2">
@@ -17,6 +20,10 @@ export function WatchlistRow({ item, onRemove }: WatchlistRowProps) {
       </td>
       <td className="py-2 text-sm text-gray-600">{item.marketType}</td>
       <td className="py-2 text-sm text-gray-600">{item.sector}</td>
+      <td className="py-2 text-right text-sm text-gray-900">{formatPrice(livePrice?.currentPrice)}</td>
+      <td className={`py-2 text-right text-sm ${changeRateColorClass(livePrice?.changeRate)}`}>
+        {formatChangeRate(livePrice?.changeRate)}
+      </td>
       <td className="py-2 text-right">
         <button
           type="button"

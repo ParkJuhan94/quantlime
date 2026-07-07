@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useAddWatchlist, useRemoveWatchlist, useWatchlistQuery } from '../hooks/queries/useWatchlist'
 import { useStockSearch } from '../hooks/queries/useStockSearch'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
+import { useStockPriceSocket } from '../hooks/useStockPriceSocket'
 import { LoadingSpinner } from '../components/common/LoadingSpinner'
 import { ErrorState } from '../components/common/ErrorState'
 import { EmptyState } from '../components/common/EmptyState'
@@ -18,7 +19,10 @@ export function WatchlistPage() {
   const addWatchlist = useAddWatchlist()
   const removeWatchlist = useRemoveWatchlist()
 
-  const watchlistCodes = new Set(watchlistQuery.data?.map((item) => item.stockCode))
+  const watchlistStockCodes = watchlistQuery.data?.map((item) => item.stockCode) ?? []
+  const livePrices = useStockPriceSocket(watchlistStockCodes)
+
+  const watchlistCodes = new Set(watchlistStockCodes)
   const isSearching = debouncedQuery.trim().length > 0
 
   return (
@@ -65,6 +69,8 @@ export function WatchlistPage() {
                 <th className="pb-2 font-medium">종목</th>
                 <th className="pb-2 font-medium">시장</th>
                 <th className="pb-2 font-medium">섹터</th>
+                <th className="pb-2 text-right font-medium">현재가</th>
+                <th className="pb-2 text-right font-medium">등락률</th>
                 <th className="pb-2"></th>
               </tr>
             </thead>
@@ -73,6 +79,7 @@ export function WatchlistPage() {
                 <WatchlistRow
                   key={item.id}
                   item={item}
+                  livePrice={livePrices[item.stockCode]}
                   onRemove={(stockCode) => removeWatchlist.mutate(stockCode)}
                 />
               ))}
