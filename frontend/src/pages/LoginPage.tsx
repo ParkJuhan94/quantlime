@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { buildAuthorizeUrl } from '../config/oauth'
 import { issueDevToken } from '../api/auth'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth } from '../auth/useAuth'
 import type { OAuthProviderName } from '../types/auth'
 
 const PROVIDERS: { id: OAuthProviderName; label: string }[] = [
