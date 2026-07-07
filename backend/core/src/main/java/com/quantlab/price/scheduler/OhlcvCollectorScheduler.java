@@ -1,6 +1,7 @@
 package com.quantlab.price.scheduler;
 
 import com.quantlab.common.exception.ExternalApiException;
+import com.quantlab.common.util.SafeExecutor;
 import com.quantlab.infra.toss.exception.TossApiErrorCode;
 import com.quantlab.price.service.DailyPriceService;
 import com.quantlab.score.service.ScoreService;
@@ -54,18 +55,10 @@ public class OhlcvCollectorScheduler {
         log.info("OHLCV 수집 완료: 성공={}, 실패={}",
             successCount, failCount);
 
-        recalculateScoresSafely();
-    }
-
-    private void recalculateScoresSafely() {
-        try {
-            scoreService.recalculateWatchlistedScores();
-        } catch (Exception e) {
-            // 스코어 재계산 실패(퀀트 엔진 장애 등)가 이번 배치 전체를 실패로
-            // 만들지 않도록 로그만 남긴다. 조회 API는 직전 이력을 그대로
-            // 반환한다(fallback).
-            log.error("스코어 일괄 재계산 실패: error={}", e.getMessage(), e);
-        }
+        // 스코어 재계산 실패(퀀트 엔진 장애 등)가 이번 배치 전체를 실패로 만들지
+        // 않도록 로그만 남긴다. 조회 API는 직전 이력을 그대로 반환한다(fallback).
+        SafeExecutor.runSafely(
+            "스코어 일괄 재계산", scoreService::recalculateWatchlistedScores);
     }
 
     private void collectWithRateLimitRetry(String stockCode) throws InterruptedException {
