@@ -1,6 +1,6 @@
 package com.quantlab.infra.toss;
 
-import com.quantlab.common.exception.ExternalApiException;
+import com.quantlab.common.util.ExternalApiInvoker;
 import com.quantlab.infra.toss.dto.TossCandleResponse;
 import com.quantlab.infra.toss.dto.TossPriceResponse;
 import com.quantlab.infra.toss.exception.TossApiErrorCode;
@@ -19,10 +19,10 @@ public class TossApiClient {
     private final TossTokenManager tokenManager;
 
     public TossCandleResponse getDailyCandles(String symbol, int count, String before) {
-        try {
-            String token = tokenManager.getAccessToken();
-
-            TossCandleResponse response = tossRestClient.get()
+        String token = tokenManager.getAccessToken();
+        return ExternalApiInvoker.call(
+            TossApiErrorCode.CANDLE_INQUIRY_FAILED,
+            () -> tossRestClient.get()
                 .uri(uriBuilder -> {
                     var builder = uriBuilder
                         .path("/api/v1/candles")
@@ -37,46 +37,24 @@ public class TossApiClient {
                 })
                 .header("authorization", "Bearer " + token)
                 .retrieve()
-                .body(TossCandleResponse.class);
-
-            if (response == null) {
-                throw new ExternalApiException(TossApiErrorCode.CANDLE_INQUIRY_FAILED);
-            }
-
-            return response;
-        } catch (ExternalApiException e) {
-            throw e;
-        } catch (HttpClientErrorException.TooManyRequests e) {
-            throw new ExternalApiException(TossApiErrorCode.RATE_LIMIT_EXCEEDED, e);
-        } catch (Exception e) {
-            throw new ExternalApiException(TossApiErrorCode.CANDLE_INQUIRY_FAILED, e);
-        }
+                .body(TossCandleResponse.class),
+            HttpClientErrorException.TooManyRequests.class,
+            TossApiErrorCode.RATE_LIMIT_EXCEEDED);
     }
 
     public TossPriceResponse getCurrentPrices(String symbols) {
-        try {
-            String token = tokenManager.getAccessToken();
-
-            TossPriceResponse response = tossRestClient.get()
+        String token = tokenManager.getAccessToken();
+        return ExternalApiInvoker.call(
+            TossApiErrorCode.PRICE_INQUIRY_FAILED,
+            () -> tossRestClient.get()
                 .uri(uriBuilder -> uriBuilder
                     .path("/api/v1/prices")
                     .queryParam("symbols", symbols)
                     .build())
                 .header("authorization", "Bearer " + token)
                 .retrieve()
-                .body(TossPriceResponse.class);
-
-            if (response == null) {
-                throw new ExternalApiException(TossApiErrorCode.PRICE_INQUIRY_FAILED);
-            }
-
-            return response;
-        } catch (ExternalApiException e) {
-            throw e;
-        } catch (HttpClientErrorException.TooManyRequests e) {
-            throw new ExternalApiException(TossApiErrorCode.RATE_LIMIT_EXCEEDED, e);
-        } catch (Exception e) {
-            throw new ExternalApiException(TossApiErrorCode.PRICE_INQUIRY_FAILED, e);
-        }
+                .body(TossPriceResponse.class),
+            HttpClientErrorException.TooManyRequests.class,
+            TossApiErrorCode.RATE_LIMIT_EXCEEDED);
     }
 }
