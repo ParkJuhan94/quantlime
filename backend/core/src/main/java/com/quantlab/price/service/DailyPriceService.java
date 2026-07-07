@@ -57,6 +57,20 @@ public class DailyPriceService {
     }
 
     /**
+     * 여러 종목의 이력을 한 번의 쿼리로 조회한다. 종목 수만큼 순차 조회하는
+     * N+1 패턴을 피하기 위한 배치 버전 - 호출 측에서 stockCode별로 그룹핑해
+     * 사용한다.
+     */
+    @Transactional(readOnly = true)
+    public List<DailyPrice> getDailyPrices(List<String> stockCodes, LocalDate start, LocalDate end) {
+        if (stockCodes.isEmpty()) {
+            return List.of();
+        }
+        return dailyPriceRepository
+            .findByStockCodeInAndTradeDateBetweenOrderByTradeDateDesc(stockCodes, start, end);
+    }
+
+    /**
      * 종목의 이력 OHLCV가 목표 일수(기본 200일)에 못 미치면 토스 캔들 조회를
      * 페이지네이션(count=200 + before/nextBefore)으로 반복 호출해 채운다.
      * 이미 충분하면 API를 호출하지 않고 즉시 반환한다.
