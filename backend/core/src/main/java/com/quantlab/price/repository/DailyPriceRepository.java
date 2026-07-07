@@ -6,7 +6,8 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface DailyPriceRepository extends JpaRepository<DailyPrice, Long> {
+public interface DailyPriceRepository
+    extends JpaRepository<DailyPrice, Long>, DailyPriceQueryRepository {
 
     Optional<DailyPrice> findByStockCodeAndTradeDate(
         String stockCode, LocalDate tradeDate);
