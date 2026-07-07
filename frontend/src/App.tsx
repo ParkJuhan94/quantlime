@@ -1,10 +1,10 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppHeader } from './components/layout/AppHeader'
-import { PlaceholderPage } from './components/common/PlaceholderPage'
 import { LoginPage } from './pages/LoginPage'
 import { OAuthCallbackPage } from './pages/OAuthCallbackPage'
 import { WatchlistPage } from './pages/WatchlistPage'
 import { StockDetailPage } from './pages/StockDetailPage'
+import { DashboardPage } from './pages/DashboardPage'
 import { ProtectedRoute } from './auth/ProtectedRoute'
 
 function App() {
@@ -18,7 +18,7 @@ function App() {
           <Route path="/stocks/:stockCode" element={<StockDetailPage />} />
           <Route element={<ProtectedRoute />}>
             <Route path="/" element={<WatchlistPage />} />
-            <Route path="/dashboard" element={<PlaceholderPage title="대시보드" />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
