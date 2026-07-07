@@ -20,12 +20,15 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 
 @Tag("unit")
@@ -47,11 +50,23 @@ class WatchlistServiceTest {
     @Mock
     private ScoreService scoreService;
 
+    @Mock
+    private TaskExecutor watchlistTaskExecutor;
+
     @InjectMocks
     private WatchlistService watchlistService;
 
     private final User user = UserFixture.createUser();
     private final Stock stock = StockFixture.createStock();
+
+    // 등록 후속작업(백필/스코어 재계산)은 별도 스레드로 넘겨 실행되므로, 그
+    // 결과를 검증해야 하는 테스트에서는 실행기가 즉시 동기 실행하도록 스텁한다.
+    private void runPostRegistrationTasksSynchronously() {
+        doAnswer(invocation -> {
+            invocation.getArgument(0, Runnable.class).run();
+            return null;
+        }).when(watchlistTaskExecutor).execute(any());
+    }
 
     @Test
     @DisplayName("[관심 종목이 없으면 신규 등록한다]")
@@ -114,6 +129,7 @@ class WatchlistServiceTest {
         // given
         Long userId = 1L;
         String stockCode = stock.getStockCode();
+        runPostRegistrationTasksSynchronously();
         given(userService.getById(userId)).willReturn(user);
         given(stockMasterService.getStockByCode(stockCode)).willReturn(stock);
         given(watchlistRepository.existsByUser_IdAndStock_StockCode(userId, stockCode))
@@ -134,6 +150,7 @@ class WatchlistServiceTest {
         // given
         Long userId = 1L;
         String stockCode = stock.getStockCode();
+        runPostRegistrationTasksSynchronously();
         given(userService.getById(userId)).willReturn(user);
         given(stockMasterService.getStockByCode(stockCode)).willReturn(stock);
         given(watchlistRepository.existsByUser_IdAndStock_StockCode(userId, stockCode))
@@ -156,6 +173,7 @@ class WatchlistServiceTest {
         // given
         Long userId = 1L;
         String stockCode = stock.getStockCode();
+        runPostRegistrationTasksSynchronously();
         given(userService.getById(userId)).willReturn(user);
         given(stockMasterService.getStockByCode(stockCode)).willReturn(stock);
         given(watchlistRepository.existsByUser_IdAndStock_StockCode(userId, stockCode))
@@ -176,6 +194,7 @@ class WatchlistServiceTest {
         // given
         Long userId = 1L;
         String stockCode = stock.getStockCode();
+        runPostRegistrationTasksSynchronously();
         given(userService.getById(userId)).willReturn(user);
         given(stockMasterService.getStockByCode(stockCode)).willReturn(stock);
         given(watchlistRepository.existsByUser_IdAndStock_StockCode(userId, stockCode))
