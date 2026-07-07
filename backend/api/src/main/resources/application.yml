@@ -34,6 +34,9 @@ toss:
 python-engine:
   base-url: ${PYTHON_ENGINE_URL:http://localhost:8000}
 
+realtime-price:
+  poll-interval-ms: ${REALTIME_PRICE_POLL_INTERVAL_MS:3000}
+
 jwt:
   secret: ${JWT_SECRET:}
   access-token-validity: ${JWT_ACCESS_TOKEN_VALIDITY:1800000}
