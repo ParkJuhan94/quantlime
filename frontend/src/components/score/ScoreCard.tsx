@@ -1,6 +1,7 @@
 import type { ScoreResponse } from '../../types/score'
 import { GradeBadge } from './GradeBadge'
 import { DivergenceNotice } from './DivergenceNotice'
+import { formatScore } from '../../utils/scoreFormat'
 
 export function ScoreCard({ score }: { score: ScoreResponse }) {
   return (
@@ -17,15 +18,15 @@ export function ScoreCard({ score }: { score: ScoreResponse }) {
       <dl className="mb-3 grid grid-cols-3 gap-3 text-center text-sm">
         <div>
           <dt className="text-xs text-gray-500">추세추종</dt>
-          <dd className="font-semibold text-gray-900">{score.trendScore ?? '-'}</dd>
+          <dd className="font-semibold text-gray-900">{formatScore(score.trendScore)}</dd>
         </div>
         <div>
           <dt className="text-xs text-gray-500">평균회귀</dt>
-          <dd className="font-semibold text-gray-900">{score.meanReversionScore ?? '-'}</dd>
+          <dd className="font-semibold text-gray-900">{formatScore(score.meanReversionScore)}</dd>
         </div>
         <div>
           <dt className="text-xs text-gray-500">종합</dt>
-          <dd className="font-semibold text-gray-900">{score.compositeScore ?? '-'}</dd>
+          <dd className="font-semibold text-gray-900">{formatScore(score.compositeScore)}</dd>
         </div>
       </dl>
       <DivergenceNotice message={score.divergenceMessage} />

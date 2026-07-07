@@ -63,28 +63,30 @@ export function WatchlistPage() {
           <EmptyState message="관심 종목이 없습니다. 위 검색으로 추가해보세요." />
         )}
         {watchlistQuery.data && watchlistQuery.data.length > 0 && (
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b border-gray-200 text-xs text-gray-500">
-                <th className="pb-2 font-medium">종목</th>
-                <th className="pb-2 font-medium">시장</th>
-                <th className="pb-2 font-medium">섹터</th>
-                <th className="pb-2 text-right font-medium">현재가</th>
-                <th className="pb-2 text-right font-medium">등락률</th>
-                <th className="pb-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {watchlistQuery.data.map((item) => (
-                <WatchlistRow
-                  key={item.id}
-                  item={item}
-                  livePrice={livePrices[item.stockCode]}
-                  onRemove={(stockCode) => removeWatchlist.mutate(stockCode)}
-                />
-              ))}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[420px] text-left">
+              <thead>
+                <tr className="border-b border-gray-200 text-xs text-gray-500">
+                  <th className="pb-2 font-medium">종목</th>
+                  <th className="pb-2 font-medium">시장</th>
+                  <th className="pb-2 font-medium">섹터</th>
+                  <th className="pb-2 text-right font-medium">현재가</th>
+                  <th className="pb-2 text-right font-medium">등락률</th>
+                  <th className="pb-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {watchlistQuery.data.map((item) => (
+                  <WatchlistRow
+                    key={item.id}
+                    item={item}
+                    livePrice={livePrices[item.stockCode]}
+                    onRemove={(stockCode) => removeWatchlist.mutate(stockCode)}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
     </div>
