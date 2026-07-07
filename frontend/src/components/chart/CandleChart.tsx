@@ -16,7 +16,11 @@ export function CandleChart({ data }: CandleChartProps) {
     const chart = createChart(container, {
       layout: { textColor: '#374151', background: { type: ColorType.Solid, color: '#ffffff' } },
       grid: { vertLines: { color: '#f3f4f6' }, horzLines: { color: '#f3f4f6' } },
-      width: container.clientWidth,
+      // 직접 만든 ResizeObserver + clientWidth 조합은 좁은 화면에서 20px 정도
+      // 우측이 컨테이너 밖으로 삐져나가는 문제가 있었다(Playwright로 375px
+      // 뷰포트를 실제로 확인하며 발견) - 라이브러리 자체가 제공하는
+      // autoSize로 바꿔 컨테이너 크기 측정/반영을 온전히 위임한다.
+      autoSize: true,
       height: 360,
       timeScale: { borderColor: '#e5e7eb' },
     })
@@ -45,13 +49,7 @@ export function CandleChart({ data }: CandleChartProps) {
     )
     chart.timeScale().fitContent()
 
-    const resizeObserver = new ResizeObserver((entries) => {
-      chart.applyOptions({ width: entries[0].contentRect.width })
-    })
-    resizeObserver.observe(container)
-
     return () => {
-      resizeObserver.disconnect()
       chart.remove()
     }
   }, [data])
