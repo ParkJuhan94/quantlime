@@ -1,8 +1,8 @@
 package com.quantlab.score.domain;
 
 import com.quantlab.common.exception.ValidationException;
+import com.quantlab.common.util.EnumCodeMatcher;
 import com.quantlab.score.exception.ScoreErrorCode;
-import java.util.Arrays;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
@@ -26,9 +26,7 @@ public enum Grade {
      * 자체로 매칭한다 - 소스 데이터(Python 응답)가 코드 형태로 오기 때문.
      */
     public static Grade of(String rawGrade) {
-        return Arrays.stream(values())
-            .filter(grade -> grade.name().equalsIgnoreCase(rawGrade))
-            .findFirst()
-            .orElseThrow(() -> new ValidationException(ScoreErrorCode.INVALID_GRADE));
+        return EnumCodeMatcher.matchByName(Grade.class, rawGrade,
+            () -> new ValidationException(ScoreErrorCode.INVALID_GRADE));
     }
 }

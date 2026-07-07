@@ -1,8 +1,8 @@
 package com.quantlab.user.domain;
 
 import com.quantlab.common.exception.ValidationException;
+import com.quantlab.common.util.EnumCodeMatcher;
 import com.quantlab.user.exception.UserErrorCode;
-import java.util.Arrays;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
@@ -17,9 +17,7 @@ public enum OAuthProvider {
     private final String label;
 
     public static OAuthProvider of(String value) {
-        return Arrays.stream(values())
-            .filter(provider -> provider.name().equalsIgnoreCase(value))
-            .findFirst()
-            .orElseThrow(() -> new ValidationException(UserErrorCode.INVALID_OAUTH_PROVIDER));
+        return EnumCodeMatcher.matchByName(OAuthProvider.class, value,
+            () -> new ValidationException(UserErrorCode.INVALID_OAUTH_PROVIDER));
     }
 }
