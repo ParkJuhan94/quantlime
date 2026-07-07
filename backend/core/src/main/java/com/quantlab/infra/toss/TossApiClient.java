@@ -2,6 +2,7 @@ package com.quantlab.infra.toss;
 
 import com.quantlab.common.util.ExternalApiInvoker;
 import com.quantlab.infra.toss.dto.TossCandleResponse;
+import com.quantlab.infra.toss.dto.TossMarketCalendarResponse;
 import com.quantlab.infra.toss.dto.TossPriceResponse;
 import com.quantlab.infra.toss.exception.TossApiErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -56,5 +57,21 @@ public class TossApiClient {
                 .body(TossPriceResponse.class),
             HttpClientErrorException.TooManyRequests.class,
             TossApiErrorCode.RATE_LIMIT_EXCEEDED);
+    }
+
+    /**
+     * 국내 장 운영 캘린더 조회(휴장일 포함). Rate Limits Group이 시세
+     * 조회(MARKET_DATA)와 분리된 MARKET_INFO라 별도 예산을 쓴다 - 호출
+     * 측(MarketCalendarCache)이 하루 1회만 호출하도록 캐싱한다.
+     */
+    public TossMarketCalendarResponse getMarketCalendar() {
+        String token = tokenManager.getAccessToken();
+        return ExternalApiInvoker.call(
+            TossApiErrorCode.MARKET_CALENDAR_INQUIRY_FAILED,
+            () -> tossRestClient.get()
+                .uri("/api/v1/market-calendar/KR")
+                .header("authorization", "Bearer " + token)
+                .retrieve()
+                .body(TossMarketCalendarResponse.class));
     }
 }
