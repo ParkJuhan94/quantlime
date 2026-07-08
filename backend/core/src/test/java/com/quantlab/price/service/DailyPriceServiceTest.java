@@ -44,6 +44,41 @@ class DailyPriceServiceTest {
     private DailyPriceService dailyPriceService;
 
     @Test
+    @DisplayName("[최근 며칠이 밀려있어도 조회한 기간 내 빠진 날짜를 전부 채운다]")
+    void collectDailyPrice_missingRecentDays_savesOnlyNewOnes() {
+        // given: 최근 3일치를 조회했는데 그중 1일치는 이미 저장돼 있음
+        TossCandleResponse page = candlePage(3, "2026-07-09", null);
+        given(tossApiClient.getDailyCandles(eq(STOCK_CODE), eq(10), any())).willReturn(page);
+        given(dailyPriceRepository.existsByStockCodeAndTradeDate(eq(STOCK_CODE), eq(LocalDate.parse("2026-07-09"))))
+            .willReturn(false);
+        given(dailyPriceRepository.existsByStockCodeAndTradeDate(eq(STOCK_CODE), eq(LocalDate.parse("2026-07-08"))))
+            .willReturn(false);
+        given(dailyPriceRepository.existsByStockCodeAndTradeDate(eq(STOCK_CODE), eq(LocalDate.parse("2026-07-07"))))
+            .willReturn(true);
+
+        // when
+        dailyPriceService.collectDailyPrice(STOCK_CODE);
+
+        // then: 이미 있던 하루를 제외한 2건만 저장
+        verify(dailyPriceRepository, times(2)).save(any(DailyPrice.class));
+    }
+
+    @Test
+    @DisplayName("[조회한 기간이 전부 이미 저장돼 있으면 아무것도 저장하지 않는다]")
+    void collectDailyPrice_allAlreadySaved_savesNothing() {
+        // given
+        TossCandleResponse page = candlePage(1, "2026-07-09", null);
+        given(tossApiClient.getDailyCandles(eq(STOCK_CODE), eq(10), any())).willReturn(page);
+        given(dailyPriceRepository.existsByStockCodeAndTradeDate(anyString(), any())).willReturn(true);
+
+        // when
+        dailyPriceService.collectDailyPrice(STOCK_CODE);
+
+        // then
+        verify(dailyPriceRepository, never()).save(any(DailyPrice.class));
+    }
+
+    @Test
     @DisplayName("[이미 목표치만큼 쌓여있으면 API를 호출하지 않는다]")
     void backfillHistoryIfNeeded_alreadySufficient_skipsApiCall() {
         // given

@@ -24,13 +24,18 @@ public class DailyPriceService {
     private static final int BACKFILL_PAGE_SIZE = 200;
     private static final long BACKFILL_API_DELAY_MS = 150;
     private static final long BACKFILL_RATE_LIMIT_BACKOFF_MS = 3000;
+    // 배치가 하루 이상 못 돈 날(로컬 개발 서버 다운타임, 공휴일 스케줄 밀림
+    // 등)에도 다음 실행에서 자동으로 따라잡을 수 있도록 "최신 1건"이 아니라
+    // 최근 며칠치를 함께 조회한다.
+    private static final int DAILY_COLLECT_LOOKBACK_DAYS = 10;
 
     private final DailyPriceRepository dailyPriceRepository;
     private final TossApiClient tossApiClient;
 
     @Transactional
     public void collectDailyPrice(String stockCode) {
-        TossCandleResponse response = tossApiClient.getDailyCandles(stockCode, 1, null);
+        TossCandleResponse response = tossApiClient.getDailyCandles(
+            stockCode, DAILY_COLLECT_LOOKBACK_DAYS, null);
 
         List<TossCandleResponse.TossCandle> candles = response.result().candles();
         if (candles == null || candles.isEmpty()) {
@@ -38,16 +43,12 @@ public class DailyPriceService {
             return;
         }
 
-        TossCandleResponse.TossCandle latest = candles.get(0);
-        LocalDate tradeDate = TossPriceMapper.toLocalDate(latest.timestamp());
-
-        if (dailyPriceRepository.existsByStockCodeAndTradeDate(stockCode, tradeDate)) {
-            log.debug("이미 수집된 데이터: stockCode={}, date={}", stockCode, tradeDate);
-            return;
+        int savedCount = saveNewCandles(stockCode, candles);
+        if (savedCount > 0) {
+            log.info("일별 시세 수집 완료: stockCode={}, 신규저장={}건", stockCode, savedCount);
+        } else {
+            log.debug("이미 수집된 데이터: stockCode={}", stockCode);
         }
-
-        dailyPriceRepository.save(TossPriceMapper.toDailyPrice(stockCode, latest));
-        log.info("일별 시세 수집 완료: stockCode={}, date={}", stockCode, tradeDate);
     }
 
     @Transactional(readOnly = true)

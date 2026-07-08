@@ -85,13 +85,37 @@ class MarketCalendarCacheTest {
         verify(tossApiClient, times(1)).getMarketCalendar();
     }
 
+    @Test
+    @DisplayName("[정규장 시간 밖이어도 NXT 프리마켓 시간대 안이면 개장 중이다]")
+    void isMarketOpenNow_withinPreMarketOnly_returnsTrue() {
+        // given: 정규장은 현재 시각 이후(+2~+3시간)로 아직 시작 전, 프리마켓만 현재 시각을 포함
+        OffsetDateTime now = OffsetDateTime.now();
+        MarketSession preMarket = session(now.minusHours(1), now.plusHours(1));
+        MarketSession regularMarket = session(now.plusHours(2), now.plusHours(3));
+        MarketDay today = new MarketDay(
+            now.toLocalDate().toString(),
+            new MarketSessions(preMarket, regularMarket, null));
+        given(tossApiClient.getMarketCalendar()).willReturn(
+            new TossMarketCalendarResponse(new KrMarketCalendarResult(today)));
+
+        // when
+        boolean result = marketCalendarCache.isMarketOpenNow();
+
+        // then
+        assertThat(result).isTrue();
+    }
+
     private TossMarketCalendarResponse businessDayResponse(long startOffsetHours, long endOffsetHours) {
         OffsetDateTime start = OffsetDateTime.now().plusHours(startOffsetHours);
         OffsetDateTime end = OffsetDateTime.now().plusHours(endOffsetHours);
         MarketSession regularMarket = new MarketSession(start.toString(), end.toString());
         MarketDay today = new MarketDay(
             OffsetDateTime.now().toLocalDate().toString(),
-            new MarketSessions(regularMarket));
+            new MarketSessions(null, regularMarket, null));
         return new TossMarketCalendarResponse(new KrMarketCalendarResult(today));
+    }
+
+    private MarketSession session(OffsetDateTime start, OffsetDateTime end) {
+        return new MarketSession(start.toString(), end.toString());
     }
 }
