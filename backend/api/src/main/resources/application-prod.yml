@@ -1,0 +1,21 @@
+# 프로덕션 프로파일 - 베이스 application.yml의 env 치환값은 그대로 쓰고,
+# 로컬 개발 편의용으로 켜뒀던 SQL 로깅만 끈다.
+#
+# ddl-auto는 update를 그대로 유지한다 - 마이그레이션 도구(Flyway 등)를
+# 아직 도입하지 않은 상태에서 최초 배포 시 스키마를 자동 생성해야 하고,
+# 이후 컬럼 추가 같은 단순 변경도 그대로 반영되는 게 현재로선 더
+# 실용적이라는 의도적 트레이드오프. 운영 데이터가 쌓이기 시작하면
+# Flyway/Liquibase 도입을 재검토할 것.
+spring:
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        use_sql_comments: false
+
+logging:
+  level:
+    root: info
+    com.quantlab: info
+    org.hibernate.SQL: warn

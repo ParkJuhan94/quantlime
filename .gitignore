@@ -22,6 +22,7 @@ venv/
 # Environment
 .env
 *.env.local
+.env.prod
 
 # 스코어링 상세 설계 (공개 저장소 노출 방지, 로컬 전용)
 quant-engine/docs/SCORING_DESIGN.md

@@ -1,0 +1,93 @@
+# 단일 EC2 배포용 compose. 각 앱 서비스는 build(로컬 검증: `docker compose
+# -f docker-compose.prod.yml build`)와 image(EC2에서는 `pull`로 GHCR 이미지
+# 사용, `docker-compose.prod.yml pull && up -d`)를 함께 명시해 한 파일로
+# 로컬 빌드 검증과 EC2 배포를 모두 지원한다.
+#
+# 토폴로지 고정값(호스트명·포트 등 서비스 간 배선)은 여기 environment에,
+# 실제 비밀값(시크릿)은 .env.prod(gitignore 대상, .env.prod.example 참고)로
+# 분리한다.
+#
+# 프로젝트명을 dev용 docker-compose.yml과 다르게 고정(quantlab-prod)해
+# 컨테이너명·볼륨명이 겹치지 않게 한다 - 두 compose 파일이 같은 루트
+# 디렉터리에 있어 이름을 명시하지 않으면 둘 다 기본 프로젝트명(디렉터리명
+# "quantlab")을 공유해, 로컬에서 prod 스택을 검증차 띄우면 dev용
+# MySQL/Redis 컨테이너와 볼륨을 그대로 재사용(사실상 덮어씀)해버린다.
+name: quantlab-prod
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: quantlab-prod-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-quantlab}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    restart: always
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --default-time-zone=+09:00
+
+  redis:
+    image: redis:7-alpine
+    container_name: quantlab-prod-redis
+    volumes:
+      - redis_data:/data
+    restart: always
+
+  quant-engine:
+    build: ./quant-engine
+    image: ghcr.io/parkjuhan94/quantlab-quant-engine:latest
+    container_name: quantlab-prod-quant-engine
+    env_file: .env.prod
+    restart: always
+
+  backend:
+    build: ./backend
+    image: ghcr.io/parkjuhan94/quantlab-backend:latest
+    container_name: quantlab-prod-backend
+    env_file: .env.prod
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      PYTHON_ENGINE_URL: http://quant-engine:8000
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      quant-engine:
+        condition: service_started
+    restart: always
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # same-origin 프록시(nginx.conf)라 빈 값 - axios/STOMP가 상대경로로
+        # 요청하게 됨. OAuth 클라이언트 ID는 공개값이라 .env.prod에서 가져옴
+        VITE_API_BASE_URL: ""
+        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID}
+        VITE_KAKAO_CLIENT_ID: ${VITE_KAKAO_CLIENT_ID}
+        VITE_NAVER_CLIENT_ID: ${VITE_NAVER_CLIENT_ID}
+    image: ghcr.io/parkjuhan94/quantlab-frontend:latest
+    container_name: quantlab-prod-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: always
+
+volumes:
+  mysql_data:
+  redis_data:
