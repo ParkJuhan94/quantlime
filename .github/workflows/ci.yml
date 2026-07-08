@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    # TestContainerSupport는 MySQL만 Testcontainers로 격리하고 Redis는
+    # 격리하지 않는다(로컬/CI의 실제 Redis를 그대로 씀 - CLAUDE.md 참고).
+    # 러너가 기본 제공하는 Docker로 Testcontainers(MySQL)는 별도 설정 없이
+    # 동작하고, Redis만 서비스 컨테이너로 6381(백엔드 기본 포트)에 매핑한다.
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6381:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Gradle 캐시
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: 빌드 + 테스트
+        working-directory: backend
+        run: ./gradlew build
+
+  quant-engine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 의존성 설치
+        working-directory: quant-engine
+        run: pip install -r requirements.txt
+
+      - name: 테스트
+        working-directory: quant-engine
+        run: pytest
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: 의존성 설치
+        working-directory: frontend
+        run: npm ci
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: 타입체크 + 빌드
+        working-directory: frontend
+        run: npm run build
