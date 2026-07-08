@@ -32,6 +32,9 @@ export function CandleChart({ data }: CandleChartProps) {
       borderVisible: false,
       wickUpColor: '#dc2626',
       wickDownColor: '#2563eb',
+      // 국내 주식은 원 단위 정수 가격이라 라이브러리 기본값(소수 2자리)을
+      // 끄고 정수로 표시한다(크로스헤어/축 라벨 전부 적용됨).
+      priceFormat: { type: 'price', precision: 0, minMove: 1 },
     })
 
     // 백엔드는 최신순(내림차순)으로 내려주므로 차트가 요구하는 오름차순으로 정렬한다.
