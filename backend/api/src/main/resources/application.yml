@@ -35,6 +35,9 @@ toss:
   client-secret: ${TOSS_CLIENT_SECRET:}
   base-url: ${TOSS_BASE_URL:https://openapi.tossinvest.com}
 
+kind:
+  base-url: ${KIND_BASE_URL:https://kind.krx.co.kr}
+
 python-engine:
   base-url: ${PYTHON_ENGINE_URL:http://localhost:8000}
 

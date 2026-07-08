@@ -9,7 +9,9 @@ import com.quantlab.price.scheduler.OhlcvCollectorScheduler;
 import com.quantlab.price.service.DailyPriceService;
 import com.quantlab.score.service.ScoreService;
 import com.quantlab.stock.domain.Stock;
+import com.quantlab.stock.dto.StockMasterSyncResult;
 import com.quantlab.stock.service.StockMasterService;
+import com.quantlab.stock.service.StockMasterSyncService;
 import com.quantlab.user.domain.OAuthProvider;
 import com.quantlab.user.domain.User;
 import com.quantlab.user.service.UserService;
@@ -35,6 +37,7 @@ public class DevController {
 
     private final OhlcvCollectorScheduler ohlcvCollectorScheduler;
     private final StockMasterService stockMasterService;
+    private final StockMasterSyncService stockMasterSyncService;
     private final DailyPriceService dailyPriceService;
     private final ScoreService scoreService;
     private final UserService userService;
@@ -60,6 +63,15 @@ public class DevController {
             }
         }
         return ResponseEntity.ok("백필 완료");
+    }
+
+    @PostMapping("/stock-master/sync")
+    @Operation(summary = "[개발용] 종목마스터 동기화(신규상장/상장폐지 반영) 수동 트리거")
+    public ResponseEntity<String> triggerStockMasterSync() {
+        StockMasterSyncResult result = stockMasterSyncService.syncStockMaster();
+        return ResponseEntity.ok(
+            "종목마스터 동기화 완료: 신규상장 %d건, 상장폐지 %d건"
+                .formatted(result.newlyListedCount(), result.delistedCount()));
     }
 
     @PostMapping("/scores/recalculate")
