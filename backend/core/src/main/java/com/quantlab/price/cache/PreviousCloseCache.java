@@ -11,10 +11,13 @@ import org.springframework.stereotype.Component;
 
 /**
  * 종목별 전일 종가를 캘린더 날짜 기준으로 캐싱한다. 전일 종가는 당일
- * 하루 동안 값이 바뀌지 않으므로(당일 시세는 16시 배치가 끝나야
- * 수집됨) 배치 조회는 하루 1회만 수행한다. 단, 캐시된 이후 새로 관심
- * 종목에 등록된 종목처럼 캐시에 없는 코드가 섞여 있으면 그 시점에만
- * 다시 조회한다.
+ * 하루 동안 값이 바뀌지 않으므로 배치 조회는 하루 1회만 수행한다. 단,
+ * 캐시된 이후 새로 관심 종목에 등록된 종목처럼 캐시에 없는 코드가
+ * 섞여 있으면 그 시점에만 다시 조회한다.
+ *
+ * <p>당일 행은 DailyPriceQueryRepository.findLatestBeforeDate가 항상
+ * 제외하므로, 장중 캐치업 수집으로 당일 OHLCV가 먼저 들어와도 전일
+ * 종가가 당일 값으로 잘못 대체되지 않는다.
  */
 @Component
 @RequiredArgsConstructor
@@ -41,7 +44,7 @@ public class PreviousCloseCache {
         if (!needsRefresh(stockCodes, today)) {
             return; // 락 대기 중 다른 스레드가 이미 갱신함
         }
-        closeByStockCode = dailyPriceRepository.findLatestByStockCodesIn(stockCodes).stream()
+        closeByStockCode = dailyPriceRepository.findLatestBeforeDate(stockCodes, today).stream()
             .collect(Collectors.toMap(DailyPrice::getStockCode, DailyPrice::getClosePrice));
         cachedDate = today;
     }

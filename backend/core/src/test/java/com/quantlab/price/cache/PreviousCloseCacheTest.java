@@ -15,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.times;
@@ -36,7 +37,7 @@ class PreviousCloseCacheTest {
     @DisplayName("[첫 조회 시 배치 조회로 전일 종가를 가져온다]")
     void get_firstCall_fetchesBatch() {
         // given
-        given(dailyPriceRepository.findLatestByStockCodesIn(anyList()))
+        given(dailyPriceRepository.findLatestBeforeDate(anyList(), any()))
             .willReturn(List.of(dailyPrice(STOCK_CODE, 70000L)));
 
         // when
@@ -44,14 +45,14 @@ class PreviousCloseCacheTest {
 
         // then
         assertThat(result).containsEntry(STOCK_CODE, 70000L);
-        verify(dailyPriceRepository, times(1)).findLatestByStockCodesIn(anyList());
+        verify(dailyPriceRepository, times(1)).findLatestBeforeDate(anyList(), any());
     }
 
     @Test
     @DisplayName("[같은 날 같은 종목을 다시 조회하면 배치 조회를 반복하지 않는다]")
     void get_sameDaySameCodes_doesNotRefetch() {
         // given
-        given(dailyPriceRepository.findLatestByStockCodesIn(anyList()))
+        given(dailyPriceRepository.findLatestBeforeDate(anyList(), any()))
             .willReturn(List.of(dailyPrice(STOCK_CODE, 70000L)));
 
         // when
@@ -59,7 +60,7 @@ class PreviousCloseCacheTest {
         previousCloseCache.get(List.of(STOCK_CODE));
 
         // then
-        verify(dailyPriceRepository, times(1)).findLatestByStockCodesIn(anyList());
+        verify(dailyPriceRepository, times(1)).findLatestBeforeDate(anyList(), any());
     }
 
     @Test
@@ -67,7 +68,7 @@ class PreviousCloseCacheTest {
     void get_newCodeNotCached_refetches() {
         // given
         String newCode = "000660";
-        given(dailyPriceRepository.findLatestByStockCodesIn(anyList()))
+        given(dailyPriceRepository.findLatestBeforeDate(anyList(), any()))
             .willReturn(List.of(dailyPrice(STOCK_CODE, 70000L)))
             .willReturn(List.of(dailyPrice(STOCK_CODE, 70000L), dailyPrice(newCode, 50000L)));
 
@@ -77,14 +78,14 @@ class PreviousCloseCacheTest {
 
         // then
         assertThat(result).containsEntry(newCode, 50000L);
-        verify(dailyPriceRepository, times(2)).findLatestByStockCodesIn(anyList());
+        verify(dailyPriceRepository, times(2)).findLatestBeforeDate(anyList(), any());
     }
 
     @Test
     @DisplayName("[날짜가 바뀌면 같은 종목이어도 다시 조회한다]")
     void get_dateChanged_refetches() {
         // given
-        given(dailyPriceRepository.findLatestByStockCodesIn(anyList()))
+        given(dailyPriceRepository.findLatestBeforeDate(anyList(), any()))
             .willReturn(List.of(dailyPrice(STOCK_CODE, 70000L)))
             .willReturn(List.of(dailyPrice(STOCK_CODE, 71000L)));
         previousCloseCache.get(List.of(STOCK_CODE));
@@ -95,7 +96,7 @@ class PreviousCloseCacheTest {
 
         // then
         assertThat(result).containsEntry(STOCK_CODE, 71000L);
-        verify(dailyPriceRepository, times(2)).findLatestByStockCodesIn(anyList());
+        verify(dailyPriceRepository, times(2)).findLatestBeforeDate(anyList(), any());
     }
 
     private DailyPrice dailyPrice(String stockCode, long closePrice) {

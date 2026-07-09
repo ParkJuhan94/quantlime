@@ -17,7 +17,7 @@ public class DailyPriceQueryRepositoryImpl implements DailyPriceQueryRepository 
     private final JPAQueryFactory queryFactory;
 
     @Override
-    public List<DailyPrice> findLatestByStockCodesIn(List<String> stockCodes) {
+    public List<DailyPrice> findLatestBeforeDate(List<String> stockCodes, LocalDate date) {
         QDailyPrice dailyPrice = QDailyPrice.dailyPrice;
         QDailyPrice latest = new QDailyPrice("latest");
 
@@ -29,15 +29,17 @@ public class DailyPriceQueryRepositoryImpl implements DailyPriceQueryRepository 
             .selectFrom(dailyPrice)
             .where(
                 dailyPrice.stockCode.in(stockCodes),
-                dailyPrice.tradeDate.eq(latestTradeDateSubquery(latest, dailyPrice))
+                dailyPrice.tradeDate.lt(date),
+                dailyPrice.tradeDate.eq(latestTradeDateSubquery(latest, dailyPrice, date))
             )
             .fetch();
     }
 
-    private JPQLQuery<LocalDate> latestTradeDateSubquery(QDailyPrice latest, QDailyPrice dailyPrice) {
+    private JPQLQuery<LocalDate> latestTradeDateSubquery(
+        QDailyPrice latest, QDailyPrice dailyPrice, LocalDate date) {
         return JPAExpressions
             .select(latest.tradeDate.max())
             .from(latest)
-            .where(latest.stockCode.eq(dailyPrice.stockCode));
+            .where(latest.stockCode.eq(dailyPrice.stockCode), latest.tradeDate.lt(date));
     }
 }
