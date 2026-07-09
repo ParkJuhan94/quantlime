@@ -1,0 +1,59 @@
+# EC2 배포 전용 오버레이 - 컨테이너 로그를 CloudWatch Logs로 스트리밍한다.
+# docker-compose.prod.yml 본체에 넣지 않고 별도 파일로 분리한 이유:
+# awslogs 드라이버는 컨테이너 기동 시점에 AWS 자격증명/리전을 요구하므로,
+# 로컬 검증(`docker compose -f docker-compose.prod.yml up --build`, Phase 6
+# 때 확인해둔 경로)에 이 드라이버가 섞이면 AWS 자격증명 없는 로컬 환경에서
+# 기동 자체가 실패한다. EC2에서만 아래처럼 두 파일을 함께 지정해 합친다:
+#   docker compose -f docker-compose.prod.yml -f docker-compose.cloudwatch.yml \
+#     --env-file .env.prod up -d
+#
+# 로그 그룹은 서비스별로 분리(/quantlab/{service})해 CloudWatch Logs
+# Insights에서 서비스 단위로 조회하기 쉽게 하고, 보존 기간은 이 파일이
+# 아니라 로그 그룹 생성 시 AWS CLI로 지정한다(docs/DEPLOYMENT.md 참고 -
+# awslogs-create-group으로 자동 생성되는 로그 그룹은 기본 "무기한 보존"이라
+# 비용 억제를 위해 반드시 보존 기간을 명시적으로 설정해야 함).
+services:
+  mysql:
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ${AWS_REGION:-ap-northeast-2}
+        awslogs-create-group: "true"
+        awslogs-stream-prefix: ec2
+        awslogs-group: /quantlab/mysql
+
+  redis:
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ${AWS_REGION:-ap-northeast-2}
+        awslogs-create-group: "true"
+        awslogs-stream-prefix: ec2
+        awslogs-group: /quantlab/redis
+
+  quant-engine:
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ${AWS_REGION:-ap-northeast-2}
+        awslogs-create-group: "true"
+        awslogs-stream-prefix: ec2
+        awslogs-group: /quantlab/quant-engine
+
+  backend:
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ${AWS_REGION:-ap-northeast-2}
+        awslogs-create-group: "true"
+        awslogs-stream-prefix: ec2
+        awslogs-group: /quantlab/backend
+
+  frontend:
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ${AWS_REGION:-ap-northeast-2}
+        awslogs-create-group: "true"
+        awslogs-stream-prefix: ec2
+        awslogs-group: /quantlab/frontend
