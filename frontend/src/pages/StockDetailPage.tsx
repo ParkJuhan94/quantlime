@@ -77,7 +77,7 @@ export function StockDetailPage() {
         {chartQuery.data && chartQuery.data.length === 0 && <EmptyState message="차트 데이터가 없습니다." />}
         {chartQuery.data && chartQuery.data.length > 0 && (
           <Suspense fallback={<LoadingSpinner />}>
-            <CandleChart data={chartQuery.data} />
+            <CandleChart data={chartQuery.data} livePrice={livePrice} />
           </Suspense>
         )}
       </section>

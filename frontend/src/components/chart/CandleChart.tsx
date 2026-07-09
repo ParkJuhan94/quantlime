@@ -1,13 +1,27 @@
 import { useEffect, useRef } from 'react'
-import { CandlestickSeries, ColorType, createChart } from 'lightweight-charts'
+import { CandlestickSeries, ColorType, createChart, type ISeriesApi } from 'lightweight-charts'
 import type { DailyChartResponse } from '../../types/stock'
+import type { PriceBroadcastMessage } from '../../types/realtime'
 
 interface CandleChartProps {
   data: DailyChartResponse[]
+  livePrice?: PriceBroadcastMessage
 }
 
-export function CandleChart({ data }: CandleChartProps) {
+interface LiveBar {
+  tradeDate: string
+  open: number
+  high: number
+  low: number
+  close: number
+}
+
+export function CandleChart({ data, livePrice }: CandleChartProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
+  // 실시간 틱마다 오늘자 봉의 고가/저가/종가를 계산할 기준값. setData 이후
+  // 틱으로 갱신되므로 매 렌더마다 새로 만들지 않고 ref로 들고 있는다.
+  const lastBarRef = useRef<LiveBar | null>(null)
 
   useEffect(() => {
     const container = containerRef.current
@@ -38,24 +52,48 @@ export function CandleChart({ data }: CandleChartProps) {
     })
 
     // 백엔드는 최신순(내림차순)으로 내려주므로 차트가 요구하는 오름차순으로 정렬한다.
+    const sorted = data.slice().sort((a, b) => a.tradeDate.localeCompare(b.tradeDate))
     candleSeries.setData(
-      data
-        .slice()
-        .sort((a, b) => a.tradeDate.localeCompare(b.tradeDate))
-        .map((item) => ({
-          time: item.tradeDate,
-          open: item.open,
-          high: item.high,
-          low: item.low,
-          close: item.close,
-        })),
+      sorted.map((item) => ({
+        time: item.tradeDate,
+        open: item.open,
+        high: item.high,
+        low: item.low,
+        close: item.close,
+      })),
     )
     chart.timeScale().fitContent()
 
+    candleSeriesRef.current = candleSeries
+    const last = sorted[sorted.length - 1]
+    lastBarRef.current = last ? { ...last } : null
+
     return () => {
+      candleSeriesRef.current = null
       chart.remove()
     }
   }, [data])
+
+  // 일별 배치가 아직 안 돈 시간대(장중)에도 오늘자 캔들이 실시간 가격을
+  // 따라 움직이도록, 틱마다 마지막 봉(또는 아직 없으면 오늘자 신규 봉)을
+  // 갱신한다. 오늘자 봉이 아직 DB에 없는 경우 첫 틱 가격을 시가로 삼는
+  // 근사치다(정확한 시가는 다음 배치/수동 트리거가 채워줄 때 대체된다).
+  useEffect(() => {
+    const series = candleSeriesRef.current
+    if (!series || livePrice?.currentPrice == null) return
+
+    const today = livePrice.timestamp.slice(0, 10)
+    const price = livePrice.currentPrice
+    const previous = lastBarRef.current
+
+    const bar: LiveBar =
+      previous && previous.tradeDate === today
+        ? { ...previous, high: Math.max(previous.high, price), low: Math.min(previous.low, price), close: price }
+        : { tradeDate: today, open: price, high: price, low: price, close: price }
+
+    series.update({ time: bar.tradeDate, open: bar.open, high: bar.high, low: bar.low, close: bar.close })
+    lastBarRef.current = bar
+  }, [livePrice])
 
   return <div ref={containerRef} className="w-full" />
 }
