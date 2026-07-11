@@ -6,6 +6,7 @@ public record StockDetailResponse(
     String stockName,
     String marketType,
     String listingStatus,
-    String sector
+    String sector,
+    String logoUrl
 ) {
 }

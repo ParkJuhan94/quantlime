@@ -5,6 +5,7 @@ export interface StockDetailResponse {
   marketType: string
   listingStatus: string
   sector: string
+  logoUrl: string
 }
 
 export interface PageResponse<T> {
