@@ -33,7 +33,7 @@ class KakaoOAuthClientTest {
         RestClient restClient = builder.build();
 
         OAuthProperties.Provider provider = new OAuthProperties.Provider(
-            "client-id", "client-secret", "http://localhost/cb", TOKEN_URI, USERINFO_URI);
+            "client-id", "client-secret", TOKEN_URI, USERINFO_URI);
         OAuthProperties properties = new OAuthProperties(provider, provider, provider);
 
         kakaoOAuthClient = new KakaoOAuthClient(restClient, properties);
@@ -82,6 +82,27 @@ class KakaoOAuthClientTest {
         // then
         assertThat(userInfo.providerId()).isEqualTo("987654321");
         assertThat(userInfo.email()).isNull();
+        assertThat(userInfo.nickname()).isEqualTo("카카오사용자");
+    }
+
+    @Test
+    @DisplayName("[닉네임이 빈 문자열이어도 기본 닉네임으로 조회된다]")
+    void fetch_blankNickname_fallsBackToDefaultNickname() {
+        // given
+        mockServer.expect(requestTo(TOKEN_URI))
+            .andRespond(withSuccess(
+                "{\"access_token\":\"kakao-access-token\",\"token_type\":\"bearer\",\"expires_in\":3600}",
+                MediaType.APPLICATION_JSON));
+        mockServer.expect(requestTo(USERINFO_URI))
+            .andRespond(withSuccess(
+                "{\"id\":111222333,\"kakao_account\":{\"profile\":{\"nickname\":\"\"}}}",
+                MediaType.APPLICATION_JSON));
+
+        // when
+        OAuthUserInfo userInfo = kakaoOAuthClient.fetch("auth-code", "http://localhost/cb");
+
+        // then
+        assertThat(userInfo.providerId()).isEqualTo("111222333");
         assertThat(userInfo.nickname()).isEqualTo("카카오사용자");
     }
 }

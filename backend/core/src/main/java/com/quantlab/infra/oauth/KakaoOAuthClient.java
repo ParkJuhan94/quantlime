@@ -11,6 +11,7 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 
 @Component
@@ -70,7 +71,7 @@ public class KakaoOAuthClient implements OAuthClient {
                 ? userInfo.kakaoAccount().profile().profileImageUrl() : null;
 
             return new OAuthUserInfo(OAuthProvider.KAKAO, String.valueOf(userInfo.id()),
-                email, nickname != null ? nickname : DEFAULT_NICKNAME, profileImageUrl);
+                email, StringUtils.hasText(nickname) ? nickname : DEFAULT_NICKNAME, profileImageUrl);
         } catch (ExternalApiException e) {
             throw e;
         } catch (Exception e) {

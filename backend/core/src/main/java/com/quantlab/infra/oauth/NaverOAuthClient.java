@@ -11,11 +11,14 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 
 @Component
 @RequiredArgsConstructor
 public class NaverOAuthClient implements OAuthClient {
+
+    private static final String DEFAULT_NICKNAME = "네이버사용자";
 
     private final RestClient oAuthRestClient;
     private final OAuthProperties properties;
@@ -58,8 +61,11 @@ public class NaverOAuthClient implements OAuthClient {
             }
 
             NaverUserInfoResponse.NaverAccount account = userInfo.response();
+            String nickname = StringUtils.hasText(account.nickname())
+                ? account.nickname() : DEFAULT_NICKNAME;
+
             return new OAuthUserInfo(OAuthProvider.NAVER, account.id(),
-                account.email(), account.nickname(), account.profileImage());
+                account.email(), nickname, account.profileImage());
         } catch (ExternalApiException e) {
             throw e;
         } catch (Exception e) {
