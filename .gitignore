@@ -6,7 +6,7 @@ build/
 
 # Gradle
 .gradle/
-!gradle/wrapper/gradle-wrapper.jar
+!backend/gradle/wrapper/gradle-wrapper.jar
 
 # Generated
 **/src/main/generated/
