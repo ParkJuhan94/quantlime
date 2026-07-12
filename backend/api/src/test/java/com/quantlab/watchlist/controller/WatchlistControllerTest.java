@@ -1,6 +1,8 @@
 package com.quantlab.watchlist.controller;
 
 import com.quantlab.auth.jwt.JwtTokenProvider;
+import com.quantlab.infra.toss.TossApiClient;
+import com.quantlab.infra.toss.dto.TossCandleResponse;
 import com.quantlab.stock.StockFixture;
 import com.quantlab.stock.domain.Stock;
 import com.quantlab.stock.repository.StockRepository;
@@ -8,12 +10,18 @@ import com.quantlab.support.ApiTestSupport;
 import com.quantlab.user.UserFixture;
 import com.quantlab.user.domain.User;
 import com.quantlab.user.repository.UserRepository;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.mock.mockito.MockBean;
 
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -32,6 +40,13 @@ class WatchlistControllerTest extends ApiTestSupport {
     @Autowired
     private JwtTokenProvider jwtTokenProvider;
 
+    // 관심종목 등록은 별도 스레드에서 이력 백필(TossApiClient.getDailyCandles)을
+    // 트리거한다. 실제 빈을 그대로 두면 이 통합테스트가 매번 진짜 토스증권
+    // API를 호출하는데, 토스 토큰은 1개만 유효해(CLAUDE.md §4) CI가 재발급받는
+    // 순간 로컬/운영에서 쓰던 토큰이 즉시 무효화된다 - 반드시 mock으로 격리.
+    @MockBean
+    private TossApiClient tossApiClient;
+
     private Stock stock;
     private String accessToken;
 
@@ -40,6 +55,12 @@ class WatchlistControllerTest extends ApiTestSupport {
         User user = userRepository.save(UserFixture.createUser());
         stock = stockRepository.save(StockFixture.createStock());
         accessToken = jwtTokenProvider.createAccessToken(user.getId(), user.getRole());
+
+        // 빈 캔들 목록을 반환시켜 백필이 즉시 정상 종료되게 한다(캔들 매핑
+        // 자체는 이 테스트의 관심사가 아님 - DailyPriceServiceTest에서 별도 검증).
+        given(tossApiClient.getDailyCandles(anyString(), anyInt(), nullable(String.class)))
+            .willReturn(new TossCandleResponse(
+                new TossCandleResponse.TossCandlePageResult(List.of(), null)));
     }
 
     @Test
