@@ -6,4 +6,6 @@ export const queryKeys = {
   stockChart: (stockCode: string, days: number) => ['stocks', 'chart', stockCode, days] as const,
   stockScore: (stockCode: string) => ['stocks', 'score', stockCode] as const,
   dashboardScores: ['dashboard', 'scores'] as const,
+  marketIndices: ['market', 'indices'] as const,
+  marketRanking: (sort: string, limit: number) => ['market', 'ranking', sort, limit] as const,
 }
