@@ -2,6 +2,7 @@ package com.quantlab.infra.toss;
 
 import com.quantlab.common.util.ExternalApiInvoker;
 import com.quantlab.infra.toss.dto.TossCandleResponse;
+import com.quantlab.infra.toss.dto.TossExchangeRateResponse;
 import com.quantlab.infra.toss.dto.TossMarketCalendarResponse;
 import com.quantlab.infra.toss.dto.TossPriceResponse;
 import com.quantlab.infra.toss.exception.TossApiErrorCode;
@@ -57,6 +58,26 @@ public class TossApiClient {
                 .body(TossPriceResponse.class),
             HttpClientErrorException.TooManyRequests.class,
             TossApiErrorCode.RATE_LIMIT_EXCEEDED);
+    }
+
+    /**
+     * 환율 조회. Rate Limits Group이 시세 조회(MARKET_DATA)와 분리된
+     * MARKET_INFO라 별도 예산을 쓴다(장 운영 캘린더와 동일 그룹) -
+     * 호출 측(MarketIndexCache)이 짧게 캐싱해 재호출을 줄인다.
+     */
+    public TossExchangeRateResponse getExchangeRate(String baseCurrency, String quoteCurrency) {
+        String token = tokenManager.getAccessToken();
+        return ExternalApiInvoker.call(
+            TossApiErrorCode.EXCHANGE_RATE_INQUIRY_FAILED,
+            () -> tossRestClient.get()
+                .uri(uriBuilder -> uriBuilder
+                    .path("/api/v1/exchange-rate")
+                    .queryParam("baseCurrency", baseCurrency)
+                    .queryParam("quoteCurrency", quoteCurrency)
+                    .build())
+                .header("authorization", "Bearer " + token)
+                .retrieve()
+                .body(TossExchangeRateResponse.class));
     }
 
     /**
