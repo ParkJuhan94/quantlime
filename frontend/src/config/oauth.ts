@@ -21,7 +21,7 @@ const SCOPES: Partial<Record<OAuthProviderName, string>> = {
 
 const STATE_STORAGE_KEY_PREFIX = 'ql_oauth_state_'
 
-/** 백엔드 .env의 GOOGLE_REDIRECT_URI 등과 정확히 일치해야 한다. */
+/** 각 프로바이더 콘솔에 등록된 Authorized Redirect URI와 정확히 일치해야 한다. */
 export function getRedirectUri(provider: OAuthProviderName): string {
   return `${window.location.origin}/oauth/callback/${provider}`
 }

@@ -36,7 +36,7 @@ class GoogleOAuthClientTest {
         RestClient restClient = builder.build();
 
         OAuthProperties.Provider provider = new OAuthProperties.Provider(
-            "client-id", "client-secret", "http://localhost/cb", TOKEN_URI, USERINFO_URI);
+            "client-id", "client-secret", TOKEN_URI, USERINFO_URI);
         OAuthProperties properties = new OAuthProperties(provider, provider, provider);
 
         googleOAuthClient = new GoogleOAuthClient(restClient, properties);

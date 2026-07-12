@@ -12,8 +12,10 @@ npm run dev                  # http://localhost:3001
 ```
 
 개발 서버 포트는 **3001로 고정**돼 있다(`vite.config.ts`의
-`strictPort`). 백엔드 `.env`의 `GOOGLE_REDIRECT_URI` 등 OAuth 리다이렉트
-URI가 이 포트를 전제로 하므로, 임의로 바꾸면 로그인이 깨진다.
+`strictPort`). OAuth 리다이렉트 URI는 프론트가 `window.location.origin`
+기준으로 런타임에 동적 생성해 백엔드로 넘기므로, 각 프로바이더 콘솔에
+등록된 Authorized Redirect URI가 이 포트를 전제로 한다 - 임의로 바꾸면
+로그인이 깨진다.
 
 ## 실제 소셜 로그인 없이 개발하기
 
