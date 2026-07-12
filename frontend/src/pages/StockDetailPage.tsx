@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import {
   useStockChartQuery,
@@ -17,6 +17,7 @@ import { StockLogo } from '../components/common/StockLogo'
 import { getErrorMessage, isNotFoundStatus } from '../api/errors'
 import { changeRateColorClass, formatChangeRate, formatPrice } from '../utils/priceFormat'
 import { DEFAULT_INDICATOR_SETTINGS, INDICATOR_WARMUP_DAYS, type IndicatorSettings } from '../utils/indicators'
+import { recentlyViewedStorage } from '../storage/recentlyViewedStorage'
 
 // lightweight-charts는 이 페이지에서만 쓰이는데도 기본적으로는 전체
 // 초기 번들(관심종목/로그인 등 다른 페이지 포함)에 함께 실려 500KB+
@@ -45,6 +46,15 @@ export function StockDetailPage() {
   const scoreQuery = useStockScoreQuery(stockCode)
   const livePrices = useStockPriceSocket([stockCode])
   const livePrice = livePrices[stockCode]
+
+  useEffect(() => {
+    if (!detailQuery.data) return
+    recentlyViewedStorage.record({
+      stockCode: detailQuery.data.stockCode,
+      stockName: detailQuery.data.stockName,
+      logoUrl: detailQuery.data.logoUrl,
+    })
+  }, [detailQuery.data])
 
   if (detailQuery.isLoading) {
     return <LoadingSpinner />
