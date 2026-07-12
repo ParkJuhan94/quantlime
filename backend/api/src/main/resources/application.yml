@@ -38,11 +38,17 @@ toss:
 kind:
   base-url: ${KIND_BASE_URL:https://kind.krx.co.kr}
 
+upbit:
+  base-url: ${UPBIT_BASE_URL:https://api.upbit.com}
+
 python-engine:
   base-url: ${PYTHON_ENGINE_URL:http://localhost:8000}
 
 realtime-price:
   poll-interval-ms: ${REALTIME_PRICE_POLL_INTERVAL_MS:3000}
+
+market-ranking:
+  poll-interval-ms: ${MARKET_RANKING_POLL_INTERVAL_MS:5000}
 
 jwt:
   secret: ${JWT_SECRET:}
