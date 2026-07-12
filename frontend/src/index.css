@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* 홈 리디자인(claude.ai/design "Quantlab 토스증권 UI 리디자인") 톤에 맞춘 강조색·로고 폰트. */
+@theme {
+  --color-accent: #3752ff;
+  --font-logo: 'Space Grotesk', sans-serif;
+}
+
 body {
   margin: 0;
 }
