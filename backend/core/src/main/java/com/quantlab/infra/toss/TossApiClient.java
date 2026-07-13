@@ -1,11 +1,13 @@
 package com.quantlab.infra.toss;
 
+import com.quantlab.common.exception.ExternalApiException;
 import com.quantlab.common.util.ExternalApiInvoker;
 import com.quantlab.infra.toss.dto.TossCandleResponse;
 import com.quantlab.infra.toss.dto.TossExchangeRateResponse;
 import com.quantlab.infra.toss.dto.TossMarketCalendarResponse;
 import com.quantlab.infra.toss.dto.TossPriceResponse;
 import com.quantlab.infra.toss.exception.TossApiErrorCode;
+import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -21,8 +23,7 @@ public class TossApiClient {
     private final TossTokenManager tokenManager;
 
     public TossCandleResponse getDailyCandles(String symbol, int count, String before) {
-        String token = tokenManager.getAccessToken();
-        return ExternalApiInvoker.call(
+        return withTokenRetry(token -> ExternalApiInvoker.call(
             TossApiErrorCode.CANDLE_INQUIRY_FAILED,
             () -> tossRestClient.get()
                 .uri(uriBuilder -> {
@@ -41,12 +42,11 @@ public class TossApiClient {
                 .retrieve()
                 .body(TossCandleResponse.class),
             HttpClientErrorException.TooManyRequests.class,
-            TossApiErrorCode.RATE_LIMIT_EXCEEDED);
+            TossApiErrorCode.RATE_LIMIT_EXCEEDED));
     }
 
     public TossPriceResponse getCurrentPrices(String symbols) {
-        String token = tokenManager.getAccessToken();
-        return ExternalApiInvoker.call(
+        return withTokenRetry(token -> ExternalApiInvoker.call(
             TossApiErrorCode.PRICE_INQUIRY_FAILED,
             () -> tossRestClient.get()
                 .uri(uriBuilder -> uriBuilder
@@ -57,7 +57,7 @@ public class TossApiClient {
                 .retrieve()
                 .body(TossPriceResponse.class),
             HttpClientErrorException.TooManyRequests.class,
-            TossApiErrorCode.RATE_LIMIT_EXCEEDED);
+            TossApiErrorCode.RATE_LIMIT_EXCEEDED));
     }
 
     /**
@@ -66,8 +66,7 @@ public class TossApiClient {
      * 호출 측(MarketIndexCache)이 짧게 캐싱해 재호출을 줄인다.
      */
     public TossExchangeRateResponse getExchangeRate(String baseCurrency, String quoteCurrency) {
-        String token = tokenManager.getAccessToken();
-        return ExternalApiInvoker.call(
+        return withTokenRetry(token -> ExternalApiInvoker.call(
             TossApiErrorCode.EXCHANGE_RATE_INQUIRY_FAILED,
             () -> tossRestClient.get()
                 .uri(uriBuilder -> uriBuilder
@@ -77,7 +76,7 @@ public class TossApiClient {
                     .build())
                 .header("authorization", "Bearer " + token)
                 .retrieve()
-                .body(TossExchangeRateResponse.class));
+                .body(TossExchangeRateResponse.class)));
     }
 
     /**
@@ -86,13 +85,32 @@ public class TossApiClient {
      * 측(MarketCalendarCache)이 하루 1회만 호출하도록 캐싱한다.
      */
     public TossMarketCalendarResponse getMarketCalendar() {
-        String token = tokenManager.getAccessToken();
-        return ExternalApiInvoker.call(
+        return withTokenRetry(token -> ExternalApiInvoker.call(
             TossApiErrorCode.MARKET_CALENDAR_INQUIRY_FAILED,
             () -> tossRestClient.get()
                 .uri("/api/v1/market-calendar/KR")
                 .header("authorization", "Bearer " + token)
                 .retrieve()
-                .body(TossMarketCalendarResponse.class));
+                .body(TossMarketCalendarResponse.class)));
+    }
+
+    /**
+     * 토스 API 토큰은 계정당 1개만 유효해 다른 프로세스가 재발급하면 이
+     * 인스턴스가 캐싱해둔 토큰이 TTL과 무관하게 조용히 무효화될 수 있다.
+     * 401(invalid-token) 응답을 그 신호로 보고 캐시를 지운 뒤 새로 발급받은
+     * 토큰으로 1회만 재시도한다(그래도 실패하면 그대로 전파).
+     */
+    private <T> T withTokenRetry(Function<String, T> apiCall) {
+        String token = tokenManager.getAccessToken();
+        try {
+            return apiCall.apply(token);
+        } catch (ExternalApiException e) {
+            if (!(e.getCause() instanceof HttpClientErrorException.Unauthorized)) {
+                throw e;
+            }
+            log.warn("토스증권 API 토큰이 무효화된 것으로 감지, 재발급 후 1회 재시도");
+            tokenManager.invalidateToken();
+            return apiCall.apply(tokenManager.getAccessToken());
+        }
     }
 }

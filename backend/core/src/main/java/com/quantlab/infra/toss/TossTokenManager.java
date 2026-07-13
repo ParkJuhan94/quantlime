@@ -34,6 +34,15 @@ public class TossTokenManager {
         return refreshToken();
     }
 
+    /**
+     * 토스 API가 캐시된 토큰을 401(invalid-token)로 거부할 때 호출한다.
+     * 토큰은 계정당 1개만 유효해 다른 프로세스의 재발급이 이 캐시를 조용히
+     * 무효화시킬 수 있는데, TTL만으로는 이를 감지할 수 없기 때문이다.
+     */
+    public void invalidateToken() {
+        redisTemplate.delete(REDIS_TOKEN_KEY);
+    }
+
     private synchronized String refreshToken() {
         String cachedToken = redisTemplate.opsForValue().get(REDIS_TOKEN_KEY);
         if (cachedToken != null) {
