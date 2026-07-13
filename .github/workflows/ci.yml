@@ -9,20 +9,11 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
-    # TestContainerSupport는 MySQL만 Testcontainers로 격리하고 Redis는
-    # 격리하지 않는다(로컬/CI의 실제 Redis를 그대로 씀 - CLAUDE.md 참고).
-    # 러너가 기본 제공하는 Docker로 Testcontainers(MySQL)는 별도 설정 없이
-    # 동작하고, Redis만 서비스 컨테이너로 6381(백엔드 기본 포트)에 매핑한다.
-    services:
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6381:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+    # TestContainerSupport가 MySQL·Redis 둘 다 Testcontainers로 격리한다
+    # (2026-07-13 - 이전엔 Redis만 서비스 컨테이너로 6381에 매핑해 썼으나,
+    # 실제로 로컬/CI Redis를 참조하는 테스트가 ApiTestSupport 계열뿐이라
+    # 컨테이너화 후엔 불필요해짐 - CLAUDE.md 참고). 러너가 기본 제공하는
+    # Docker로 별도 설정 없이 동작한다.
     steps:
       - uses: actions/checkout@v4
 

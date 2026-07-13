@@ -37,12 +37,13 @@ class PriceControllerTest extends ApiTestSupport {
     @MockBean
     private TossApiClient tossApiClient;
 
-    // 이 테스트는 실제 로컬 Redis(TestContainerSupport가 Redis는 격리하지
-    // 않음)를 공유한다. 실시간 시세 브로드캐스트 스케줄러 등이 이미 채워둔
-    // price:current:{stockCode} 캐시가 남아있으면 캐시 히트로 응답이
-    // 갈려 아래 TossApiClient 목 스텁이 무시되므로, 이 컨트롤러 테스트는
-    // 캐시를 미스로 고정해 Toss 응답 매핑 자체만 검증한다(캐시 히트
-    // 경로는 StockPriceServiceTest에서 별도 검증).
+    // Redis는 TestContainerSupport가 격리하지만, @EnableScheduling이
+    // 테스트 프로파일에서도 그대로 켜져 있어 PriceBroadcastScheduler가
+    // 백그라운드에서 같은 컨테이너에 price:current:{stockCode}를 비동기로
+    // 채울 수 있다(타이밍에 따라 있을 수도 없을 수도 있음). 이 컨트롤러
+    // 테스트는 캐시를 항상 미스로 고정해 Toss 응답 매핑 자체만
+    // 결정적으로 검증한다(캐시 히트 경로는 StockPriceServiceTest에서
+    // 별도 검증).
     @MockBean
     private PriceCacheStore priceCacheStore;
 
