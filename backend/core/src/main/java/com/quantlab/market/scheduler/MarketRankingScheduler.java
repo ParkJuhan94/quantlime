@@ -27,7 +27,13 @@ import org.springframework.util.StringUtils;
  * 계산한다. {@code PriceBroadcastScheduler}(관심종목 전용, 3초 주기)와
  * 동일한 Toss {@code MARKET_DATA} Rate Limit 그룹 예산을 나눠 쓰므로
  * 기본 주기를 더 길게(5초) 둔다 - docs/ROADMAP.md #2a 참고
- * (14호출/스윕 ≈ 1.4초, 3~5초 주기면 사실상 실시간).
+ * (3~5초 주기면 사실상 실시간).
+ *
+ * <p>청크(최대 14개) 사이에 {@link #TOSS_API_DELAY_MS}(150ms) 딜레이를
+ * 둔다 - 딜레이 없이 연속 호출하면 스윕 하나가 순식간에 초당 토큰 버킷
+ * (스펙 예시 10건/초)을 넘겨, 같은 그룹을 쓰는 {@code PriceBroadcastScheduler}
+ * 요청까지 동반 429를 유발할 수 있음을 실제 운영 로그로 확인 후 추가함
+ * (2026-07-13).
  *
  * <p>청크 하나가 429 등으로 실패해도 전체 스윕을 중단하지 않고 그 청크만
  * 건너뛴다 - 다음 틱에 다시 시도되므로 일부 종목의 순위가 한 틱만큼
@@ -39,6 +45,7 @@ import org.springframework.util.StringUtils;
 public class MarketRankingScheduler {
 
     private static final int TOSS_BATCH_SIZE = 200;
+    private static final long TOSS_API_DELAY_MS = 150;
 
     private final MarketCalendarCache marketCalendarCache;
     private final AllListedStockCache allListedStockCache;
@@ -67,10 +74,25 @@ public class MarketRankingScheduler {
         Map<String, Long> previousCloseByStockCode = previousCloseCache.get(stockCodes);
 
         List<MarketRankingResponse> ranking = new ArrayList<>();
-        for (List<String> chunk : chunk(stockCodes, TOSS_BATCH_SIZE)) {
-            ranking.addAll(fetchChunkRanking(chunk, stockByCode, previousCloseByStockCode));
+        List<List<String>> chunks = chunk(stockCodes, TOSS_BATCH_SIZE);
+        for (int i = 0; i < chunks.size(); i++) {
+            ranking.addAll(fetchChunkRanking(chunks.get(i), stockByCode, previousCloseByStockCode));
+            if (i < chunks.size() - 1 && !sleepBetweenChunks()) {
+                break;
+            }
         }
         marketRankingCache.update(ranking);
+    }
+
+    private boolean sleepBetweenChunks() {
+        try {
+            Thread.sleep(TOSS_API_DELAY_MS);
+            return true;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("전종목 랭킹 갱신 중단: 인터럽트 발생");
+            return false;
+        }
     }
 
     private List<MarketRankingResponse> fetchChunkRanking(
