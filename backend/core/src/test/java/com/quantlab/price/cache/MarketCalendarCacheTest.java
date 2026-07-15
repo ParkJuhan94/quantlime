@@ -46,6 +46,19 @@ class MarketCalendarCacheTest {
     }
 
     @Test
+    @DisplayName("[캘린더 응답이 null이면 예외 없이 개장 중이 아닌 것으로 처리한다]")
+    void isMarketOpenNow_nullResponse_returnsFalseWithoutThrowing() {
+        // given
+        given(tossApiClient.getMarketCalendar()).willReturn(null);
+
+        // when
+        boolean result = marketCalendarCache.isMarketOpenNow();
+
+        // then
+        assertThat(result).isFalse();
+    }
+
+    @Test
     @DisplayName("[영업일이고 현재 시각이 정규장 시간대 안이면 개장 중이다]")
     void isMarketOpenNow_businessDayWithinHours_returnsTrue() {
         // given: 정규장 시간을 현재 시각 -1시간 ~ +1시간으로 설정

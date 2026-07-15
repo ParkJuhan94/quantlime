@@ -38,7 +38,7 @@ class PriceControllerTest extends ApiTestSupport {
     private TossApiClient tossApiClient;
 
     // Redis는 TestContainerSupport가 격리하지만, @EnableScheduling이
-    // 테스트 프로파일에서도 그대로 켜져 있어 PriceBroadcastScheduler가
+    // 테스트 프로파일에서도 그대로 켜져 있어 MarketPriceSweepScheduler가
     // 백그라운드에서 같은 컨테이너에 price:current:{stockCode}를 비동기로
     // 채울 수 있다(타이밍에 따라 있을 수도 없을 수도 있음). 이 컨트롤러
     // 테스트는 캐시를 항상 미스로 고정해 Toss 응답 매핑 자체만

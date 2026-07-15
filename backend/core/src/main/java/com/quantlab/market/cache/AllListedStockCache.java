@@ -11,8 +11,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * 전체 상장 종목 목록을 짧지 않은 TTL로 캐싱한다. 종목마스터는
- * {@code StockMasterSyncScheduler}가 주 1회만 갱신하므로, 5초 주기로
- * 도는 {@code MarketRankingScheduler}가 틱마다 2,700여 건을 다시
+ * {@code StockMasterSyncScheduler}가 주 1회만 갱신하므로, 짧은 주기로
+ * 도는 {@code MarketPriceSweepScheduler}가 틱마다 2,700여 건을 다시
  * 조회하지 않도록 {@value #REFRESH_INTERVAL_SECONDS}초 동안 재사용한다
  * (WatchlistedStockCodeCache와 동일한 단순 TTL 캐시 패턴).
  */

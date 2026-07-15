@@ -14,8 +14,9 @@ import org.springframework.stereotype.Component;
 /**
  * 국내 장 운영 여부(공휴일 포함)를 캘린더 날짜 기준으로 캐싱한다. 하루
  * 1회만 Toss 장 운영 캘린더 API를 호출하고, 그 전까지는 캐시된 결과를
- * 반환한다 - PriceBroadcastScheduler가 3초 틱마다 이 API를 다시 부르지
- * 않도록 하기 위함.
+ * 반환한다 - {@code MarketPriceSweepScheduler}(100ms 틱)와
+ * {@code WatchlistPriceRelayScheduler}(3초 틱) 둘 다 매 틱 이 메서드를
+ * 호출하지만 이 API를 다시 부르지 않도록 하기 위함.
  *
  * <p>정규장(regularMarket)만이 아니라 NXT 프리마켓(preMarket, 08:00~09:00)/
  * 애프터마켓(afterMarket, 15:30~20:00)도 "장중"으로 취급한다 - 정규장만
@@ -54,6 +55,12 @@ public class MarketCalendarCache {
             return; // 락 대기 중 다른 스레드가 이미 갱신함
         }
         TossMarketCalendarResponse response = tossApiClient.getMarketCalendar();
+        if (response == null || response.result() == null || response.result().today() == null) {
+            log.warn("장 운영 캘린더 응답이 비어있어 장중이 아닌 것으로 처리: date={}", today);
+            this.tradingSessions = List.of();
+            this.cachedDate = today;
+            return;
+        }
         TossMarketCalendarResponse.MarketDay todayInfo = response.result().today();
         TossMarketCalendarResponse.MarketSessions sessions = todayInfo.integrated();
         this.tradingSessions = sessions == null

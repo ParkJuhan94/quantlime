@@ -9,7 +9,7 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 /**
  * 실시간 시세 브로드캐스트용 STOMP 엔드포인트. 토스증권 API가 아직 WebSocket을
  * 지원하지 않아(CLAUDE.md §4), 서버가 REST로 폴링한 시세를 이 브로커를 통해
- * 클라이언트에 전달한다(PriceBroadcastScheduler 참고).
+ * 클라이언트에 전달한다(WatchlistPriceRelayScheduler 참고).
  */
 @Configuration
 @EnableWebSocketMessageBroker

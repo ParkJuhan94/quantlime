@@ -8,6 +8,8 @@ import com.quantlab.market.cache.MarketRankingCache;
 import com.quantlab.market.dto.response.MarketRankingResponse;
 import com.quantlab.price.cache.MarketCalendarCache;
 import com.quantlab.price.cache.PreviousCloseCache;
+import com.quantlab.price.cache.PriceCacheStore;
+import com.quantlab.price.dto.response.PriceSnapshot;
 import com.quantlab.stock.StockFixture;
 import com.quantlab.stock.domain.Stock;
 import java.util.List;
@@ -31,7 +33,7 @@ import static org.mockito.Mockito.verify;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
-class MarketRankingSchedulerTest {
+class MarketPriceSweepSchedulerTest {
 
     private static final String STOCK_CODE = "005930";
 
@@ -50,8 +52,11 @@ class MarketRankingSchedulerTest {
     @Mock
     private TossApiClient tossApiClient;
 
+    @Mock
+    private PriceCacheStore priceCacheStore;
+
     @InjectMocks
-    private MarketRankingScheduler marketRankingScheduler;
+    private MarketPriceSweepScheduler marketPriceSweepScheduler;
 
     @Test
     @DisplayName("[장이 닫혀 있으면 종목 목록 조회도 하지 않고 스킵한다]")
@@ -60,7 +65,7 @@ class MarketRankingSchedulerTest {
         given(marketCalendarCache.isMarketOpenNow()).willReturn(false);
 
         // when
-        marketRankingScheduler.refreshRanking();
+        marketPriceSweepScheduler.refreshRanking();
 
         // then
         verify(allListedStockCache, never()).get();
@@ -75,15 +80,15 @@ class MarketRankingSchedulerTest {
         given(allListedStockCache.get()).willReturn(List.of());
 
         // when
-        marketRankingScheduler.refreshRanking();
+        marketPriceSweepScheduler.refreshRanking();
 
         // then
         verify(tossApiClient, never()).getCurrentPrices(anyString());
     }
 
     @Test
-    @DisplayName("[정상 틱이면 등락률을 계산해 랭킹 캐시를 갱신한다]")
-    void refresh_normalTick_updatesRankingCacheWithChangeRate() {
+    @DisplayName("[정상 틱이면 등락률을 계산해 랭킹 캐시를 갱신하고 시세를 Redis에 적재한다]")
+    void refresh_normalTick_updatesRankingCacheAndPriceCache() {
         // given
         Stock stock = StockFixture.createStock(STOCK_CODE, "삼성전자");
         given(marketCalendarCache.isMarketOpenNow()).willReturn(true);
@@ -93,7 +98,7 @@ class MarketRankingSchedulerTest {
             List.of(new TossPrice(STOCK_CODE, "2026-07-06T09:00:00+09:00", "71400", "KRW"))));
 
         // when
-        marketRankingScheduler.refreshRanking();
+        marketPriceSweepScheduler.refreshRanking();
 
         // then: (71400-70000)/70000*100 = 2.0
         ArgumentCaptor<List<MarketRankingResponse>> captor = ArgumentCaptor.forClass(List.class);
@@ -104,11 +109,17 @@ class MarketRankingSchedulerTest {
         assertThat(ranked.stockName()).isEqualTo("삼성전자");
         assertThat(ranked.currentPrice()).isEqualTo(71400L);
         assertThat(ranked.changeRate()).isEqualTo(2.0);
+
+        ArgumentCaptor<PriceSnapshot> cacheCaptor = ArgumentCaptor.forClass(PriceSnapshot.class);
+        verify(priceCacheStore).save(cacheCaptor.capture());
+        assertThat(cacheCaptor.getValue().stockCode()).isEqualTo(STOCK_CODE);
+        assertThat(cacheCaptor.getValue().currentPrice()).isEqualTo(71400L);
+        assertThat(cacheCaptor.getValue().changeRate()).isEqualTo(2.0);
     }
 
     @Test
-    @DisplayName("[전일 종가가 없는 종목은 랭킹에서 제외한다]")
-    void refresh_noPreviousClose_excludesStockFromRanking() {
+    @DisplayName("[전일 종가가 없는 종목은 랭킹에서는 제외하지만 시세 캐시에는 그대로 적재한다]")
+    void refresh_noPreviousClose_excludesFromRankingButStillCachesPrice() {
         // given
         Stock stock = StockFixture.createStock(STOCK_CODE, "삼성전자");
         given(marketCalendarCache.isMarketOpenNow()).willReturn(true);
@@ -118,12 +129,17 @@ class MarketRankingSchedulerTest {
             List.of(new TossPrice(STOCK_CODE, "2026-07-06T09:00:00+09:00", "71400", "KRW"))));
 
         // when
-        marketRankingScheduler.refreshRanking();
+        marketPriceSweepScheduler.refreshRanking();
 
         // then
         ArgumentCaptor<List<MarketRankingResponse>> captor = ArgumentCaptor.forClass(List.class);
         verify(marketRankingCache).update(captor.capture());
         assertThat(captor.getValue()).isEmpty();
+
+        ArgumentCaptor<PriceSnapshot> cacheCaptor = ArgumentCaptor.forClass(PriceSnapshot.class);
+        verify(priceCacheStore).save(cacheCaptor.capture());
+        assertThat(cacheCaptor.getValue().currentPrice()).isEqualTo(71400L);
+        assertThat(cacheCaptor.getValue().changeRate()).isNull();
     }
 
     @Test
@@ -138,7 +154,7 @@ class MarketRankingSchedulerTest {
             .willThrow(new RuntimeException("토스 API 장애"));
 
         // when & then: SafeExecutor가 내부에서 흡수하므로 예외가 밖으로 나오면 안 됨
-        assertThatCode(() -> marketRankingScheduler.refreshRanking())
+        assertThatCode(() -> marketPriceSweepScheduler.refreshRanking())
             .doesNotThrowAnyException();
     }
 }

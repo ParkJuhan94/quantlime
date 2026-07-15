@@ -1,7 +1,7 @@
 package com.quantlab.price.cache;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.quantlab.price.dto.response.PriceBroadcastMessage;
+import com.quantlab.price.dto.response.PriceSnapshot;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -42,21 +42,21 @@ class PriceCacheStoreTest {
     void saveAndFind_roundTrip_returnsEquivalentMessage() {
         // given
         given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        PriceBroadcastMessage message =
-            new PriceBroadcastMessage(STOCK_CODE, 70000L, 1.5, "2026-07-06T09:00:00+09:00");
+        PriceSnapshot snapshot =
+            new PriceSnapshot(STOCK_CODE, 70000L, 1.5, "2026-07-06T09:00:00+09:00");
         String[] savedJson = new String[1];
         org.mockito.Mockito.doAnswer(invocation -> {
             savedJson[0] = invocation.getArgument(1);
             return null;
         }).when(valueOperations).set(anyString(), anyString(), any());
-        priceCacheStore.save(message);
+        priceCacheStore.save(snapshot);
         given(valueOperations.get(anyString())).willReturn(savedJson[0]);
 
         // when
-        Optional<PriceBroadcastMessage> result = priceCacheStore.find(STOCK_CODE);
+        Optional<PriceSnapshot> result = priceCacheStore.find(STOCK_CODE);
 
         // then
-        assertThat(result).contains(message);
+        assertThat(result).contains(snapshot);
     }
 
     @Test
@@ -67,7 +67,7 @@ class PriceCacheStoreTest {
         given(valueOperations.get(anyString())).willReturn(null);
 
         // when
-        Optional<PriceBroadcastMessage> result = priceCacheStore.find(STOCK_CODE);
+        Optional<PriceSnapshot> result = priceCacheStore.find(STOCK_CODE);
 
         // then
         assertThat(result).isEmpty();

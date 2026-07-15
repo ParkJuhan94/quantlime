@@ -6,7 +6,7 @@ import java.util.List;
 import org.springframework.stereotype.Component;
 
 /**
- * {@code MarketRankingScheduler}가 매 틱 계산한 전종목 등락률 랭킹의
+ * {@code MarketPriceSweepScheduler}가 매 틱 계산한 전종목 등락률 랭킹의
  * 최신 스냅샷을 들고 있는다. 단일 인스턴스 배치 결과라 Redis 없이
  * 메모리에만 보관한다 - 재시작 시 초기화되지만, 다음 스케줄러 틱(장중
  * 기준 수 초 내)에 다시 채워진다.

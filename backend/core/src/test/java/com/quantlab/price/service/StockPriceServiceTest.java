@@ -7,7 +7,7 @@ import com.quantlab.price.cache.PriceCacheStore;
 import com.quantlab.price.domain.DailyPrice;
 import com.quantlab.price.dto.response.CurrentPriceResponse;
 import com.quantlab.price.dto.response.DailyChartResponse;
-import com.quantlab.price.dto.response.PriceBroadcastMessage;
+import com.quantlab.price.dto.response.PriceSnapshot;
 import com.quantlab.stock.StockFixture;
 import com.quantlab.stock.domain.Stock;
 import com.quantlab.stock.service.StockMasterService;
@@ -56,7 +56,7 @@ class StockPriceServiceTest {
         String stockCode = stock.getStockCode();
         given(stockMasterService.getStockByCode(stockCode)).willReturn(stock);
         given(priceCacheStore.find(stockCode)).willReturn(Optional.of(
-            new PriceBroadcastMessage(stockCode, 70000L, 1.5, "2026-07-06T09:00:00+09:00")));
+            new PriceSnapshot(stockCode, 70000L, 1.5, "2026-07-06T09:00:00+09:00")));
 
         // when
         CurrentPriceResponse response = stockPriceService.getCurrentPrice(stockCode);

@@ -48,7 +48,7 @@ realtime-price:
   poll-interval-ms: ${REALTIME_PRICE_POLL_INTERVAL_MS:3000}
 
 market-ranking:
-  poll-interval-ms: ${MARKET_RANKING_POLL_INTERVAL_MS:5000}
+  poll-interval-ms: ${MARKET_RANKING_POLL_INTERVAL_MS:100}
 
 jwt:
   secret: ${JWT_SECRET:}
