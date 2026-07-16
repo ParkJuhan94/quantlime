@@ -1,0 +1,14 @@
+apiVersion: 1
+
+providers:
+  - name: QuantLab
+    orgId: 1
+    folder: QuantLab
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      # docker-compose.monitoring.yml이 monitoring/grafana/dashboards를
+      # 이 경로로 마운트한다.
+      path: /etc/grafana/provisioning/dashboards/json

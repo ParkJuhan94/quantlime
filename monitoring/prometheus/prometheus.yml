@@ -1,0 +1,45 @@
+# 로컬/EC2 공통 Prometheus 설정. 스크랩 대상은 전부 docker-compose 내부
+# 네트워크의 컨테이너명으로 참조한다(quantlab-prod 프로젝트 기본 네트워크를
+# docker-compose.prod.yml과 공유 - docker-compose.monitoring.yml 참고) -
+# 호스트 포트 노출 여부와 무관하게 스크랩 가능하다(backend/quant-engine은
+# 호스트 포트를 열지 않는 내부 전용 서비스).
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Spring Boot Actuator + Micrometer(backend/api/build.gradle 참고).
+  # /actuator/**는 SecurityConfig에서 permitAll이지만 nginx가 프록시하지
+  # 않아 외부에서는 도달 불가 - Prometheus만 내부망에서 스크랩한다.
+  - job_name: backend
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["backend:8080"]
+
+  # FastAPI + prometheus-fastapi-instrumentator(quant-engine/main.py 참고).
+  - job_name: quant-engine
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["quant-engine:8000"]
+
+  # 호스트(EC2) CPU/메모리/디스크/네트워크
+  - job_name: node-exporter
+    static_configs:
+      - targets: ["node-exporter:9100"]
+
+  # 컨테이너별 리소스 사용량
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]

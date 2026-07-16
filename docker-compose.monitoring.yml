@@ -1,0 +1,117 @@
+# 관측성 스택 오버레이(Phase 1: 메트릭 + 대시보드 + Slack 알림).
+# docker-compose.cloudwatch.yml과 달리 이 오버레이는 AWS 자격증명이 전혀
+# 필요 없어 로컬에서도 그대로 기동·검증할 수 있다:
+#   docker compose -f docker-compose.prod.yml -f docker-compose.monitoring.yml \
+#     --env-file .env.prod up -d --build
+#
+# docker-compose.prod.yml과 별도 파일로 분리한 이유는 cloudwatch 오버레이와
+# 동일하다 - 관측성 스택은 선택적 구성요소라 항상 켤 필요는 없고, 필요할
+# 때만 -f로 얹는 편이 base 파일을 단순하게 유지한다. name을 여기서 다시
+# 선언하지 않아도 docker-compose.prod.yml의 `name: quantlab-prod`를 그대로
+# 따라가 같은 프로젝트/네트워크에 합류한다(cloudwatch.yml과 동일 패턴).
+#
+# 로그(Loki)와 트레이스(Tempo)는 Phase 2/3로 별도 진행 예정 - 이 오버레이는
+# 메트릭 파이프라인(Prometheus/Alertmanager/exporter)과 시각화(Grafana)까지만
+# 다룬다.
+services:
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: quantlab-prod-prometheus
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+    ports:
+      - "9090:9090"
+    restart: always
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: quantlab-prod-alertmanager
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml.template:ro
+      - alertmanager_data:/alertmanager
+    environment:
+      SLACK_ALERT_WEBHOOK_URL: ${SLACK_ALERT_WEBHOOK_URL:-}
+    # Alertmanager 설정 파일은 환경변수 치환을 지원하지 않아(monitoring/
+    # alertmanager/alertmanager.yml 상단 주석 참고) 기동 시 sed로 직접
+    # 치환한 사본을 만든 뒤 그 파일로 기동한다. prom/alertmanager 이미지는
+    # busybox 베이스라 sh/sed를 그대로 쓸 수 있다. 치환 대상 플레이스홀더
+    # (__SLACK_ALERT_WEBHOOK_URL__)에는 $ 문자가 없어 docker compose 자신의
+    # ${VAR} 보간과 충돌하지 않는다 - $ 문자가 있는 쪽은 오직 아래 sed
+    # 치환식의 우변($$SLACK_ALERT_WEBHOOK_URL, compose가 $$를 리터럴 $ 하나로
+    # 풀어줘서 컨테이너 안 sh가 실행 시점에 environment의 실제 값으로
+    # 확장한다)뿐이다.
+    entrypoint:
+      - sh
+      - -c
+      - |
+        sed "s#__SLACK_ALERT_WEBHOOK_URL__#$$SLACK_ALERT_WEBHOOK_URL#" \
+          /etc/alertmanager/alertmanager.yml.template > /etc/alertmanager/alertmanager.yml
+        exec /bin/alertmanager --config.file=/etc/alertmanager/alertmanager.yml --storage.path=/alertmanager
+    ports:
+      - "9093:9093"
+    restart: always
+
+  # 호스트(EC2) CPU/메모리/디스크/네트워크 - node_memory_*/node_filesystem_*
+  # 등을 Prometheus가 스크랩(monitoring/prometheus/rules/alerts.yml의
+  # HostMemoryHigh/HostDiskHigh가 참조).
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: quantlab-prod-node-exporter
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/rootfs
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+    restart: always
+
+  # 컨테이너별 CPU/메모리/네트워크 사용량(어떤 컨테이너가 리소스를 먹는지
+  # node-exporter의 호스트 합산 지표만으로는 안 보이는 부분을 보완).
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: quantlab-prod-cadvisor
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    restart: always
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    container_name: quantlab-prod-grafana
+    # 대시보드 JSON은 monitoring/grafana/provisioning/dashboards/json에
+    # 직접 두고 provisioning 트리 하나만 통째로 마운트한다 - 처음에는
+    # 대시보드 JSON 폴더를 provisioning과 별개 경로(monitoring/grafana/
+    # dashboards)에 두고 별도 bind mount로 그 안쪽 경로에 다시 마운트했는데,
+    # 바깥쪽 provisioning 마운트가 :ro(읽기전용)라 컨테이너가 그 안에
+    # 마운트포인트 디렉터리를 새로 만들 수 없어 "read-only file system"
+    # 에러로 기동 자체가 실패했다(로컬 실제 기동 중 발견) - 마운트를
+    # 하나로 합쳐 중첩 마운트 자체를 없애 해결.
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      # 로컬 개발 환경의 다른 프로젝트 Grafana(3000)/QuantLab 프론트(3001)와
+      # 포트가 겹치지 않도록 3002로 매핑.
+      - "3002:3000"
+    depends_on:
+      - prometheus
+    restart: always
+
+volumes:
+  prometheus_data:
+  alertmanager_data:
+  grafana_data:

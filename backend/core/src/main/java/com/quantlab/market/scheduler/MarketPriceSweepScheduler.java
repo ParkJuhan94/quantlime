@@ -12,6 +12,8 @@ import com.quantlab.price.cache.PreviousCloseCache;
 import com.quantlab.price.cache.PriceCacheStore;
 import com.quantlab.price.dto.response.PriceSnapshot;
 import com.quantlab.stock.domain.Stock;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -59,12 +61,18 @@ public class MarketPriceSweepScheduler {
     private static final int TOSS_BATCH_SIZE = 200;
     private static final long TOSS_API_DELAY_MS = 120;
 
+    // 스윕 1회 소요시간(폴링 주기 100ms를 못 따라가는지) + 청크 스킵
+    // 횟수(429 등으로 그 틱의 일부 종목이 갱신되지 못한 횟수)를 계측한다.
+    private static final String METRIC_SWEEP_DURATION = "market.sweep.duration";
+    private static final String METRIC_CHUNK_SKIPPED = "market.sweep.chunk.skipped";
+
     private final MarketCalendarCache marketCalendarCache;
     private final AllListedStockCache allListedStockCache;
     private final PreviousCloseCache previousCloseCache;
     private final MarketRankingCache marketRankingCache;
     private final TossApiClient tossApiClient;
     private final PriceCacheStore priceCacheStore;
+    private final MeterRegistry meterRegistry;
 
     @Scheduled(fixedDelayString = "${market-ranking.poll-interval-ms:100}")
     public void refreshRanking() {
@@ -72,6 +80,15 @@ public class MarketPriceSweepScheduler {
     }
 
     private void refreshOnce() {
+        Timer.Sample sample = Timer.start(meterRegistry);
+        try {
+            doRefresh();
+        } finally {
+            sample.stop(meterRegistry.timer(METRIC_SWEEP_DURATION));
+        }
+    }
+
+    private void doRefresh() {
         if (!marketCalendarCache.isMarketOpenNow()) {
             return;
         }
@@ -115,6 +132,7 @@ public class MarketPriceSweepScheduler {
             response = tossApiClient.getCurrentPrices(String.join(",", chunkCodes));
         } catch (ExternalApiException e) {
             log.warn("전종목 시세 조회 중 일부 청크 스킵(다음 틱에 재시도): error={}", e.getMessage());
+            meterRegistry.counter(METRIC_CHUNK_SKIPPED, "reason", e.getCode()).increment();
             return List.of();
         }
 

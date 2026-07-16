@@ -26,6 +26,34 @@ spring:
 server:
   port: 8080
 
+# Prometheus가 스크랩할 /actuator/prometheus만 열고 나머지 actuator
+# 엔드포인트는 닫아둔다(공격 표면 최소화). health는 DB/Redis 등 실제
+# 의존성을 확인하는 상세 지표라 기존 /api/health(정적 200, cron 헬스체크
+# 스크립트 전용)와 별개로 둔다 - 서로 다른 소비자(운영 스크립트 vs
+# Prometheus/사람)를 겨냥해 의도적으로 분리 유지.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: when_authorized
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      # http.server.requests에만 퍼센타일 히스토그램을 켜서 Grafana에서
+      # p95/p99 지연 패널을 그릴 수 있게 한다(histogram_quantile 사용).
+      # toss.api.duration/python-engine.duration 등 커스텀 Timer는 태그
+      # 카디널리티가 낮고 평균 지연만으로 충분해 굳이 버킷을 늘리지 않는다.
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5,0.95,0.99
+
 app:
   cors:
     allowed-origin: ${APP_CORS_ALLOWED_ORIGIN:http://localhost:3001}

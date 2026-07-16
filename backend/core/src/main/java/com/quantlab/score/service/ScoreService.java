@@ -16,6 +16,7 @@ import com.quantlab.score.exception.ScoreErrorCode;
 import com.quantlab.score.repository.ScoreRepository;
 import com.quantlab.watchlist.domain.Watchlist;
 import com.quantlab.watchlist.repository.WatchlistRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -44,12 +45,14 @@ import org.springframework.transaction.annotation.Transactional;
 public class ScoreService {
 
     private static final int OHLCV_LOOKBACK_DAYS = 730;
+    private static final String METRIC_MISSING_FROM_RESPONSE = "score.batch.missing-from-response";
 
     private final DailyPriceService dailyPriceService;
     private final PythonEngineClient pythonEngineClient;
     private final ScorePersistenceService scorePersistenceService;
     private final ScoreRepository scoreRepository;
     private final WatchlistRepository watchlistRepository;
+    private final MeterRegistry meterRegistry;
 
     public void recalculateScore(String stockCode) {
         recalculateScores(List.of(stockCode));
@@ -136,6 +139,7 @@ public class ScoreService {
             .toList();
         if (!missing.isEmpty()) {
             log.warn("퀀트 엔진 응답에 누락된 종목 존재(저장 스킵): stockCodes={}", missing);
+            meterRegistry.counter(METRIC_MISSING_FROM_RESPONSE).increment(missing.size());
         }
     }
 }

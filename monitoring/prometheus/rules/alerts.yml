@@ -1,0 +1,103 @@
+# 알림 규칙. Alertmanager(monitoring/alertmanager/alertmanager.yml)를 거쳐
+# Slack #quantlab-alerts로 전송된다. 임계값은 t3.small~medium 1대 규모의
+# 초기 추정치로, 실제 운영 데이터를 보며 조정할 것을 전제로 한다.
+groups:
+  # --- 가용성: 서비스 자체가 죽었는지 ---
+  - name: quantlab-availability
+    rules:
+      - alert: BackendDown
+        expr: up{job="backend"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "QuantLab 백엔드가 다운됨"
+          description: "Prometheus가 2분 이상 backend(actuator/prometheus)를 스크랩하지 못했습니다."
+
+      - alert: QuantEngineDown
+        expr: up{job="quant-engine"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "퀀트 엔진(quant-engine)이 다운됨"
+          description: "Prometheus가 2분 이상 quant-engine을 스크랩하지 못했습니다. 스코어 재계산은 직전 이력으로 fallback되지만 신규 계산은 멈춥니다."
+
+  # --- HTTP 지연/에러율 ---
+  - name: quantlab-http
+    rules:
+      - alert: HighHttp5xxRate
+        expr: |
+          sum(rate(http_server_requests_seconds_count{job="backend", outcome="SERVER_ERROR"}[5m]))
+          /
+          sum(rate(http_server_requests_seconds_count{job="backend"}[5m]))
+          > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "백엔드 5xx 응답 비율 5% 초과"
+          description: "최근 5분간 HTTP 5xx 응답 비율이 5%를 넘었습니다."
+
+  # --- 이 프로젝트만의 비즈니스 지표: Toss 429, 퀀트엔진 실패율 ---
+  # (2026-07-16 세션에서 겪은 Toss MARKET_DATA 429 장애가 이 알림의 계기)
+  - name: quantlab-business
+    rules:
+      - alert: TossRateLimitSpike
+        expr: sum(rate(toss_api_calls_total{outcome="rate_limited"}[5m])) > 0.5
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Toss API 429(Rate Limit) 급증"
+          description: "최근 5분간 초당 0.5건 이상의 Toss 429 응답이 발생했습니다 - MarketPriceSweepScheduler 청크 딜레이(현재 120ms)를 늘리는 것을 검토하세요."
+
+      - alert: QuantEngineFailureRate
+        expr: |
+          sum(rate(python_engine_calls_total{outcome="failure"}[15m]))
+          /
+          sum(rate(python_engine_calls_total[15m]))
+          > 0.2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "퀀트 엔진 호출 실패율 20% 초과"
+          description: "스코어 재계산 호출이 실패해 직전 스코어로 fallback되는 비율이 높습니다(ScoreService/PythonEngineClient)."
+
+  # --- 리소스: JVM 힙 + 호스트 메모리/디스크 ---
+  # 호스트 메모리/디스크는 기존 CloudWatch 알람(scripts/report-health-metric.sh
+  # + docs/DEPLOYMENT.md §7)과 개념이 겹치지만, Slack 단일 창으로 통합해
+  # 별도 AWS 콘솔을 안 열어도 되게 하는 것이 목적이다. 두 알림 체계를
+  # 병존시키는 것도 무방(중복 알림이 싫으면 CloudWatch 쪽 알람만 유지).
+  - name: quantlab-resource
+    rules:
+      - alert: JvmHeapHigh
+        expr: |
+          sum(jvm_memory_used_bytes{job="backend", area="heap"})
+          /
+          sum(jvm_memory_max_bytes{job="backend", area="heap"})
+          > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "백엔드 JVM 힙 사용률 90% 초과"
+          description: "GC 압박 또는 메모리 누수 가능성 - 힙 덤프/스레드 덤프 확인을 권장합니다."
+
+      - alert: HostMemoryHigh
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "호스트 메모리 사용률 90% 초과"
+
+      - alert: HostDiskHigh
+        expr: |
+          (1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "호스트 루트 디스크 사용률 90% 초과"

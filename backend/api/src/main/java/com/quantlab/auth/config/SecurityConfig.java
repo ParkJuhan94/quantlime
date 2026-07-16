@@ -37,7 +37,11 @@ public class SecurityConfig {
         "/swagger-ui/**",
         "/swagger-ui.html",
         "/v3/api-docs/**",
-        "/ws/**"
+        "/ws/**",
+        // Prometheus 스크랩 대상(/actuator/prometheus) + health. nginx가
+        // /actuator 경로를 프록시하지 않아(frontend/nginx.conf) 외부에서는
+        // 애초에 도달 불가하고, docker 내부망의 Prometheus만 호출한다.
+        "/actuator/**"
     };
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;

@@ -15,6 +15,8 @@ import com.quantlab.score.domain.Score;
 import com.quantlab.score.dto.response.ScoreResponse;
 import com.quantlab.score.repository.ScoreRepository;
 import com.quantlab.watchlist.repository.WatchlistRepository;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -25,6 +27,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -55,6 +58,9 @@ class ScoreServiceTest {
 
     @Mock
     private WatchlistRepository watchlistRepository;
+
+    @Spy
+    private MeterRegistry meterRegistry = new SimpleMeterRegistry();
 
     @InjectMocks
     private ScoreService scoreService;

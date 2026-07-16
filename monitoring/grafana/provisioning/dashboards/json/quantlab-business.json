@@ -1,0 +1,149 @@
+{
+  "uid": "quantlab-business",
+  "title": "QuantLab - 비즈니스 지표 (Toss / 스윕 / 퀀트엔진)",
+  "tags": ["quantlab", "business"],
+  "timezone": "Asia/Seoul",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Toss API 호출 결과별 비율(rate)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "sum(rate(toss_api_calls_total{job=\"backend\"}[5m])) by (endpoint, outcome)",
+          "legendFormat": "{{endpoint}} - {{outcome}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Toss 429(Rate Limit) 발생률",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 0.5 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(toss_api_calls_total{job=\"backend\", outcome=\"rate_limited\"}[5m]))",
+          "legendFormat": "429/s"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Toss API 평균 응답시간(endpoint별)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "sum(rate(toss_api_duration_seconds_sum{job=\"backend\"}[5m])) by (endpoint) / sum(rate(toss_api_duration_seconds_count{job=\"backend\"}[5m])) by (endpoint)",
+          "legendFormat": "{{endpoint}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "전종목 스윕(MarketPriceSweepScheduler) 소요시간",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "rate(market_sweep_duration_seconds_sum{job=\"backend\"}[5m]) / rate(market_sweep_duration_seconds_count{job=\"backend\"}[5m])",
+          "legendFormat": "평균 소요시간"
+        },
+        {
+          "expr": "market_sweep_duration_seconds_max{job=\"backend\"}",
+          "legendFormat": "최대(max)"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "스윕 청크 스킵 발생률(429 등)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(rate(market_sweep_chunk_skipped_total{job=\"backend\"}[5m])) by (reason)",
+          "legendFormat": "{{reason}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "퀀트 엔진 호출 실패율",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.1 },
+              { "color": "red", "value": 0.2 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(python_engine_calls_total{job=\"backend\", outcome=\"failure\"}[15m])) / sum(rate(python_engine_calls_total{job=\"backend\"}[15m]))",
+          "legendFormat": "failure ratio"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "스코어 배치 응답 누락 종목 수(rate)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "rate(score_batch_missing_from_response_total{job=\"backend\"}[15m])",
+          "legendFormat": "missing/sec"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "퀀트 엔진 평균 응답시간",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "rate(python_engine_duration_seconds_sum{job=\"backend\"}[5m]) / rate(python_engine_duration_seconds_count{job=\"backend\"}[5m])",
+          "legendFormat": "평균 응답시간"
+        }
+      ]
+    }
+  ]
+}

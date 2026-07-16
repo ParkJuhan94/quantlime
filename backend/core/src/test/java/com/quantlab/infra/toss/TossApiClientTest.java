@@ -16,6 +16,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import com.quantlab.common.exception.ExternalApiException;
 import com.quantlab.infra.toss.dto.TossMarketCalendarResponse;
 import com.quantlab.infra.toss.exception.TossApiErrorCode;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -43,7 +44,7 @@ class TossApiClientTest {
         RestClient restClient = builder.build();
 
         tokenManager = mock(TossTokenManager.class);
-        tossApiClient = new TossApiClient(restClient, tokenManager);
+        tossApiClient = new TossApiClient(restClient, tokenManager, new SimpleMeterRegistry());
     }
 
     @Test

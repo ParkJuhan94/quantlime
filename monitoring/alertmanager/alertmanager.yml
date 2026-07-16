@@ -1,0 +1,37 @@
+# Alertmanager는 설정 파일 안에서 환경변수 치환을 지원하지 않는다. 그래서
+# 이 파일은 SLACK_ALERT_WEBHOOK_URL 자리를 __SLACK_ALERT_WEBHOOK_URL__
+# 플레이스홀더로 남긴 "템플릿"으로 커밋하고, docker-compose.monitoring.yml의
+# entrypoint가 컨테이너 기동 시점에 sed로 실제 값을 채운 사본
+# (/etc/alertmanager/alertmanager.yml)을 만들어 그걸로 alertmanager를
+# 띄운다 - 실제 시크릿 값은 여전히 .env.prod(gitignore 대상)에만 존재하고
+# git에는 남지 않는다.
+#
+# 플레이스홀더에 $ 문자를 안 쓴 이유: 만약 ${SLACK_ALERT_WEBHOOK_URL}
+# 형태로 뒀다면, docker compose 자신이 이 파일을 마운트하는 volumes 설정이
+# 아니라 "compose 파일 텍스트"만 해석 대상으로 삼기 때문에 원래는 이
+# 파일 내용과 무관해야 하지만, 실제로는 이 템플릿을 그대로 옮겨 적은
+# entrypoint 스크립트 문자열 안에서 compose의 ${VAR} 보간과 충돌해
+# 의도한 리터럴 문자열이 아니라 실제 시크릿 값으로 미리 치환돼버리는
+# 문제를 실제로 겪었다(로컬 `docker compose config`로 렌더링 결과를
+# 직접 확인해 발견). $ 문자가 아예 없는 플레이스홀더를 쓰면 compose
+# 보간 대상 자체가 되지 않아 이 충돌이 원천적으로 사라진다.
+#
+# 여기서 쓰는 웹훅은 기존 SlackWebhookClient(사용자 피드백 전용, slack.
+# feedback-webhook-url)와 별개의 ops 알림 채널로 분리 등록할 것을 권장한다
+# (docs/DEPLOYMENT.md 참고) - 사용자 피드백과 인프라 알람이 같은 채널에
+# 섞이면 노이즈가 커진다.
+route:
+  receiver: slack
+  group_by: ["alertname"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: slack
+    slack_configs:
+      - api_url: "__SLACK_ALERT_WEBHOOK_URL__"
+        channel: "#quantlab-alerts"
+        send_resolved: true
+        title: "{{ .CommonAnnotations.summary }}"
+        text: "{{ range .Alerts }}{{ .Annotations.description }}\n{{ end }}"

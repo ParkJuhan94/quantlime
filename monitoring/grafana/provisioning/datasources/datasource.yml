@@ -1,0 +1,13 @@
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    # 대시보드 JSON(monitoring/grafana/dashboards/*.json)이 이 uid를
+    # 고정값으로 참조한다 - 자동생성 uid에 의존하면 프로비저닝마다 값이
+    # 달라져 대시보드 패널이 데이터소스를 못 찾을 수 있다.
+    uid: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false

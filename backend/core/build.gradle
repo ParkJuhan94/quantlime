@@ -5,6 +5,10 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    // Toss/퀀트엔진 호출 스케줄러 등 core 모듈 빈에서 커스텀 Micrometer
+    // 지표(Timer/Counter)를 계측하기 위함 - registry 구현체(prometheus)는
+    // api 모듈에서만 붙이고 core는 계측 API(MeterRegistry)만 참조한다.
+    implementation 'io.micrometer:micrometer-core'
     // SimpMessagingTemplate만 필요 - WebSocket 핸드셰이크/STOMP 엔드포인트
     // 등록(spring-websocket)은 api 모듈의 WebSocketConfig가 담당한다.
     implementation 'org.springframework:spring-messaging'

@@ -12,6 +12,8 @@ import com.quantlab.price.cache.PriceCacheStore;
 import com.quantlab.price.dto.response.PriceSnapshot;
 import com.quantlab.stock.StockFixture;
 import com.quantlab.stock.domain.Stock;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
@@ -21,6 +23,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -54,6 +57,11 @@ class MarketPriceSweepSchedulerTest {
 
     @Mock
     private PriceCacheStore priceCacheStore;
+
+    // 실제 MeterRegistry 구현체로 넣어야 timer()/counter() 호출이 null을
+    // 반환하지 않는다(순수 Mockito mock은 값을 반환하지 않아 NPE 위험).
+    @Spy
+    private MeterRegistry meterRegistry = new SimpleMeterRegistry();
 
     @InjectMocks
     private MarketPriceSweepScheduler marketPriceSweepScheduler;
