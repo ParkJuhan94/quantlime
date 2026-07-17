@@ -66,10 +66,10 @@ groups:
           description: "스코어 재계산 호출이 실패해 직전 스코어로 fallback되는 비율이 높습니다(ScoreService/PythonEngineClient)."
 
   # --- 리소스: JVM 힙 + 호스트 메모리/디스크 ---
-  # 호스트 메모리/디스크는 기존 CloudWatch 알람(scripts/report-health-metric.sh
-  # + docs/DEPLOYMENT.md §7)과 개념이 겹치지만, Slack 단일 창으로 통합해
-  # 별도 AWS 콘솔을 안 열어도 되게 하는 것이 목적이다. 두 알림 체계를
-  # 병존시키는 것도 무방(중복 알림이 싫으면 CloudWatch 쪽 알람만 유지).
+  # 호스트 메모리/디스크 알림은 원래 CloudWatch 커스텀 메트릭+SNS로 별도
+  # 구성했었는데, Slack 단일 창으로 통합하기 위해 이 PLG 스택으로
+  # 일원화했다(CloudWatch/IAM 인스턴스 역할/SNS 관련 코드는 제거함 -
+  # docs/DEPLOYMENT.md 참고).
   - name: quantlab-resource
     rules:
       - alert: JvmHeapHigh

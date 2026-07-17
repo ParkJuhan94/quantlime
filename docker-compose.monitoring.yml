@@ -1,14 +1,15 @@
-# 관측성 스택 오버레이(Phase 1: 메트릭 + 대시보드 + Slack 알림).
-# docker-compose.cloudwatch.yml과 달리 이 오버레이는 AWS 자격증명이 전혀
-# 필요 없어 로컬에서도 그대로 기동·검증할 수 있다:
+# 관측성 스택 오버레이(Phase 1: 메트릭 + 대시보드 + Slack 알림). 로그/
+# 메트릭/알림 전체를 CloudWatch가 아닌 이 스택(PLG류: Prometheus/
+# Grafana + Alertmanager)으로 일원화했다 - AWS 자격증명이 전혀 필요 없어
+# 로컬에서도 그대로 기동·검증할 수 있다:
 #   docker compose -f docker-compose.prod.yml -f docker-compose.monitoring.yml \
 #     --env-file .env.prod up -d --build
 #
-# docker-compose.prod.yml과 별도 파일로 분리한 이유는 cloudwatch 오버레이와
-# 동일하다 - 관측성 스택은 선택적 구성요소라 항상 켤 필요는 없고, 필요할
-# 때만 -f로 얹는 편이 base 파일을 단순하게 유지한다. name을 여기서 다시
-# 선언하지 않아도 docker-compose.prod.yml의 `name: quantlab-prod`를 그대로
-# 따라가 같은 프로젝트/네트워크에 합류한다(cloudwatch.yml과 동일 패턴).
+# docker-compose.prod.yml과 별도 파일로 분리한 이유: 관측성 스택은
+# 선택적 구성요소라 항상 켤 필요는 없고, 필요할 때만 -f로 얹는 편이 base
+# 파일을 단순하게 유지한다. name을 여기서 다시 선언하지 않아도
+# docker-compose.prod.yml의 `name: quantlab-prod`를 그대로 따라가 같은
+# 프로젝트/네트워크에 합류한다.
 #
 # 로그(Loki)와 트레이스(Tempo)는 Phase 2/3로 별도 진행 예정 - 이 오버레이는
 # 메트릭 파이프라인(Prometheus/Alertmanager/exporter)과 시각화(Grafana)까지만

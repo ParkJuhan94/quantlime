@@ -1,34 +1,28 @@
 #!/usr/bin/env bash
-# EC2에서 최초 1회(또는 스크립트 경로가 바뀔 때) 실행 - 헬스/리소스
-# 지표 전송(5분마다)과 MySQL 백업(매일 새벽 3시, 16시 배치와 장중을
-# 피한 시간대)을 crontab에 등록한다.
+# EC2에서 최초 1회(또는 스크립트 경로가 바뀔 때) 실행 - MySQL 백업(매일
+# 새벽 3시, 16시 배치와 장중을 피한 시간대)을 crontab에 등록한다.
 #
-# 멱등성: 이미 등록된 줄은 마커 주석(quantlab-report-health-metric /
-# quantlab-backup-mysql)으로 걸러 중복 추가하지 않는다 - 이 스크립트를
-# 재배포 때마다 실수로 다시 돌려도 크론탭에 같은 작업이 여러 줄 쌓이지 않음.
+# 헬스/리소스 지표는 더 이상 여기서 다루지 않는다 - CloudWatch 커스텀
+# 메트릭 대신 PLG 관측성 스택(docker-compose.monitoring.yml,
+# node-exporter/cAdvisor + Prometheus + Alertmanager)으로 일원화했다
+# (docs/DEPLOYMENT.md 참고).
+#
+# 멱등성: 이미 등록된 줄은 마커 주석(quantlab-backup-mysql)으로 걸러
+# 중복 추가하지 않는다 - 이 스크립트를 재배포 때마다 실수로 다시 돌려도
+# 크론탭에 같은 작업이 여러 줄 쌓이지 않음.
 set -euo pipefail
 
 QUANTLAB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG_DIR="$QUANTLAB_DIR/logs"
 mkdir -p "$LOG_DIR"
 
-HEALTH_MARKER="# quantlab-report-health-metric"
 BACKUP_MARKER="# quantlab-backup-mysql"
 
-HEALTH_LINE="*/5 * * * * $QUANTLAB_DIR/scripts/report-health-metric.sh >> $LOG_DIR/health-metric.log 2>&1 $HEALTH_MARKER"
 BACKUP_LINE="0 3 * * * $QUANTLAB_DIR/scripts/backup-mysql.sh >> $LOG_DIR/backup-mysql.log 2>&1 $BACKUP_MARKER"
 
 current_crontab="$(crontab -l 2>/dev/null || true)"
 
 new_crontab="$current_crontab"
-
-if ! grep -qF "$HEALTH_MARKER" <<< "$current_crontab"; then
-    new_crontab="$new_crontab
-$HEALTH_LINE"
-    echo "[install-cron] 헬스/리소스 지표 전송(5분 간격) 등록"
-else
-    echo "[install-cron] 헬스/리소스 지표 전송 - 이미 등록됨, 건너뜀"
-fi
 
 if ! grep -qF "$BACKUP_MARKER" <<< "$current_crontab"; then
     new_crontab="$new_crontab

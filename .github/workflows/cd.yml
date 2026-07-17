@@ -1,4 +1,4 @@
-name: Deploy
+name: CD
 
 on:
   push:
@@ -68,6 +68,6 @@ jobs:
           script: |
             cd ~/quantlab
             git pull
-            docker compose -f docker-compose.prod.yml -f docker-compose.cloudwatch.yml --env-file .env.prod pull
-            docker compose -f docker-compose.prod.yml -f docker-compose.cloudwatch.yml --env-file .env.prod up -d
+            docker compose -f docker-compose.prod.yml -f docker-compose.monitoring.yml --env-file .env.prod pull
+            docker compose -f docker-compose.prod.yml -f docker-compose.monitoring.yml --env-file .env.prod up -d
             docker image prune -f
