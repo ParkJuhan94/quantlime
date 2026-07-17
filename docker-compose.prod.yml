@@ -61,6 +61,13 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       PYTHON_ENGINE_URL: http://quant-engine:8000
+      # 업로드 이미지 저장 경로(FileStorageService) - 컨테이너 내부 절대
+      # 경로라 시크릿이 아닌 토폴로지 값. 아래 volumes:의 upload_data와
+      # 반드시 같은 경로를 가리켜야 한다(안 그러면 컨테이너 재기동 시
+      # 업로드 파일이 유실된다).
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      - upload_data:/app/uploads
     depends_on:
       mysql:
         condition: service_healthy
@@ -91,3 +98,4 @@ services:
 volumes:
   mysql_data:
   redis_data:
+  upload_data:
