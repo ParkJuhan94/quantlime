@@ -1,7 +1,6 @@
 package com.quantlab.price.controller;
 
 import com.quantlab.infra.toss.TossApiClient;
-import com.quantlab.infra.toss.dto.TossPriceResponse;
 import com.quantlab.price.DailyPriceFixture;
 import com.quantlab.price.cache.PriceCacheStore;
 import com.quantlab.price.repository.DailyPriceRepository;
@@ -10,7 +9,6 @@ import com.quantlab.stock.domain.Stock;
 import com.quantlab.stock.repository.StockRepository;
 import com.quantlab.support.ApiTestSupport;
 import java.time.LocalDate;
-import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -56,29 +54,24 @@ class PriceControllerTest extends ApiTestSupport {
     }
 
     @Test
-    @DisplayName("[현재가 조회 성공 시 200과 가격을 반환한다]")
+    @DisplayName("[현재가 조회 성공 시 200과 DB의 마지막 종가를 반환한다]")
     void getCurrentPrice_success_returns200() throws Exception {
-        // given
-        TossPriceResponse.TossPrice tossPrice = new TossPriceResponse.TossPrice(
-            stock.getStockCode(), "2026-07-06T09:00:00+09:00", "70000", "KRW");
-        given(tossApiClient.getCurrentPrices(stock.getStockCode()))
-            .willReturn(new TossPriceResponse(List.of(tossPrice)));
+        // given: 캐시 미스 경로는 더 이상 Toss를 직접 호출하지 않고 DB의
+        // 마지막 확정 종가로 응답한다(429 반복 발생 원인이었던 무페이싱
+        // 직접 호출 제거, 2026-07-17). DailyPriceFixture 종가는 105L 고정값
+        dailyPriceRepository.save(DailyPriceFixture.createDailyPrice(stock.getStockCode(), LocalDate.now()));
 
         // when & then
         mockMvc.perform(get("/api/stocks/{stockCode}/price", stock.getStockCode()))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.price").value(70000))
+            .andExpect(jsonPath("$.price").value(105))
             .andExpect(jsonPath("$.currency").value("KRW"));
     }
 
     @Test
-    @DisplayName("[현재가가 없으면 200과 price=null을 반환한다]")
+    @DisplayName("[DB에 시세 이력이 없으면 200과 price=null을 반환한다]")
     void getCurrentPrice_noPrice_returnsNullPrice() throws Exception {
-        // given
-        given(tossApiClient.getCurrentPrices(stock.getStockCode()))
-            .willReturn(new TossPriceResponse(List.of()));
-
-        // when & then
+        // when & then: DailyPrice 이력을 저장하지 않은 상태 그대로 조회
         mockMvc.perform(get("/api/stocks/{stockCode}/price", stock.getStockCode()))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.price").doesNotExist());

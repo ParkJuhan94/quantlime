@@ -1,18 +1,19 @@
 package com.quantlab.price.service;
 
-import com.quantlab.infra.toss.TossApiClient;
-import com.quantlab.infra.toss.dto.TossPriceResponse;
 import com.quantlab.price.DailyPriceFixture;
+import com.quantlab.price.cache.PreviousCloseCache;
 import com.quantlab.price.cache.PriceCacheStore;
 import com.quantlab.price.domain.DailyPrice;
 import com.quantlab.price.dto.response.CurrentPriceResponse;
 import com.quantlab.price.dto.response.DailyChartResponse;
 import com.quantlab.price.dto.response.PriceSnapshot;
+import com.quantlab.price.repository.DailyPriceRepository;
 import com.quantlab.stock.StockFixture;
 import com.quantlab.stock.domain.Stock;
 import com.quantlab.stock.service.StockMasterService;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -36,13 +37,16 @@ class StockPriceServiceTest {
     private StockMasterService stockMasterService;
 
     @Mock
-    private TossApiClient tossApiClient;
-
-    @Mock
     private DailyPriceService dailyPriceService;
 
     @Mock
+    private DailyPriceRepository dailyPriceRepository;
+
+    @Mock
     private PriceCacheStore priceCacheStore;
+
+    @Mock
+    private PreviousCloseCache previousCloseCache;
 
     @InjectMocks
     private StockPriceService stockPriceService;
@@ -50,8 +54,8 @@ class StockPriceServiceTest {
     private final Stock stock = StockFixture.createStock();
 
     @Test
-    @DisplayName("[캐시에 스냅샷이 있으면 Toss를 호출하지 않고 캐시 값을 반환한다]")
-    void getCurrentPrice_cacheHit_returnsCachedResponseWithoutCallingToss() {
+    @DisplayName("[캐시에 스냅샷이 있으면 DB 폴백 없이 캐시 값을 반환한다]")
+    void getCurrentPrice_cacheHit_returnsCachedResponseWithoutDbFallback() {
         // given
         String stockCode = stock.getStockCode();
         given(stockMasterService.getStockByCode(stockCode)).willReturn(stock);
@@ -63,38 +67,43 @@ class StockPriceServiceTest {
 
         // then
         assertThat(response.price()).isEqualTo(70000L);
-        verify(tossApiClient, never()).getCurrentPrices(stockCode);
+        verify(dailyPriceRepository, never()).findTopByStockCodeOrderByTradeDateDesc(stockCode);
     }
 
     @Test
-    @DisplayName("[캐시 미스면 Toss를 직접 호출해 정상 매핑된 응답을 반환한다]")
-    void getCurrentPrice_cacheMiss_callsTossAndReturnsMappedResponse() {
-        // given
+    @DisplayName("[캐시 미스면 Toss를 호출하지 않고 DB의 마지막 종가로 응답한다]")
+    void getCurrentPrice_cacheMiss_fallsBackToLastDbCloseWithoutCallingToss() {
+        // given: MarketPriceSweepScheduler가 유일한 Toss 가격 조회원이어야 하는데,
+        // 예전엔 이 캐시 미스 경로가 무페이싱으로 Toss를 직접 호출해 프론트의
+        // 5초 동시 폴링(useStockPricesQuery)과 겹치며 429를 유발했음(2026-07-17) -
+        // 이제는 DB에 있는 마지막 확정 종가만 반환하고 Toss는 절대 호출하지 않는다
         String stockCode = stock.getStockCode();
+        DailyPrice latestClose = DailyPriceFixture.createDailyPrice(stockCode, LocalDate.of(2026, 7, 16));
         given(stockMasterService.getStockByCode(stockCode)).willReturn(stock);
         given(priceCacheStore.find(stockCode)).willReturn(Optional.empty());
-        TossPriceResponse.TossPrice tossPrice = new TossPriceResponse.TossPrice(
-            stockCode, "2026-07-06T09:00:00+09:00", "70000", "KRW");
-        given(tossApiClient.getCurrentPrices(stockCode))
-            .willReturn(new TossPriceResponse(List.of(tossPrice)));
+        given(dailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(stockCode))
+            .willReturn(Optional.of(latestClose));
+        given(previousCloseCache.get(List.of(stockCode)))
+            .willReturn(Map.of(stockCode, 100L));
 
         // when
         CurrentPriceResponse response = stockPriceService.getCurrentPrice(stockCode);
 
-        // then
-        assertThat(response.price()).isEqualTo(70000L);
+        // then: DailyPriceFixture의 종가는 105L 고정값
+        assertThat(response.price()).isEqualTo(105L);
         assertThat(response.currency()).isEqualTo("KRW");
+        assertThat(response.changeRate()).isCloseTo(5.0, org.assertj.core.data.Offset.offset(0.001));
     }
 
     @Test
-    @DisplayName("[캐시 미스이고 토스 응답의 result도 비어있으면 price=null 응답을 반환한다]")
-    void getCurrentPrice_emptyResult_returnsNullPrice() {
+    @DisplayName("[캐시 미스이고 DB 이력도 없으면 price=null 응답을 반환한다]")
+    void getCurrentPrice_cacheMissAndNoDbHistory_returnsNullPrice() {
         // given
         String stockCode = stock.getStockCode();
         given(stockMasterService.getStockByCode(stockCode)).willReturn(stock);
         given(priceCacheStore.find(stockCode)).willReturn(Optional.empty());
-        given(tossApiClient.getCurrentPrices(stockCode))
-            .willReturn(new TossPriceResponse(List.of()));
+        given(dailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(stockCode))
+            .willReturn(Optional.empty());
 
         // when
         CurrentPriceResponse response = stockPriceService.getCurrentPrice(stockCode);

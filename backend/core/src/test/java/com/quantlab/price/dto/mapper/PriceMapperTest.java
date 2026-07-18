@@ -1,6 +1,5 @@
 package com.quantlab.price.dto.mapper;
 
-import com.quantlab.infra.toss.dto.TossPriceResponse;
 import com.quantlab.price.DailyPriceFixture;
 import com.quantlab.price.domain.DailyPrice;
 import com.quantlab.price.dto.response.CurrentPriceResponse;
@@ -16,47 +15,45 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PriceMapperTest {
 
     @Test
-    @DisplayName("[정상 lastPrice는 Long으로 파싱된다]")
-    void toCurrentPriceResponse_validPrice_parsesLong() {
-        // given
-        TossPriceResponse.TossPrice tossPrice = new TossPriceResponse.TossPrice(
-            "005930", "2026-07-06T09:00:00+09:00", "70000", "KRW");
+    @DisplayName("[DB의 마지막 종가를 그대로 가격으로 매핑한다]")
+    void toCurrentPriceResponse_mapsLastCloseAsPrice() {
+        // given: DailyPriceFixture의 종가는 105L 고정값
+        DailyPrice latestClose = DailyPriceFixture.createDailyPrice("005930", LocalDate.of(2026, 7, 16));
 
         // when
-        CurrentPriceResponse response = PriceMapper.toCurrentPriceResponse("005930", tossPrice);
+        CurrentPriceResponse response = PriceMapper.toCurrentPriceResponse(latestClose, 100L);
 
         // then
         assertThat(response.stockCode()).isEqualTo("005930");
-        assertThat(response.price()).isEqualTo(70000L);
+        assertThat(response.price()).isEqualTo(105L);
         assertThat(response.currency()).isEqualTo("KRW");
+        assertThat(response.timestamp()).isEqualTo("2026-07-16");
     }
 
     @Test
-    @DisplayName("[lastPrice가 빈 문자열이면 price는 null이다]")
-    void toCurrentPriceResponse_blankPrice_returnsNullPrice() {
-        // given
-        TossPriceResponse.TossPrice tossPrice = new TossPriceResponse.TossPrice(
-            "005930", "2026-07-06T09:00:00+09:00", "", "KRW");
+    @DisplayName("[전일종가가 있으면 등락률을 계산한다]")
+    void toCurrentPriceResponse_withPreviousClose_calculatesChangeRate() {
+        // given: DailyPriceFixture의 종가는 105L 고정값
+        DailyPrice latestClose = DailyPriceFixture.createDailyPrice("005930", LocalDate.of(2026, 7, 16));
 
         // when
-        CurrentPriceResponse response = PriceMapper.toCurrentPriceResponse("005930", tossPrice);
+        CurrentPriceResponse response = PriceMapper.toCurrentPriceResponse(latestClose, 100L);
 
         // then
-        assertThat(response.price()).isNull();
+        assertThat(response.changeRate()).isEqualTo(5.0);
     }
 
     @Test
-    @DisplayName("[lastPrice가 null이면 price는 null이다]")
-    void toCurrentPriceResponse_nullPrice_returnsNullPrice() {
+    @DisplayName("[전일종가가 없으면(관심종목이 아니어서 캐시에 없는 경우 등) 등락률은 null이다]")
+    void toCurrentPriceResponse_withoutPreviousClose_returnsNullChangeRate() {
         // given
-        TossPriceResponse.TossPrice tossPrice = new TossPriceResponse.TossPrice(
-            "005930", "2026-07-06T09:00:00+09:00", null, "KRW");
+        DailyPrice latestClose = DailyPriceFixture.createDailyPrice("005930", LocalDate.of(2026, 7, 16));
 
         // when
-        CurrentPriceResponse response = PriceMapper.toCurrentPriceResponse("005930", tossPrice);
+        CurrentPriceResponse response = PriceMapper.toCurrentPriceResponse(latestClose, null);
 
         // then
-        assertThat(response.price()).isNull();
+        assertThat(response.changeRate()).isNull();
     }
 
     @Test
