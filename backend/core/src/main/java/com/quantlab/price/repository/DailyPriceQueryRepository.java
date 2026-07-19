@@ -1,6 +1,7 @@
 package com.quantlab.price.repository;
 
 import com.quantlab.price.domain.DailyPrice;
+import com.quantlab.price.dto.StockTradingValue;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -19,4 +20,12 @@ public interface DailyPriceQueryRepository {
      * 깨졌다 - 명시적으로 date 미만으로 걸러야 한다.
      */
     List<DailyPrice> findLatestBeforeDate(List<String> stockCodes, LocalDate date);
+
+    /**
+     * {@code since} 이후 누적 거래대금(종가×거래량 합) 상위 {@code limit}
+     * 종목. 백테스트 국내 유니버스 선정(거래대금 상위 500)용 - 종목별로
+     * 보유한 이력 기간이 달라도(신규상장 등) {@code since} 이전 데이터는
+     * 자동으로 집계에서 빠진다.
+     */
+    List<StockTradingValue> findTopByTradingValue(LocalDate since, int limit);
 }

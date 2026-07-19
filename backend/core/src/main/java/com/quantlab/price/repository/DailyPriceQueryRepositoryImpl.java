@@ -1,10 +1,12 @@
 package com.quantlab.price.repository;
 
+import com.querydsl.core.types.Projections;
 import com.querydsl.jpa.JPAExpressions;
 import com.querydsl.jpa.JPQLQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.quantlab.price.domain.DailyPrice;
 import com.quantlab.price.domain.QDailyPrice;
+import com.quantlab.price.dto.StockTradingValue;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +17,22 @@ import org.springframework.stereotype.Repository;
 public class DailyPriceQueryRepositoryImpl implements DailyPriceQueryRepository {
 
     private final JPAQueryFactory queryFactory;
+
+    @Override
+    public List<StockTradingValue> findTopByTradingValue(LocalDate since, int limit) {
+        QDailyPrice dailyPrice = QDailyPrice.dailyPrice;
+
+        return queryFactory
+            .select(Projections.constructor(StockTradingValue.class,
+                dailyPrice.stockCode,
+                dailyPrice.closePrice.multiply(dailyPrice.volume).sum()))
+            .from(dailyPrice)
+            .where(dailyPrice.tradeDate.goe(since))
+            .groupBy(dailyPrice.stockCode)
+            .orderBy(dailyPrice.closePrice.multiply(dailyPrice.volume).sum().desc())
+            .limit(limit)
+            .fetch();
+    }
 
     @Override
     public List<DailyPrice> findLatestBeforeDate(List<String> stockCodes, LocalDate date) {
