@@ -34,8 +34,17 @@ quant-engine/docs/BACKTEST_METHODOLOGY_REVIEW.md
 backend/docs/PORTFOLIO_HIGHLIGHTS.md
 
 # 사용자 업로드 이미지(로컬 디스크 저장, FileStorageService 참고) - 실행 시
-# 자동 생성되는 런타임 데이터라 저장소에 커밋하지 않는다.
+# 자동 생성되는 런타임 데이터라 저장소에 커밋하지 않는다. 실행 위치(루트
+# vs backend/api)에 따라 상대경로 UPLOAD_DIR이 둘 중 한 곳에 생길 수 있음.
 backend/uploads/
+backend/api/uploads/
+
+# JVM 힙 덤프(OOM 분석 등으로 로컬에 우발적으로 생성됨, 수백MB~ 크기라
+# 저장소에 절대 커밋하지 않는다)
+*.hprof
+
+# Playwright MCP 임시 아티팩트
+.playwright-mcp/
 
 # Node
 node_modules/
