@@ -14,6 +14,7 @@ export interface ScoreResponse {
 export interface ScoreRankingResponse {
   stockCode: string
   stockName: string
+  sector: string
   scoreDate: string
   trendScore: number | null
   meanReversionScore: number | null

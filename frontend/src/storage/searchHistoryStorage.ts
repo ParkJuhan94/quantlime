@@ -1,5 +1,5 @@
 const SEARCH_HISTORY_KEY = 'ql_recent_searches'
-const MAX_ENTRIES = 8
+const MAX_ENTRIES = 10
 
 function read(): string[] {
   try {

@@ -1,11 +1,129 @@
 @import "tailwindcss";
 
-/* 홈 리디자인(claude.ai/design "Quantlab 토스증권 UI 리디자인") 톤에 맞춘 강조색·로고 폰트. */
+/* 홈 리디자인(claude.ai/design "Quantlab 토스증권 UI 리디자인") 로고 폰트.
+   강조색(--color-accent)은 디자인 일관성을 블랙 기준으로 정리하며
+   제거했다(2026-07-16, 버튼·선택 상태는 전부 gray-900/gray-100로 통일). */
 @theme {
-  --color-accent: #3752ff;
   --font-logo: 'Space Grotesk', sans-serif;
 }
 
 body {
   margin: 0;
 }
+
+/* 클릭 가능한 요소는 항상 포인터 커서 + hover 시 배경이 살짝 진해지도록
+   전역으로 보장한다 - 컴포넌트마다 개별로 챙기면 빠지는 곳이 생긴다. */
+button:not(:disabled),
+a,
+[role='button'],
+summary {
+  cursor: pointer;
+}
+
+button:not(:disabled):hover,
+[role='button']:hover {
+  filter: brightness(0.96);
+}
+
+/* 로그인 모달이 뜰 때 한 번 반짝이고 가라앉는 효과 - 문구가 계속
+   반짝이면 산만하므로 애니메이션은 1회만(무한 반복 아님). */
+@keyframes sparkle-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.03);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes shimmer-sweep {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.shimmer-text {
+  background-image: linear-gradient(110deg, #111827 40%, #fbbf24 50%, #111827 60%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation:
+    sparkle-pop 0.4s ease-out,
+    shimmer-sweep 1.6s ease-out 1;
+}
+
+/* 스코어 카드의 현재 등급 박스가 "살아있다"는 느낌을 주는 은은한 글로우
+   펄스 - 색상은 등급 톤(매수=빨강/매도=파랑/중립=회색)에 맞춰 각
+   사용처에서 --glow-color CSS 변수로 주입한다. */
+@keyframes glow-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0px 0px var(--glow-color, transparent);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow:
+      0 0 20px 5px var(--glow-color, transparent),
+      0 0 6px 1px var(--glow-color, transparent);
+    transform: scale(1.035);
+  }
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 2.8s ease-in-out infinite;
+}
+
+/* 피드 글쓰기에서 주제를 안 고르고 "남기기"를 누르면 주제 선택 버튼을
+   짧게 좌우로 흔들어 "여기부터 골라주세요"를 유도한다(2026-07-16). */
+@keyframes shake-x {
+  10%,
+  90% {
+    transform: translateX(-1px);
+  }
+  20%,
+  80% {
+    transform: translateX(2px);
+  }
+  30%,
+  50%,
+  70% {
+    transform: translateX(-4px);
+  }
+  40%,
+  60% {
+    transform: translateX(4px);
+  }
+}
+
+.animate-shake {
+  animation: shake-x 0.4s ease-in-out;
+}
+
+/* 가로 스크롤은 되지만 네이티브 스크롤바는 안 보이게 한다(검색모달 최근
+   검색 목록 등) - 스크롤 가능 여부는 오른쪽 페이드 그라데이션으로만
+   알려주고, 스크롤바 자체는 지저분해 보인다는 피드백(2026-07-18). */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* 리퀴드 글래스(SVG feDisplacementMap 굴절) 실험은 진행했다가 2026-07-20
+   피드백으로 코드에서는 전부 제거했다 - 구현 방법론(4-layer 구조, 정적
+   패널 판단 기준, Safari 폴백 한계, 성능 체크법)은 재사용을 위해
+   `~/.claude/CLAUDE.md` "리퀴드 글래스(Liquid Glass) 구현 가이드"에만
+   문서로 남겨뒀다. 다시 적용을 요청받으면 이 프로젝트에 이 이름의
+   클래스를 새로 만들지 말고 그 문서를 참고해 처음부터 구현할 것. */

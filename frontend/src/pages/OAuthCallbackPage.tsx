@@ -4,6 +4,7 @@ import { login } from '../api/auth'
 import { consumeState, getRedirectUri } from '../config/oauth'
 import { useAuth } from '../auth/useAuth'
 import { getErrorMessage } from '../api/errors'
+import { lastLoginProviderStorage } from '../storage/lastLoginProviderStorage'
 import type { OAuthProviderName } from '../types/auth'
 
 export function OAuthCallbackPage() {
@@ -42,6 +43,7 @@ export function OAuthCallbackPage() {
           redirectUri: getRedirectUri(oauthProvider),
         })
         setTokens(tokens)
+        lastLoginProviderStorage.set(oauthProvider)
         navigate('/', { replace: true })
       } catch (loginError) {
         setError(getErrorMessage(loginError, '로그인에 실패했습니다.'))
@@ -59,8 +61,8 @@ export function OAuthCallbackPage() {
     return (
       <div className="flex min-h-[70vh] flex-col items-center justify-center gap-4">
         <p className="text-red-600">{error}</p>
-        <a href="/login" className="text-blue-600 underline">
-          로그인 페이지로 돌아가기
+        <a href="/" className="text-blue-600 underline">
+          홈으로 돌아가기
         </a>
       </div>
     )

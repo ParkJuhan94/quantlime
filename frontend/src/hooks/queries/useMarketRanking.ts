@@ -6,10 +6,15 @@ import { queryKeys } from '../queryKeys'
 // 프론트도 같은 주기로 폴링한다(별도 WebSocket 토픽 없이 REST 폴링만으로
 // "준실시간" 구현 - PriceBroadcastScheduler 기반 개별 종목 시세와 동일한
 // 설계 철학).
-export function useMarketRankingQuery(sort: 'gainers' | 'losers', limit = 10, enabled = true) {
+export function useMarketRankingQuery(
+  sort: 'gainers' | 'losers',
+  limit = 10,
+  enabled = true,
+  watchlistOnly = false,
+) {
   return useQuery({
-    queryKey: queryKeys.marketRanking(sort, limit),
-    queryFn: () => getMarketRanking(sort, limit),
+    queryKey: queryKeys.marketRanking(sort, limit, watchlistOnly),
+    queryFn: () => getMarketRanking(sort, limit, watchlistOnly),
     enabled,
     refetchInterval: enabled ? 5_000 : false,
   })

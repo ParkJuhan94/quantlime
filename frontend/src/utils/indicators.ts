@@ -3,24 +3,119 @@
  * 표준 공식만 구현한다 - 가중치/등급 산출 없이 캔들 위에 그대로 겹쳐 그리는 용도.
  */
 
-/** 지표 계산에 필요한 최소 워밍업 구간(MA120이 가장 길다). 이보다 짧은
- * 데이터로는 MA120/일목 선행스팬 앞부분이 비어(null) 보인다. */
-export const INDICATOR_WARMUP_DAYS = 130
+export type LineDashStyle = 'solid' | 'dashed' | 'dotted'
+
+// 라인 하나(예: MA5, BB상단, 전환선)의 표시 여부·색상·굵기·선 종류. 굵기는
+// lightweight-charts의 LineWidth 타입(1~4)에 맞춘다 - 실제 차트에
+// 넘길 때 클램프한다(components/chart/CandleChart.tsx의 toLineWidth 참고).
+export interface LineStyleSettings {
+  visible: boolean
+  color: string
+  width: number
+  lineStyle: LineDashStyle
+}
+
+export type PriceSource = 'close' | 'open' | 'high' | 'low'
+
+export interface MaLineSettings extends LineStyleSettings {
+  period: number
+  priceSource: PriceSource
+}
+
+export interface BollingerBandsParams {
+  period: number
+  multiplier: number
+}
+
+export interface BollingerBandsLines {
+  upper: LineStyleSettings
+  middle: LineStyleSettings
+  lower: LineStyleSettings
+}
+
+export interface IchimokuParams {
+  tenkanPeriod: number
+  kijunPeriod: number
+  senkouBPeriod: number
+}
+
+export interface IchimokuLines {
+  tenkan: LineStyleSettings
+  kijun: LineStyleSettings
+  senkouA: LineStyleSettings
+  senkouB: LineStyleSettings
+  chikou: LineStyleSettings
+}
+
+export interface MacdParams {
+  fastPeriod: number
+  slowPeriod: number
+  signalPeriod: number
+}
+
+export interface MacdLines {
+  macd: LineStyleSettings
+  signal: LineStyleSettings
+}
 
 export interface IndicatorSettings {
   volume: boolean
   ma: boolean
+  maLines: MaLineSettings[]
   bollingerBands: boolean
+  bollingerBandsParams: BollingerBandsParams
+  bollingerBandsLines: BollingerBandsLines
+  // 상단-하단 밴드 사이를 옅게 채울지 여부(설정 옵션, 2026-07-16).
+  bollingerBandsFill: boolean
   ichimoku: boolean
+  ichimokuParams: IchimokuParams
+  ichimokuLines: IchimokuLines
+  // 선행스팬A-B 사이(구름대)를 채울지 여부. 일목균형표는 원래 구름대
+  // 채우기가 지표 정체성에 가까워 기본값을 true로 둔다.
+  ichimokuCloudFill: boolean
   macd: boolean
+  macdParams: MacdParams
+  macdLines: MacdLines
+}
+
+function line(color: string, visible = true, width = 1, lineStyle: LineDashStyle = 'solid'): LineStyleSettings {
+  return { visible, color, width, lineStyle }
 }
 
 export const DEFAULT_INDICATOR_SETTINGS: IndicatorSettings = {
   volume: true,
-  ma: false,
-  bollingerBands: false,
-  ichimoku: false,
-  macd: false,
+  ma: true,
+  maLines: [
+    { ...line('#f59e0b'), period: 5, priceSource: 'close' },
+    { ...line('#10b981'), period: 10, priceSource: 'close' },
+    { ...line('#3b82f6'), period: 20, priceSource: 'close' },
+    { ...line('#8b5cf6'), period: 60, priceSource: 'close' },
+    { ...line('#ec4899'), period: 120, priceSource: 'close' },
+  ],
+  bollingerBands: true,
+  bollingerBandsParams: { period: 20, multiplier: 2 },
+  bollingerBandsLines: {
+    upper: line('#94a3b8', true, 1, 'dashed'),
+    middle: line('#64748b', true, 1, 'dashed'),
+    lower: line('#94a3b8', true, 1, 'dashed'),
+  },
+  bollingerBandsFill: false,
+  ichimoku: true,
+  ichimokuParams: { tenkanPeriod: 9, kijunPeriod: 26, senkouBPeriod: 52 },
+  ichimokuLines: {
+    tenkan: line('#ef4444'),
+    kijun: line('#0ea5e9'),
+    senkouA: line('#22c55e', true, 1, 'dashed'),
+    senkouB: line('#f97316', true, 1, 'dashed'),
+    chikou: line('#a855f7', true, 1, 'dashed'),
+  },
+  ichimokuCloudFill: true,
+  macd: true,
+  macdParams: { fastPeriod: 12, slowPeriod: 26, signalPeriod: 9 },
+  macdLines: {
+    macd: line('#2563eb'),
+    signal: line('#f97316'),
+  },
 }
 
 function sma(values: number[], period: number): (number | null)[] {

@@ -1,11 +1,9 @@
+import { useState } from 'react'
 import type { IndicatorSettings } from '../../utils/indicators'
+import { IndicatorSettingsModal } from './IndicatorSettingsModal'
 
-const OPTIONS: Array<{ key: keyof IndicatorSettings; label: string }> = [
-  { key: 'volume', label: '거래량' },
-  { key: 'ma', label: '이동평균(5/10/20/60/120)' },
-  { key: 'bollingerBands', label: '볼린저밴드' },
-  { key: 'ichimoku', label: '일목균형표' },
-  { key: 'macd', label: 'MACD' },
+const TOGGLE_KEYS: Array<keyof Pick<IndicatorSettings, 'volume' | 'ma' | 'bollingerBands' | 'ichimoku' | 'macd'>> = [
+  'volume', 'ma', 'bollingerBands', 'ichimoku', 'macd',
 ]
 
 interface IndicatorControlsProps {
@@ -13,20 +11,33 @@ interface IndicatorControlsProps {
   onChange: (next: IndicatorSettings) => void
 }
 
+// 예전엔 체크박스 5개짜리 드롭다운을 먼저 열고 거기서 다시 "커스터마이즈"로
+// 들어가는 2단 구조였다 - 참고 이미지의 지표 설정 화면 자체가 이미 목록 +
+// 토글 + 상세 설정 진입점을 다 갖추고 있어서, 버튼을 누르면 그 화면을
+// 곧장 연다(중간 드롭다운 제거).
 export function IndicatorControls({ value, onChange }: IndicatorControlsProps) {
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const activeCount = TOGGLE_KEYS.filter((key) => value[key]).length
+
   return (
-    <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-      {OPTIONS.map((option) => (
-        <label key={option.key} className="flex cursor-pointer items-center gap-1.5 text-xs text-gray-600">
-          <input
-            type="checkbox"
-            checked={value[option.key]}
-            onChange={(event) => onChange({ ...value, [option.key]: event.target.checked })}
-            className="h-3.5 w-3.5 rounded border-gray-300 text-gray-900 focus:ring-gray-400"
-          />
-          {option.label}
-        </label>
-      ))}
-    </div>
+    <>
+      <button
+        type="button"
+        onClick={() => setSettingsOpen(true)}
+        className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+      >
+        보조지표
+        <span className="rounded-full bg-gray-100 px-1.5 text-[11px] font-semibold text-gray-500">
+          {activeCount}
+        </span>
+      </button>
+
+      <IndicatorSettingsModal
+        open={settingsOpen}
+        value={value}
+        onClose={() => setSettingsOpen(false)}
+        onSave={onChange}
+      />
+    </>
   )
 }

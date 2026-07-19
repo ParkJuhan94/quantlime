@@ -4,6 +4,7 @@ import type {
   DailyChartResponse,
   PageResponse,
   StockDetailResponse,
+  StockFundamentalsResponse,
 } from '../types/stock'
 import type { ScoreResponse } from '../types/score'
 
@@ -32,6 +33,16 @@ export async function getChart(stockCode: string, days = 90): Promise<DailyChart
   const { data } = await apiClient.get<DailyChartResponse[]>(`/api/stocks/${stockCode}/chart`, {
     params: { period: 'daily', days },
   })
+  return data
+}
+
+export async function getFundamentals(stockCode: string): Promise<StockFundamentalsResponse> {
+  const { data } = await apiClient.get<StockFundamentalsResponse>(`/api/stocks/${stockCode}/fundamentals`)
+  return data
+}
+
+export async function getPopularStocks(limit = 5): Promise<StockDetailResponse[]> {
+  const { data } = await apiClient.get<StockDetailResponse[]>('/api/stocks/popular', { params: { limit } })
   return data
 }
 

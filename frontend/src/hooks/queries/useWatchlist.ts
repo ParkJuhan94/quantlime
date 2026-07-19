@@ -1,22 +1,30 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { addWatchlist, getWatchlist, removeWatchlist } from '../../api/watchlist'
+import {
+  addWatchlist,
+  getWatchlist,
+  moveWatchlistGroup,
+  removeWatchlist,
+  reorderWatchlist,
+} from '../../api/watchlist'
 import { queryKeys } from '../queryKeys'
 import type { WatchlistResponse } from '../../types/watchlist'
 
-export function useWatchlistQuery() {
+export function useWatchlistQuery(enabled = true) {
   return useQuery({
     queryKey: queryKeys.watchlist,
     queryFn: getWatchlist,
+    enabled,
   })
 }
 
 export function useAddWatchlist() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (stockCode: string) => addWatchlist(stockCode),
+    mutationFn: ({ stockCode, groupId }: { stockCode: string; groupId: number }) =>
+      addWatchlist(stockCode, groupId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.watchlist })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.dashboardScores })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.dashboardScoresAll })
     },
   })
 }
@@ -39,6 +47,27 @@ export function useRemoveWatchlist() {
       }
     },
     onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.watchlist })
+    },
+  })
+}
+
+export function useMoveWatchlistGroup() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ stockCode, groupId }: { stockCode: string; groupId: number }) =>
+      moveWatchlistGroup(stockCode, groupId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.watchlist })
+    },
+  })
+}
+
+export function useReorderWatchlist() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (watchlistIds: number[]) => reorderWatchlist(watchlistIds),
+    onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.watchlist })
     },
   })

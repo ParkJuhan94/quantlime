@@ -1,7 +1,7 @@
 export function formatPrice(price: number | null | undefined): string {
   // 국내 주식은 원 단위 정수로만 거래되므로 소수점은 항상 버린다.
   return price != null
-    ? Math.round(price).toLocaleString('ko-KR', { maximumFractionDigits: 0 })
+    ? `${Math.round(price).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}원`
     : '-'
 }
 

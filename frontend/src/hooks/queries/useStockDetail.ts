@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { getChart, getCurrentPrice, getScore, getStock } from '../../api/stocks'
+import { getChart, getCurrentPrice, getFundamentals, getScore, getStock } from '../../api/stocks'
 import { queryKeys } from '../queryKeys'
 
 export function useStockDetailQuery(stockCode: string) {
@@ -22,6 +22,15 @@ export function useStockChartQuery(stockCode: string, days: number) {
     queryKey: queryKeys.stockChart(stockCode, days),
     queryFn: () => getChart(stockCode, days),
     staleTime: 5 * 60 * 1000,
+  })
+}
+
+// 재무 데이터는 분기 단위로만 바뀌니 서버 캐시(1시간)에 맞춰 길게 둔다.
+export function useStockFundamentalsQuery(stockCode: string) {
+  return useQuery({
+    queryKey: queryKeys.stockFundamentals(stockCode),
+    queryFn: () => getFundamentals(stockCode),
+    staleTime: 60 * 60 * 1000,
   })
 }
 
