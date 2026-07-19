@@ -27,8 +27,15 @@ venv/
 # 스코어링 상세 설계 (공개 저장소 노출 방지, 로컬 전용)
 quant-engine/docs/SCORING_DESIGN.md
 
+# 스코어링/백테스팅 방법론 외부 리뷰(claude-fable-5) 전문 보존, 로컬 전용
+quant-engine/docs/BACKTEST_METHODOLOGY_REVIEW.md
+
 # 포트폴리오 어필 포인트 초안 (공개 저장소 노출 방지, 로컬 전용)
 backend/docs/PORTFOLIO_HIGHLIGHTS.md
+
+# 사용자 업로드 이미지(로컬 디스크 저장, FileStorageService 참고) - 실행 시
+# 자동 생성되는 런타임 데이터라 저장소에 커밋하지 않는다.
+backend/uploads/
 
 # Node
 node_modules/
