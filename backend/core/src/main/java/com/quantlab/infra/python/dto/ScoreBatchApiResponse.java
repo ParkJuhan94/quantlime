@@ -13,6 +13,7 @@ public record ScoreBatchApiResponse(
         @JsonProperty("mean_reversion_score") Double meanReversionScore,
         @JsonProperty("composite_score") Double compositeScore,
         String grade,
+        String quadrant,
         DivergenceApiResponse divergence,
         String comment,
         @JsonProperty("insufficient_data") boolean insufficientData

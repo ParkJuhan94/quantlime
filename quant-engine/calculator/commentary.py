@@ -34,18 +34,6 @@ def _get_client() -> Anthropic | None:
     return _client
 
 
-def _classify_quadrant(trend_score: float, mean_reversion_score: float) -> str:
-    trend_strong = trend_score > 50
-    reversion_strong = mean_reversion_score > 50
-    if trend_strong and reversion_strong:
-        return "trend_up_oversold"
-    if trend_strong and not reversion_strong:
-        return "trend_up_overbought"
-    if not trend_strong and reversion_strong:
-        return "trend_down_oversold"
-    return "trend_down_overbought"
-
-
 _TEMPLATE_FALLBACK: dict[str, str] = {
     "trend_up_oversold": "상승 추세와 저평가 신호가 동시에 나타나고 있어 매수 관점에서 긍정적인 구간입니다.",
     "trend_up_overbought": "상승 추세는 유지되고 있으나 단기적으로 과열된 상태라 되돌림에 유의할 필요가 있습니다.",
@@ -66,8 +54,9 @@ _TEMPLATE_MEAN_REVERSION_ONLY: dict[str, str] = {
 
 def _fallback_comment(score: ScoreResult) -> str:
     if score.trend_score is not None and score.mean_reversion_score is not None:
-        quadrant = _classify_quadrant(score.trend_score, score.mean_reversion_score)
-        return _TEMPLATE_FALLBACK[quadrant]
+        # 사분면 분류는 scorer.py의 계산 결과(score.quadrant)를 그대로
+        # 재사용한다 - 여기서 다시 분류하면 두 곳의 로직이 어긋날 수 있다.
+        return _TEMPLATE_FALLBACK[score.quadrant]
     if score.trend_score is not None:
         return _TEMPLATE_TREND_ONLY["strong" if score.trend_score > 50 else "weak"]
     if score.mean_reversion_score is not None:

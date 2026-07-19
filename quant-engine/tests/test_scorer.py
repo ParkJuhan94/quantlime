@@ -2,7 +2,11 @@ import math
 
 import pytest
 
-from calculator.scorer import DIVERGENCE_THRESHOLD, calculate_score
+from calculator.scorer import (
+    DIVERGENCE_THRESHOLD,
+    _apply_volume_multiplier,
+    calculate_score,
+)
 
 
 def _base_latest(**overrides) -> dict:
@@ -37,7 +41,7 @@ class TestCalculateScoreHappyPath:
         assert result.trend_score == pytest.approx(50.0)
         assert result.mean_reversion_score == pytest.approx(50.0)
         assert result.composite_score == pytest.approx(50.0)
-        assert result.grade == "B"
+        assert result.grade == "NEUTRAL"
         assert result.insufficient_data is False
 
     def test_oversold_rsi_and_bb_boost_mean_reversion(self):
@@ -155,6 +159,88 @@ class TestVolumeMultiplier:
         assert result.trend_score == pytest.approx(50.0)
         assert result.mean_reversion_score == pytest.approx(50.0)
 
+    def test_multiplier_amplifies_symmetric_deviation_from_50(self):
+        # given: multiplier=1.3(거래량비율 2.0 -> 1+0.3*1)일 때, 50 기준
+        # 같은 크기(10)만큼 떨어진 60점과 40점 - 이전 버그(>50 곱하기,
+        # <50 나누기)였다면 60->78(편차 28)/40->30.77(편차 19.23)로
+        # 비대칭이었다. dev 기반 수정 후에는 편차가 대칭으로 증폭돼야 한다.
+        multiplier = 1.3
+
+        above = _apply_volume_multiplier(60.0, multiplier)
+        below = _apply_volume_multiplier(40.0, multiplier)
+
+        assert above - 50.0 == pytest.approx(50.0 - below)
+        assert above == pytest.approx(63.0)
+        assert below == pytest.approx(37.0)
+
+    def test_multiplier_has_no_discontinuity_at_50(self):
+        # given/when: 50에 근접한 두 점수(49.999, 50.001)에 같은 배율 적용
+        multiplier = 1.3
+        just_below = _apply_volume_multiplier(49.999, multiplier)
+        just_above = _apply_volume_multiplier(50.001, multiplier)
+
+        # then: 이전 버그(50 경계에서 곱셈<->나눗셈 전환)와 달리 연속적이어야 함
+        assert just_above - just_below == pytest.approx(0.0026, abs=1e-4)
+
+
+class TestQuadrant:
+    def test_trend_up_reversion_up_is_pullback_quadrant(self):
+        # given: 추세추종·평균회귀 둘 다 50 초과(상승추세 중 눌림목)
+        latest = _base_latest(
+            close=150.0, macd_histogram=5.0, rsi=20.0, bollinger_percent_b=0.0,
+        )
+
+        result = calculate_score(latest)
+
+        assert result.trend_score > 50
+        assert result.mean_reversion_score > 50
+        assert result.quadrant == "trend_up_oversold"
+
+    def test_trend_up_reversion_down_is_overheated_quadrant(self):
+        # given: 추세추종은 강세, 평균회귀는 과매수(약세)
+        latest = _base_latest(
+            close=150.0, macd_histogram=5.0, rsi=90.0, bollinger_percent_b=1.0,
+        )
+
+        result = calculate_score(latest)
+
+        assert result.trend_score > 50
+        assert result.mean_reversion_score < 50
+        assert result.quadrant == "trend_up_overbought"
+
+    def test_trend_down_reversion_up_is_oversold_weak_trend_quadrant(self):
+        # given: 추세추종은 약세, 평균회귀는 과매도(강세 신호)
+        latest = _base_latest(
+            close=50.0, macd_histogram=-5.0, rsi=10.0, bollinger_percent_b=0.0,
+        )
+
+        result = calculate_score(latest)
+
+        assert result.trend_score < 50
+        assert result.mean_reversion_score > 50
+        assert result.quadrant == "trend_down_oversold"
+
+    def test_trend_down_reversion_down_is_no_bounce_quadrant(self):
+        # given: 추세추종·평균회귀 둘 다 50 미만
+        latest = _base_latest(
+            close=50.0, macd_histogram=-5.0, rsi=90.0, bollinger_percent_b=1.0,
+        )
+
+        result = calculate_score(latest)
+
+        assert result.trend_score < 50
+        assert result.mean_reversion_score < 50
+        assert result.quadrant == "trend_down_overbought"
+
+    def test_quadrant_is_none_when_either_axis_missing(self):
+        # given: 평균회귀 축 데이터 부족
+        latest = _base_latest(rsi=None, bollinger_percent_b=None)
+
+        result = calculate_score(latest)
+
+        assert result.mean_reversion_score is None
+        assert result.quadrant is None
+
 
 class TestDivergence:
     def test_large_gap_sets_divergence_flag(self):
@@ -191,9 +277,9 @@ class TestGradeCutoffs:
         "composite_inputs,expected_grade",
         [
             # 두 축 모두 최고점(추세=MACD 강한 양수, 평균회귀=과매도 극단)
-            ({"rsi": 15.0, "bollinger_percent_b": 0.0, "macd_histogram": 10.0}, "SSS"),
+            ({"rsi": 15.0, "bollinger_percent_b": 0.0, "macd_histogram": 10.0}, "STRONG_BUY"),
             # 두 축 모두 정확히 중립(50)
-            ({"rsi": 50.0, "bollinger_percent_b": 0.5, "macd_histogram": 0.0}, "B"),
+            ({"rsi": 50.0, "bollinger_percent_b": 0.5, "macd_histogram": 0.0}, "NEUTRAL"),
         ],
     )
     def test_grade_matches_expected_tier(self, composite_inputs, expected_grade):

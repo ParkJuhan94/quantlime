@@ -60,6 +60,7 @@ def _score_single_stock(stock: StockScoreRequest) -> StockScoreResponse:
         mean_reversion_score=score.mean_reversion_score,
         composite_score=score.composite_score,
         grade=score.grade,
+        quadrant=score.quadrant,
         divergence=divergence_response,
         comment=comment,
         insufficient_data=score.insufficient_data,

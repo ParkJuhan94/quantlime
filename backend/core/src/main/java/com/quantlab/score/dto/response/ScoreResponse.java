@@ -10,6 +10,7 @@ public record ScoreResponse(
     Double meanReversionScore,
     Double compositeScore,
     String grade,
+    String quadrant,
     Boolean divergenceFlag,
     String divergenceMessage,
     String comment,

@@ -12,6 +12,11 @@ def _result(**overrides) -> ScoreResult:
         grade="A",
         divergence=DivergenceInfo(flag=False, message=None),
         insufficient_data=False,
+        # 기본값(70, 60)은 둘 다 50 초과라 trend_up_oversold 사분면 -
+        # scorer.py가 실제로 계산해 넘겨주는 값을 수동으로 맞춰준다(이
+        # 테스트는 ScoreResult를 직접 생성해 calculate_score를 거치지
+        # 않으므로).
+        quadrant="trend_up_oversold",
     )
     base.update(overrides)
     return ScoreResult(**base)

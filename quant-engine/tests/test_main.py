@@ -54,7 +54,11 @@ class TestCalculateScoreBatch:
         assert score["trend_score"] is not None
         assert score["mean_reversion_score"] is not None
         assert score["composite_score"] is not None
-        assert score["grade"] in {"SSS", "SS", "S", "A", "B", "C", "D"}
+        assert score["grade"] in {"STRONG_BUY", "BUY", "NEUTRAL", "SELL", "STRONG_SELL"}
+        assert score["quadrant"] in {
+            "trend_up_oversold", "trend_up_overbought",
+            "trend_down_oversold", "trend_down_overbought",
+        }
         assert isinstance(score["comment"], str) and len(score["comment"]) > 0
 
     def test_insufficient_data_marks_flag(self):
@@ -74,6 +78,7 @@ class TestCalculateScoreBatch:
         assert score["insufficient_data"] is True
         assert score["trend_score"] is None
         assert score["mean_reversion_score"] is None
+        assert score["quadrant"] is None
         assert score["comment"] == "데이터가 부족해 코멘트를 생성할 수 없습니다."
 
     def test_multiple_stocks_in_one_batch(self):

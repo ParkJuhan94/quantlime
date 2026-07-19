@@ -36,6 +36,7 @@ class StockScoreResponse(BaseModel):
     mean_reversion_score: float | None
     composite_score: float | None
     grade: str | None
+    quadrant: str | None
     divergence: DivergenceResponse | None
     comment: str
     insufficient_data: bool
