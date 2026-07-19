@@ -27,11 +27,23 @@ export function getRedirectUri(provider: OAuthProviderName): string {
 }
 
 /**
+ * crypto.randomUUID()는 보안 컨텍스트(HTTPS 또는 localhost)에서만 존재한다.
+ * TLS 적용 전 순수 HTTP 배포(docs/DEPLOYMENT.md 참고)에서는 이 함수 자체가
+ * undefined라 호출 시 TypeError가 난다 - crypto.getRandomValues()는 보안
+ * 컨텍스트 제약이 없는 동일한 CSPRNG라 대신 사용한다(암호학적 강도는 동일,
+ * UUID 형식이 아닐 뿐 CSRF state 용도로는 충분).
+ */
+function generateRandomState(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+/**
  * CSRF 방지용 state를 생성해 브라우저 리다이렉트 전에 sessionStorage에
  * 저장하고, authorize URL을 만들어 반환한다.
  */
 export function buildAuthorizeUrl(provider: OAuthProviderName): string {
-  const state = crypto.randomUUID()
+  const state = generateRandomState()
   sessionStorage.setItem(`${STATE_STORAGE_KEY_PREFIX}${provider}`, state)
 
   const params = new URLSearchParams({
