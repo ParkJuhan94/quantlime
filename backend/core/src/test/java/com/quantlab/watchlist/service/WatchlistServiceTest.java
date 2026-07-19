@@ -10,8 +10,12 @@ import com.quantlab.stock.service.StockMasterService;
 import com.quantlab.user.UserFixture;
 import com.quantlab.user.domain.User;
 import com.quantlab.user.service.UserService;
+import com.quantlab.watchlist.WatchlistFixture;
+import com.quantlab.watchlist.WatchlistGroupFixture;
 import com.quantlab.watchlist.domain.Watchlist;
+import com.quantlab.watchlist.domain.WatchlistGroup;
 import com.quantlab.watchlist.repository.WatchlistRepository;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -29,6 +33,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 @Tag("unit")
@@ -45,6 +50,9 @@ class WatchlistServiceTest {
     private WatchlistRepository watchlistRepository;
 
     @Mock
+    private WatchlistGroupService watchlistGroupService;
+
+    @Mock
     private DailyPriceService dailyPriceService;
 
     @Mock
@@ -58,6 +66,8 @@ class WatchlistServiceTest {
 
     private final User user = UserFixture.createUser();
     private final Stock stock = StockFixture.createStock();
+    private final WatchlistGroup group = WatchlistGroupFixture.createWatchlistGroup(user);
+    private final Long groupId = 10L;
 
     // 등록 후속작업(백필/스코어 재계산)은 별도 스레드로 넘겨 실행되므로, 그
     // 결과를 검증해야 하는 테스트에서는 실행기가 즉시 동기 실행하도록 스텁한다.
@@ -76,17 +86,36 @@ class WatchlistServiceTest {
         String stockCode = stock.getStockCode();
         given(userService.getById(userId)).willReturn(user);
         given(stockMasterService.getStockByCode(stockCode)).willReturn(stock);
+        given(watchlistGroupService.getOwnedGroup(userId, groupId)).willReturn(group);
         given(watchlistRepository.existsByUser_IdAndStock_StockCode(userId, stockCode))
             .willReturn(false);
         given(watchlistRepository.save(org.mockito.ArgumentMatchers.any(Watchlist.class)))
             .willAnswer(invocation -> invocation.getArgument(0));
 
         // when
-        Watchlist result = watchlistService.addWatchlist(userId, stockCode);
+        Watchlist result = watchlistService.addWatchlist(userId, stockCode, groupId);
 
         // then
         assertThat(result.getStock()).isEqualTo(stock);
+        assertThat(result.getGroup()).isEqualTo(group);
         verify(watchlistRepository).save(org.mockito.ArgumentMatchers.any(Watchlist.class));
+    }
+
+    @Test
+    @DisplayName("[존재하지 않거나 소유하지 않은 그룹으로 등록하면 예외가 발생한다]")
+    void addWatchlist_groupNotOwned_throwsNotFoundException() {
+        // given
+        Long userId = 1L;
+        String stockCode = stock.getStockCode();
+        given(userService.getById(userId)).willReturn(user);
+        given(stockMasterService.getStockByCode(stockCode)).willReturn(stock);
+        given(watchlistGroupService.getOwnedGroup(userId, groupId))
+            .willThrow(new NotFoundException(com.quantlab.watchlist.exception.WatchlistErrorCode.NOT_FOUND_WATCHLIST_GROUP));
+
+        // when & then
+        assertThatThrownBy(() -> watchlistService.addWatchlist(userId, stockCode, groupId))
+            .isInstanceOf(NotFoundException.class);
+        verify(watchlistRepository, never()).save(any(Watchlist.class));
     }
 
     @Test
@@ -97,11 +126,12 @@ class WatchlistServiceTest {
         String stockCode = stock.getStockCode();
         given(userService.getById(userId)).willReturn(user);
         given(stockMasterService.getStockByCode(stockCode)).willReturn(stock);
+        given(watchlistGroupService.getOwnedGroup(userId, groupId)).willReturn(group);
         given(watchlistRepository.existsByUser_IdAndStock_StockCode(userId, stockCode))
             .willReturn(true);
 
         // when & then
-        assertThatThrownBy(() -> watchlistService.addWatchlist(userId, stockCode))
+        assertThatThrownBy(() -> watchlistService.addWatchlist(userId, stockCode, groupId))
             .isInstanceOf(ValidationException.class);
     }
 
@@ -113,13 +143,14 @@ class WatchlistServiceTest {
         String stockCode = stock.getStockCode();
         given(userService.getById(userId)).willReturn(user);
         given(stockMasterService.getStockByCode(stockCode)).willReturn(stock);
+        given(watchlistGroupService.getOwnedGroup(userId, groupId)).willReturn(group);
         given(watchlistRepository.existsByUser_IdAndStock_StockCode(userId, stockCode))
             .willReturn(false);
         given(watchlistRepository.save(org.mockito.ArgumentMatchers.any(Watchlist.class)))
             .willThrow(new DataIntegrityViolationException("duplicate"));
 
         // when & then
-        assertThatThrownBy(() -> watchlistService.addWatchlist(userId, stockCode))
+        assertThatThrownBy(() -> watchlistService.addWatchlist(userId, stockCode, groupId))
             .isInstanceOf(ValidationException.class);
     }
 
@@ -132,13 +163,14 @@ class WatchlistServiceTest {
         runPostRegistrationTasksSynchronously();
         given(userService.getById(userId)).willReturn(user);
         given(stockMasterService.getStockByCode(stockCode)).willReturn(stock);
+        given(watchlistGroupService.getOwnedGroup(userId, groupId)).willReturn(group);
         given(watchlistRepository.existsByUser_IdAndStock_StockCode(userId, stockCode))
             .willReturn(false);
         given(watchlistRepository.save(org.mockito.ArgumentMatchers.any(Watchlist.class)))
             .willAnswer(invocation -> invocation.getArgument(0));
 
         // when
-        watchlistService.addWatchlist(userId, stockCode);
+        watchlistService.addWatchlist(userId, stockCode, groupId);
 
         // then
         verify(dailyPriceService).backfillHistoryIfNeeded(stockCode);
@@ -153,6 +185,7 @@ class WatchlistServiceTest {
         runPostRegistrationTasksSynchronously();
         given(userService.getById(userId)).willReturn(user);
         given(stockMasterService.getStockByCode(stockCode)).willReturn(stock);
+        given(watchlistGroupService.getOwnedGroup(userId, groupId)).willReturn(group);
         given(watchlistRepository.existsByUser_IdAndStock_StockCode(userId, stockCode))
             .willReturn(false);
         given(watchlistRepository.save(org.mockito.ArgumentMatchers.any(Watchlist.class)))
@@ -161,7 +194,7 @@ class WatchlistServiceTest {
             .given(dailyPriceService).backfillHistoryIfNeeded(stockCode);
 
         // when
-        Watchlist result = watchlistService.addWatchlist(userId, stockCode);
+        Watchlist result = watchlistService.addWatchlist(userId, stockCode, groupId);
 
         // then
         assertThat(result.getStock()).isEqualTo(stock);
@@ -176,13 +209,14 @@ class WatchlistServiceTest {
         runPostRegistrationTasksSynchronously();
         given(userService.getById(userId)).willReturn(user);
         given(stockMasterService.getStockByCode(stockCode)).willReturn(stock);
+        given(watchlistGroupService.getOwnedGroup(userId, groupId)).willReturn(group);
         given(watchlistRepository.existsByUser_IdAndStock_StockCode(userId, stockCode))
             .willReturn(false);
         given(watchlistRepository.save(org.mockito.ArgumentMatchers.any(Watchlist.class)))
             .willAnswer(invocation -> invocation.getArgument(0));
 
         // when
-        watchlistService.addWatchlist(userId, stockCode);
+        watchlistService.addWatchlist(userId, stockCode, groupId);
 
         // then
         verify(scoreService).recalculateScore(stockCode);
@@ -197,6 +231,7 @@ class WatchlistServiceTest {
         runPostRegistrationTasksSynchronously();
         given(userService.getById(userId)).willReturn(user);
         given(stockMasterService.getStockByCode(stockCode)).willReturn(stock);
+        given(watchlistGroupService.getOwnedGroup(userId, groupId)).willReturn(group);
         given(watchlistRepository.existsByUser_IdAndStock_StockCode(userId, stockCode))
             .willReturn(false);
         given(watchlistRepository.save(org.mockito.ArgumentMatchers.any(Watchlist.class)))
@@ -205,7 +240,7 @@ class WatchlistServiceTest {
             .given(scoreService).recalculateScore(stockCode);
 
         // when
-        Watchlist result = watchlistService.addWatchlist(userId, stockCode);
+        Watchlist result = watchlistService.addWatchlist(userId, stockCode, groupId);
 
         // then
         assertThat(result.getStock()).isEqualTo(stock);
@@ -217,7 +252,7 @@ class WatchlistServiceTest {
         // given
         Long userId = 1L;
         String stockCode = stock.getStockCode();
-        Watchlist watchlist = Watchlist.of(user, stock);
+        Watchlist watchlist = WatchlistFixture.createWatchlist(user, stock, group);
         given(watchlistRepository.findByUser_IdAndStock_StockCode(userId, stockCode))
             .willReturn(Optional.of(watchlist));
 
@@ -240,5 +275,71 @@ class WatchlistServiceTest {
         // when & then
         assertThatThrownBy(() -> watchlistService.removeWatchlist(userId, stockCode))
             .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("[관심 종목을 다른 그룹으로 이동한다]")
+    void moveToGroup_ownedGroup_reassignsGroup() {
+        // given
+        Long userId = 1L;
+        String stockCode = stock.getStockCode();
+        Watchlist watchlist = WatchlistFixture.createWatchlist(user, stock, group);
+        WatchlistGroup targetGroup = WatchlistGroupFixture.createWatchlistGroup(user);
+        given(watchlistRepository.findByUser_IdAndStock_StockCode(userId, stockCode))
+            .willReturn(Optional.of(watchlist));
+        given(watchlistGroupService.getOwnedGroup(userId, groupId)).willReturn(targetGroup);
+
+        // when
+        watchlistService.moveToGroup(userId, stockCode, groupId);
+
+        // then
+        assertThat(watchlist.getGroup()).isEqualTo(targetGroup);
+    }
+
+    @Test
+    @DisplayName("[등록되지 않은 관심 종목을 이동시키려 하면 예외가 발생한다]")
+    void moveToGroup_notRegistered_throwsNotFoundException() {
+        // given
+        Long userId = 1L;
+        String stockCode = stock.getStockCode();
+        given(watchlistRepository.findByUser_IdAndStock_StockCode(userId, stockCode))
+            .willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> watchlistService.moveToGroup(userId, stockCode, groupId))
+            .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("[미분류 행이 없으면 추가 조회 없이 목록을 그대로 반환한다]")
+    void getWatchlist_noUngroupedItems_skipsReconciliation() {
+        // given
+        Long userId = 1L;
+        given(watchlistRepository.findAllByUser_IdAndGroupIsNull(userId)).willReturn(List.of());
+        given(watchlistRepository.findAllWithStockByUserId(userId)).willReturn(List.of());
+
+        // when
+        watchlistService.getWatchlist(userId);
+
+        // then
+        verify(watchlistGroupService, never()).findOrCreateDefaultGroup(userId);
+    }
+
+    @Test
+    @DisplayName("[미분류 행이 있으면 기본 그룹으로 자동 이동시킨 뒤 조회한다]")
+    void getWatchlist_hasUngroupedItems_reassignsToDefaultGroupThenReturns() {
+        // given: 그룹 도입 이전에 등록된 레거시 행을 흉내낸다
+        Long userId = 1L;
+        Watchlist legacyUngrouped = WatchlistFixture.createWatchlist(user, stock, group);
+        given(watchlistRepository.findAllByUser_IdAndGroupIsNull(userId)).willReturn(List.of(legacyUngrouped));
+        given(watchlistGroupService.findOrCreateDefaultGroup(userId)).willReturn(group);
+        given(watchlistRepository.findAllWithStockByUserId(userId)).willReturn(List.of(legacyUngrouped));
+
+        // when
+        watchlistService.getWatchlist(userId);
+
+        // then
+        verify(watchlistGroupService).findOrCreateDefaultGroup(userId);
+        assertThat(legacyUngrouped.getGroup()).isEqualTo(group);
     }
 }

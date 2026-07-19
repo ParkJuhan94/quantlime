@@ -10,6 +10,9 @@ import com.quantlab.support.ApiTestSupport;
 import com.quantlab.user.UserFixture;
 import com.quantlab.user.domain.User;
 import com.quantlab.user.repository.UserRepository;
+import com.quantlab.watchlist.WatchlistGroupFixture;
+import com.quantlab.watchlist.domain.WatchlistGroup;
+import com.quantlab.watchlist.repository.WatchlistGroupRepository;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -17,6 +20,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
 
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -38,6 +42,9 @@ class WatchlistControllerTest extends ApiTestSupport {
     private StockRepository stockRepository;
 
     @Autowired
+    private WatchlistGroupRepository watchlistGroupRepository;
+
+    @Autowired
     private JwtTokenProvider jwtTokenProvider;
 
     // 관심종목 등록은 별도 스레드에서 이력 백필(TossApiClient.getDailyCandles)을
@@ -49,11 +56,14 @@ class WatchlistControllerTest extends ApiTestSupport {
 
     private Stock stock;
     private String accessToken;
+    private Long groupId;
 
     @BeforeEach
     void setUp() {
         User user = userRepository.save(UserFixture.createUser());
         stock = stockRepository.save(StockFixture.createStock());
+        WatchlistGroup group = watchlistGroupRepository.save(WatchlistGroupFixture.createWatchlistGroup(user));
+        groupId = group.getId();
         accessToken = jwtTokenProvider.createAccessToken(user.getId(), user.getRole());
 
         // 빈 캔들 목록을 반환시켜 백필이 즉시 정상 종료되게 한다(캔들 매핑
@@ -67,20 +77,37 @@ class WatchlistControllerTest extends ApiTestSupport {
     @DisplayName("[관심 종목을 등록하면 201을 반환한다]")
     void addWatchlist_success_returns201() throws Exception {
         mockMvc.perform(post("/api/watchlist/{stockCode}", stock.getStockCode())
-                .header("Authorization", "Bearer " + accessToken))
+                .header("Authorization", "Bearer " + accessToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"groupId\":" + groupId + "}"))
             .andExpect(status().isCreated())
-            .andExpect(jsonPath("$.stockCode").value(stock.getStockCode()));
+            .andExpect(jsonPath("$.stockCode").value(stock.getStockCode()))
+            .andExpect(jsonPath("$.groupId").value(groupId));
+    }
+
+    @Test
+    @DisplayName("[그룹 없이 등록하면 400을 반환한다]")
+    void addWatchlist_withoutGroup_returns400() throws Exception {
+        mockMvc.perform(post("/api/watchlist/{stockCode}", stock.getStockCode())
+                .header("Authorization", "Bearer " + accessToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+            .andExpect(status().isBadRequest());
     }
 
     @Test
     @DisplayName("[이미 등록된 종목을 다시 등록하면 400을 반환한다]")
     void addWatchlist_duplicate_returns400() throws Exception {
         mockMvc.perform(post("/api/watchlist/{stockCode}", stock.getStockCode())
-                .header("Authorization", "Bearer " + accessToken))
+                .header("Authorization", "Bearer " + accessToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"groupId\":" + groupId + "}"))
             .andExpect(status().isCreated());
 
         mockMvc.perform(post("/api/watchlist/{stockCode}", stock.getStockCode())
-                .header("Authorization", "Bearer " + accessToken))
+                .header("Authorization", "Bearer " + accessToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"groupId\":" + groupId + "}"))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("WL_000"));
     }
@@ -89,7 +116,9 @@ class WatchlistControllerTest extends ApiTestSupport {
     @DisplayName("[관심 종목 목록을 조회한다]")
     void getWatchlist_returnsRegisteredStocks() throws Exception {
         mockMvc.perform(post("/api/watchlist/{stockCode}", stock.getStockCode())
-                .header("Authorization", "Bearer " + accessToken))
+                .header("Authorization", "Bearer " + accessToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"groupId\":" + groupId + "}"))
             .andExpect(status().isCreated());
 
         mockMvc.perform(get("/api/watchlist")
@@ -102,7 +131,9 @@ class WatchlistControllerTest extends ApiTestSupport {
     @DisplayName("[관심 종목을 해제하면 204를 반환한다]")
     void removeWatchlist_success_returns204() throws Exception {
         mockMvc.perform(post("/api/watchlist/{stockCode}", stock.getStockCode())
-                .header("Authorization", "Bearer " + accessToken))
+                .header("Authorization", "Bearer " + accessToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"groupId\":" + groupId + "}"))
             .andExpect(status().isCreated());
 
         mockMvc.perform(delete("/api/watchlist/{stockCode}", stock.getStockCode())

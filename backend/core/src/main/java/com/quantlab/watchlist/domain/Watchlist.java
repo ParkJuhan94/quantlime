@@ -44,22 +44,51 @@ public class Watchlist extends TimeBaseEntity {
         foreignKey = @ForeignKey(NO_CONSTRAINT))
     private Stock stock;
 
+    // 관심종목은 항상 어느 한 그룹에 속한다("미분류" 상태 폐지 - 2026-07-14
+    // 세션에서 등록 시점에 그룹 선택을 강제하는 쪽으로 정리). DB 컬럼
+    // 자체는 nullable로 남겨둔다 - ddl-auto=update 환경에서 NOT NULL로
+    // 바꾸면 기존에 이미 미분류로 남아있던 행 때문에 애플리케이션이
+    // 그 행을 정리(WatchlistService의 자동 재배정)할 기회를 갖기도 전에
+    // 스키마 ALTER 자체가 실패한다. 불변식은 여기(생성자 검증)와
+    // assignToGroup에서 애플리케이션 레벨로 강제한다.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "watchlist_group_id",
+        foreignKey = @ForeignKey(NO_CONSTRAINT))
+    private WatchlistGroup group;
+
+    @Column(name = "sort_order", nullable = false)
+    private int sortOrder;
+
     @Builder
-    private Watchlist(User user, Stock stock) {
-        validateWatchlist(user, stock);
+    private Watchlist(User user, Stock stock, WatchlistGroup group, int sortOrder) {
+        validateWatchlist(user, stock, group);
         this.user = user;
         this.stock = stock;
+        this.group = group;
+        this.sortOrder = sortOrder;
     }
 
-    public static Watchlist of(User user, Stock stock) {
+    public static Watchlist of(User user, Stock stock, WatchlistGroup group, int sortOrder) {
         return Watchlist.builder()
             .user(user)
             .stock(stock)
+            .group(group)
+            .sortOrder(sortOrder)
             .build();
     }
 
-    private void validateWatchlist(User user, Stock stock) {
+    public void assignToGroup(WatchlistGroup group) {
+        Assert.notNull(group, "그룹은 필수입니다.");
+        this.group = group;
+    }
+
+    public void updateSortOrder(int sortOrder) {
+        this.sortOrder = sortOrder;
+    }
+
+    private void validateWatchlist(User user, Stock stock, WatchlistGroup group) {
         Assert.notNull(user, "사용자는 필수입니다.");
         Assert.notNull(stock, "종목은 필수입니다.");
+        Assert.notNull(group, "그룹은 필수입니다.");
     }
 }

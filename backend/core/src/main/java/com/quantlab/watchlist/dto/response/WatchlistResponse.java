@@ -8,6 +8,8 @@ public record WatchlistResponse(
     String stockName,
     String marketType,
     String sector,
+    Long groupId,
+    int sortOrder,
     LocalDateTime createdAt
 ) {
 }
