@@ -1,6 +1,7 @@
 package com.quantlab.infra.upbit;
 
 import com.quantlab.common.util.ExternalApiInvoker;
+import com.quantlab.infra.upbit.dto.UpbitMinuteCandle;
 import com.quantlab.infra.upbit.dto.UpbitTicker;
 import com.quantlab.infra.upbit.exception.UpbitApiErrorCode;
 import java.util.Arrays;
@@ -31,6 +32,23 @@ public class UpbitApiClient {
                     .retrieve()
                     .body(UpbitTicker[].class);
                 return tickers == null ? null : Arrays.asList(tickers);
+            });
+    }
+
+    // 홈 카드의 "최근 24시간" 비트코인 차트용 - 30분봉 48개 = 24시간.
+    public List<UpbitMinuteCandle> getMinuteCandles(String market, int unitMinutes, int count) {
+        return ExternalApiInvoker.call(
+            UpbitApiErrorCode.CANDLE_INQUIRY_FAILED,
+            () -> {
+                UpbitMinuteCandle[] candles = upbitRestClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                        .path("/v1/candles/minutes/{unit}")
+                        .queryParam("market", market)
+                        .queryParam("count", count)
+                        .build(unitMinutes))
+                    .retrieve()
+                    .body(UpbitMinuteCandle[].class);
+                return candles == null ? null : Arrays.asList(candles);
             });
     }
 }
