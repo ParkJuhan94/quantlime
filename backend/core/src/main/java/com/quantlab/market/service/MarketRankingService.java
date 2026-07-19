@@ -3,6 +3,7 @@ package com.quantlab.market.service;
 import com.quantlab.market.cache.MarketRankingCache;
 import com.quantlab.market.dto.response.MarketRankingResponse;
 import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -14,9 +15,9 @@ public class MarketRankingService {
 
     private final MarketRankingCache marketRankingCache;
 
-    public List<MarketRankingResponse> getRanking(String sort, int limit) {
+    public List<MarketRankingResponse> getRanking(String sort, int limit, Set<String> watchlistCodes) {
         return LOSERS.equals(sort)
-            ? marketRankingCache.getLosers(limit)
-            : marketRankingCache.getGainers(limit);
+            ? marketRankingCache.getLosers(limit, watchlistCodes)
+            : marketRankingCache.getGainers(limit, watchlistCodes);
     }
 }

@@ -3,6 +3,8 @@ package com.quantlab.market.cache;
 import com.quantlab.market.dto.response.MarketRankingResponse;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Stream;
 import org.springframework.stereotype.Component;
 
 /**
@@ -20,17 +22,27 @@ public class MarketRankingCache {
         this.latestRanking = List.copyOf(ranking);
     }
 
-    public List<MarketRankingResponse> getGainers(int limit) {
-        return latestRanking.stream()
+    public List<MarketRankingResponse> getGainers(int limit, Set<String> stockCodes) {
+        return filtered(stockCodes)
             .sorted(Comparator.comparingDouble(MarketRankingResponse::changeRate).reversed())
             .limit(limit)
             .toList();
     }
 
-    public List<MarketRankingResponse> getLosers(int limit) {
-        return latestRanking.stream()
+    public List<MarketRankingResponse> getLosers(int limit, Set<String> stockCodes) {
+        return filtered(stockCodes)
             .sorted(Comparator.comparingDouble(MarketRankingResponse::changeRate))
             .limit(limit)
             .toList();
+    }
+
+    /**
+     * stockCodes가 null이면 전종목, 아니면 그 코드들만 - "관심종목만 보기"
+     * 토글용. 전종목 스냅샷 안에서 필터링하므로(top-50 등으로 미리 잘려
+     * 있지 않음) 관심종목이 상위권 밖에 있어도 정확히 걸러진다.
+     */
+    private Stream<MarketRankingResponse> filtered(Set<String> stockCodes) {
+        Stream<MarketRankingResponse> stream = latestRanking.stream();
+        return stockCodes == null ? stream : stream.filter(item -> stockCodes.contains(item.stockCode()));
     }
 }
