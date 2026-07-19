@@ -6,6 +6,7 @@ import java.time.LocalDate;
 public record ScoreRankingResponse(
     String stockCode,
     String stockName,
+    String sector,
     @JsonFormat(pattern = "yyyy-MM-dd", timezone = "Asia/Seoul") LocalDate scoreDate,
     Double trendScore,
     Double meanReversionScore,

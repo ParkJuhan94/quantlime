@@ -14,10 +14,13 @@ import com.quantlab.score.dto.response.ScoreRankingResponse;
 import com.quantlab.score.dto.response.ScoreResponse;
 import com.quantlab.score.exception.ScoreErrorCode;
 import com.quantlab.score.repository.ScoreRepository;
+import com.quantlab.stock.domain.Stock;
+import com.quantlab.stock.service.StockMasterService;
 import com.quantlab.watchlist.domain.Watchlist;
 import com.quantlab.watchlist.repository.WatchlistRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -46,25 +49,58 @@ public class ScoreService {
 
     private static final int OHLCV_LOOKBACK_DAYS = 730;
     private static final String METRIC_MISSING_FROM_RESPONSE = "score.batch.missing-from-response";
+    // 전종목(약 2,700개)을 한 요청에 다 넣으면 퀀트 엔진에 보내는 JSON
+    // 페이로드가 지나치게 커진다(종목당 최대 730일 OHLCV) - 청크로 나눠
+    // 순차 호출하고, 한 청크가 실패해도 나머지 청크는 계속 진행한다
+    // (OhlcvCollectorScheduler의 종목별 try-catch와 동일한 격리 원칙).
+    private static final int SCORE_BATCH_CHUNK_SIZE = 100;
 
     private final DailyPriceService dailyPriceService;
     private final PythonEngineClient pythonEngineClient;
     private final ScorePersistenceService scorePersistenceService;
     private final ScoreRepository scoreRepository;
     private final WatchlistRepository watchlistRepository;
+    private final StockMasterService stockMasterService;
     private final MeterRegistry meterRegistry;
 
     public void recalculateScore(String stockCode) {
         recalculateScores(List.of(stockCode));
     }
 
-    public void recalculateWatchlistedScores() {
-        List<String> stockCodes = watchlistRepository.findDistinctStockCodes();
+    // 관심종목만이 아니라 전 상장종목을 대상으로 계산한다(2026-07-16 -
+    // 이전엔 관심종목만 계산해 등록 안 한 종목은 스코어 자체가 없었음).
+    // 일봉 마감 기준 지표라 매일 배치 한 번이면 충분하다(OhlcvCollectorScheduler
+    // 참고, 하루 한 번 16:00 실행).
+    public void recalculateAllListedScores() {
+        List<String> stockCodes = stockMasterService.getAllListedStocks().stream()
+            .map(Stock::getStockCode)
+            .toList();
         if (stockCodes.isEmpty()) {
-            log.debug("스코어 일괄 재계산 스킵: 관심 종목 없음");
+            log.debug("스코어 일괄 재계산 스킵: 상장 종목 없음");
             return;
         }
-        recalculateScores(stockCodes);
+
+        List<List<String>> chunks = partition(stockCodes, SCORE_BATCH_CHUNK_SIZE);
+        log.info("전종목 스코어 재계산 시작: 대상종목수={}, 청크수={}", stockCodes.size(), chunks.size());
+        int chunkIndex = 0;
+        for (List<String> chunk : chunks) {
+            chunkIndex++;
+            try {
+                recalculateScores(chunk);
+            } catch (Exception e) {
+                log.error("스코어 재계산 청크 실패(다음 청크는 계속 진행): chunkIndex={}/{}, error={}",
+                    chunkIndex, chunks.size(), e.getMessage(), e);
+            }
+        }
+        log.info("전종목 스코어 재계산 완료: 총 {}개 청크", chunks.size());
+    }
+
+    private static List<List<String>> partition(List<String> list, int size) {
+        List<List<String>> chunks = new ArrayList<>();
+        for (int i = 0; i < list.size(); i += size) {
+            chunks.add(list.subList(i, Math.min(i + size, list.size())));
+        }
+        return chunks;
     }
 
     @Transactional(readOnly = true)
@@ -77,17 +113,36 @@ public class ScoreService {
     @Transactional(readOnly = true)
     public List<ScoreRankingResponse> getDashboardScores(Long userId) {
         List<Watchlist> watchlist = watchlistRepository.findAllWithStockByUserId(userId);
-        Map<String, String> stockNameByCode = watchlist.stream()
-            .collect(Collectors.toMap(
-                w -> w.getStock().getStockCode(), w -> w.getStock().getStockName()));
+        Map<String, Stock> stockByCode = watchlist.stream()
+            .collect(Collectors.toMap(w -> w.getStock().getStockCode(), Watchlist::getStock));
 
         List<Score> latestScores = scoreRepository
             .findLatestScoresByStockCodesOrderByCompositeScoreDesc(
-                stockNameByCode.keySet().stream().toList());
+                stockByCode.keySet().stream().toList());
 
         return latestScores.stream()
-            .map(score -> ScoreMapper.toScoreRankingResponse(
-                score, stockNameByCode.get(score.getStockCode())))
+            .map(score -> {
+                Stock stock = stockByCode.get(score.getStockCode());
+                return ScoreMapper.toScoreRankingResponse(score, stock.getStockName(), stock.getSector());
+            })
+            .toList();
+    }
+
+    // "실시간 랭킹" 스코어 탭의 "전체" 토글 - 관심종목 여부와 무관하게 전
+    // 상장종목 중 상위 N개(2026-07-18, 관심종목만/전체 토글로 /dashboard
+    // 별도 페이지를 대체).
+    @Transactional(readOnly = true)
+    public List<ScoreRankingResponse> getAllStocksScoreRanking(int limit) {
+        List<Score> latestScores = scoreRepository.findTopScoresOrderByCompositeScoreDesc(limit);
+        List<String> stockCodes = latestScores.stream().map(Score::getStockCode).toList();
+        Map<String, Stock> stockByCode = stockMasterService.getStocksByCodesInOrder(stockCodes).stream()
+            .collect(Collectors.toMap(Stock::getStockCode, stock -> stock));
+
+        return latestScores.stream()
+            .map(score -> {
+                Stock stock = stockByCode.get(score.getStockCode());
+                return ScoreMapper.toScoreRankingResponse(score, stock.getStockName(), stock.getSector());
+            })
             .toList();
     }
 

@@ -19,6 +19,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -156,6 +157,27 @@ class DailyPriceServiceTest {
 
         // then
         verify(dailyPriceRepository, never()).save(any(DailyPrice.class));
+    }
+
+    @Test
+    @DisplayName("[당일 행이 이미 있으면 스킵하지 않고 최신 확정값으로 덮어쓴다]")
+    void collectDailyPrice_todayAlreadyExists_updatesInPlaceInsteadOfSkipping() {
+        // given: 관심종목 등록 시 백필이 장중에 미완성 당일 캔들을 먼저 저장해둔 상태를 가정
+        LocalDate today = LocalDate.now();
+        DailyPrice existingIntradaySnapshot = DailyPrice.of(
+            STOCK_CODE, today, 70000L, 70500L, 69500L, 70200L, 500000L);
+        TossCandleResponse page = candlePage(1, today.toString(), null);
+        given(tossApiClient.getDailyCandles(eq(STOCK_CODE), eq(10), any())).willReturn(page);
+        given(dailyPriceRepository.findByStockCodeAndTradeDate(STOCK_CODE, today))
+            .willReturn(java.util.Optional.of(existingIntradaySnapshot));
+
+        // when: 장 마감 배치가 확정 종가로 재수집
+        dailyPriceService.collectDailyPrice(STOCK_CODE);
+
+        // then: exists 체크로 스킵하는 게 아니라 기존 행을 확정 종가로 갱신 후 저장
+        verify(dailyPriceRepository, never()).existsByStockCodeAndTradeDate(anyString(), any());
+        verify(dailyPriceRepository, times(1)).save(existingIntradaySnapshot);
+        assertThat(existingIntradaySnapshot.getClosePrice()).isEqualTo(70500L);
     }
 
     @Test

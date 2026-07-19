@@ -1,14 +1,20 @@
 package com.quantlab.stock.controller;
 
 import com.quantlab.common.dto.PageResponse;
+import com.quantlab.stock.cache.PopularStocksCache;
 import com.quantlab.stock.domain.Stock;
 import com.quantlab.stock.dto.mapper.StockMapper;
 import com.quantlab.stock.dto.response.StockDetailResponse;
+import com.quantlab.stock.dto.response.StockFundamentalsResponse;
+import com.quantlab.stock.service.StockFundamentalsService;
 import com.quantlab.stock.service.StockMasterService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -28,6 +34,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class StockController {
 
     private final StockMasterService stockMasterService;
+    private final StockFundamentalsService stockFundamentalsService;
+    private final PopularStocksCache popularStocksCache;
 
     @GetMapping("/{stockCode}")
     @Operation(
@@ -40,6 +48,30 @@ public class StockController {
         Stock stock = stockMasterService.getStockByCode(stockCode);
         return ResponseEntity.ok(
             StockMapper.toStockDetailResponse(stock));
+    }
+
+    @GetMapping("/{stockCode}/fundamentals")
+    @Operation(
+        summary = "종목 밸류에이션 지표 조회",
+        description = "시가총액/PER/포워드PER/PBR/PSR/부채비율을 조회한다(값이 없으면 null)"
+    )
+    @ApiResponse(useReturnTypeSchema = true)
+    public ResponseEntity<StockFundamentalsResponse> getFundamentals(
+        @PathVariable String stockCode) {
+        return ResponseEntity.ok(stockFundamentalsService.getFundamentals(stockCode));
+    }
+
+    @GetMapping("/popular")
+    @Operation(
+        summary = "인기 종목 조회",
+        description = "관심종목으로 등록한 사용자 수가 많은 순으로 상위 N개 종목을 조회한다(검색모달 '인기 종목')"
+    )
+    @ApiResponse(useReturnTypeSchema = true)
+    public ResponseEntity<List<StockDetailResponse>> getPopularStocks(
+        @RequestParam(defaultValue = "5")
+        @Min(value = 1, message = "limit는 1 이상이어야 합니다.")
+        @Max(value = 20, message = "limit는 20 이하여야 합니다.") int limit) {
+        return ResponseEntity.ok(popularStocksCache.get(limit));
     }
 
     @GetMapping("/search")

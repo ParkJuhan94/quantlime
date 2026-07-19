@@ -88,6 +88,26 @@ public class DailyPrice extends TimeBaseEntity {
             .build();
     }
 
+    /**
+     * 당일(장중) 백필로 미리 저장된 미완성 캔들을, 장 마감 후 배치가 받아온
+     * 확정 캔들로 덮어쓸 때 사용한다. setter를 두지 않는 컨벤션을 지키기
+     * 위한 비즈니스 메서드 - 과거 거래일 행은 이미 확정값이라 호출 대상이
+     * 아니다(호출측에서 당일 거래일에 한해서만 사용).
+     */
+    public void updateOhlcv(Long openPrice, Long highPrice, Long lowPrice,
+                            Long closePrice, Long volume) {
+        Assert.notNull(openPrice, "시가는 필수입니다.");
+        Assert.notNull(highPrice, "고가는 필수입니다.");
+        Assert.notNull(lowPrice, "저가는 필수입니다.");
+        Assert.notNull(closePrice, "종가는 필수입니다.");
+        Assert.notNull(volume, "거래량은 필수입니다.");
+        this.openPrice = openPrice;
+        this.highPrice = highPrice;
+        this.lowPrice = lowPrice;
+        this.closePrice = closePrice;
+        this.volume = volume;
+    }
+
     private void validateDailyPrice(String stockCode, LocalDate tradeDate,
                                     Long openPrice, Long highPrice,
                                     Long lowPrice, Long closePrice,

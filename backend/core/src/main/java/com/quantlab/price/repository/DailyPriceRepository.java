@@ -22,4 +22,6 @@ public interface DailyPriceRepository
         String stockCode, LocalDate tradeDate);
 
     long countByStockCode(String stockCode);
+
+    Optional<DailyPrice> findTopByStockCodeOrderByTradeDateDesc(String stockCode);
 }

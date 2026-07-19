@@ -120,10 +120,25 @@ public class DailyPriceService {
         log.info("이력 백필 완료: stockCode={}, 신규저장={}건", stockCode, savedCount);
     }
 
+    /**
+     * 과거 거래일 행은 이미 확정된 값이라 존재하면 그대로 스킵한다. 다만
+     * 당일(오늘) 행은 예외다 - 관심종목 등록 시 백필(backfillHistoryIfNeeded)이
+     * 장중에 먼저 실행되면 아직 확정되지 않은 당일 캔들이 미리 저장되는데,
+     * 이후 장 마감(15:30) 배치가 같은 날짜에 이미 행이 있다는 이유로 조용히
+     * 스킵해버리면 확정 종가가 영영 반영되지 않는다(다음날 전일종가 계산이
+     * 틀어지는 버그의 원인이었음) - 당일 행만 항상 최신값으로 덮어쓴다.
+     */
     private int saveNewCandles(String stockCode, List<TossCandleResponse.TossCandle> candles) {
+        LocalDate today = LocalDate.now();
         int saved = 0;
         for (TossCandleResponse.TossCandle candle : candles) {
             LocalDate tradeDate = TossPriceMapper.toLocalDate(candle.timestamp());
+            if (tradeDate.isEqual(today)) {
+                if (upsertToday(stockCode, tradeDate, candle)) {
+                    saved++;
+                }
+                continue;
+            }
             if (dailyPriceRepository.existsByStockCodeAndTradeDate(stockCode, tradeDate)) {
                 continue;
             }
@@ -135,6 +150,37 @@ public class DailyPriceService {
             }
         }
         return saved;
+    }
+
+    /**
+     * 갱신 분기는 dirty checking에 기대지 않고 명시적으로 save()한다 -
+     * backfillHistoryIfNeeded 경로는(위 클래스 주석 참고) 메서드 자체가
+     * @Transactional이 아니라 건별로 커밋되므로, findBy로 읽어온 엔티티가
+     * 이미 detached 상태일 수 있어 트랜잭션 종료 시 자동 flush를 보장할 수
+     * 없다.
+     */
+    private boolean upsertToday(String stockCode, LocalDate tradeDate,
+                                TossCandleResponse.TossCandle candle) {
+        return dailyPriceRepository.findByStockCodeAndTradeDate(stockCode, tradeDate)
+            .map(existing -> {
+                existing.updateOhlcv(
+                    Long.parseLong(candle.openPrice()),
+                    Long.parseLong(candle.highPrice()),
+                    Long.parseLong(candle.lowPrice()),
+                    Long.parseLong(candle.closePrice()),
+                    Long.parseLong(candle.volume()));
+                dailyPriceRepository.save(existing);
+                return false;
+            })
+            .orElseGet(() -> {
+                try {
+                    dailyPriceRepository.save(TossPriceMapper.toDailyPrice(stockCode, candle));
+                    return true;
+                } catch (DataIntegrityViolationException e) {
+                    log.debug("당일 시세 동시 저장 충돌 스킵: stockCode={}, date={}", stockCode, tradeDate);
+                    return false;
+                }
+            });
     }
 
     private boolean sleepBeforeNextPage(String stockCode) {

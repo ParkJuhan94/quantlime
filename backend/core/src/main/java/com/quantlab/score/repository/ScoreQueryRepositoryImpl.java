@@ -36,6 +36,19 @@ public class ScoreQueryRepositoryImpl implements ScoreQueryRepository {
             .fetch();
     }
 
+    @Override
+    public List<Score> findTopScoresOrderByCompositeScoreDesc(int limit) {
+        QScore score = QScore.score;
+        QScore latest = new QScore("latest");
+
+        return queryFactory
+            .selectFrom(score)
+            .where(score.scoreDate.eq(latestScoreDateSubquery(latest, score)))
+            .orderBy(score.compositeScore.desc().nullsLast())
+            .limit(limit)
+            .fetch();
+    }
+
     private JPQLQuery<LocalDate> latestScoreDateSubquery(QScore latest, QScore score) {
         return JPAExpressions
             .select(latest.scoreDate.max())

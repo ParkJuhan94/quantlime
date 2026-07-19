@@ -3,6 +3,7 @@ package com.quantlab.score.service;
 import com.quantlab.infra.python.dto.ScoreBatchApiResponse.DivergenceApiResponse;
 import com.quantlab.infra.python.dto.ScoreBatchApiResponse.StockScoreApiResponse;
 import com.quantlab.score.domain.Divergence;
+import com.quantlab.score.domain.Quadrant;
 import com.quantlab.score.domain.Score;
 import com.quantlab.score.repository.ScoreRepository;
 import java.time.LocalDate;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -52,11 +54,27 @@ class ScorePersistenceServiceTest {
     }
 
     @Test
+    @DisplayName("[퀀트 엔진이 내려준 사분면 코드가 그대로 Score에 저장된다]")
+    void saveAll_withQuadrant_persistsQuadrant() {
+        // given
+        given(scoreRepository.findByStockCodeAndScoreDate(eq(STOCK_CODE), any()))
+            .willReturn(Optional.empty());
+        ArgumentCaptor<Score> captor = ArgumentCaptor.forClass(Score.class);
+
+        // when
+        scorePersistenceService.saveAll(List.of(successResponse(STOCK_CODE, 82.0)));
+
+        // then
+        verify(scoreRepository).save(captor.capture());
+        assertThat(captor.getValue().getQuadrant()).isEqualTo(Quadrant.TREND_UP_OVERSOLD);
+    }
+
+    @Test
     @DisplayName("[같은 날 재계산이면 기존 행을 갱신하고 새로 저장하지 않는다]")
     void saveAll_existingScoreToday_updatesInPlaceWithoutSave() {
         // given
         Score existing = Score.of(STOCK_CODE, LocalDate.now(), 50.0, 50.0, 50.0,
-            null, Divergence.of(false, null), "이전 코멘트", false);
+            null, null, Divergence.of(false, null), "이전 코멘트", false);
         given(scoreRepository.findByStockCodeAndScoreDate(eq(STOCK_CODE), any()))
             .willReturn(Optional.of(existing));
 
@@ -111,7 +129,7 @@ class ScorePersistenceServiceTest {
             .willReturn(Optional.empty());
 
         StockScoreApiResponse invalidGradeResponse = new StockScoreApiResponse(
-            invalidGradeCode, 70.0, 50.0, 60.0, "UNKNOWN_GRADE",
+            invalidGradeCode, 70.0, 50.0, 60.0, "UNKNOWN_GRADE", null,
             new DivergenceApiResponse(false, null), "코멘트", false);
 
         // when: Grade.of()가 ValidationException을 던져도 예외가 전파되지 않아야 한다
@@ -124,7 +142,7 @@ class ScorePersistenceServiceTest {
 
     private StockScoreApiResponse successResponse(String stockCode, double compositeScore) {
         return new StockScoreApiResponse(
-            stockCode, 70.0, 50.0, compositeScore, "A",
+            stockCode, 70.0, 50.0, compositeScore, "BUY", "trend_up_oversold",
             new DivergenceApiResponse(false, null), "코멘트", false);
     }
 }

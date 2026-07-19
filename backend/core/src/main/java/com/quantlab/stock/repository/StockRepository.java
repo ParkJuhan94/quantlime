@@ -18,4 +18,6 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
 
     Slice<Stock> findByStockNameContainingIgnoreCaseOrStockCodeContaining(
         String stockName, String stockCode, Pageable pageable);
+
+    List<Stock> findByStockCodeIn(List<String> stockCodes);
 }
