@@ -10,3 +10,8 @@
 # 값은 그보다 충분히 김).
 jwt:
   secret: test-jwt-secret-key-for-integration-test-must-be-long-enough-1234567890
+
+# 기본값(./uploads)을 그대로 쓰면 테스트가 실제 저장소 디렉터리에 파일을
+# 남긴다 - OS 임시 디렉터리로 격리한다.
+upload:
+  dir: ${java.io.tmpdir}/quantlab-test-uploads
