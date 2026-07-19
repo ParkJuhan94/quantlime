@@ -41,7 +41,9 @@ public class StockMasterSyncService {
 
     private Map<String, KindStockInfo> fetchLatestCorpList() {
         Map<String, KindStockInfo> result = new LinkedHashMap<>();
-        for (MarketType marketType : MarketType.values()) {
+        // KIND는 국내 거래소 전용 소스라 해외 시장(NASDAQ/NYSE)은 제외한다 -
+        // MarketType.values() 그대로 순회하면 KindApiClient가 예외를 던진다.
+        for (MarketType marketType : MarketType.domesticValues()) {
             List<KindStockInfo> stocks = kindApiClient.fetchCorpList(marketType);
             for (KindStockInfo stock : stocks) {
                 // 동일 코드가 KIND 응답 내에서 중복 행으로 내려오는 경우가

@@ -78,6 +78,11 @@ public class KindApiClient {
             case KOSPI -> "stockMkt";
             case KOSDAQ -> "kosdaqMkt";
             case KONEX -> "konexMkt";
+            // KIND는 국내 거래소 전용 소스라 해외 시장은 호출 대상이 아니다
+            // (호출측 StockMasterSyncService가 MarketType.domesticValues()로
+            // 미리 걸러내야 한다 - 여기 도달하면 그 필터가 깨진 것).
+            case NASDAQ, NYSE -> throw new IllegalArgumentException(
+                "KIND는 국내 시장만 지원합니다: " + marketType);
         };
     }
 }

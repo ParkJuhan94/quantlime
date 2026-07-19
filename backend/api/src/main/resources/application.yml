@@ -22,6 +22,10 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6381}
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 5MB
 
 server:
   port: 8080
@@ -57,17 +61,50 @@ management:
 app:
   cors:
     allowed-origin: ${APP_CORS_ALLOWED_ORIGIN:http://localhost:3001}
+  cookie:
+    # 리프레시 토큰 쿠키의 Secure 속성. HTTPS가 아니면 브라우저가 secure
+    # 쿠키를 아예 저장하지 않으므로, TLS 미적용 상태인 로컬 개발과 현재
+    # 프로덕션(순수 HTTP, docs/DEPLOYMENT.md 참고)에서는 반드시 false여야
+    # 한다. HTTPS 적용 후 COOKIE_SECURE=true로 전환할 것.
+    secure: ${COOKIE_SECURE:false}
 
 toss:
   client-id: ${TOSS_CLIENT_ID:}
   client-secret: ${TOSS_CLIENT_SECRET:}
   base-url: ${TOSS_BASE_URL:https://openapi.tossinvest.com}
 
+# 해외 종목(백테스트 유니버스) 연동용 - 토스는 국내 전용이라 별도 필요(CLAUDE.md §4).
+# 실전 도메인 기본값(시세 조회 전용이라 모의투자 도메인 분리 불필요).
+kis:
+  app-key: ${KIS_APP_KEY:}
+  app-secret: ${KIS_APP_SECRET:}
+  base-url: ${KIS_BASE_URL:https://openapi.koreainvestment.com:9443}
+  master-file-base-url: ${KIS_MASTER_FILE_BASE_URL:https://new.real.download.dws.co.kr}
+
 kind:
   base-url: ${KIND_BASE_URL:https://kind.krx.co.kr}
 
 upbit:
   base-url: ${UPBIT_BASE_URL:https://api.upbit.com}
+
+naver-finance:
+  base-url: ${NAVER_FINANCE_BASE_URL:https://m.stock.naver.com}
+  chart-base-url: ${NAVER_FINANCE_CHART_BASE_URL:https://api.stock.naver.com}
+
+tradingview:
+  base-url: ${TRADINGVIEW_BASE_URL:https://scanner.tradingview.com}
+
+upload:
+  dir: ${UPLOAD_DIR:./uploads}
+  max-size-bytes: ${UPLOAD_MAX_SIZE_BYTES:5242880}
+  public-base-url: ${UPLOAD_PUBLIC_BASE_URL:http://localhost:8080}
+
+slack:
+  # 사이드패널 "의견 보내기" 기능이 전송할 Incoming Webhook URL. 비어
+  # 있으면 SlackWebhookClient가 조용히 실패하지 않고 명시적으로
+  # WEBHOOK_NOT_CONFIGURED 에러를 던진다(설정 누락과 실제 전송 실패를
+  # 구분하기 위함).
+  feedback-webhook-url: ${SLACK_FEEDBACK_WEBHOOK_URL:}
 
 python-engine:
   base-url: ${PYTHON_ENGINE_URL:http://localhost:8000}
