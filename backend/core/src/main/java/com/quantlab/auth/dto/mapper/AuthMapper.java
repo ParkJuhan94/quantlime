@@ -11,11 +11,9 @@ public final class AuthMapper {
 
     private static final String TOKEN_TYPE = "Bearer";
 
-    public static TokenResponse toTokenResponse(String accessToken, String refreshToken,
-                                                long accessTokenValidityMs) {
+    public static TokenResponse toTokenResponse(String accessToken, long accessTokenValidityMs) {
         return new TokenResponse(
             accessToken,
-            refreshToken,
             TOKEN_TYPE,
             TimeUnit.MILLISECONDS.toSeconds(accessTokenValidityMs)
         );

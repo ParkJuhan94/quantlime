@@ -7,6 +7,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @Slf4j
@@ -44,6 +45,18 @@ public class GlobalExceptionHandler {
         log.warn("검증 예외: message={}, code={}",
             e.getMessage(), e.getCode());
         return new ErrorResponseTemplate(e.getMessage(), e.getCode());
+    }
+
+    // 파일 크기가 spring.servlet.multipart.max-file-size를 넘으면 컨트롤러에
+    // 도달하기도 전에 Spring이 이 예외를 던진다 - FileStorageService의
+    // 자체 검증(UploadErrorCode.FILE_TOO_LARGE)과 별개로 여기서도 400으로
+    // 응답해야 500(catch-all)으로 새지 않는다.
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ErrorResponseTemplate handleMaxUploadSizeExceededException(
+        MaxUploadSizeExceededException e) {
+        log.warn("업로드 파일 크기 초과: message={}", e.getMessage());
+        return new ErrorResponseTemplate("파일 크기가 너무 큽니다.", "UPLOAD_002");
     }
 
     @ResponseStatus(HttpStatus.NOT_FOUND)

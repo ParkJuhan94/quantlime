@@ -1,9 +1,7 @@
 package com.quantlab.auth.service;
 
 import com.quantlab.auth.dto.mapper.AuthMapper;
-import com.quantlab.auth.dto.request.ReissueRequest;
 import com.quantlab.auth.dto.request.SocialLoginRequest;
-import com.quantlab.auth.dto.response.TokenResponse;
 import com.quantlab.auth.exception.AuthErrorCode;
 import com.quantlab.auth.jwt.JwtTokenProvider;
 import com.quantlab.auth.token.RefreshTokenStore;
@@ -29,7 +27,7 @@ public class AuthService {
     private final RefreshTokenStore refreshTokenStore;
 
     @Transactional
-    public TokenResponse login(OAuthProvider provider, SocialLoginRequest request) {
+    public AuthTokens login(OAuthProvider provider, SocialLoginRequest request) {
         OAuthUserInfo userInfo = oAuthClientDispatcher.fetch(
             provider, request.code(), request.redirectUri());
         User user = userService.findOrCreate(userInfo);
@@ -38,8 +36,7 @@ public class AuthService {
     }
 
     @Transactional(readOnly = true)
-    public TokenResponse reissue(ReissueRequest request) {
-        String refreshToken = request.refreshToken();
+    public AuthTokens reissue(String refreshToken) {
         if (!jwtTokenProvider.isRefreshToken(refreshToken)) {
             throw new UnauthorizedException(AuthErrorCode.INVALID_TOKEN);
         }
@@ -60,11 +57,12 @@ public class AuthService {
         log.info("로그아웃 완료: userId={}", userId);
     }
 
-    private TokenResponse issueTokens(User user) {
+    private AuthTokens issueTokens(User user) {
         String accessToken = jwtTokenProvider.createAccessToken(user.getId(), user.getRole());
         String refreshToken = jwtTokenProvider.createRefreshToken(user.getId());
         refreshTokenStore.save(user.getId(), refreshToken);
-        return AuthMapper.toTokenResponse(
-            accessToken, refreshToken, jwtTokenProvider.getAccessTokenValidity());
+        return new AuthTokens(
+            AuthMapper.toTokenResponse(accessToken, jwtTokenProvider.getAccessTokenValidity()),
+            refreshToken);
     }
 }

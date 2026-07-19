@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -33,6 +34,11 @@ public class SecurityConfig {
         "/api/health",
         "/api/stocks/**",
         "/api/market/**",
+        "/api/feedback",
+        // 업로드된 이미지 열람은 인증 불필요 - Slack 언퍼널링, 비로그인
+        // 피드 열람 등에서 그대로 불러와야 한다. 업로드(POST)는 별개로
+        // UploadController에서 @LoginUser로 막는다.
+        "/uploads/**",
         "/dev/**",
         "/swagger-ui/**",
         "/swagger-ui.html",
@@ -61,6 +67,17 @@ public class SecurityConfig {
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(PERMIT_ALL_PATTERNS).permitAll()
+                // 피드 글쓰기/좋아요/댓글 작성은 로그인이 필요하지만 조회는
+                // 누구나 볼 수 있어야 해서 GET만 따로 permitAll한다(경로
+                // 전체를 열면 글쓰기까지 비로그인으로 뚫림).
+                .requestMatchers(HttpMethod.GET, "/api/feed/posts").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/feed/posts/*/comments").permitAll()
+                // 실시간 랭킹 "스코어" 탭의 "전체" 토글(watchlistOnly=false)은
+                // 관심종목과 무관한 공개 데이터라 로그인 없이도 조회 가능해야
+                // 한다 - watchlistOnly=true(관심종목만)는 컨트롤러에서
+                // @OptionalLoginUser로 비로그인 시 빈 배열을 반환해 처리
+                // (2026-07-18, /api/market/ranking의 watchlistOnly와 동일한 패턴).
+                .requestMatchers(HttpMethod.GET, "/api/dashboard/scores").permitAll()
                 .anyRequest().authenticated())
             .exceptionHandling(handling -> handling
                 .authenticationEntryPoint((request, response, e) ->
@@ -89,7 +106,10 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of(allowedOrigin));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        // PATCH는 관심 그룹 이름 변경/종목 그룹 이동 API에서 새로 쓰기
+        // 시작하면서 추가 - 빠져 있으면 브라우저 프리플라이트(OPTIONS)가
+        // 거부돼 CORS 에러로만 보이고 서버 로그엔 아무 단서도 안 남는다.
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);

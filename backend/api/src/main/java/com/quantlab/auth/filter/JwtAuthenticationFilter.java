@@ -1,5 +1,6 @@
 package com.quantlab.auth.filter;
 
+import com.quantlab.auth.exception.AuthErrorCode;
 import com.quantlab.auth.jwt.JwtTokenProvider;
 import com.quantlab.common.exception.UnauthorizedException;
 import com.quantlab.user.domain.UserRole;
@@ -33,6 +34,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String token = resolveToken(request);
         if (token != null) {
             try {
+                // 리프레시 토큰은 재발급(/api/auth/reissue) 전용이다 - 여기서
+                // 걸러두지 않으면 리프레시 토큰을 액세스 토큰처럼 Authorization
+                // 헤더에 실어 보내도 그대로 인증돼버린다(리프레시 토큰은 수명이
+                // 14일로 훨씬 길어 탈취 시 피해 범위가 커짐).
+                if (jwtTokenProvider.isRefreshToken(token)) {
+                    throw new UnauthorizedException(AuthErrorCode.INVALID_TOKEN);
+                }
                 Long userId = jwtTokenProvider.validateAndGetUserId(token);
                 UserRole role = jwtTokenProvider.getRole(token);
                 List<GrantedAuthority> authorities = role != null

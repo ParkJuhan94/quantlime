@@ -1,7 +1,7 @@
 package com.quantlab.auth.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.quantlab.auth.dto.request.ReissueRequest;
+import com.quantlab.auth.cookie.RefreshTokenCookieProvider;
 import com.quantlab.auth.dto.request.SocialLoginRequest;
 import com.quantlab.auth.jwt.JwtTokenProvider;
 import com.quantlab.infra.oauth.OAuthClientDispatcher;
@@ -9,6 +9,7 @@ import com.quantlab.infra.oauth.dto.OAuthUserInfo;
 import com.quantlab.support.ApiTestSupport;
 import com.quantlab.user.domain.OAuthProvider;
 import com.quantlab.user.domain.UserRole;
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -20,6 +21,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -36,7 +38,7 @@ class AuthControllerTest extends ApiTestSupport {
     private OAuthClientDispatcher oAuthClientDispatcher;
 
     @Test
-    @DisplayName("[소셜 로그인 성공 시 토큰을 발급하고 200을 반환한다]")
+    @DisplayName("[소셜 로그인 성공 시 액세스 토큰은 바디로, 리프레시 토큰은 httpOnly 쿠키로 내려온다]")
     void login_success_returns200AndTokens() throws Exception {
         // given
         OAuthUserInfo userInfo = new OAuthUserInfo(
@@ -46,14 +48,17 @@ class AuthControllerTest extends ApiTestSupport {
 
         SocialLoginRequest request = new SocialLoginRequest("auth-code", "http://localhost/cb");
 
-        // when & then
+        // when & then: 리프레시 토큰은 더 이상 응답 바디에 없다(쿠키로만 전달)
         mockMvc.perform(post("/api/auth/login/google")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.accessToken").exists())
-            .andExpect(jsonPath("$.refreshToken").exists())
-            .andExpect(jsonPath("$.tokenType").value("Bearer"));
+            .andExpect(jsonPath("$.refreshToken").doesNotExist())
+            .andExpect(jsonPath("$.tokenType").value("Bearer"))
+            .andExpect(cookie().exists(RefreshTokenCookieProvider.COOKIE_NAME))
+            .andExpect(cookie().httpOnly(RefreshTokenCookieProvider.COOKIE_NAME, true))
+            .andExpect(cookie().path(RefreshTokenCookieProvider.COOKIE_NAME, "/api/auth"));
     }
 
     @Test
@@ -77,27 +82,42 @@ class AuthControllerTest extends ApiTestSupport {
     }
 
     @Test
-    @DisplayName("[유효한 액세스 토큰으로 로그아웃하면 204를 반환한다]")
+    @DisplayName("[유효한 액세스 토큰으로 로그아웃하면 204와 함께 쿠키를 지운다]")
     void logout_withValidToken_returns204() throws Exception {
         // given
         String accessToken = jwtTokenProvider.createAccessToken(1L, UserRole.USER);
 
-        // when & then
+        // when & then: maxAge=0으로 재발급된 쿠키가 브라우저의 기존 쿠키를 지운다
         mockMvc.perform(post("/api/auth/logout")
                 .header("Authorization", "Bearer " + accessToken))
-            .andExpect(status().isNoContent());
+            .andExpect(status().isNoContent())
+            .andExpect(cookie().maxAge(RefreshTokenCookieProvider.COOKIE_NAME, 0));
     }
 
     @Test
-    @DisplayName("[유효하지 않은 리프레시 토큰으로 재발급하면 401을 반환한다]")
-    void reissue_invalidToken_returns401() throws Exception {
-        // given
-        ReissueRequest request = new ReissueRequest("invalid-refresh-token");
+    @DisplayName("[리프레시 토큰을 액세스 토큰처럼 Authorization 헤더에 실어도 인증되지 않는다]")
+    void protectedEndpoint_withRefreshTokenAsBearer_returns401() throws Exception {
+        // given: JwtAuthenticationFilter가 type=refresh를 걸러내는지 검증
+        String refreshToken = jwtTokenProvider.createRefreshToken(1L);
 
         // when & then
+        mockMvc.perform(post("/api/auth/logout")
+                .header("Authorization", "Bearer " + refreshToken))
+            .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("[쿠키 없이 재발급을 요청하면 401을 반환한다]")
+    void reissue_withoutCookie_returns401() throws Exception {
+        mockMvc.perform(post("/api/auth/reissue"))
+            .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("[유효하지 않은 리프레시 토큰 쿠키로 재발급하면 401을 반환한다]")
+    void reissue_invalidTokenCookie_returns401() throws Exception {
         mockMvc.perform(post("/api/auth/reissue")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                .cookie(new Cookie(RefreshTokenCookieProvider.COOKIE_NAME, "invalid-refresh-token")))
             .andExpect(status().isUnauthorized());
     }
 }

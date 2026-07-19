@@ -1,8 +1,6 @@
 package com.quantlab.auth.service;
 
-import com.quantlab.auth.dto.request.ReissueRequest;
 import com.quantlab.auth.dto.request.SocialLoginRequest;
-import com.quantlab.auth.dto.response.TokenResponse;
 import com.quantlab.auth.jwt.JwtTokenProvider;
 import com.quantlab.auth.token.RefreshTokenStore;
 import com.quantlab.common.exception.UnauthorizedException;
@@ -66,12 +64,12 @@ class AuthServiceTest {
         given(jwtTokenProvider.getAccessTokenValidity()).willReturn(60_000L);
 
         // when
-        TokenResponse response = authService.login(OAuthProvider.GOOGLE, request);
+        AuthTokens tokens = authService.login(OAuthProvider.GOOGLE, request);
 
         // then
-        assertThat(response.accessToken()).isEqualTo("access-token");
-        assertThat(response.refreshToken()).isEqualTo("refresh-token");
-        assertThat(response.tokenType()).isEqualTo("Bearer");
+        assertThat(tokens.response().accessToken()).isEqualTo("access-token");
+        assertThat(tokens.refreshToken()).isEqualTo("refresh-token");
+        assertThat(tokens.response().tokenType()).isEqualTo("Bearer");
         verify(refreshTokenStore).save(1L, "refresh-token");
     }
 
@@ -79,11 +77,10 @@ class AuthServiceTest {
     @DisplayName("[리프레시 토큰이 아닌 토큰으로 재발급을 요청하면 예외가 발생한다]")
     void reissue_notRefreshToken_throwsUnauthorizedException() {
         // given
-        ReissueRequest request = new ReissueRequest("access-token-misused");
         given(jwtTokenProvider.isRefreshToken("access-token-misused")).willReturn(false);
 
         // when & then
-        assertThatThrownBy(() -> authService.reissue(request))
+        assertThatThrownBy(() -> authService.reissue("access-token-misused"))
             .isInstanceOf(UnauthorizedException.class);
     }
 
@@ -91,13 +88,12 @@ class AuthServiceTest {
     @DisplayName("[저장된 리프레시 토큰과 일치하지 않으면 예외가 발생한다]")
     void reissue_mismatchStoredToken_throwsUnauthorizedException() {
         // given
-        ReissueRequest request = new ReissueRequest("refresh-token");
         given(jwtTokenProvider.isRefreshToken("refresh-token")).willReturn(true);
         given(jwtTokenProvider.validateAndGetUserId("refresh-token")).willReturn(1L);
         given(refreshTokenStore.findByUserId(1L)).willReturn(Optional.of("different-token"));
 
         // when & then
-        assertThatThrownBy(() -> authService.reissue(request))
+        assertThatThrownBy(() -> authService.reissue("refresh-token"))
             .isInstanceOf(UnauthorizedException.class);
     }
 
@@ -107,7 +103,6 @@ class AuthServiceTest {
         // given
         User user = UserFixture.createUser();
         setUserId(user, 1L);
-        ReissueRequest request = new ReissueRequest("refresh-token");
 
         given(jwtTokenProvider.isRefreshToken("refresh-token")).willReturn(true);
         given(jwtTokenProvider.validateAndGetUserId("refresh-token")).willReturn(1L);
@@ -118,11 +113,11 @@ class AuthServiceTest {
         given(jwtTokenProvider.getAccessTokenValidity()).willReturn(60_000L);
 
         // when
-        TokenResponse response = authService.reissue(request);
+        AuthTokens tokens = authService.reissue("refresh-token");
 
         // then
-        assertThat(response.accessToken()).isEqualTo("new-access-token");
-        assertThat(response.refreshToken()).isEqualTo("new-refresh-token");
+        assertThat(tokens.response().accessToken()).isEqualTo("new-access-token");
+        assertThat(tokens.refreshToken()).isEqualTo("new-refresh-token");
         verify(refreshTokenStore).save(1L, "new-refresh-token");
     }
 

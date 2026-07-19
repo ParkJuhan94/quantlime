@@ -52,6 +52,10 @@ public class JwtTokenProvider {
         return jwtProperties.getAccessTokenValidity();
     }
 
+    public long getRefreshTokenValidity() {
+        return jwtProperties.getRefreshTokenValidity();
+    }
+
     private String createToken(Long userId, String type, UserRole role, long validityMs) {
         Instant now = Instant.now();
         JwtBuilder builder = Jwts.builder()
