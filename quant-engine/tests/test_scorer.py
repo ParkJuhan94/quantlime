@@ -1,11 +1,15 @@
 import math
 
+import numpy as np
+import pandas as pd
 import pytest
 
+from calculator.indicators import compute_all_indicators
 from calculator.scorer import (
     DIVERGENCE_THRESHOLD,
     _apply_volume_multiplier,
     calculate_score,
+    compute_scores,
 )
 
 
@@ -270,6 +274,54 @@ class TestDivergence:
         # then
         assert result.divergence.flag is False
         assert result.divergence.message is None
+
+
+class TestComputeScores:
+    def _synthetic_ohlcv(self, days: int = 150) -> pd.DataFrame:
+        dates = pd.date_range("2026-01-01", periods=days, freq="B")
+        rng = np.random.default_rng(0)
+        close = pd.Series(100 + np.cumsum(rng.normal(0, 1, size=days)))
+        return pd.DataFrame({
+            "date": dates,
+            "open": close,
+            "high": close + 1,
+            "low": close - 1,
+            "close": close,
+            "volume": rng.integers(1000, 2000, size=days),
+        })
+
+    def test_compute_scores_reuses_calculate_score_per_row(self):
+        # given: compute_scores는 calculate_score를 행 단위로 그대로
+        # 적용할 뿐이므로, 마지막 행 결과가 calculate_score 직접 호출과
+        # 정확히 같아야 한다(라이브/백테스트 드리프트 방지가 핵심 설계 의도).
+        enriched = compute_all_indicators(self._synthetic_ohlcv())
+
+        # when
+        scores_df = compute_scores(enriched)
+
+        # then
+        assert len(scores_df) == len(enriched)
+        assert list(scores_df.columns) == [
+            "date", "close", "trend_score", "mean_reversion_score",
+            "composite_score", "grade", "quadrant", "insufficient_data",
+        ]
+        direct_result = calculate_score(enriched.iloc[-1].to_dict())
+        last_scored = scores_df.iloc[-1]
+        assert last_scored["trend_score"] == pytest.approx(direct_result.trend_score)
+        assert last_scored["mean_reversion_score"] == pytest.approx(direct_result.mean_reversion_score)
+        assert last_scored["grade"] == direct_result.grade
+
+    def test_compute_scores_marks_warmup_rows_insufficient(self):
+        # given: 120일 이평(콜드스타트 요구치 중 가장 긴)이 아직 안 나오는
+        # 초반 구간
+        enriched = compute_all_indicators(self._synthetic_ohlcv())
+
+        # when
+        scores_df = compute_scores(enriched)
+
+        # then: 최소 두 지표(RSI, MACD)조차 계산 안 되는 아주 초반 행은
+        # 두 축 모두 None -> insufficient_data True
+        assert bool(scores_df.iloc[0]["insufficient_data"]) is True
 
 
 class TestGradeCutoffs:

@@ -97,3 +97,29 @@ class TestCalculateScoreBatch:
         assert response.status_code == 200
         scores = response.json()["scores"]
         assert [s["stock_code"] for s in scores] == ["005930", "000660"]
+
+
+class TestBacktestScore:
+    def test_returns_both_axes_with_all_horizons(self):
+        # given: 벤치마크보다 완만하게 오르는 300거래일치 데이터(초과수익률이
+        # 발생하도록 종목 추세를 벤치마크보다 강하게 설정)
+        request_body = {
+            "stock_code": "005930",
+            "ohlcv": _make_ohlcv(days=300, trend=0.5),
+            "benchmark_ohlcv": _make_ohlcv(days=300, trend=0.1),
+        }
+
+        # when
+        response = client.post("/backtest/score", json=request_body)
+
+        # then
+        assert response.status_code == 200
+        body = response.json()
+        assert body["stock_code"] == "005930"
+        assert body["score_version"]
+        assert body["sample_days"] == 300
+        assert {axis["axis"] for axis in body["axes"]} == {"trend", "mean_reversion"}
+        for axis in body["axes"]:
+            assert [h["horizon"] for h in axis["horizons"]] == [5, 10, 20, 60]
+            for horizon in axis["horizons"]:
+                assert horizon["sample_size"] >= 0

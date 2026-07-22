@@ -12,6 +12,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+import pandas as pd
+
+# 스코어링 로직(임계값/가중치)이 바뀔 때마다 올린다. 백테스트 결과를
+# score_version으로 태깅해 튜닝 전후 비교가 가능하게 한다(Phase E/G,
+# CLAUDE.md 백테스트 계획 참고) - v1(초기 균등가중) -> v2(추세추종/평균회귀
+# 분리) -> v2.1(거래량 배율 대칭화 + 사분면 도입, 이번 값).
+SCORE_VERSION = "v2.1"
 
 # TODO: 초기값. 실데이터 분포 확인 후 튜닝 필요. (SCORING_DESIGN.md 참고)
 VOLUME_MULTIPLIER_COEF = 0.3
@@ -199,3 +206,28 @@ def calculate_score(latest: dict) -> ScoreResult:
         insufficient_data=insufficient,
         quadrant=quadrant,
     )
+
+
+def compute_scores(indicator_df: pd.DataFrame) -> pd.DataFrame:
+    """지표가 계산된 전 구간(indicators.compute_all_indicators 결과)에 매일의
+    스코어를 산출해 DataFrame으로 반환한다.
+
+    라이브 단건 스코어(main.py의 _score_single_stock)와 백테스트
+    (calculator/backtest.py)가 이 함수를 통해 같은 calculate_score를
+    공유한다 - 각 행에 그 함수를 그대로 적용할 뿐 별도 계산 로직을 두지
+    않아, 둘 사이에 스코어링 결과가 어긋나는(드리프트) 것을 원천 차단한다.
+    """
+    records = []
+    for row in indicator_df.to_dict("records"):
+        result = calculate_score(row)
+        records.append({
+            "date": row["date"],
+            "close": row["close"],
+            "trend_score": result.trend_score,
+            "mean_reversion_score": result.mean_reversion_score,
+            "composite_score": result.composite_score,
+            "grade": result.grade,
+            "quadrant": result.quadrant,
+            "insufficient_data": result.insufficient_data,
+        })
+    return pd.DataFrame.from_records(records)

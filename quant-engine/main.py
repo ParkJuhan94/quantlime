@@ -11,13 +11,20 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from prometheus_fastapi_instrumentator import Instrumentator
 
+from calculator.backtest import run_backtest
 from calculator.commentary import generate_comment
 from calculator.indicators import compute_all_indicators
-from calculator.scorer import calculate_score
+from calculator.scorer import SCORE_VERSION, calculate_score, compute_scores
 from schemas import (
+    AxisBacktestResponse,
+    BacktestRequest,
+    BacktestResponse,
+    BucketStatResponse,
     DivergenceResponse,
+    HorizonStatResponse,
     ScoreBatchRequest,
     ScoreBatchResponse,
+    StabilityStatResponse,
     StockScoreRequest,
     StockScoreResponse,
 )
@@ -71,3 +78,47 @@ def _score_single_stock(stock: StockScoreRequest) -> StockScoreResponse:
 def calculate_score_batch(request: ScoreBatchRequest) -> ScoreBatchResponse:
     results = [_score_single_stock(stock) for stock in request.stocks]
     return ScoreBatchResponse(scores=results)
+
+
+@app.post("/backtest/score", response_model=BacktestResponse)
+def backtest_score(request: BacktestRequest) -> BacktestResponse:
+    stock_df = (
+        pd.DataFrame([item.model_dump() for item in request.ohlcv])
+        .sort_values("date")
+        .reset_index(drop=True)
+    )
+    benchmark_df = (
+        pd.DataFrame([item.model_dump() for item in request.benchmark_ohlcv])
+        .sort_values("date")
+        .reset_index(drop=True)
+    )
+
+    scores_df = compute_scores(compute_all_indicators(stock_df))
+    axis_results = run_backtest(scores_df, benchmark_df)
+
+    return BacktestResponse(
+        stock_code=request.stock_code,
+        score_version=SCORE_VERSION,
+        sample_days=len(scores_df),
+        axes=[
+            AxisBacktestResponse(
+                axis=axis_result.axis,
+                horizons=[
+                    HorizonStatResponse(
+                        horizon=h.horizon,
+                        rank_ic=h.rank_ic,
+                        rank_ic_ci_low=h.rank_ic_ci_low,
+                        rank_ic_ci_high=h.rank_ic_ci_high,
+                        sample_size=h.sample_size,
+                        buckets=[BucketStatResponse(**vars(b)) for b in h.buckets],
+                    )
+                    for h in axis_result.horizons
+                ],
+                stability=StabilityStatResponse(
+                    score_autocorrelation=axis_result.stability.score_autocorrelation,
+                    grade_flip_rate=axis_result.stability.grade_flip_rate,
+                ),
+            )
+            for axis_result in axis_results
+        ],
+    )

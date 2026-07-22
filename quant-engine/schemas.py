@@ -44,3 +44,46 @@ class StockScoreResponse(BaseModel):
 
 class ScoreBatchResponse(BaseModel):
     scores: list[StockScoreResponse]
+
+
+class BacktestRequest(BaseModel):
+    stock_code: str
+    ohlcv: list[OhlcvItem]
+    # 초과수익률 계산의 기준선(코스피/코스닥 등 벤치마크 지수 OHLCV) -
+    # calculator/backtest.py의 방법론 참고.
+    benchmark_ohlcv: list[OhlcvItem]
+
+
+class BucketStatResponse(BaseModel):
+    bucket: int
+    mean_excess_return: float | None
+    median_excess_return: float | None
+    hit_rate: float | None
+    sample_size: int
+
+
+class HorizonStatResponse(BaseModel):
+    horizon: int
+    rank_ic: float | None
+    rank_ic_ci_low: float | None
+    rank_ic_ci_high: float | None
+    sample_size: int
+    buckets: list[BucketStatResponse]
+
+
+class StabilityStatResponse(BaseModel):
+    score_autocorrelation: float | None
+    grade_flip_rate: float | None
+
+
+class AxisBacktestResponse(BaseModel):
+    axis: str
+    horizons: list[HorizonStatResponse]
+    stability: StabilityStatResponse
+
+
+class BacktestResponse(BaseModel):
+    stock_code: str
+    score_version: str
+    sample_days: int
+    axes: list[AxisBacktestResponse]
