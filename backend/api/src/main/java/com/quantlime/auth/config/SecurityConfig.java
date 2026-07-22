@@ -35,6 +35,9 @@ public class SecurityConfig {
         "/api/stocks/**",
         "/api/market/**",
         "/api/feedback",
+        // 토스페이먼츠가 서버 대 서버로 호출하는 웹훅 - 사용자 인증(JWT)이
+        // 아니라 PaymentService.handleWebhook 내부의 서명 검증으로 대체한다.
+        "/api/webhooks/**",
         // 업로드된 이미지 열람은 인증 불필요 - Slack 언퍼널링, 비로그인
         // 피드 열람 등에서 그대로 불러와야 한다. 업로드(POST)는 별개로
         // UploadController에서 @LoginUser로 막는다.
