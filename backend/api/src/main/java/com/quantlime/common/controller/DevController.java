@@ -5,6 +5,7 @@ import com.quantlime.auth.dto.mapper.AuthMapper;
 import com.quantlime.auth.dto.response.TokenResponse;
 import com.quantlime.auth.jwt.JwtTokenProvider;
 import com.quantlime.auth.token.RefreshTokenStore;
+import com.quantlime.backtest.service.BacktestService;
 import com.quantlime.infra.oauth.dto.OAuthUserInfo;
 import com.quantlime.market.service.BenchmarkIndexBackfillService;
 import com.quantlime.market.service.DomesticUniverseSelectionService;
@@ -55,6 +56,7 @@ public class DevController {
     private final DomesticUniverseSelectionService domesticUniverseSelectionService;
     private final OverseasUniverseSelectionService overseasUniverseSelectionService;
     private final ScoreService scoreService;
+    private final BacktestService backtestService;
     private final UserService userService;
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenStore refreshTokenStore;
@@ -133,6 +135,14 @@ public class DevController {
     public ResponseEntity<String> triggerScoreRecalculate() {
         scoreService.recalculateAllListedScores();
         return ResponseEntity.ok("스코어 재계산 완료");
+    }
+
+    @PostMapping("/backtest/run")
+    @Operation(summary = "[개발용] 종목 백테스트 수동 트리거(국내 KOSPI/KOSDAQ 종목만 지원 - "
+        + "해외는 아직 벤치마크 지수가 없음)")
+    public ResponseEntity<String> triggerBacktest(@RequestParam String stockCode) {
+        backtestService.runBacktest(stockCode);
+        return ResponseEntity.ok("백테스트 완료: " + stockCode);
     }
 
     @PostMapping("/auth/token")

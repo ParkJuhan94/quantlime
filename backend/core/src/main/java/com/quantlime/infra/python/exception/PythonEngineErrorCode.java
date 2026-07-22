@@ -8,7 +8,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public enum PythonEngineErrorCode implements ErrorCode {
 
-    SCORE_CALCULATION_FAILED("퀀트 엔진 스코어 계산에 실패했습니다.", "PYE_000");
+    SCORE_CALCULATION_FAILED("퀀트 엔진 스코어 계산에 실패했습니다.", "PYE_000"),
+    BACKTEST_CALCULATION_FAILED("퀀트 엔진 백테스트 계산에 실패했습니다.", "PYE_001");
 
     private final String message;
     private final String code;

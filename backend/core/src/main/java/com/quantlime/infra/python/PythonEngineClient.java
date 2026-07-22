@@ -2,6 +2,8 @@ package com.quantlime.infra.python;
 
 import com.quantlime.common.exception.ExternalApiException;
 import com.quantlime.common.util.ExternalApiInvoker;
+import com.quantlime.infra.python.dto.BacktestApiRequest;
+import com.quantlime.infra.python.dto.BacktestApiResponse;
 import com.quantlime.infra.python.dto.ScoreBatchApiRequest;
 import com.quantlime.infra.python.dto.ScoreBatchApiResponse;
 import com.quantlime.infra.python.exception.PythonEngineErrorCode;
@@ -38,6 +40,24 @@ public class PythonEngineClient {
                         .body(request)
                         .retrieve()
                         .body(ScoreBatchApiResponse.class));
+            recordOutcome(OUTCOME_SUCCESS, sample);
+            return response;
+        } catch (ExternalApiException e) {
+            recordOutcome(OUTCOME_FAILURE, sample);
+            throw e;
+        }
+    }
+
+    public BacktestApiResponse runBacktest(BacktestApiRequest request) {
+        Timer.Sample sample = Timer.start(meterRegistry);
+        try {
+            BacktestApiResponse response = ExternalApiInvoker.call(
+                PythonEngineErrorCode.BACKTEST_CALCULATION_FAILED, () ->
+                    pythonEngineRestClient.post()
+                        .uri("/backtest/score")
+                        .body(request)
+                        .retrieve()
+                        .body(BacktestApiResponse.class));
             recordOutcome(OUTCOME_SUCCESS, sample);
             return response;
         } catch (ExternalApiException e) {

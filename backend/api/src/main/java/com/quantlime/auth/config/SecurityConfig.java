@@ -34,6 +34,10 @@ public class SecurityConfig {
         "/api/health",
         "/api/stocks/**",
         "/api/market/**",
+        // 백테스트 결과(Rank IC/버킷/안정성)는 사용자별 데이터가 아니라
+        // /api/stocks/**의 스코어 조회와 동일하게 누구나 볼 수 있는 공개
+        // 분석 데이터다.
+        "/api/backtest/**",
         "/api/feedback",
         // 토스페이먼츠가 서버 대 서버로 호출하는 웹훅 - 사용자 인증(JWT)이
         // 아니라 PaymentService.handleWebhook 내부의 서명 검증으로 대체한다.
