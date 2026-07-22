@@ -98,10 +98,14 @@ class SubscriptionControllerTest extends ApiTestSupport {
             .andExpect(jsonPath("$.planCode").value(plan.getCode()))
             .andExpect(jsonPath("$.status").value("구독중"));
 
+        // orderId는 PaymentService가 매번 새로 생성하는 값이라(주문 생성
+        // 주체는 우리 서버 - Toss가 응답에 echo하는 값이 아니라 우리가 생성한
+        // 값을 신뢰) 여기서 특정 문자열을 기대할 수 없다. 금액/상태로 대신 검증.
         mockMvc.perform(get("/api/subscription/payments")
                 .header("Authorization", "Bearer " + accessToken))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$[0].orderId").value("order-1"));
+            .andExpect(jsonPath("$[0].amount").value(plan.getPriceWon()))
+            .andExpect(jsonPath("$[0].status").value("결제 완료"));
 
         mockMvc.perform(post("/api/subscription/cancel")
                 .header("Authorization", "Bearer " + accessToken))

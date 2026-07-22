@@ -81,6 +81,10 @@ public class SecurityConfig {
                 // @OptionalLoginUser로 비로그인 시 빈 배열을 반환해 처리
                 // (2026-07-18, /api/market/ranking의 watchlistOnly와 동일한 패턴).
                 .requestMatchers(HttpMethod.GET, "/api/dashboard/scores").permitAll()
+                // 판매중인 구독 플랜 목록은 로그인 전에도(가입 유도 목적) 볼 수
+                // 있어야 한다 - 구독 상태/결제/해지 등 나머지 /api/subscription/**
+                // 는 여전히 인증 필요(anyRequest().authenticated()로 커버).
+                .requestMatchers(HttpMethod.GET, "/api/subscription/plans").permitAll()
                 .anyRequest().authenticated())
             .exceptionHandling(handling -> handling
                 .authenticationEntryPoint((request, response, e) ->
