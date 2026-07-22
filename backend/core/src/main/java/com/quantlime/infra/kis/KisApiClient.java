@@ -1,5 +1,6 @@
 package com.quantlime.infra.kis;
 
+import com.quantlime.common.exception.ErrorCode;
 import com.quantlime.common.exception.ExternalApiException;
 import com.quantlime.common.util.ExternalApiInvoker;
 import com.quantlime.infra.kis.dto.KisOverseasDailyPriceResponse;
@@ -28,6 +29,12 @@ public class KisApiClient {
     private static final String TR_ID_OVERSEAS_PRICE = "HHDFS00000300";
     private static final String TR_ID_OVERSEAS_DAILY_PRICE = "HHDFS76240000";
     private static final String CUST_TYPE_PERSONAL = "P";
+    // KIS는 HTTP 200이어도 rt_cd(자체 성공/실패 코드)가 "0"이 아니면 API
+    // 레벨 실패다(예: 잘못된 심볼). ExternalApiInvoker는 null 응답만 체크하고
+    // rt_cd는 모르므로, 이를 검증하지 않으면 실패 응답의 빈 필드를
+    // Double.parseDouble 등으로 그대로 파싱하려다 의미 불명확한
+    // NumberFormatException이 새어나간다.
+    private static final String RT_CD_SUCCESS = "0";
     // 수정주가 반영(분할·배당락 보정). 백테스트·지표 계산 정합성을 위해 고정.
     private static final String MODP_ADJUSTED = "1";
     // 일봉 고정(주봉 1, 월봉 2는 사용하지 않음).
@@ -43,16 +50,20 @@ public class KisApiClient {
     public KisOverseasPriceResponse getOverseasPrice(String exchangeCode, String symbol) {
         return withTokenRetry(token -> ExternalApiInvoker.call(
             KisApiErrorCode.OVERSEAS_PRICE_INQUIRY_FAILED,
-            () -> kisRestClient.get()
-                .uri(uriBuilder -> uriBuilder
-                    .path("/uapi/overseas-price/v1/quotations/price")
-                    .queryParam("AUTH", "")
-                    .queryParam("EXCD", exchangeCode)
-                    .queryParam("SYMB", symbol)
-                    .build())
-                .headers(headers -> applyHeaders(headers, token, TR_ID_OVERSEAS_PRICE))
-                .retrieve()
-                .body(KisOverseasPriceResponse.class),
+            () -> {
+                KisOverseasPriceResponse response = kisRestClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                        .path("/uapi/overseas-price/v1/quotations/price")
+                        .queryParam("AUTH", "")
+                        .queryParam("EXCD", exchangeCode)
+                        .queryParam("SYMB", symbol)
+                        .build())
+                    .headers(headers -> applyHeaders(headers, token, TR_ID_OVERSEAS_PRICE))
+                    .retrieve()
+                    .body(KisOverseasPriceResponse.class);
+                return validateRtCd(response, response == null ? null : response.rtCd(),
+                    KisApiErrorCode.OVERSEAS_PRICE_INQUIRY_FAILED);
+            },
             HttpClientErrorException.TooManyRequests.class,
             KisApiErrorCode.RATE_LIMIT_EXCEEDED));
     }
@@ -66,23 +77,39 @@ public class KisApiClient {
         String exchangeCode, String symbol, String baseDate) {
         return withTokenRetry(token -> ExternalApiInvoker.call(
             KisApiErrorCode.OVERSEAS_DAILY_PRICE_INQUIRY_FAILED,
-            () -> kisRestClient.get()
-                .uri(uriBuilder -> {
-                    var builder = uriBuilder
-                        .path("/uapi/overseas-price/v1/quotations/dailyprice")
-                        .queryParam("AUTH", "")
-                        .queryParam("EXCD", exchangeCode)
-                        .queryParam("SYMB", symbol)
-                        .queryParam("GUBN", GUBN_DAILY)
-                        .queryParam("MODP", MODP_ADJUSTED);
-                    builder.queryParam("BYMD", baseDate == null ? "" : baseDate);
-                    return builder.build();
-                })
-                .headers(headers -> applyHeaders(headers, token, TR_ID_OVERSEAS_DAILY_PRICE))
-                .retrieve()
-                .body(KisOverseasDailyPriceResponse.class),
+            () -> {
+                KisOverseasDailyPriceResponse response = kisRestClient.get()
+                    .uri(uriBuilder -> {
+                        var builder = uriBuilder
+                            .path("/uapi/overseas-price/v1/quotations/dailyprice")
+                            .queryParam("AUTH", "")
+                            .queryParam("EXCD", exchangeCode)
+                            .queryParam("SYMB", symbol)
+                            .queryParam("GUBN", GUBN_DAILY)
+                            .queryParam("MODP", MODP_ADJUSTED);
+                        builder.queryParam("BYMD", baseDate == null ? "" : baseDate);
+                        return builder.build();
+                    })
+                    .headers(headers -> applyHeaders(headers, token, TR_ID_OVERSEAS_DAILY_PRICE))
+                    .retrieve()
+                    .body(KisOverseasDailyPriceResponse.class);
+                return validateRtCd(response, response == null ? null : response.rtCd(),
+                    KisApiErrorCode.OVERSEAS_DAILY_PRICE_INQUIRY_FAILED);
+            },
             HttpClientErrorException.TooManyRequests.class,
             KisApiErrorCode.RATE_LIMIT_EXCEEDED));
+    }
+
+    /**
+     * HTTP 200이어도 KIS 자체 응답 코드(rt_cd)가 "0"이 아니면 실패로 취급한다
+     * (예: 잘못된 심볼) - 그대로 두면 빈 필드를 파싱하려다 의미 불명확한
+     * 예외가 새어나간다.
+     */
+    private <T> T validateRtCd(T response, String rtCd, ErrorCode errorCode) {
+        if (response == null || !RT_CD_SUCCESS.equals(rtCd)) {
+            throw new ExternalApiException(errorCode);
+        }
+        return response;
     }
 
     private void applyHeaders(HttpHeaders headers, String token, String trId) {

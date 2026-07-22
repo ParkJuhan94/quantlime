@@ -33,20 +33,20 @@ class OverseasStockMasterSyncServiceTest {
     private OverseasStockMasterSyncService overseasStockMasterSyncService;
 
     @Test
-    @DisplayName("[ETF(종목구분 3)는 등록하지 않고 주식(종목구분 2)만 등록한다]")
+    @DisplayName("[ETF(종목구분 3)는 등록하지 않고 주식(종목구분 2)만 등록하며, 업종코드를 sector로 전달한다]")
     void syncMarket_registersOnlyStocks() {
         // given
         given(kisOverseasStockMasterClient.fetchStockMaster("nys")).willReturn(List.of(
-            new KisOverseasStockMasterEntry("AA", "ALCOA CORPORATION", "2"),
-            new KisOverseasStockMasterEntry("SPY", "SPDR S&P 500 ETF", "3")
+            new KisOverseasStockMasterEntry("AA", "ALCOA CORPORATION", "2", "720"),
+            new KisOverseasStockMasterEntry("SPY", "SPDR S&P 500 ETF", "3", "000")
         ));
 
         // when
         overseasStockMasterSyncService.syncMarket(MarketType.NYSE);
 
-        // then: ETF까지 등록됐다면 2회 호출됐을 것 - 실제로는 주식 1건만
+        // then: ETF까지 등록됐다면 2회 호출됐을 것 - 실제로는 주식 1건만, 업종코드(720)를 sector로 전달
         verify(stockMasterService, times(1))
-            .registerStock("AA", "ALCOA CORPORATION", MarketType.NYSE, null);
+            .registerStock("AA", "ALCOA CORPORATION", MarketType.NYSE, "720");
         verify(stockMasterService, times(1))
             .registerStock(anyString(), anyString(), any(), any());
     }
@@ -56,7 +56,7 @@ class OverseasStockMasterSyncServiceTest {
     void syncMarket_skipsSymbolsLongerThanSix() {
         // given
         given(kisOverseasStockMasterClient.fetchStockMaster("nys")).willReturn(List.of(
-            new KisOverseasStockMasterEntry("XFLH/UN", "SOME SPAC UNIT", "2")
+            new KisOverseasStockMasterEntry("XFLH/UN", "SOME SPAC UNIT", "2", "720")
         ));
 
         // when

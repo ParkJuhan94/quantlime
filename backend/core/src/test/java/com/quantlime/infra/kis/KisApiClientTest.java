@@ -118,6 +118,41 @@ class KisApiClientTest {
     }
 
     @Test
+    @DisplayName("[HTTP 200이어도 rt_cd가 \"0\"이 아니면 실패로 처리한다]")
+    void getOverseasPrice_nonZeroRtCd_throwsExternalApiException() {
+        // given
+        when(tokenManager.getAccessToken()).thenReturn("access-token");
+        mockServer.expect(requestTo(PRICE_URI))
+            .andRespond(withSuccess(
+                "{\"rt_cd\":\"1\",\"msg1\":\"모의투자 미지원 종목\"}",
+                MediaType.APPLICATION_JSON));
+
+        // when & then
+        assertThatThrownBy(() -> kisApiClient.getOverseasPrice("NAS", "AAPL"))
+            .isInstanceOf(ExternalApiException.class)
+            .hasFieldOrPropertyWithValue("code", KisApiErrorCode.OVERSEAS_PRICE_INQUIRY_FAILED.getCode());
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("[일별시세도 HTTP 200 + rt_cd 비정상이면 실패로 처리한다]")
+    void getOverseasDailyPrice_nonZeroRtCd_throwsExternalApiException() {
+        // given
+        when(tokenManager.getAccessToken()).thenReturn("access-token");
+        mockServer.expect(requestTo(DAILY_PRICE_URI))
+            .andRespond(withSuccess(
+                "{\"rt_cd\":\"1\",\"msg1\":\"모의투자 미지원 종목\"}",
+                MediaType.APPLICATION_JSON));
+
+        // when & then
+        assertThatThrownBy(() -> kisApiClient.getOverseasDailyPrice("NAS", "AAPL", null))
+            .isInstanceOf(ExternalApiException.class)
+            .hasFieldOrPropertyWithValue(
+                "code", KisApiErrorCode.OVERSEAS_DAILY_PRICE_INQUIRY_FAILED.getCode());
+        mockServer.verify();
+    }
+
+    @Test
     @DisplayName("[429(Rate Limit) 응답은 토큰을 무효화하지 않고 RATE_LIMIT_EXCEEDED로 전파한다]")
     void withTokenRetry_tooManyRequests_doesNotInvalidateToken() {
         // given

@@ -40,10 +40,11 @@ class KisOverseasStockMasterClientTest {
     @Test
     @DisplayName("[정상 주식(종목구분 2)만 담고 ETF(3)는 그대로 전달한다 - 필터링은 호출측 책임]")
     void fetchStockMaster_parsesTabSeparatedCp949File() throws IOException {
-        // given: 실제 KIS 마스터파일과 동일한 컬럼 구조(24컬럼 중 일부 생략,
-        // 종목코드=5번째, 영문명=8번째, 종목구분=9번째 위치만 정확히 맞춤)
-        String stockLine = "US\t21\tNYS\t뉴욕\tAA\tNYSAA\t알코아\tALCOA CORPORATION\t2\tUSD";
-        String etfLine = "US\t22\tNAS\t나스닥\tAAAP\tNASAAAP\tPACER ETF\tPACER BARINGS CLO ETF\t3\tUSD";
+        // given: 실제 KIS 마스터파일과 동일한 컬럼 구조(24컬럼 - 종목코드=5번째,
+        // 영문명=8번째, 종목구분=9번째, 업종코드=20번째 위치만 정확히 맞춤,
+        // 나머지는 생략 가능한 컬럼도 빈 값으로 채워 총 24컬럼 유지)
+        String stockLine = "US\t21\tNYS\t뉴욕\tAA\tNYSAA\t알코아\tALCOA CORPORATION\t2\tUSD\t4\t\t65.18\t1\t1\t930\t1600\tN\t\t720\t0\t0\t\t";
+        String etfLine = "US\t22\tNAS\t나스닥\tAAAP\tNASAAAP\tPACER ETF\tPACER BARINGS CLO ETF\t3\tUSD\t4\t\t25.00\t1\t1\t930\t1600\tN\t\t000\t0\t0\t\t";
         byte[] zipBytes = zipOf("NYSMST.COD", stockLine + "\n" + etfLine + "\n");
 
         mockServer.expect(requestTo(BASE_URL + "/common/master/nysmst.cod.zip"))
@@ -57,7 +58,29 @@ class KisOverseasStockMasterClientTest {
         assertThat(entries.get(0).symbol()).isEqualTo("AA");
         assertThat(entries.get(0).englishName()).isEqualTo("ALCOA CORPORATION");
         assertThat(entries.get(0).isStock()).isTrue();
+        assertThat(entries.get(0).industryCode()).isEqualTo("720");
+        assertThat(entries.get(0).isRealEstateSector()).isFalse();
         assertThat(entries.get(1).isStock()).isFalse();
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("[업종코드가 630(부동산)이면 isRealEstateSector가 true를 반환한다]")
+    void fetchStockMaster_flagsRealEstateSector() throws IOException {
+        // given: 실제 다운로드로 확인한 Realty Income(REIT)의 업종코드(630) 재현
+        String reitLine = "US\t21\tNYS\t뉴욕\tO\tNYSO\t리얼티 인컴\tREALTY INCOME CORP\t2\tUSD\t4\t\t65.18\t1\t1\t930\t1600\tN\t\t630\t0\t0\t\t";
+        byte[] zipBytes = zipOf("NYSMST.COD", reitLine + "\n");
+
+        mockServer.expect(requestTo(BASE_URL + "/common/master/nysmst.cod.zip"))
+            .andRespond(withSuccess(new ByteArrayResource(zipBytes), MediaType.APPLICATION_OCTET_STREAM));
+
+        // when
+        List<KisOverseasStockMasterEntry> entries = client.fetchStockMaster("nys");
+
+        // then
+        assertThat(entries).hasSize(1);
+        assertThat(entries.get(0).industryCode()).isEqualTo("630");
+        assertThat(entries.get(0).isRealEstateSector()).isTrue();
         mockServer.verify();
     }
 

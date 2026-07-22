@@ -57,7 +57,8 @@ public class OverseasStockMasterSyncService {
                 skippedTooLong++;
                 continue;
             }
-            stockMasterService.registerStock(entry.symbol(), entry.englishName(), marketType, null);
+            stockMasterService.registerStock(
+                entry.symbol(), entry.englishName(), marketType, entry.industryCode());
             registered++;
         }
         log.info("해외 종목마스터 동기화 완료: marketType={}, 전체={}건, 등록시도={}건, 코드길이초과스킵={}건",

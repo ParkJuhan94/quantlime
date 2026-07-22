@@ -22,7 +22,7 @@ import org.springframework.web.client.RestClient;
  * (실제 다운로드로 확인 - KIND 상장법인목록이 HTML 테이블이었던 것과 같은
  * 종류의 "비-JSON 정적 파일" 연동). 24개 컬럼 중 유니버스 선정에 필요한
  * 종목코드(5번째)·영문종목명(8번째)·종목구분(9번째, 1:지수/2:주식/
- * 3:ETP·ETF/4:Warrant)만 사용한다.
+ * 3:ETP·ETF/4:Warrant)·업종코드(20번째, REIT/부동산 제외 판단용)만 사용한다.
  */
 @Component
 @RequiredArgsConstructor
@@ -32,7 +32,8 @@ public class KisOverseasStockMasterClient {
     private static final int COLUMN_SYMBOL = 4;
     private static final int COLUMN_ENGLISH_NAME = 7;
     private static final int COLUMN_SECURITY_TYPE = 8;
-    private static final int MIN_COLUMN_COUNT = COLUMN_SECURITY_TYPE + 1;
+    private static final int COLUMN_INDUSTRY_CODE = 19;
+    private static final int MIN_COLUMN_COUNT = COLUMN_INDUSTRY_CODE + 1;
 
     private final RestClient kisMasterFileRestClient;
 
@@ -77,6 +78,7 @@ public class KisOverseasStockMasterClient {
         return Optional.of(new KisOverseasStockMasterEntry(
             columns[COLUMN_SYMBOL].trim(),
             columns[COLUMN_ENGLISH_NAME].trim(),
-            columns[COLUMN_SECURITY_TYPE].trim()));
+            columns[COLUMN_SECURITY_TYPE].trim(),
+            columns[COLUMN_INDUSTRY_CODE].trim()));
     }
 }
