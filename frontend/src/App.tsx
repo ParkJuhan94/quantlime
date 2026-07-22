@@ -9,11 +9,13 @@ import { FeedPage } from './pages/FeedPage'
 import { StockDetailPage } from './pages/StockDetailPage'
 import { IndexDetailPage } from './pages/IndexDetailPage'
 import { MyInfoPage } from './pages/MyInfoPage'
+import { SubscribePage } from './pages/SubscribePage'
+import { PaymentResultPage } from './pages/PaymentResultPage'
 import { ProtectedRoute } from './auth/ProtectedRoute'
 import { logoutToast } from './auth/logoutToast'
 
-// OAuth 콜백 화면에는 관심종목 패널을 띄우지 않는다.
-const ROUTE_PREFIXES_WITHOUT_SIDE_PANEL = ['/oauth/callback']
+// OAuth 콜백/결제 체크아웃 화면에는 관심종목 패널을 띄우지 않는다.
+const ROUTE_PREFIXES_WITHOUT_SIDE_PANEL = ['/oauth/callback', '/subscribe']
 
 function App() {
   const [panelWidth, setPanelWidth] = useState(0)
@@ -50,6 +52,8 @@ function App() {
             <Route path="/feed" element={<FeedPage />} />
             <Route element={<ProtectedRoute />}>
               <Route path="/me" element={<MyInfoPage />} />
+              <Route path="/subscribe" element={<SubscribePage />} />
+              <Route path="/subscribe/result" element={<PaymentResultPage />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

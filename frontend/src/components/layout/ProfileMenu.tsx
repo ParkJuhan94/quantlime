@@ -31,6 +31,11 @@ export function ProfileMenu({ onLogout }: ProfileMenuProps) {
     navigate('/me')
   }
 
+  function handleSubscription() {
+    setOpen(false)
+    navigate('/subscribe')
+  }
+
   function handleLogout() {
     setOpen(false)
     onLogout()
@@ -61,6 +66,14 @@ export function ProfileMenu({ onLogout }: ProfileMenuProps) {
               className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
               내 정보
+              <span className="text-gray-300">›</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleSubscription}
+              className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              구독 관리
               <span className="text-gray-300">›</span>
             </button>
             <button

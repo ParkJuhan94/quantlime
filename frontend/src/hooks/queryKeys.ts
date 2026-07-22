@@ -25,4 +25,7 @@ export const queryKeys = {
   feedPostsAll: ['feed', 'posts'] as const,
   feedPosts: (category?: string) => ['feed', 'posts', category ?? 'all'] as const,
   feedComments: (postId: number) => ['feed', 'posts', postId, 'comments'] as const,
+  subscriptionPlans: ['subscription', 'plans'] as const,
+  subscriptionMe: ['subscription', 'me'] as const,
+  subscriptionPayments: ['subscription', 'payments'] as const,
 }
