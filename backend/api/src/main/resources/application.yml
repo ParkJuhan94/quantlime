@@ -73,6 +73,20 @@ toss:
   client-secret: ${TOSS_CLIENT_SECRET:}
   base-url: ${TOSS_BASE_URL:https://openapi.tossinvest.com}
 
+# 토스증권 Open API(toss:, 시세/캔들 조회)와는 완전히 별개 제품/인증체계 -
+# 시크릿키로 매 요청 Basic Auth(TossPaymentsConfig), 토큰 발급/캐싱 불필요.
+# 사업자등록 전에는 테스트 키만 쓸 수 있고, 라이브 전환 시 이 값만 교체하면 된다(§4).
+toss-payments:
+  client-key: ${TOSS_PAYMENTS_CLIENT_KEY:}
+  secret-key: ${TOSS_PAYMENTS_SECRET_KEY:}
+  webhook-secret: ${TOSS_PAYMENTS_WEBHOOK_SECRET:}
+  base-url: ${TOSS_PAYMENTS_BASE_URL:https://api.tosspayments.com}
+
+subscription:
+  # 빌링키(자동결제 권한 대표 토큰) 컬럼 암호화 키(base64 32바이트, AES-GCM).
+  # 미설정 시 평문 저장(로컬 개발 전용) - BillingKeyConverter 참고.
+  billing-key-encryption-key: ${SUBSCRIPTION_BILLING_KEY_ENCRYPTION_KEY:}
+
 # 해외 종목(백테스트 유니버스) 연동용 - 토스는 국내 전용이라 별도 필요(CLAUDE.md §4).
 # 실전 도메인 기본값(시세 조회 전용이라 모의투자 도메인 분리 불필요).
 kis:
