@@ -3,7 +3,7 @@ import type { ScoreResponse } from '../../types/score'
 import { formatScore } from '../../utils/scoreFormat'
 
 // 등급을 매도~매수 5단계로 표시한다(백엔드 Grade enum과 동일한 5단계,
-// com.quantlab.score.domain.Grade 참고). 국내 주식 관례대로 매수 쪽은
+// com.quantlime.score.domain.Grade 참고). 국내 주식 관례대로 매수 쪽은
 // 빨강, 매도 쪽은 파랑 계열로 채색한다. glowColor는 현재 등급 박스에
 // 적용하는 은은한 펄스 애니메이션(index.css .animate-glow-pulse) 색상.
 const GRADE_SCALE: { label: string; activeClass: string; glowColor: string }[] = [
@@ -70,7 +70,7 @@ export function ScoreSummaryRow({ score }: { score: ScoreResponse }) {
             <circle cx="12" cy="8" r="0.75" fill="currentColor" stroke="none" />
           </svg>
           <div className="invisible absolute left-0 top-6 z-20 w-56 rounded-xl border border-gray-100 bg-white p-3 text-xs leading-relaxed text-gray-600 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100">
-            퀀트랩의 자체 로직·백테스팅을 통해 산출한 100점 만점 기준의 점수예요.
+            퀀트라임의 자체 로직·백테스팅을 통해 산출한 100점 만점 기준의 점수예요.
             세부 산출 방식은 외부에 공개하지 않아요.
             {score.insufficientData && (
               <p className="mt-2 text-[11px] text-gray-400">데이터가 충분하지 않아 신뢰도가 낮아요.</p>

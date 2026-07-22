@@ -1,4 +1,4 @@
-"""QuantLab 퀀트 엔진 (FastAPI).
+"""QuantLime 퀀트 엔진 (FastAPI).
 
 Spring 백엔드가 관심 종목의 OHLCV 이력을 넘기면, 기술적 지표를 계산해
 추세추종/평균회귀 서브스코어 + 종합점수 + 등급 + AI 코멘트를 반환한다.
@@ -24,7 +24,7 @@ from schemas import (
 
 load_dotenv()
 
-app = FastAPI(title="QuantLab Quant Engine", version="0.1.0")
+app = FastAPI(title="QuantLime Quant Engine", version="0.1.0")
 
 # Prometheus가 스크랩할 /metrics를 노출한다(요청 수/지연을 자동 계측).
 # Spring 쪽 Micrometer와 마찬가지로 멀티서비스 관측성 스택(Phase 1)의

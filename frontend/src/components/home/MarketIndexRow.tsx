@@ -358,7 +358,7 @@ function UsdCard({ rate, changeRate }: { rate: number | null; changeRate: number
 // 실데이터다(네이버 금융·토스·Upbit·TradingView). "15분 지연" 같은
 // 라벨은 붙이지 않는다 - 네이버 금융 API 응답의 delayTime/delayTimeName이
 // 이 7개 전부 "실시간"(0)으로 내려온다(실제 호출로 확인). 지연 표시가
-// 흔한 건 대개 해외 상품(금·WTI 등)인데 QuantLab은 아직 그 데이터를
+// 흔한 건 대개 해외 상품(금·WTI 등)인데 QuantLime은 아직 그 데이터를
 // 다루지 않는다. 국채금리는 토스·네이버 어디에도 없는 심볼이라
 // TradingView 공개 스캐너 API로 보완했다(인베스팅닷컴은 Cloudflare
 // 봇 차단으로 서버 간 호출이 아예 불가능해 제외). 프론트는 8초

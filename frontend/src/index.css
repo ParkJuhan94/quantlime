@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* 홈 리디자인(claude.ai/design "Quantlab 토스증권 UI 리디자인") 로고 폰트.
+/* 홈 리디자인(claude.ai/design "quantlime 토스증권 UI 리디자인") 로고 폰트.
    강조색(--color-accent)은 디자인 일관성을 블랙 기준으로 정리하며
    제거했다(2026-07-16, 버튼·선택 상태는 전부 gray-900/gray-100로 통일). */
 @theme {

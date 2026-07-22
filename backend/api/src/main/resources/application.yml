@@ -1,13 +1,13 @@
 spring:
   application:
-    name: quantlab
+    name: quantlime
   profiles:
     active: dev
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3308}/${MYSQL_DATABASE:quantlab}?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3308}/${MYSQL_DATABASE:quantlime}?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
     username: ${DB_USER:root}
-    password: ${DB_PASSWORD:quantlab}
+    password: ${DB_PASSWORD:quantlime}
   jpa:
     show-sql: true
     open-in-view: false
@@ -140,5 +140,5 @@ oauth:
 logging:
   level:
     root: info
-    com.quantlab: debug
+    com.quantlime: debug
     org.hibernate.SQL: debug

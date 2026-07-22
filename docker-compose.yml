@@ -1,10 +1,15 @@
+# 로컬 dev 인프라. 명시적 name:을 지정해 compose 프로젝트명이 디렉터리명에서
+# 암묵적으로 파생되지 않게 한다 - 디렉터리명이 나중에 바뀌어도(예: quantlab
+# → quantlime 리네이밍) 볼륨명이 조용히 갈라지지 않도록 하기 위함.
+name: quantlime
+
 services:
   mysql:
     image: mysql:8.0
-    container_name: quantlab-mysql
+    container_name: quantlime-mysql
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-quantlab}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-quantlab}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-quantlime}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-quantlime}
     ports:
       - "3308:3306"
     volumes:
@@ -23,7 +28,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: quantlab-redis
+    container_name: quantlime-redis
     ports:
       - "6381:6379"
     volumes:

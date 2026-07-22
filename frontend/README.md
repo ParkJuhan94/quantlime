@@ -1,4 +1,4 @@
-# QuantLab Frontend
+# QuantLime Frontend
 
 국내 주식 기술적 지표 스코어링 + 관심 종목 실시간 모니터링 프론트엔드.
 React 19 + TypeScript + Vite + Tailwind CSS.

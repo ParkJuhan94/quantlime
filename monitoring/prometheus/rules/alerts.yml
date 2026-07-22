@@ -1,9 +1,9 @@
 # 알림 규칙. Alertmanager(monitoring/alertmanager/alertmanager.yml)를 거쳐
-# Slack #quantlab-alerts로 전송된다. 임계값은 t3.small~medium 1대 규모의
+# Slack #quantlime-alerts(실제 Slack 채널명 그대로 유지)로 전송된다. 임계값은 t3.small~medium 1대 규모의
 # 초기 추정치로, 실제 운영 데이터를 보며 조정할 것을 전제로 한다.
 groups:
   # --- 가용성: 서비스 자체가 죽었는지 ---
-  - name: quantlab-availability
+  - name: quantlime-availability
     rules:
       - alert: BackendDown
         expr: up{job="backend"} == 0
@@ -11,7 +11,7 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "QuantLab 백엔드가 다운됨"
+          summary: "QuantLime 백엔드가 다운됨"
           description: "Prometheus가 2분 이상 backend(actuator/prometheus)를 스크랩하지 못했습니다."
 
       - alert: QuantEngineDown
@@ -24,7 +24,7 @@ groups:
           description: "Prometheus가 2분 이상 quant-engine을 스크랩하지 못했습니다. 스코어 재계산은 직전 이력으로 fallback되지만 신규 계산은 멈춥니다."
 
   # --- HTTP 지연/에러율 ---
-  - name: quantlab-http
+  - name: quantlime-http
     rules:
       - alert: HighHttp5xxRate
         expr: |
@@ -41,7 +41,7 @@ groups:
 
   # --- 이 프로젝트만의 비즈니스 지표: Toss 429, 퀀트엔진 실패율 ---
   # (2026-07-16 세션에서 겪은 Toss MARKET_DATA 429 장애가 이 알림의 계기)
-  - name: quantlab-business
+  - name: quantlime-business
     rules:
       - alert: TossRateLimitSpike
         expr: sum(rate(toss_api_calls_total{outcome="rate_limited"}[5m])) > 0.5
@@ -70,7 +70,7 @@ groups:
   # 구성했었는데, Slack 단일 창으로 통합하기 위해 이 PLG 스택으로
   # 일원화했다(CloudWatch/IAM 인스턴스 역할/SNS 관련 코드는 제거함 -
   # docs/DEPLOYMENT.md 참고).
-  - name: quantlab-resource
+  - name: quantlime-resource
     rules:
       - alert: JvmHeapHigh
         expr: |

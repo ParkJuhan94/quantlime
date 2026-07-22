@@ -8,7 +8,7 @@
 # docker-compose.prod.yml과 별도 파일로 분리한 이유: 관측성 스택은
 # 선택적 구성요소라 항상 켤 필요는 없고, 필요할 때만 -f로 얹는 편이 base
 # 파일을 단순하게 유지한다. name을 여기서 다시 선언하지 않아도
-# docker-compose.prod.yml의 `name: quantlab-prod`를 그대로 따라가 같은
+# docker-compose.prod.yml의 `name: quantlime-prod`를 그대로 따라가 같은
 # 프로젝트/네트워크에 합류한다.
 #
 # 로그(Loki)와 트레이스(Tempo)는 Phase 2/3로 별도 진행 예정 - 이 오버레이는
@@ -17,7 +17,7 @@
 services:
   prometheus:
     image: prom/prometheus:v2.55.1
-    container_name: quantlab-prod-prometheus
+    container_name: quantlime-prod-prometheus
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
@@ -32,7 +32,7 @@ services:
 
   alertmanager:
     image: prom/alertmanager:v0.27.0
-    container_name: quantlab-prod-alertmanager
+    container_name: quantlime-prod-alertmanager
     volumes:
       - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml.template:ro
       - alertmanager_data:/alertmanager
@@ -63,7 +63,7 @@ services:
   # HostMemoryHigh/HostDiskHigh가 참조).
   node-exporter:
     image: prom/node-exporter:v1.8.2
-    container_name: quantlab-prod-node-exporter
+    container_name: quantlime-prod-node-exporter
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
@@ -79,7 +79,7 @@ services:
   # node-exporter의 호스트 합산 지표만으로는 안 보이는 부분을 보완).
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.49.1
-    container_name: quantlab-prod-cadvisor
+    container_name: quantlime-prod-cadvisor
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
@@ -89,7 +89,7 @@ services:
 
   grafana:
     image: grafana/grafana:11.3.1
-    container_name: quantlab-prod-grafana
+    container_name: quantlime-prod-grafana
     # 대시보드 JSON은 monitoring/grafana/provisioning/dashboards/json에
     # 직접 두고 provisioning 트리 하나만 통째로 마운트한다 - 처음에는
     # 대시보드 JSON 폴더를 provisioning과 별개 경로(monitoring/grafana/
@@ -105,7 +105,7 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
       GF_USERS_ALLOW_SIGN_UP: "false"
     ports:
-      # 로컬 개발 환경의 다른 프로젝트 Grafana(3000)/QuantLab 프론트(3001)와
+      # 로컬 개발 환경의 다른 프로젝트 Grafana(3000)/QuantLime 프론트(3001)와
       # 포트가 겹치지 않도록 3002로 매핑.
       - "3002:3000"
     depends_on:

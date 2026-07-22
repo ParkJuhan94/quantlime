@@ -1,4 +1,4 @@
-# QuantLab
+# QuantLime
 
 국내 주식 기술적 지표 스코어링 + 관심 종목 실시간 모니터링 서비스.
 주문 기능 없이 조회·분석에 집중한 개인 프로젝트입니다.
@@ -15,7 +15,7 @@
 ## 디렉토리 구조
 
 ```
-quantlab/
+quantlime/
 ├── backend/        # Spring Boot 멀티모듈 (api, core, common, event)
 ├── quant-engine/   # Python FastAPI 퀀트 계산 서버 (지표·스코어링)
 └── frontend/       # React + TypeScript + Vite

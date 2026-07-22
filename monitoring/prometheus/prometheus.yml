@@ -1,5 +1,5 @@
 # 로컬/EC2 공통 Prometheus 설정. 스크랩 대상은 전부 docker-compose 내부
-# 네트워크의 컨테이너명으로 참조한다(quantlab-prod 프로젝트 기본 네트워크를
+# 네트워크의 컨테이너명으로 참조한다(quantlime-prod 프로젝트 기본 네트워크를
 # docker-compose.prod.yml과 공유 - docker-compose.monitoring.yml 참고) -
 # 호스트 포트 노출 여부와 무관하게 스크랩 가능하다(backend/quant-engine은
 # 호스트 포트를 열지 않는 내부 전용 서비스).

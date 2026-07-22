@@ -1,7 +1,7 @@
 {
-  "uid": "quantlab-http",
-  "title": "QuantLab - Spring Boot HTTP",
-  "tags": ["quantlab", "http"],
+  "uid": "quantlime-http",
+  "title": "QuantLime - Spring Boot HTTP",
+  "tags": ["quantlime", "http"],
   "timezone": "Asia/Seoul",
   "schemaVersion": 39,
   "version": 1,

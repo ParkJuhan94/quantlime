@@ -1,4 +1,4 @@
-rootProject.name = 'quantlab'
+rootProject.name = 'quantlime'
 
 include 'api'
 include 'core'

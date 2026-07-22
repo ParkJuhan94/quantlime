@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # EC2 호스트에서 cron으로 매일 실행(scripts/install-cron.sh 참고).
-# quantlab-prod-mysql 컨테이너 안에서 mysqldump를 돌려 대상 DB만
+# quantlime-prod-mysql 컨테이너 안에서 mysqldump를 돌려 대상 DB만
 # 백업(--all-databases 아님 - mysql 시스템 스키마까지 백업할 이유 없음)
 # 하고 gzip 압축 후 S3에 올린다.
 #
@@ -14,10 +14,10 @@
 # 게 낫다).
 set -euo pipefail
 
-QUANTLAB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_FILE="$QUANTLAB_DIR/.env.prod"
-BACKUP_DIR="$QUANTLAB_DIR/backups"
-CONTAINER_NAME="quantlab-prod-mysql"
+QUANTLIME_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ENV_FILE="$QUANTLIME_DIR/.env.prod"
+BACKUP_DIR="$QUANTLIME_DIR/backups"
+CONTAINER_NAME="quantlime-prod-mysql"
 LOCAL_RETENTION_COUNT=3
 
 if [ ! -f "$ENV_FILE" ]; then
@@ -34,13 +34,13 @@ set +a
 
 : "${DB_PASSWORD:?DB_PASSWORD가 .env.prod에 없습니다}"
 : "${BACKUP_S3_BUCKET:?BACKUP_S3_BUCKET이 .env.prod에 없습니다}"
-MYSQL_DATABASE="${MYSQL_DATABASE:-quantlab}"
+MYSQL_DATABASE="${MYSQL_DATABASE:-quantlime}"
 AWS_REGION="${AWS_REGION:-ap-northeast-2}"
 
 mkdir -p "$BACKUP_DIR"
 
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
-FILENAME="quantlab-mysql-${TIMESTAMP}.sql.gz"
+FILENAME="quantlime-mysql-${TIMESTAMP}.sql.gz"
 FILEPATH="$BACKUP_DIR/$FILENAME"
 
 echo "[backup-mysql] 덤프 시작: db=$MYSQL_DATABASE"
@@ -55,7 +55,7 @@ aws s3 cp "$FILEPATH" "s3://$BACKUP_S3_BUCKET/mysql/$FILENAME" --region "$AWS_RE
 
 # 로컬엔 최근 n개만 남긴다 - 장기 보존은 S3 라이프사이클 규칙에 위임
 # (docs/DEPLOYMENT.md 참고). EC2 루트 볼륨을 백업 파일로 채우지 않기 위함.
-ls -1t "$BACKUP_DIR"/quantlab-mysql-*.sql.gz 2>/dev/null \
+ls -1t "$BACKUP_DIR"/quantlime-mysql-*.sql.gz 2>/dev/null \
     | tail -n +$((LOCAL_RETENTION_COUNT + 1)) \
     | xargs -r rm -f
 

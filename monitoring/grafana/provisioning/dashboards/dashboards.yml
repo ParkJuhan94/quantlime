@@ -1,9 +1,9 @@
 apiVersion: 1
 
 providers:
-  - name: QuantLab
+  - name: QuantLime
     orgId: 1
-    folder: QuantLab
+    folder: QuantLime
     type: file
     disableDeletion: false
     updateIntervalSeconds: 30

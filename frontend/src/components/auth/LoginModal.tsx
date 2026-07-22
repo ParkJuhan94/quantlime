@@ -57,7 +57,7 @@ export function LoginModal({ open, onClose }: LoginModalProps) {
       className="absolute right-0 top-11 z-50 w-80 rounded-2xl border border-gray-100 bg-white p-6 shadow-lg"
     >
       <p className="shimmer-text mb-4 text-center text-sm font-semibold leading-relaxed">
-        실시간 시세와 퀀트랩만의 스코어를
+        실시간 시세와 퀀트라임만의 스코어를
         <br />
         가장 먼저 받아보세요
       </p>

@@ -60,7 +60,7 @@ export function AppHeader({ onLoggedOut }: AppHeaderProps) {
             <circle cx="17" cy="18" r="7" fill="none" stroke="#fff" strokeWidth="2.4" />
             <path d="M20.5 21.5 25 26" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" />
           </svg>
-          <span className="font-logo text-lg font-bold tracking-tight text-gray-900">퀀트랩</span>
+          <span className="font-logo text-lg font-bold tracking-tight text-gray-900">퀀트라임</span>
         </NavLink>
 
         <nav className="flex items-center gap-1">

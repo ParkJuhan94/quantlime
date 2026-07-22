@@ -7,18 +7,18 @@
 # node-exporter/cAdvisor + Prometheus + Alertmanager)으로 일원화했다
 # (docs/DEPLOYMENT.md 참고).
 #
-# 멱등성: 이미 등록된 줄은 마커 주석(quantlab-backup-mysql)으로 걸러
+# 멱등성: 이미 등록된 줄은 마커 주석(quantlime-backup-mysql)으로 걸러
 # 중복 추가하지 않는다 - 이 스크립트를 재배포 때마다 실수로 다시 돌려도
 # 크론탭에 같은 작업이 여러 줄 쌓이지 않음.
 set -euo pipefail
 
-QUANTLAB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-LOG_DIR="$QUANTLAB_DIR/logs"
+QUANTLIME_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+LOG_DIR="$QUANTLIME_DIR/logs"
 mkdir -p "$LOG_DIR"
 
-BACKUP_MARKER="# quantlab-backup-mysql"
+BACKUP_MARKER="# quantlime-backup-mysql"
 
-BACKUP_LINE="0 3 * * * $QUANTLAB_DIR/scripts/backup-mysql.sh >> $LOG_DIR/backup-mysql.log 2>&1 $BACKUP_MARKER"
+BACKUP_LINE="0 3 * * * $QUANTLIME_DIR/scripts/backup-mysql.sh >> $LOG_DIR/backup-mysql.log 2>&1 $BACKUP_MARKER"
 
 current_crontab="$(crontab -l 2>/dev/null || true)"
 

@@ -58,7 +58,7 @@ function App() {
 
       {showSidePanel && <AppSidePanel onWidthChange={setPanelWidth} />}
       {showLogoutToast && (
-        <Toast message="퀀트랩에서 로그아웃 됐어요" onDismiss={() => setShowLogoutToast(false)} />
+        <Toast message="퀀트라임에서 로그아웃 됐어요" onDismiss={() => setShowLogoutToast(false)} />
       )}
     </div>
   )

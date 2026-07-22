@@ -7,20 +7,20 @@
 # 실제 비밀값(시크릿)은 .env.prod(gitignore 대상, .env.prod.example 참고)로
 # 분리한다.
 #
-# 프로젝트명을 dev용 docker-compose.yml과 다르게 고정(quantlab-prod)해
+# 프로젝트명을 dev용 docker-compose.yml과 다르게 고정(quantlime-prod)해
 # 컨테이너명·볼륨명이 겹치지 않게 한다 - 두 compose 파일이 같은 루트
 # 디렉터리에 있어 이름을 명시하지 않으면 둘 다 기본 프로젝트명(디렉터리명
-# "quantlab")을 공유해, 로컬에서 prod 스택을 검증차 띄우면 dev용
+# "quantlime")을 공유해, 로컬에서 prod 스택을 검증차 띄우면 dev용
 # MySQL/Redis 컨테이너와 볼륨을 그대로 재사용(사실상 덮어씀)해버린다.
-name: quantlab-prod
+name: quantlime-prod
 
 services:
   mysql:
     image: mysql:8.0
-    container_name: quantlab-prod-mysql
+    container_name: quantlime-prod-mysql
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-quantlab}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-quantlime}
     volumes:
       - mysql_data:/var/lib/mysql
     restart: always
@@ -37,22 +37,22 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: quantlab-prod-redis
+    container_name: quantlime-prod-redis
     volumes:
       - redis_data:/data
     restart: always
 
   quant-engine:
     build: ./quant-engine
-    image: ghcr.io/parkjuhan94/quantlab-quant-engine:latest
-    container_name: quantlab-prod-quant-engine
+    image: ghcr.io/parkjuhan94/quantlime-quant-engine:latest
+    container_name: quantlime-prod-quant-engine
     env_file: .env.prod
     restart: always
 
   backend:
     build: ./backend
-    image: ghcr.io/parkjuhan94/quantlab-backend:latest
-    container_name: quantlab-prod-backend
+    image: ghcr.io/parkjuhan94/quantlime-backend:latest
+    container_name: quantlime-prod-backend
     env_file: .env.prod
     environment:
       SPRING_PROFILES_ACTIVE: prod
@@ -87,8 +87,8 @@ services:
         VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID}
         VITE_KAKAO_CLIENT_ID: ${VITE_KAKAO_CLIENT_ID}
         VITE_NAVER_CLIENT_ID: ${VITE_NAVER_CLIENT_ID}
-    image: ghcr.io/parkjuhan94/quantlab-frontend:latest
-    container_name: quantlab-prod-frontend
+    image: ghcr.io/parkjuhan94/quantlime-frontend:latest
+    container_name: quantlime-prod-frontend
     ports:
       - "80:80"
     depends_on:

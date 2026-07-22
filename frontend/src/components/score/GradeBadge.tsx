@@ -1,5 +1,5 @@
 // 백엔드 ScoreResponse.grade는 enum 이름이 아니라 한글 표시명(Grade.label)
-// 으로 내려온다 - com.quantlab.score.domain.Grade 참고(5단계: 강력매도~강력매수).
+// 으로 내려온다 - com.quantlime.score.domain.Grade 참고(5단계: 강력매도~강력매수).
 // RankingTable처럼 스코어 숫자와 등급을 한 배지로 합쳐 보여주는 곳에서도
 // 동일한 색을 쓰도록 export한다(2026-07-17 - 종목상세 ScoreSummaryRow와
 // 톤을 맞추기 위해 새로 필요해짐).

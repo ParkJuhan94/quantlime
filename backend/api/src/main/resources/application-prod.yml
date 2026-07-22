@@ -17,5 +17,5 @@ spring:
 logging:
   level:
     root: info
-    com.quantlab: info
+    com.quantlime: info
     org.hibernate.SQL: warn

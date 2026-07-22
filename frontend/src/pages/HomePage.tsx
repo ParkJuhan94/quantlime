@@ -32,7 +32,7 @@ export function HomePage() {
       <MarketIndexRow />
       <RankingTable watchlistCodes={watchlistCodes} onToggleWatch={toggleWatch} />
       <p className="px-4 py-3 text-center text-xs leading-relaxed text-gray-400">
-        퀀트랩에서 제공되는 스코어·코멘트는 투자 판단을 위한 단순 참고용 정보이며, 투자 제안이나 종목 추천이 아닙니다.
+        퀀트라임에서 제공되는 스코어·코멘트는 투자 판단을 위한 단순 참고용 정보이며, 투자 제안이나 종목 추천이 아닙니다.
         <br />
         투자 판단과 그 책임은 본인에게 있습니다.
       </p>

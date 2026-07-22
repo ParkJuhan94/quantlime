@@ -31,7 +31,7 @@ receivers:
   - name: slack
     slack_configs:
       - api_url: "__SLACK_ALERT_WEBHOOK_URL__"
-        channel: "#quantlab-alerts"
+        channel: "#quantlime-alerts"
         send_resolved: true
         title: "{{ .CommonAnnotations.summary }}"
         text: "{{ range .Alerts }}{{ .Annotations.description }}\n{{ end }}"
