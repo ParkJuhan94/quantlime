@@ -108,6 +108,13 @@ naver-finance:
 tradingview:
   base-url: ${TRADINGVIEW_BASE_URL:https://scanner.tradingview.com}
 
+# 투자 콘텐츠 요약 피드 모듈(유튜브 채널 수집) - Data API v3, search.list는
+# 일 쿼터(10,000u)를 순식간에 소모해 절대 쓰지 않고 playlistItems/videos만
+# 사용한다(1u씩).
+youtube:
+  api-key: ${YOUTUBE_API_KEY:}
+  base-url: ${YOUTUBE_BASE_URL:https://www.googleapis.com/youtube/v3}
+
 upload:
   dir: ${UPLOAD_DIR:./uploads}
   max-size-bytes: ${UPLOAD_MAX_SIZE_BYTES:5242880}
