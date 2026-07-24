@@ -99,6 +99,25 @@ class MarketCalendarCacheTest {
     }
 
     @Test
+    @DisplayName("[캘린더 조회가 예외로 실패하면 예외를 전파하지 않고, 백오프 동안 재호출하지 않는다]")
+    void isMarketOpenNow_calendarCallThrows_doesNotRetryEveryTickDuringBackoff() {
+        // given
+        given(tossApiClient.getMarketCalendar())
+            .willThrow(new RuntimeException("429 Too Many Requests"));
+
+        // when: 스케줄러 틱을 흉내내 짧은 간격으로 반복 호출
+        boolean firstCall = marketCalendarCache.isMarketOpenNow();
+        boolean secondCall = marketCalendarCache.isMarketOpenNow();
+        boolean thirdCall = marketCalendarCache.isMarketOpenNow();
+
+        // then: 예외 없이 안전하게 false 처리되고, 백오프 중이라 최초 1회만 호출됨
+        assertThat(firstCall).isFalse();
+        assertThat(secondCall).isFalse();
+        assertThat(thirdCall).isFalse();
+        verify(tossApiClient, times(1)).getMarketCalendar();
+    }
+
+    @Test
     @DisplayName("[정규장 시간 밖이어도 NXT 프리마켓 시간대 안이면 개장 중이다]")
     void isMarketOpenNow_withinPreMarketOnly_returnsTrue() {
         // given: 정규장은 현재 시각 이후(+2~+3시간)로 아직 시작 전, 프리마켓만 현재 시각을 포함

@@ -1,12 +1,15 @@
 package com.quantlime.infra.toss;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withBadRequest;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import com.quantlime.common.exception.ExternalApiException;
 import java.time.Duration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -85,5 +88,24 @@ class TossTokenManagerTest {
 
         // then
         verify(redisTemplate).delete(REDIS_TOKEN_KEY);
+    }
+
+    @Test
+    @DisplayName("[토큰 발급 실패 후 백오프 기간 안에 재호출하면 토스를 다시 부르지 않고 즉시 실패한다]")
+    void getAccessToken_afterFailure_doesNotRetryWithinBackoff() {
+        // given: 토큰 엔드포인트가 1회 400으로 실패
+        when(valueOperations.get(REDIS_TOKEN_KEY)).thenReturn(null);
+        mockServer.expect(requestTo(BASE_URL + "/oauth2/token"))
+            .andRespond(withBadRequest());
+
+        // when: 백오프 기간 안에 바로 재호출
+        assertThatThrownBy(tossTokenManager::getAccessToken)
+            .isInstanceOf(ExternalApiException.class);
+        assertThatThrownBy(tossTokenManager::getAccessToken)
+            .isInstanceOf(ExternalApiException.class);
+
+        // then: 토스 호출은 최초 1회만 발생(두 번째는 백오프로 즉시 실패,
+        // MockRestServiceServer의 단일 expect()가 그대로 충족됨)
+        mockServer.verify();
     }
 }
