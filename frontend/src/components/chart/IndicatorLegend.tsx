@@ -96,7 +96,7 @@ export function OverlayIndicatorLegend({
               type="button"
               onClick={() => onItemClick(item.key)}
               title="눌러서 차트에서 확인하기"
-              className="flex items-center gap-1 rounded-md px-1 py-0.5 text-xs text-gray-600 transition hover:bg-gray-100"
+              className="flex items-center gap-1 rounded-lg px-1 py-0.5 text-xs text-gray-600 transition hover:bg-gray-100"
             >
               <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
               {item.label}

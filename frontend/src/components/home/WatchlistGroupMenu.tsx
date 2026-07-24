@@ -28,7 +28,7 @@ export function WatchlistGroupMenu({ onEditGroups, onCreateGroup }: WatchlistGro
         type="button"
         onClick={() => setOpen((prev) => !prev)}
         aria-label="관심 그룹 메뉴"
-        className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100"
+        className="flex h-6 w-6 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100"
       >
         ···
       </button>

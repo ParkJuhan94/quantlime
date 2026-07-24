@@ -2,9 +2,31 @@
 
 /* 홈 리디자인(claude.ai/design "quantlime 토스증권 UI 리디자인") 로고 폰트.
    강조색(--color-accent)은 디자인 일관성을 블랙 기준으로 정리하며
-   제거했다(2026-07-16, 버튼·선택 상태는 전부 gray-900/gray-100로 통일). */
+   제거했다(2026-07-16, 버튼·선택 상태는 전부 gray-900/gray-100로 통일).
+
+   2026-07-23 브랜드 컬러파레트(라임 로고 + 쿨톤 네이비 그레이) 적용 -
+   버튼/선택 상태 로직은 그대로 두고 Tailwind 기본 gray 스케일 자체를
+   이 팔레트 톤으로 교체했다(gray-100/400/700/900은 사용자가 지정한
+   정확한 값, 나머지 단계는 같은 계열의 통용되는 콜드그레이 램프 값으로
+   보간). --color-brand-lime은 헤더 로그인 CTA 한 곳에만 쓰는 포인트
+   강조색 - 아래 §참고 강조색 남발 금지 원칙에 따라 버튼 전반이나
+   선택 탭에는 확대 적용하지 않는다. */
 @theme {
   --font-logo: 'Space Grotesk', sans-serif;
+
+  --color-brand-lime: #bfff3a;
+
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f2f4f7;
+  --color-gray-200: #eaecf0;
+  --color-gray-300: #d0d5dd;
+  --color-gray-400: #98a2b3;
+  --color-gray-500: #667085;
+  --color-gray-600: #475467;
+  --color-gray-700: #344054;
+  --color-gray-800: #1d2939;
+  --color-gray-900: #101828;
+  --color-gray-950: #0c111d;
 }
 
 body {
@@ -52,7 +74,7 @@ button:not(:disabled):hover,
 }
 
 .shimmer-text {
-  background-image: linear-gradient(110deg, #111827 40%, #fbbf24 50%, #111827 60%);
+  background-image: linear-gradient(110deg, #101828 40%, #fbbf24 50%, #101828 60%);
   background-size: 250% 100%;
   -webkit-background-clip: text;
   background-clip: text;

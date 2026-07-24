@@ -7,7 +7,7 @@ import { ProfileMenu } from './ProfileMenu'
 import { LoginModal } from '../auth/LoginModal'
 
 const navLinkClassName = ({ isActive }: { isActive: boolean }) =>
-  `rounded-md px-2.5 py-1.5 text-sm transition hover:bg-gray-100 ${
+  `rounded-lg px-2.5 py-1.5 text-sm transition hover:bg-gray-100 ${
     isActive ? 'font-semibold text-gray-900' : 'font-medium text-gray-600'
   }`
 
@@ -55,10 +55,39 @@ export function AppHeader({ onLoggedOut }: AppHeaderProps) {
     <header className="border-b border-gray-200 bg-white">
       <div className="mx-auto flex max-w-7xl items-center gap-6 px-4 py-3">
         <NavLink to="/" className="flex items-center gap-2">
-          <svg width="26" height="26" viewBox="0 0 34 34" className="shrink-0">
-            <rect width="34" height="34" rx="9" fill="#111827" />
-            <circle cx="17" cy="18" r="7" fill="none" stroke="#fff" strokeWidth="2.4" />
-            <path d="M20.5 21.5 25 26" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" />
+          <svg
+            width="26"
+            height="26"
+            viewBox="0 0 250 250"
+            className="shrink-0"
+            style={{ filter: 'drop-shadow(0 1px 2px rgba(16,24,40,0.28))' }}
+          >
+            <defs>
+              <radialGradient id="header-logo-lime" cx="38%" cy="32%" r="75%">
+                <stop offset="0%" stopColor="#d7ef7a" />
+                <stop offset="55%" stopColor="#8fc23e" />
+                <stop offset="100%" stopColor="#4d8a1f" />
+              </radialGradient>
+              <linearGradient id="header-logo-leaf" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#5aa628" />
+                <stop offset="100%" stopColor="#2f5f16" />
+              </linearGradient>
+              <linearGradient id="header-logo-glass" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="rgba(255,255,255,0.85)" />
+                <stop offset="100%" stopColor="rgba(180,225,140,0.32)" />
+              </linearGradient>
+            </defs>
+            <rect x="18" y="18" width="214" height="214" rx="58" fill="url(#header-logo-glass)" stroke="rgba(16,24,40,0.14)" strokeWidth="3" />
+            <path d="M40,70 L95,30 L120,30 L55,95 Z" fill="rgba(255,255,255,0.4)" />
+            <circle cx="125" cy="130" r="80" fill="url(#header-logo-lime)" />
+            <ellipse cx="148" cy="92" rx="24" ry="9" fill="#eaf8b0" opacity=".3" transform="rotate(-30 148 92)" />
+            <g transform="translate(172,64) rotate(18) scale(.92)">
+              <path
+                d="M0,-38 C21,-38 33,-10 33,9 C33,29 19,44 0,44 C-19,44 -33,29 -33,9 C-33,-10 -21,-38 0,-38 Z"
+                fill="url(#header-logo-leaf)"
+              />
+              <path d="M0,-32 L0,38" stroke="#1f4a10" strokeWidth="2" opacity=".5" />
+            </g>
           </svg>
           <span className="font-logo text-lg font-bold tracking-tight text-gray-900">퀀트라임</span>
         </NavLink>
@@ -77,14 +106,14 @@ export function AppHeader({ onLoggedOut }: AppHeaderProps) {
         <button
           type="button"
           onClick={() => setSearchOpen(true)}
-          className="flex h-9 w-56 items-center gap-2 rounded-full bg-gray-100 px-3.5 text-sm text-gray-400 transition hover:bg-gray-200"
+          className="flex h-9 w-56 items-center gap-2 rounded-lg bg-gray-200 px-3.5 text-sm text-gray-500 transition hover:bg-gray-300"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="11" cy="11" r="7" />
             <path d="m21 21-4.3-4.3" />
           </svg>
           <span className="flex items-center gap-1.5">
-            <kbd className="rounded bg-gray-200 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-gray-500">
+            <kbd className="rounded bg-gray-300 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-gray-600">
               /
             </kbd>
             를 눌러 검색하세요
@@ -98,7 +127,7 @@ export function AppHeader({ onLoggedOut }: AppHeaderProps) {
             <button
               type="button"
               onClick={() => setLoginModalOpen((prev) => !prev)}
-              className="rounded-full bg-gray-900 px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-gray-800"
+              className="rounded-lg bg-brand-lime px-4 py-1.5 text-sm font-semibold text-gray-900 transition hover:brightness-95"
             >
               로그인
             </button>

@@ -133,7 +133,7 @@ export function FeedComposeModal({ open, onClose, editingPost }: FeedComposeModa
             <button
               type="button"
               onClick={() => setCategoryPickerOpen((prev) => !prev)}
-              className={`flex items-center gap-1 rounded-md text-sm font-semibold text-gray-900 ${shakeCategoryPicker ? 'animate-shake text-red-600' : ''}`}
+              className={`flex items-center gap-1 rounded-lg text-sm font-semibold text-gray-900 ${shakeCategoryPicker ? 'animate-shake text-red-600' : ''}`}
             >
               {category ?? '어떤 주제로 써볼까요?'}
               {/* 주제 선택은 필수인데 예전엔 제출을 시도해야만(shake) 알 수

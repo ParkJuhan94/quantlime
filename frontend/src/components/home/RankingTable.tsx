@@ -154,7 +154,7 @@ function RankingRow({ row, index, isWatched, onToggleWatch }: {
         {row.sector && (
           <span
             title={row.sector}
-            className="inline-block max-w-full truncate rounded-md bg-gray-100 px-2 py-1 align-bottom text-xs font-medium text-gray-600"
+            className="inline-block max-w-full truncate rounded-lg bg-gray-100 px-2 py-1 align-bottom text-xs font-medium text-gray-600"
           >
             {row.sector}
           </span>

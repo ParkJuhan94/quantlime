@@ -17,8 +17,8 @@ export const GRADE_STYLES: Record<string, string> = {
 // (2026-07-16, "박스 모양 일관성 있게" 피드백).
 export function GradeBadge({ grade }: { grade: string | null }) {
   if (!grade) {
-    return <span className="inline-flex w-16 justify-center rounded-md py-0.5 text-xs text-gray-400">-</span>
+    return <span className="inline-flex w-16 justify-center rounded-lg py-0.5 text-xs text-gray-400">-</span>
   }
   const style = GRADE_STYLES[grade] ?? 'bg-gray-100 text-gray-800'
-  return <span className={`inline-flex w-16 justify-center rounded-md py-0.5 text-xs font-semibold ${style}`}>{grade}</span>
+  return <span className={`inline-flex w-16 justify-center rounded-lg py-0.5 text-xs font-semibold ${style}`}>{grade}</span>
 }

@@ -21,7 +21,7 @@ export function ChartIntervalSelector({ value, onChange }: ChartIntervalSelector
           key={option.key}
           type="button"
           onClick={() => onChange(option.key)}
-          className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+          className={`rounded-lg px-3 py-1 text-xs font-medium transition ${
             value === option.key ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
           }`}
         >
