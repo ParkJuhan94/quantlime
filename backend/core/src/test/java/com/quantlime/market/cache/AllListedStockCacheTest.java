@@ -2,6 +2,7 @@ package com.quantlime.market.cache;
 
 import com.quantlime.stock.StockFixture;
 import com.quantlime.stock.domain.ListingStatus;
+import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.repository.StockRepository;
 import java.time.Instant;
@@ -35,21 +36,21 @@ class AllListedStockCacheTest {
     void get_firstCall_fetchesFromRepository() {
         // given
         Stock stock = StockFixture.createStock();
-        given(stockRepository.findByListingStatus(ListingStatus.LISTED)).willReturn(List.of(stock));
+        given(stockRepository.findByListingStatusAndMarketTypeIn(ListingStatus.LISTED, MarketType.domesticValues())).willReturn(List.of(stock));
 
         // when
         List<Stock> result = allListedStockCache.get();
 
         // then
         assertThat(result).containsExactly(stock);
-        verify(stockRepository, times(1)).findByListingStatus(ListingStatus.LISTED);
+        verify(stockRepository, times(1)).findByListingStatusAndMarketTypeIn(ListingStatus.LISTED, MarketType.domesticValues());
     }
 
     @Test
     @DisplayName("[TTL 이내 재조회는 DB를 다시 조회하지 않고 캐시를 반환한다]")
     void get_withinTtl_doesNotRefetch() {
         // given
-        given(stockRepository.findByListingStatus(ListingStatus.LISTED))
+        given(stockRepository.findByListingStatusAndMarketTypeIn(ListingStatus.LISTED, MarketType.domesticValues()))
             .willReturn(List.of(StockFixture.createStock()));
 
         // when
@@ -57,14 +58,14 @@ class AllListedStockCacheTest {
         allListedStockCache.get();
 
         // then
-        verify(stockRepository, times(1)).findByListingStatus(ListingStatus.LISTED);
+        verify(stockRepository, times(1)).findByListingStatusAndMarketTypeIn(ListingStatus.LISTED, MarketType.domesticValues());
     }
 
     @Test
     @DisplayName("[TTL이 지나면 다시 DB를 조회한다]")
     void get_afterTtlExpired_refetches() {
         // given
-        given(stockRepository.findByListingStatus(ListingStatus.LISTED))
+        given(stockRepository.findByListingStatusAndMarketTypeIn(ListingStatus.LISTED, MarketType.domesticValues()))
             .willReturn(List.of(StockFixture.createStock("005930", "삼성전자")))
             .willReturn(List.of(
                 StockFixture.createStock("005930", "삼성전자"),
@@ -78,6 +79,6 @@ class AllListedStockCacheTest {
 
         // then
         assertThat(result).hasSize(2);
-        verify(stockRepository, times(2)).findByListingStatus(ListingStatus.LISTED);
+        verify(stockRepository, times(2)).findByListingStatusAndMarketTypeIn(ListingStatus.LISTED, MarketType.domesticValues());
     }
 }

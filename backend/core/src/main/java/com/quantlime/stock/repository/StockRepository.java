@@ -1,6 +1,7 @@
 package com.quantlime.stock.repository;
 
 import com.quantlime.stock.domain.ListingStatus;
+import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
 import java.util.List;
 import java.util.Optional;
@@ -13,6 +14,8 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
     Optional<Stock> findByStockCode(String stockCode);
 
     List<Stock> findByListingStatus(ListingStatus listingStatus);
+
+    List<Stock> findByListingStatusAndMarketTypeIn(ListingStatus listingStatus, List<MarketType> marketTypes);
 
     boolean existsByStockCode(String stockCode);
 
