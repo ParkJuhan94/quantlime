@@ -15,3 +15,13 @@ jwt:
 # 남긴다 - OS 임시 디렉터리로 격리한다.
 upload:
   dir: ${java.io.tmpdir}/quantlime-test-uploads
+
+# TossApiConfig가 크리덴셜 없으면 기동을 fail-fast로 막는데(빈 creds로
+# invalid_client를 무한 반복하던 사고 재발 방지), ApiTestSupport의 전체
+# 컨텍스트 로드가 이 검증에 걸린다 - 위 jwt.secret과 동일한 이유로 테스트
+# 전용 더미 값을 고정해 환경(.env 유무)과 무관하게 컨텍스트가 뜨게 한다.
+# 실제 토스 호출은 테스트에서 TossApiClient를 mock으로 격리하므로 이 값이
+# 진짜일 필요는 없다.
+toss:
+  client-id: test-toss-client-id
+  client-secret: test-toss-client-secret
