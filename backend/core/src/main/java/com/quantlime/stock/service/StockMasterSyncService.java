@@ -69,10 +69,21 @@ public class StockMasterSyncService {
         return count;
     }
 
+    /**
+     * KIND는 국내(KOSPI/KOSDAQ/코넥스) 전용 소스라(fetchLatestCorpList 참고),
+     * 해외종목은 latest 맵에 애초에 존재할 수 없다 - 시장 구분 없이 전체
+     * 종목을 비교하면 모든 해외종목이 "KIND 목록에서 사라졌다"고 오판돼
+     * 매 동기화마다 DELISTED로 잘못 표시된다(실제로 재현된 버그). 해외
+     * 종목의 상장폐지 감지는 이 서비스의 책임이 아니므로 비교 대상에서
+     * 제외한다.
+     */
     private int markDelisted(
         Map<String, KindStockInfo> latest, Map<String, Stock> existingByCode) {
         int count = 0;
         for (Stock stock : existingByCode.values()) {
+            if (!stock.getMarketType().isDomestic()) {
+                continue;
+            }
             boolean stillListed = latest.containsKey(stock.getStockCode());
             if (stock.getListingStatus() == ListingStatus.LISTED && !stillListed) {
                 stock.updateListingStatus(ListingStatus.DELISTED);

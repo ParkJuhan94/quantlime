@@ -82,6 +82,25 @@ class StockMasterSyncServiceTest {
     }
 
     @Test
+    @DisplayName("[해외종목은 KIND 목록에 없어도 상장폐지 처리하지 않는다]")
+    void syncStockMaster_overseasStock_neverMarkedDelisted() {
+        // given: KIND는 국내 전용 소스라 해외종목(AAPL)은 latest 맵에 절대 없다 -
+        // 시장 구분 없이 비교하면 이 종목까지 상장폐지로 오판된다(실제 재현된 버그)
+        Stock overseasStock = Stock.of("AAPL", "APPLE INC", MarketType.NASDAQ, ListingStatus.LISTED, null);
+        given(kindApiClient.fetchCorpList(MarketType.KOSPI)).willReturn(List.of());
+        given(kindApiClient.fetchCorpList(MarketType.KOSDAQ)).willReturn(List.of());
+        given(kindApiClient.fetchCorpList(MarketType.KONEX)).willReturn(List.of());
+        given(stockRepository.findAll()).willReturn(List.of(overseasStock));
+
+        // when
+        StockMasterSyncResult result = stockMasterSyncService.syncStockMaster();
+
+        // then
+        assertThat(overseasStock.getListingStatus()).isEqualTo(ListingStatus.LISTED);
+        assertThat(result.delistedCount()).isEqualTo(0);
+    }
+
+    @Test
     @DisplayName("[KIND 목록과 DB가 동일하면 아무 것도 변경하지 않는다]")
     void syncStockMaster_noDifference_doesNothing() {
         // given
