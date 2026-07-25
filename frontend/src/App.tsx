@@ -7,6 +7,7 @@ import { OAuthCallbackPage } from './pages/OAuthCallbackPage'
 import { HomePage } from './pages/HomePage'
 import { FeedPage } from './pages/FeedPage'
 import { StockDetailPage } from './pages/StockDetailPage'
+import { BacktestPage } from './pages/BacktestPage'
 import { IndexDetailPage } from './pages/IndexDetailPage'
 import { MyInfoPage } from './pages/MyInfoPage'
 import { SubscribePage } from './pages/SubscribePage'
@@ -47,6 +48,7 @@ function App() {
           <Routes>
             <Route path="/oauth/callback/:provider" element={<OAuthCallbackPage />} />
             <Route path="/stocks/:stockCode" element={<StockDetailPage />} />
+            <Route path="/stocks/:stockCode/backtest" element={<BacktestPage />} />
             <Route path="/indices/:code" element={<IndexDetailPage />} />
             <Route path="/" element={<HomePage />} />
             <Route path="/feed" element={<FeedPage />} />

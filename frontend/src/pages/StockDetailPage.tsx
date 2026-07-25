@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import {
   useStockChartQuery,
   useStockDetailQuery,
@@ -131,6 +131,9 @@ export function StockDetailPage() {
             <div className="mt-1.5">
               <FundamentalsRow fundamentals={fundamentalsQuery.data} />
             </div>
+            <Link to={`/stocks/${stockCode}/backtest`} className="mt-1 inline-block text-xs text-gray-500 hover:underline">
+              백테스트 보기 →
+            </Link>
           </div>
         </div>
 

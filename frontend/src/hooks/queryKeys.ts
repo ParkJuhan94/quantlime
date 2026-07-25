@@ -7,6 +7,7 @@ export const queryKeys = {
   stockPrice: (stockCode: string) => ['stocks', 'price', stockCode] as const,
   stockChart: (stockCode: string, days: number) => ['stocks', 'chart', stockCode, days] as const,
   stockScore: (stockCode: string) => ['stocks', 'score', stockCode] as const,
+  backtest: (stockCode: string) => ['backtest', stockCode] as const,
   stockFundamentals: (stockCode: string) => ['stocks', 'fundamentals', stockCode] as const,
   popularStocks: (limit: number) => ['stocks', 'popular', limit] as const,
   // watchlistOnly/limit 조합별로 쿼리키가 갈라지는데(useDashboardScores),
