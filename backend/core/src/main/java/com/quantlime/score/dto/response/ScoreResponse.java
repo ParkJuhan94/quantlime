@@ -13,7 +13,6 @@ public record ScoreResponse(
     String quadrant,
     Boolean divergenceFlag,
     String divergenceMessage,
-    String comment,
     boolean insufficientData
 ) {
 }

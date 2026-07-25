@@ -304,6 +304,7 @@ class TestComputeScores:
         assert list(scores_df.columns) == [
             "date", "close", "trend_score", "mean_reversion_score",
             "composite_score", "grade", "quadrant", "insufficient_data",
+            "divergence_flag", "divergence_message",
         ]
         direct_result = calculate_score(enriched.iloc[-1].to_dict())
         last_scored = scores_df.iloc[-1]

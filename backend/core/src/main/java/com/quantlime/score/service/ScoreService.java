@@ -3,9 +3,11 @@ package com.quantlime.score.service;
 import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.infra.python.PythonEngineClient;
 import com.quantlime.infra.python.dto.ScoreBatchApiRequest;
-import com.quantlime.infra.python.dto.ScoreBatchApiResponse;
-import com.quantlime.infra.python.dto.ScoreBatchApiResponse.StockScoreApiResponse;
+import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse;
+import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.StockScoreSeriesApiResponse;
 import com.quantlime.price.domain.DailyPrice;
+import com.quantlime.price.domain.OverseasDailyPrice;
+import com.quantlime.price.repository.OverseasDailyPriceRepository;
 import com.quantlime.price.service.DailyPriceService;
 import com.quantlime.score.domain.Score;
 import com.quantlime.score.dto.mapper.ScoreMapper;
@@ -56,6 +58,7 @@ public class ScoreService {
     private static final int SCORE_BATCH_CHUNK_SIZE = 100;
 
     private final DailyPriceService dailyPriceService;
+    private final OverseasDailyPriceRepository overseasDailyPriceRepository;
     private final PythonEngineClient pythonEngineClient;
     private final ScorePersistenceService scorePersistenceService;
     private final ScoreRepository scoreRepository;
@@ -64,7 +67,7 @@ public class ScoreService {
     private final MeterRegistry meterRegistry;
 
     public void recalculateScore(String stockCode) {
-        recalculateScores(List.of(stockCode));
+        recalculateScoresChunk(List.of(stockCode));
     }
 
     // 관심종목만이 아니라 전 상장종목을 대상으로 계산한다(2026-07-16 -
@@ -75,24 +78,60 @@ public class ScoreService {
         List<String> stockCodes = stockMasterService.getAllListedStocks().stream()
             .map(Stock::getStockCode)
             .toList();
+        recalculateScores(stockCodes);
+    }
+
+    /**
+     * 전달된 종목들만 청크 단위로 재계산한다 - {@code recalculateAllListedScores}처럼
+     * 전종목을 매번 무조건 다시 계산하는 대신, 호출측(MarketDataRefreshService 등)이
+     * 실제로 갱신이 필요한 종목만 걸러서 넘기면 같은 배치/격리 로직을 그대로
+     * 재사용할 수 있다.
+     */
+    public void recalculateScores(List<String> stockCodes) {
         if (stockCodes.isEmpty()) {
-            log.debug("스코어 일괄 재계산 스킵: 상장 종목 없음");
+            log.debug("스코어 재계산 스킵: 대상 종목 없음");
             return;
         }
 
         List<List<String>> chunks = partition(stockCodes, SCORE_BATCH_CHUNK_SIZE);
-        log.info("전종목 스코어 재계산 시작: 대상종목수={}, 청크수={}", stockCodes.size(), chunks.size());
+        log.info("스코어 재계산 시작: 대상종목수={}, 청크수={}", stockCodes.size(), chunks.size());
         int chunkIndex = 0;
         for (List<String> chunk : chunks) {
             chunkIndex++;
             try {
-                recalculateScores(chunk);
+                recalculateScoresChunk(chunk);
             } catch (Exception e) {
                 log.error("스코어 재계산 청크 실패(다음 청크는 계속 진행): chunkIndex={}/{}, error={}",
                     chunkIndex, chunks.size(), e.getMessage(), e);
             }
         }
-        log.info("전종목 스코어 재계산 완료: 총 {}개 청크", chunks.size());
+        log.info("스코어 재계산 완료: 총 {}개 청크", chunks.size());
+    }
+
+    /**
+     * 해외종목 버전 - OHLCV를 {@code overseas_daily_price}에서 조회하는 것만
+     * 다르고, 청크/격리/영속화 로직은 {@link #recalculateScores}와 동일하다
+     * (PriceGapFillService의 국내/해외 분리 패턴과 동일한 이유).
+     */
+    public void recalculateOverseasScores(List<String> stockCodes) {
+        if (stockCodes.isEmpty()) {
+            log.debug("해외 스코어 재계산 스킵: 대상 종목 없음");
+            return;
+        }
+
+        List<List<String>> chunks = partition(stockCodes, SCORE_BATCH_CHUNK_SIZE);
+        log.info("해외 스코어 재계산 시작: 대상종목수={}, 청크수={}", stockCodes.size(), chunks.size());
+        int chunkIndex = 0;
+        for (List<String> chunk : chunks) {
+            chunkIndex++;
+            try {
+                recalculateOverseasScoresChunk(chunk);
+            } catch (Exception e) {
+                log.error("해외 스코어 재계산 청크 실패(다음 청크는 계속 진행): chunkIndex={}/{}, error={}",
+                    chunkIndex, chunks.size(), e.getMessage(), e);
+            }
+        }
+        log.info("해외 스코어 재계산 완료: 총 {}개 청크", chunks.size());
     }
 
     private static List<List<String>> partition(List<String> list, int size) {
@@ -146,7 +185,7 @@ public class ScoreService {
             .toList();
     }
 
-    private void recalculateScores(List<String> stockCodes) {
+    private void recalculateScoresChunk(List<String> stockCodes) {
         Map<String, List<DailyPrice>> dailyPricesByStockCode = fetchOhlcvHistories(stockCodes);
         if (dailyPricesByStockCode.isEmpty()) {
             log.info("스코어 재계산 스킵: OHLCV 이력이 있는 종목 없음, stockCodes={}", stockCodes);
@@ -156,7 +195,7 @@ public class ScoreService {
 
         ScoreBatchApiRequest request =
             ScoreRequestMapper.toScoreBatchApiRequest(dailyPricesByStockCode);
-        ScoreBatchApiResponse response = pythonEngineClient.calculateScoreBatch(request);
+        ScoreSeriesBatchApiResponse response = pythonEngineClient.calculateScoreSeries(request);
 
         warnIfMissingFromResponse(dailyPricesByStockCode.keySet(), response.scores());
         scorePersistenceService.saveAll(response.scores());
@@ -176,6 +215,32 @@ public class ScoreService {
             .collect(Collectors.groupingBy(DailyPrice::getStockCode));
     }
 
+    private void recalculateOverseasScoresChunk(List<String> stockCodes) {
+        Map<String, List<OverseasDailyPrice>> pricesByStockCode = fetchOverseasOhlcvHistories(stockCodes);
+        if (pricesByStockCode.isEmpty()) {
+            log.info("해외 스코어 재계산 스킵: OHLCV 이력이 있는 종목 없음, stockCodes={}", stockCodes);
+            return;
+        }
+        warnIfMissingHistory(stockCodes, pricesByStockCode.keySet());
+
+        ScoreBatchApiRequest request = ScoreRequestMapper.toOverseasScoreBatchApiRequest(pricesByStockCode);
+        ScoreSeriesBatchApiResponse response = pythonEngineClient.calculateScoreSeries(request);
+
+        warnIfMissingFromResponse(pricesByStockCode.keySet(), response.scores());
+        scorePersistenceService.saveAll(response.scores());
+
+        log.info("해외 스코어 재계산 완료: 대상종목수={}", pricesByStockCode.size());
+    }
+
+    private Map<String, List<OverseasDailyPrice>> fetchOverseasOhlcvHistories(List<String> stockCodes) {
+        LocalDate end = LocalDate.now();
+        LocalDate start = end.minusDays(OHLCV_LOOKBACK_DAYS);
+        return overseasDailyPriceRepository
+            .findByStockCodeInAndTradeDateBetweenOrderByTradeDateDesc(stockCodes, start, end)
+            .stream()
+            .collect(Collectors.groupingBy(OverseasDailyPrice::getStockCode));
+    }
+
     private void warnIfMissingHistory(List<String> requested, Set<String> withHistory) {
         List<String> skipped = requested.stream()
             .filter(code -> !withHistory.contains(code))
@@ -185,9 +250,9 @@ public class ScoreService {
         }
     }
 
-    private void warnIfMissingFromResponse(Set<String> requested, List<StockScoreApiResponse> results) {
+    private void warnIfMissingFromResponse(Set<String> requested, List<StockScoreSeriesApiResponse> results) {
         Set<String> responded = results.stream()
-            .map(StockScoreApiResponse::stockCode)
+            .map(StockScoreSeriesApiResponse::stockCode)
             .collect(Collectors.toSet());
         List<String> missing = requested.stream()
             .filter(code -> !responded.contains(code))

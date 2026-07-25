@@ -76,18 +76,15 @@ public class Score extends TimeBaseEntity {
     @Embedded
     private Divergence divergence;
 
-    @Column(name = "comment", nullable = false, length = 500)
-    private String comment;
-
     @Column(name = "insufficient_data", nullable = false)
     private boolean insufficientData;
 
     @Builder
     private Score(String stockCode, LocalDate scoreDate, Double trendScore,
                   Double meanReversionScore, Double compositeScore, Grade grade,
-                  Quadrant quadrant, Divergence divergence, String comment,
+                  Quadrant quadrant, Divergence divergence,
                   boolean insufficientData) {
-        validateScore(stockCode, scoreDate, comment);
+        validateScore(stockCode, scoreDate);
         this.stockCode = stockCode;
         this.scoreDate = scoreDate;
         this.trendScore = trendScore;
@@ -96,13 +93,12 @@ public class Score extends TimeBaseEntity {
         this.grade = grade;
         this.quadrant = quadrant;
         this.divergence = divergence;
-        this.comment = comment;
         this.insufficientData = insufficientData;
     }
 
     public static Score of(String stockCode, LocalDate scoreDate, Double trendScore,
                            Double meanReversionScore, Double compositeScore, Grade grade,
-                           Quadrant quadrant, Divergence divergence, String comment,
+                           Quadrant quadrant, Divergence divergence,
                            boolean insufficientData) {
         return Score.builder()
             .stockCode(stockCode)
@@ -113,7 +109,6 @@ public class Score extends TimeBaseEntity {
             .grade(grade)
             .quadrant(quadrant)
             .divergence(divergence)
-            .comment(comment)
             .insufficientData(insufficientData)
             .build();
     }
@@ -125,21 +120,18 @@ public class Score extends TimeBaseEntity {
      */
     public void updateFrom(Double trendScore, Double meanReversionScore,
                            Double compositeScore, Grade grade, Quadrant quadrant,
-                           Divergence divergence, String comment, boolean insufficientData) {
-        Assert.hasText(comment, "코멘트는 필수입니다.");
+                           Divergence divergence, boolean insufficientData) {
         this.trendScore = trendScore;
         this.meanReversionScore = meanReversionScore;
         this.compositeScore = compositeScore;
         this.grade = grade;
         this.quadrant = quadrant;
         this.divergence = divergence;
-        this.comment = comment;
         this.insufficientData = insufficientData;
     }
 
-    private void validateScore(String stockCode, LocalDate scoreDate, String comment) {
+    private void validateScore(String stockCode, LocalDate scoreDate) {
         Assert.hasText(stockCode, "종목 코드는 필수입니다.");
         Assert.notNull(scoreDate, "스코어 산출일은 필수입니다.");
-        Assert.hasText(comment, "코멘트는 필수입니다.");
     }
 }

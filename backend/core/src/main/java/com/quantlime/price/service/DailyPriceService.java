@@ -34,8 +34,18 @@ public class DailyPriceService {
 
     @Transactional
     public void collectDailyPrice(String stockCode) {
+        collectDailyPrice(stockCode, DAILY_COLLECT_LOOKBACK_DAYS);
+    }
+
+    /**
+     * lookbackDays를 고정값이 아니라 호출측이 지정할 수 있게 한 버전 -
+     * {@link PriceGapFillService}가 "마지막 저장일부터 오늘까지의 실제 갭"
+     * 만큼만 요청해 불필요한 과거 재조회 없이 정확히 그 구간만 채운다.
+     */
+    @Transactional
+    public void collectDailyPrice(String stockCode, int lookbackDays) {
         TossCandleResponse response = tossApiClient.getDailyCandles(
-            stockCode, DAILY_COLLECT_LOOKBACK_DAYS, null);
+            stockCode, lookbackDays, null);
 
         List<TossCandleResponse.TossCandle> candles = response.result().candles();
         if (candles == null || candles.isEmpty()) {

@@ -4,6 +4,7 @@ import com.quantlime.backtest.domain.BacktestAxis;
 import com.quantlime.backtest.domain.BacktestResult;
 import com.quantlime.backtest.dto.response.BacktestResponse;
 import com.quantlime.backtest.exception.BacktestErrorCode;
+import com.quantlime.backtest.repository.BacktestDailyScoreRepository;
 import com.quantlime.backtest.repository.BacktestResultRepository;
 import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.common.exception.ValidationException;
@@ -15,6 +16,8 @@ import com.quantlime.infra.python.dto.BacktestApiResponse.StabilityStatApiRespon
 import com.quantlime.market.domain.BenchmarkIndex;
 import com.quantlime.market.repository.BenchmarkIndexRepository;
 import com.quantlime.price.domain.DailyPrice;
+import com.quantlime.price.domain.OverseasDailyPrice;
+import com.quantlime.price.repository.OverseasDailyPriceRepository;
 import com.quantlime.price.service.DailyPriceService;
 import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
@@ -52,6 +55,9 @@ class BacktestServiceTest {
     private DailyPriceService dailyPriceService;
 
     @Mock
+    private OverseasDailyPriceRepository overseasDailyPriceRepository;
+
+    @Mock
     private BenchmarkIndexRepository benchmarkIndexRepository;
 
     @Mock
@@ -62,6 +68,9 @@ class BacktestServiceTest {
 
     @Mock
     private BacktestResultRepository backtestResultRepository;
+
+    @Mock
+    private BacktestDailyScoreRepository backtestDailyScoreRepository;
 
     @InjectMocks
     private BacktestService backtestService;
@@ -83,16 +92,40 @@ class BacktestServiceTest {
         // then
         verify(pythonEngineClient).runBacktest(any());
         verify(backtestPersistenceService).saveAll(any());
+        verify(backtestPersistenceService).replaceDailyScores(eq(STOCK_CODE), eq("v2.1"), any());
     }
 
     @Test
-    @DisplayName("[벤치마크가 없는 시장(해외)은 UNSUPPORTED_MARKET 예외를 던진다]")
-    void runBacktest_unsupportedMarket_throwsException() {
+    @DisplayName("[해외(나스닥) 종목도 벤치마크(나스닥종합)와 함께 퀀트 엔진에 넘겨 결과를 저장한다]")
+    void runBacktest_overseasStock_fetchesDataAndPersists() {
         // given
-        given(stockMasterService.getStockByCode("AAPL")).willReturn(stock("AAPL", MarketType.NASDAQ));
+        String overseasStockCode = "AAPL";
+        given(stockMasterService.getStockByCode(overseasStockCode))
+            .willReturn(stock(overseasStockCode, MarketType.NASDAQ));
+        given(overseasDailyPriceRepository
+            .findByStockCodeAndTradeDateBetweenOrderByTradeDateDesc(eq(overseasStockCode), any(), any()))
+            .willReturn(List.of(overseasDailyPrice(overseasStockCode)));
+        given(benchmarkIndexRepository.findByIndexCodeAndTradeDateBetweenOrderByTradeDateAsc(
+            eq("NASDAQ"), any(), any())).willReturn(List.of(benchmarkIndex()));
+        given(pythonEngineClient.runBacktest(any())).willReturn(apiResponse());
+
+        // when
+        backtestService.runBacktest(overseasStockCode);
+
+        // then: 해외종목은 국내 daily_price가 아니라 overseas_daily_price에서 조회한다
+        verify(dailyPriceService, never()).getDailyPrices(any(String.class), any(), any());
+        verify(pythonEngineClient).runBacktest(any());
+        verify(backtestPersistenceService).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("[벤치마크가 없는 시장(코넥스)은 UNSUPPORTED_MARKET 예외를 던진다]")
+    void runBacktest_unsupportedMarket_throwsException() {
+        // given: KONEX는 BENCHMARK_INDEX_CODE 맵에 없어 여전히 미지원
+        given(stockMasterService.getStockByCode("900000")).willReturn(stock("900000", MarketType.KONEX));
 
         // when & then
-        assertThatThrownBy(() -> backtestService.runBacktest("AAPL"))
+        assertThatThrownBy(() -> backtestService.runBacktest("900000"))
             .isInstanceOf(ValidationException.class)
             .hasFieldOrPropertyWithValue("code", BacktestErrorCode.UNSUPPORTED_MARKET.getCode());
         verify(pythonEngineClient, never()).runBacktest(any());
@@ -153,6 +186,9 @@ class BacktestServiceTest {
         given(backtestResultRepository
             .findByStockCodeAndScoreVersionOrderByAxisAscHorizonDaysAsc(STOCK_CODE, "v2.1"))
             .willReturn(List.of(latest));
+        given(backtestDailyScoreRepository
+            .findByStockCodeAndScoreVersionOrderByTradeDateAsc(STOCK_CODE, "v2.1"))
+            .willReturn(List.of());
 
         // when
         BacktestResponse response = backtestService.getBacktestResult(STOCK_CODE);
@@ -171,6 +207,10 @@ class BacktestServiceTest {
         return DailyPrice.of(STOCK_CODE, LocalDate.now(), 100L, 105L, 95L, 100L, 1000L);
     }
 
+    private OverseasDailyPrice overseasDailyPrice(String stockCode) {
+        return OverseasDailyPrice.of(stockCode, LocalDate.now(), 150.0, 152.0, 148.0, 151.0, 1000L);
+    }
+
     private BenchmarkIndex benchmarkIndex() {
         return BenchmarkIndex.of("KOSPI", LocalDate.now(), 2600.0, 2610.0, 2590.0, 2605.0);
     }
@@ -182,7 +222,9 @@ class BacktestServiceTest {
                 "trend",
                 List.of(new HorizonStatApiResponse(5, 0.1, -0.1, 0.3, 300, List.of())),
                 new StabilityStatApiResponse(0.05, 0.1)
-            ))
+            )),
+            List.of(new BacktestApiResponse.DailyScoreApiResponse(
+                LocalDate.now().toString(), 70000.0, 60.0, 55.0, "trend_up_oversold", "BUY"))
         );
     }
 }

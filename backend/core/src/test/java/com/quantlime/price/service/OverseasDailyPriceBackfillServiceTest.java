@@ -72,6 +72,25 @@ class OverseasDailyPriceBackfillServiceTest {
     }
 
     @Test
+    @DisplayName("[collectRecentPrices는 baseDate 없이 1회만 호출하고 페이지네이션하지 않는다]")
+    void collectRecentPrices_callsOnceWithoutPagination() {
+        // given
+        given(kisApiClient.getOverseasDailyPrice(eq(EXCHANGE_CODE), eq(STOCK_CODE), isNull()))
+            .willReturn(page(100, "20260716"));
+        given(overseasDailyPriceRepository.existsByStockCodeAndTradeDate(eq(STOCK_CODE), any()))
+            .willReturn(false);
+
+        // when
+        overseasDailyPriceBackfillService.collectRecentPrices(STOCK_CODE, EXCHANGE_CODE);
+
+        // then: 100건 꽉 찬 페이지를 받아도 다음 페이지를 요청하지 않는다
+        // (KIS는 count 지정이 안 되므로, 정확히 갭만큼만 채우는 게 아니라
+        // 한 번의 호출로 받은 최근 이력만 저장하고 끝낸다)
+        verify(kisApiClient, times(1)).getOverseasDailyPrice(any(), any(), any());
+        verify(overseasDailyPriceRepository, times(100)).save(any());
+    }
+
+    @Test
     @DisplayName("[100건 꽉 찬 페이지를 받으면 최고령일의 하루 전을 BYMD로 다음 페이지를 요청한다]")
     void backfillHistoryIfNeeded_fullPage_requestsNextPageWithPreviousDay() {
         // given

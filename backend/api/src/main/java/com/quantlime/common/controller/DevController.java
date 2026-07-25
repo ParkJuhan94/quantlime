@@ -5,26 +5,19 @@ import com.quantlime.auth.dto.mapper.AuthMapper;
 import com.quantlime.auth.dto.response.TokenResponse;
 import com.quantlime.auth.jwt.JwtTokenProvider;
 import com.quantlime.auth.token.RefreshTokenStore;
+import com.quantlime.backtest.service.BacktestDatasetPreparationService;
 import com.quantlime.backtest.service.BacktestService;
+import com.quantlime.backtest.service.BacktestUniverseService;
 import com.quantlime.infra.oauth.dto.OAuthUserInfo;
-import com.quantlime.market.service.BenchmarkIndexBackfillService;
-import com.quantlime.market.service.DomesticUniverseSelectionService;
-import com.quantlime.market.service.OverseasUniverseSelectionService;
-import com.quantlime.price.scheduler.OhlcvCollectorScheduler;
-import com.quantlime.price.service.DailyPriceService;
-import com.quantlime.price.service.OverseasDailyPriceBackfillService;
-import com.quantlime.score.service.ScoreService;
-import com.quantlime.stock.domain.Stock;
+import com.quantlime.market.service.MarketDataRefreshService;
 import com.quantlime.stock.dto.StockMasterSyncResult;
 import com.quantlime.stock.service.OverseasStockMasterSyncService;
-import com.quantlime.stock.service.StockMasterService;
 import com.quantlime.stock.service.StockMasterSyncService;
 import com.quantlime.user.domain.OAuthProvider;
 import com.quantlime.user.domain.User;
 import com.quantlime.user.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Profile;
@@ -46,42 +39,16 @@ public class DevController {
 
     private static final String DEV_TEST_PROVIDER_ID = "dev-test-user";
 
-    private final OhlcvCollectorScheduler ohlcvCollectorScheduler;
-    private final StockMasterService stockMasterService;
     private final StockMasterSyncService stockMasterSyncService;
     private final OverseasStockMasterSyncService overseasStockMasterSyncService;
-    private final DailyPriceService dailyPriceService;
-    private final OverseasDailyPriceBackfillService overseasDailyPriceBackfillService;
-    private final BenchmarkIndexBackfillService benchmarkIndexBackfillService;
-    private final DomesticUniverseSelectionService domesticUniverseSelectionService;
-    private final OverseasUniverseSelectionService overseasUniverseSelectionService;
-    private final ScoreService scoreService;
+    private final MarketDataRefreshService marketDataRefreshService;
+    private final BacktestDatasetPreparationService backtestDatasetPreparationService;
     private final BacktestService backtestService;
+    private final BacktestUniverseService backtestUniverseService;
     private final UserService userService;
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenStore refreshTokenStore;
     private final RefreshTokenCookieProvider refreshTokenCookieProvider;
-
-    @PostMapping("/ohlcv/collect")
-    @Operation(summary = "[개발용] OHLCV 수집 수동 트리거")
-    public ResponseEntity<String> triggerOhlcvCollect() {
-        ohlcvCollectorScheduler.collectDailyOhlcv();
-        return ResponseEntity.ok("OHLCV 수집 완료");
-    }
-
-    @PostMapping("/ohlcv/backfill")
-    @Operation(summary = "[개발용] 전체 상장 종목 이력 OHLCV 일괄 백필(종목당 200일)")
-    public ResponseEntity<String> triggerBackfill() {
-        for (Stock stock : stockMasterService.getAllListedStocks()) {
-            try {
-                dailyPriceService.backfillHistoryIfNeeded(stock.getStockCode());
-            } catch (Exception e) {
-                log.error("백필 실패: stockCode={}, error={}",
-                    stock.getStockCode(), e.getMessage(), e);
-            }
-        }
-        return ResponseEntity.ok("백필 완료");
-    }
 
     @PostMapping("/stock-master/sync")
     @Operation(summary = "[개발용] 종목마스터 동기화(신규상장/상장폐지 반영) 수동 트리거")
@@ -92,13 +59,6 @@ public class DevController {
                 .formatted(result.newlyListedCount(), result.delistedCount()));
     }
 
-    @PostMapping("/benchmark/backfill")
-    @Operation(summary = "[개발용] 백테스트 벤치마크 지수(KOSPI/KOSDAQ) 이력 백필 수동 트리거")
-    public ResponseEntity<String> triggerBenchmarkBackfill() {
-        benchmarkIndexBackfillService.backfillAllIfNeeded();
-        return ResponseEntity.ok("벤치마크 지수 백필 완료");
-    }
-
     @PostMapping("/stock-master/overseas/sync")
     @Operation(summary = "[개발용] 해외 종목마스터(NASDAQ/NYSE) 동기화 수동 트리거")
     public ResponseEntity<String> triggerOverseasStockMasterSync() {
@@ -106,43 +66,42 @@ public class DevController {
         return ResponseEntity.ok("해외 종목마스터 동기화 완료");
     }
 
-    @PostMapping("/universe/domestic/select")
-    @Operation(summary = "[개발용] 백테스트 국내 유니버스(거래대금 상위 500, REIT 제외) 2-pass 선정+백필 수동 트리거")
-    public ResponseEntity<String> triggerDomesticUniverseSelection() {
-        List<String> selected = domesticUniverseSelectionService.selectAndBackfillUniverse();
-        return ResponseEntity.ok("국내 유니버스 선정+백필 완료: %d종목".formatted(selected.size()));
+    @PostMapping("/refresh")
+    @Operation(summary = "[개발용/트리거1] 전 상장종목(국내+해외) 가격+스코어를 마지막 저장일 "
+        + "다음날부터 오늘까지만 갭필. stockCode를 주면 그 종목만 처리(디버깅용). "
+        + "매일 16:00 배치·로컬 기동 시 자동 캐치업과 동일한 로직을 공유한다.")
+    public ResponseEntity<String> triggerRefresh(
+            @RequestParam(required = false) String stockCode) {
+        if (stockCode != null) {
+            marketDataRefreshService.refreshStock(stockCode);
+            return ResponseEntity.ok("가격/스코어 갱신 완료: " + stockCode);
+        }
+        marketDataRefreshService.refreshAll();
+        return ResponseEntity.ok("전종목 가격/스코어 갱신 완료");
     }
 
-    @PostMapping("/overseas/backfill")
-    @Operation(summary = "[개발용] 해외 종목 단건 이력 백필 수동 트리거")
-    public ResponseEntity<String> triggerOverseasBackfill(
-            @RequestParam String stockCode,
-            @RequestParam String exchangeCode,
-            @RequestParam(defaultValue = "60") int targetDays) {
-        overseasDailyPriceBackfillService.backfillHistoryIfNeeded(stockCode, exchangeCode, targetDays);
-        return ResponseEntity.ok("해외 종목 백필 완료: " + stockCode);
-    }
-
-    @PostMapping("/universe/overseas/select")
-    @Operation(summary = "[개발용] 백테스트 해외 유니버스(거래대금 상위 500, NASDAQ/NYSE) 2-pass 선정+백필 수동 트리거")
-    public ResponseEntity<String> triggerOverseasUniverseSelection() {
-        List<String> selected = overseasUniverseSelectionService.selectAndBackfillUniverse();
-        return ResponseEntity.ok("해외 유니버스 선정+백필 완료: %d종목".formatted(selected.size()));
-    }
-
-    @PostMapping("/scores/recalculate")
-    @Operation(summary = "[개발용] 전 상장 종목 스코어 일괄 재계산 수동 트리거")
-    public ResponseEntity<String> triggerScoreRecalculate() {
-        scoreService.recalculateAllListedScores();
-        return ResponseEntity.ok("스코어 재계산 완료");
+    @PostMapping("/backtest/prepare-dataset")
+    @Operation(summary = "[개발용/트리거2] 백테스트용 데이터 일괄 준비 - 국내/해외 유니버스"
+        + "(거래대금 상위 500) 선정+백필과 벤치마크 지수(KOSPI/KOSDAQ/NASDAQ/SP500) 백필을 한 번에 실행")
+    public ResponseEntity<String> triggerBacktestDatasetPreparation() {
+        backtestDatasetPreparationService.prepareDataset();
+        return ResponseEntity.ok("백테스트 데이터셋 준비 완료");
     }
 
     @PostMapping("/backtest/run")
-    @Operation(summary = "[개발용] 종목 백테스트 수동 트리거(국내 KOSPI/KOSDAQ 종목만 지원 - "
-        + "해외는 아직 벤치마크 지수가 없음)")
+    @Operation(summary = "[개발용] 종목 백테스트 수동 트리거(국내 KOSPI/KOSDAQ, 해외 NASDAQ/NYSE 지원)")
     public ResponseEntity<String> triggerBacktest(@RequestParam String stockCode) {
         backtestService.runBacktest(stockCode);
         return ResponseEntity.ok("백테스트 완료: " + stockCode);
+    }
+
+    @PostMapping("/backtest/run-universe")
+    @Operation(summary = "[개발용] 백테스트용 유니버스(국내+해외 거래대금 상위 500씩) 전체에 대해 "
+        + "백테스트를 순회 실행. 오늘 이미 실행된 종목은 스킵. 트리거1과 달리 자동(기동 시/16:00) "
+        + "트리거에는 연결돼 있지 않음(축×horizon마다 block bootstrap 500회라 무거운 연산 - 수동으로만 실행)")
+    public ResponseEntity<String> triggerBacktestUniverse() {
+        backtestUniverseService.runUniverse();
+        return ResponseEntity.ok("유니버스 백테스트 완료");
     }
 
     @PostMapping("/auth/token")

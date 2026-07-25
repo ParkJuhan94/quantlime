@@ -4,9 +4,10 @@ import com.quantlime.common.exception.ExternalApiException;
 import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.infra.python.PythonEngineClient;
 import com.quantlime.infra.python.dto.ScoreBatchApiRequest;
-import com.quantlime.infra.python.dto.ScoreBatchApiResponse;
-import com.quantlime.infra.python.dto.ScoreBatchApiResponse.DivergenceApiResponse;
-import com.quantlime.infra.python.dto.ScoreBatchApiResponse.StockScoreApiResponse;
+import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse;
+import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.DailyScoreSeriesApiResponse;
+import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.DivergenceApiResponse;
+import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.StockScoreSeriesApiResponse;
 import com.quantlime.infra.python.exception.PythonEngineErrorCode;
 import com.quantlime.price.domain.DailyPrice;
 import com.quantlime.price.service.DailyPriceService;
@@ -85,7 +86,7 @@ class ScoreServiceTest {
         scoreService.recalculateScore(STOCK_CODE);
 
         // then
-        verify(pythonEngineClient, never()).calculateScoreBatch(any());
+        verify(pythonEngineClient, never()).calculateScoreSeries(any());
         verify(scorePersistenceService, never()).saveAll(any());
     }
 
@@ -95,9 +96,9 @@ class ScoreServiceTest {
         // given
         given(dailyPriceService.getDailyPrices(anyList(), any(), any()))
             .willReturn(List.of(dailyPrice(LocalDate.of(2026, 7, 3))));
-        ScoreBatchApiResponse response =
-            new ScoreBatchApiResponse(List.of(successResponse(STOCK_CODE, 82.0)));
-        given(pythonEngineClient.calculateScoreBatch(any(ScoreBatchApiRequest.class)))
+        ScoreSeriesBatchApiResponse response =
+            new ScoreSeriesBatchApiResponse(List.of(successResponse(STOCK_CODE, 82.0)));
+        given(pythonEngineClient.calculateScoreSeries(any(ScoreBatchApiRequest.class)))
             .willReturn(response);
 
         // when
@@ -113,7 +114,7 @@ class ScoreServiceTest {
         // given
         given(dailyPriceService.getDailyPrices(anyList(), any(), any()))
             .willReturn(List.of(dailyPrice(LocalDate.of(2026, 7, 3))));
-        given(pythonEngineClient.calculateScoreBatch(any(ScoreBatchApiRequest.class)))
+        given(pythonEngineClient.calculateScoreSeries(any(ScoreBatchApiRequest.class)))
             .willThrow(new ExternalApiException(PythonEngineErrorCode.SCORE_CALCULATION_FAILED));
 
         // when & then: 예외는 상위(WatchlistService/스케줄러)에서 잡으므로 여기선 전파돼야 함
@@ -132,7 +133,7 @@ class ScoreServiceTest {
         scoreService.recalculateAllListedScores();
 
         // then
-        verify(pythonEngineClient, never()).calculateScoreBatch(any());
+        verify(pythonEngineClient, never()).calculateScoreSeries(any());
     }
 
     @Test
@@ -144,9 +145,9 @@ class ScoreServiceTest {
             StockFixture.createStock(STOCK_CODE, "삼성전자"), StockFixture.createStock(secondCode, "SK하이닉스")));
         given(dailyPriceService.getDailyPrices(anyList(), any(), any()))
             .willReturn(List.of(dailyPrice(STOCK_CODE), dailyPrice(secondCode)));
-        ScoreBatchApiResponse response = new ScoreBatchApiResponse(List.of(
+        ScoreSeriesBatchApiResponse response = new ScoreSeriesBatchApiResponse(List.of(
             successResponse(STOCK_CODE, 70.0), successResponse(secondCode, 60.0)));
-        given(pythonEngineClient.calculateScoreBatch(any(ScoreBatchApiRequest.class)))
+        given(pythonEngineClient.calculateScoreSeries(any(ScoreBatchApiRequest.class)))
             .willReturn(response);
 
         // when
@@ -167,8 +168,8 @@ class ScoreServiceTest {
             StockFixture.createStock(STOCK_CODE, "삼성전자"), StockFixture.createStock(noHistoryCode, "SK하이닉스")));
         given(dailyPriceService.getDailyPrices(anyList(), any(), any()))
             .willReturn(List.of(dailyPrice(STOCK_CODE)));
-        given(pythonEngineClient.calculateScoreBatch(any(ScoreBatchApiRequest.class)))
-            .willReturn(new ScoreBatchApiResponse(List.of(successResponse(STOCK_CODE, 70.0))));
+        given(pythonEngineClient.calculateScoreSeries(any(ScoreBatchApiRequest.class)))
+            .willReturn(new ScoreSeriesBatchApiResponse(List.of(successResponse(STOCK_CODE, 70.0))));
 
         // when
         scoreService.recalculateAllListedScores();
@@ -176,7 +177,7 @@ class ScoreServiceTest {
         // then
         ArgumentCaptor<ScoreBatchApiRequest> requestCaptor =
             ArgumentCaptor.forClass(ScoreBatchApiRequest.class);
-        verify(pythonEngineClient).calculateScoreBatch(requestCaptor.capture());
+        verify(pythonEngineClient).calculateScoreSeries(requestCaptor.capture());
         assertThat(requestCaptor.getValue().stocks())
             .extracting(ScoreBatchApiRequest.StockScoreApiRequest::stockCode)
             .containsExactly(STOCK_CODE);
@@ -195,15 +196,15 @@ class ScoreServiceTest {
         given(dailyPriceService.getDailyPrices(anyList(), any(), any()))
             .willReturn(List.of(dailyPrice(STOCK_CODE)));
         // 첫 청크(100개)는 실패, 두 번째 청크(1개)는 성공 - 첫 청크 실패가 두 번째 청크 실행을 막지 않아야 함
-        given(pythonEngineClient.calculateScoreBatch(any(ScoreBatchApiRequest.class)))
+        given(pythonEngineClient.calculateScoreSeries(any(ScoreBatchApiRequest.class)))
             .willThrow(new ExternalApiException(PythonEngineErrorCode.SCORE_CALCULATION_FAILED))
-            .willReturn(new ScoreBatchApiResponse(List.of(successResponse(STOCK_CODE, 70.0))));
+            .willReturn(new ScoreSeriesBatchApiResponse(List.of(successResponse(STOCK_CODE, 70.0))));
 
         // when
         scoreService.recalculateAllListedScores();
 
         // then
-        verify(pythonEngineClient, times(2)).calculateScoreBatch(any());
+        verify(pythonEngineClient, times(2)).calculateScoreSeries(any());
         verify(scorePersistenceService, times(1)).saveAll(any());
     }
 
@@ -212,7 +213,7 @@ class ScoreServiceTest {
     void getScore_found_returnsResponse() {
         // given
         Score score = Score.of(STOCK_CODE, LocalDate.now(), 80.0, 40.0, 65.0,
-            null, null, Divergence.of(false, null), "코멘트", false);
+            null, null, Divergence.of(false, null), false);
         given(scoreRepository.findTopByStockCodeOrderByScoreDateDesc(STOCK_CODE))
             .willReturn(Optional.of(score));
 
@@ -229,7 +230,7 @@ class ScoreServiceTest {
     void getScore_withQuadrant_returnsQuadrantLabel() {
         // given
         Score score = Score.of(STOCK_CODE, LocalDate.now(), 80.0, 40.0, 65.0,
-            null, Quadrant.TREND_UP_OVERSOLD, Divergence.of(false, null), "코멘트", false);
+            null, Quadrant.TREND_UP_OVERSOLD, Divergence.of(false, null), false);
         given(scoreRepository.findTopByStockCodeOrderByScoreDateDesc(STOCK_CODE))
             .willReturn(Optional.of(score));
 
@@ -257,7 +258,7 @@ class ScoreServiceTest {
     void getAllStocksScoreRanking_returnsTopScoresWithStockInfo() {
         // given
         Score score = Score.of(STOCK_CODE, LocalDate.now(), 80.0, 40.0, 90.0,
-            null, null, Divergence.of(false, null), "코멘트", false);
+            null, null, Divergence.of(false, null), false);
         Stock stock = StockFixture.createStock(STOCK_CODE, "삼성전자");
         given(scoreRepository.findTopScoresOrderByCompositeScoreDesc(10)).willReturn(List.of(score));
         given(stockMasterService.getStocksByCodesInOrder(List.of(STOCK_CODE))).willReturn(List.of(stock));
@@ -281,9 +282,10 @@ class ScoreServiceTest {
             70000L, 71000L, 69000L, 70500L, 1000000L);
     }
 
-    private StockScoreApiResponse successResponse(String stockCode, double compositeScore) {
-        return new StockScoreApiResponse(
-            stockCode, 70.0, 50.0, compositeScore, "A", "trend_up_oversold",
-            new DivergenceApiResponse(false, null), "코멘트", false);
+    private StockScoreSeriesApiResponse successResponse(String stockCode, double compositeScore) {
+        DailyScoreSeriesApiResponse dailyScore = new DailyScoreSeriesApiResponse(
+            LocalDate.now().toString(), 70.0, 50.0, compositeScore, "A", "trend_up_oversold",
+            new DivergenceApiResponse(false, null), false);
+        return new StockScoreSeriesApiResponse(stockCode, List.of(dailyScore));
     }
 }

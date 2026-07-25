@@ -30,22 +30,6 @@ class DivergenceResponse(BaseModel):
     message: str | None = None
 
 
-class StockScoreResponse(BaseModel):
-    stock_code: str
-    trend_score: float | None
-    mean_reversion_score: float | None
-    composite_score: float | None
-    grade: str | None
-    quadrant: str | None
-    divergence: DivergenceResponse | None
-    comment: str
-    insufficient_data: bool
-
-
-class ScoreBatchResponse(BaseModel):
-    scores: list[StockScoreResponse]
-
-
 class BacktestRequest(BaseModel):
     stock_code: str
     ohlcv: list[OhlcvItem]
@@ -82,8 +66,35 @@ class AxisBacktestResponse(BaseModel):
     stability: StabilityStatResponse
 
 
+class DailyScoreResponse(BaseModel):
+    date: date
+    close: float
+    trend_score: float | None
+    mean_reversion_score: float | None
+    composite_score: float | None
+    quadrant: str | None
+    grade: str | None
+    divergence: DivergenceResponse | None = None
+    insufficient_data: bool = False
+
+
+class StockScoreSeriesResponse(BaseModel):
+    stock_code: str
+    daily_scores: list[DailyScoreResponse]
+
+
+class ScoreSeriesBatchResponse(BaseModel):
+    scores: list[StockScoreSeriesResponse]
+
+
 class BacktestResponse(BaseModel):
     stock_code: str
     score_version: str
     sample_days: int
     axes: list[AxisBacktestResponse]
+    # 프론트 백테스트 페이지의 가격차트 오버레이·사분면 밴드·스코어 분포
+    # 히스토그램용 일별 원시 스코어 시계열(Phase F). Score 테이블은 라이브
+    # 배치가 실제로 돌아간 날짜만 쌓여 있어(이 프로젝트는 아직 며칠치뿐)
+    # 과거 400일치를 재현하지 못하므로, 백테스트가 이미 계산해둔
+    # compute_scores(df) 결과를 그대로 함께 내려준다.
+    daily_scores: list[DailyScoreResponse]

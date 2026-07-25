@@ -21,7 +21,7 @@ class ScoreQueryRepositoryImplTest extends DataJpaTestSupport {
 
     private Score score(String stockCode, LocalDate scoreDate, double compositeScore) {
         return Score.of(stockCode, scoreDate, 50.0, 50.0, compositeScore, Grade.NEUTRAL,
-            null, Divergence.of(false, null), "코멘트", false);
+            null, Divergence.of(false, null), false);
     }
 
     @Test

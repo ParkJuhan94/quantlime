@@ -1,7 +1,7 @@
 package com.quantlime.score.dto.mapper;
 
-import com.quantlime.infra.python.dto.ScoreBatchApiResponse.DivergenceApiResponse;
-import com.quantlime.infra.python.dto.ScoreBatchApiResponse.StockScoreApiResponse;
+import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.DailyScoreSeriesApiResponse;
+import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.DivergenceApiResponse;
 import com.quantlime.score.domain.Divergence;
 import com.quantlime.score.domain.Grade;
 import com.quantlime.score.domain.Quadrant;
@@ -17,7 +17,7 @@ import static lombok.AccessLevel.PRIVATE;
 public final class ScoreMapper {
 
     public static Score toScore(
-        String stockCode, LocalDate scoreDate, StockScoreApiResponse apiResponse) {
+        String stockCode, LocalDate scoreDate, DailyScoreSeriesApiResponse apiResponse) {
         return Score.of(
             stockCode,
             scoreDate,
@@ -27,12 +27,11 @@ public final class ScoreMapper {
             extractGrade(apiResponse),
             extractQuadrant(apiResponse),
             extractDivergence(apiResponse),
-            apiResponse.comment(),
             apiResponse.insufficientData()
         );
     }
 
-    public static void updateScoreFrom(Score score, StockScoreApiResponse apiResponse) {
+    public static void updateScoreFrom(Score score, DailyScoreSeriesApiResponse apiResponse) {
         score.updateFrom(
             apiResponse.trendScore(),
             apiResponse.meanReversionScore(),
@@ -40,7 +39,6 @@ public final class ScoreMapper {
             extractGrade(apiResponse),
             extractQuadrant(apiResponse),
             extractDivergence(apiResponse),
-            apiResponse.comment(),
             apiResponse.insufficientData()
         );
     }
@@ -56,7 +54,6 @@ public final class ScoreMapper {
             quadrantLabel(score.getQuadrant()),
             divergenceFlag(score.getDivergence()),
             divergenceMessage(score.getDivergence()),
-            score.getComment(),
             score.isInsufficientData()
         );
     }
@@ -75,15 +72,15 @@ public final class ScoreMapper {
         );
     }
 
-    private static Grade extractGrade(StockScoreApiResponse apiResponse) {
+    private static Grade extractGrade(DailyScoreSeriesApiResponse apiResponse) {
         return apiResponse.grade() != null ? Grade.of(apiResponse.grade()) : null;
     }
 
-    private static Quadrant extractQuadrant(StockScoreApiResponse apiResponse) {
+    private static Quadrant extractQuadrant(DailyScoreSeriesApiResponse apiResponse) {
         return apiResponse.quadrant() != null ? Quadrant.of(apiResponse.quadrant()) : null;
     }
 
-    private static Divergence extractDivergence(StockScoreApiResponse apiResponse) {
+    private static Divergence extractDivergence(DailyScoreSeriesApiResponse apiResponse) {
         DivergenceApiResponse divergence = apiResponse.divergence();
         return divergence != null ? Divergence.of(divergence.flag(), divergence.message()) : null;
     }

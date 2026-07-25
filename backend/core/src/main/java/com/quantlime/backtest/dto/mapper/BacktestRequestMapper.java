@@ -4,6 +4,7 @@ import com.quantlime.infra.python.dto.BacktestApiRequest;
 import com.quantlime.infra.python.dto.BacktestApiRequest.OhlcvApiItem;
 import com.quantlime.market.domain.BenchmarkIndex;
 import com.quantlime.price.domain.DailyPrice;
+import com.quantlime.price.domain.OverseasDailyPrice;
 import java.util.List;
 import lombok.NoArgsConstructor;
 
@@ -18,6 +19,28 @@ public final class BacktestRequestMapper {
             stockCode,
             dailyPrices.stream().map(BacktestRequestMapper::toOhlcvApiItem).toList(),
             benchmarkPrices.stream().map(BacktestRequestMapper::toOhlcvApiItem).toList()
+        );
+    }
+
+    // 해외종목은 OverseasDailyPrice(Double 가격 컬럼)를 쓰므로 ScoreRequestMapper와
+    // 동일한 이유로 별도 메서드명 오버로드로 둔다.
+    public static BacktestApiRequest toOverseasBacktestApiRequest(
+        String stockCode, List<OverseasDailyPrice> overseasDailyPrices, List<BenchmarkIndex> benchmarkPrices) {
+        return new BacktestApiRequest(
+            stockCode,
+            overseasDailyPrices.stream().map(BacktestRequestMapper::toOhlcvApiItem).toList(),
+            benchmarkPrices.stream().map(BacktestRequestMapper::toOhlcvApiItem).toList()
+        );
+    }
+
+    private static OhlcvApiItem toOhlcvApiItem(OverseasDailyPrice overseasDailyPrice) {
+        return new OhlcvApiItem(
+            overseasDailyPrice.getTradeDate().toString(),
+            overseasDailyPrice.getOpenPrice(),
+            overseasDailyPrice.getHighPrice(),
+            overseasDailyPrice.getLowPrice(),
+            overseasDailyPrice.getClosePrice(),
+            overseasDailyPrice.getVolume()
         );
     }
 

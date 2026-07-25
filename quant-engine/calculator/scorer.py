@@ -229,5 +229,7 @@ def compute_scores(indicator_df: pd.DataFrame) -> pd.DataFrame:
             "grade": result.grade,
             "quadrant": result.quadrant,
             "insufficient_data": result.insufficient_data,
+            "divergence_flag": result.divergence.flag if result.divergence else None,
+            "divergence_message": result.divergence.message if result.divergence else None,
         })
     return pd.DataFrame.from_records(records)

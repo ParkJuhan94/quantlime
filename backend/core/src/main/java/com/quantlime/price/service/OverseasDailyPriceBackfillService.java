@@ -36,6 +36,30 @@ public class OverseasDailyPriceBackfillService {
     private final OverseasDailyPriceRepository overseasDailyPriceRepository;
     private final KisApiClient kisApiClient;
 
+    /**
+     * KIS 기간별시세는 Toss와 달리 count 파라미터가 없어(호출당 항상 최대
+     * {@value #BACKFILL_PAGE_SIZE}건 고정) "정확히 N일치"를 요청할 수 없다.
+     * 대신 baseDate 없이 1회만 호출하면 항상 최근 100거래일치가 내려오므로,
+     * {@link PriceGapFillService}가 종목별 마지막 저장일 다음날부터의 갭이
+     * 이 범위 안에 들 때(대부분의 다운타임 캐치업 상황) 페이지네이션 없이
+     * 한 번의 호출 + 건별 dedup 저장으로 채운다.
+     */
+    public void collectRecentPrices(String stockCode, String exchangeCode) {
+        KisOverseasDailyPriceResponse response = fetchWithRetry(exchangeCode, stockCode, null);
+        List<KisOverseasDailyPriceResponse.Candle> candles = response.output2();
+        if (candles == null || candles.isEmpty()) {
+            log.warn("해외 시세 데이터 없음: stockCode={}", stockCode);
+            return;
+        }
+
+        int savedCount = saveNewCandles(stockCode, candles);
+        if (savedCount > 0) {
+            log.info("해외 일별 시세 수집 완료: stockCode={}, 신규저장={}건", stockCode, savedCount);
+        } else {
+            log.debug("이미 수집된 해외 시세: stockCode={}", stockCode);
+        }
+    }
+
     public void backfillHistoryIfNeeded(String stockCode, String exchangeCode, int targetDays) {
         long existingCount = overseasDailyPriceRepository.countByStockCode(stockCode);
         if (existingCount >= targetDays) {

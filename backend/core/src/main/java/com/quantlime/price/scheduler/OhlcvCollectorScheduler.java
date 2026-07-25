@@ -1,77 +1,29 @@
 package com.quantlime.price.scheduler;
 
-import com.quantlime.common.exception.ExternalApiException;
 import com.quantlime.common.util.SafeExecutor;
-import com.quantlime.infra.toss.exception.TossApiErrorCode;
-import com.quantlime.price.service.DailyPriceService;
-import com.quantlime.score.service.ScoreService;
-import com.quantlime.stock.domain.Stock;
-import com.quantlime.stock.service.StockMasterService;
-import java.time.LocalDate;
-import java.util.List;
+import com.quantlime.market.service.MarketDataRefreshService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+/**
+ * 매일 16:00(장 마감 후, 월~금) 전 상장종목(국내+해외)의 가격+스코어를
+ * 갱신하는 배치. 실제 갭필 로직은 {@link MarketDataRefreshService}(트리거1)에
+ * 위임한다 - 이전에는 이 스케줄러가 "고정 10일 재조회 후 오늘자 스코어만
+ * 재계산"이라는 자체 로직을 갖고 있었지만, 지금은 dev 수동 트리거
+ * (/dev/refresh)·기동 시 캐치업(MarketDataStartupRunner)과 완전히 동일한
+ * 로직을 공유한다.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class OhlcvCollectorScheduler {
 
-    private static final long TOSS_API_DELAY_MS = 150;
-    private static final long RATE_LIMIT_BACKOFF_MS = 3000;
-
-    private final StockMasterService stockMasterService;
-    private final DailyPriceService dailyPriceService;
-    private final ScoreService scoreService;
+    private final MarketDataRefreshService marketDataRefreshService;
 
     @Scheduled(cron = "0 0 16 * * MON-FRI", zone = "Asia/Seoul")
     public void collectDailyOhlcv() {
-        LocalDate today = LocalDate.now();
-        List<Stock> stocks = stockMasterService.getAllListedStocks();
-        log.info("OHLCV 수집 시작: date={}, 대상종목수={}",
-            today, stocks.size());
-
-        int successCount = 0;
-        int failCount = 0;
-
-        for (Stock stock : stocks) {
-            try {
-                collectWithRateLimitRetry(stock.getStockCode());
-                successCount++;
-                Thread.sleep(TOSS_API_DELAY_MS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                log.error("OHLCV 수집 중단: 인터럽트 발생");
-                break;
-            } catch (Exception e) {
-                failCount++;
-                log.error("OHLCV 수집 실패: stockCode={}, error={}",
-                    stock.getStockCode(), e.getMessage(), e);
-            }
-        }
-
-        log.info("OHLCV 수집 완료: 성공={}, 실패={}",
-            successCount, failCount);
-
-        // 스코어 재계산 실패(퀀트 엔진 장애 등)가 이번 배치 전체를 실패로 만들지
-        // 않도록 로그만 남긴다. 조회 API는 직전 이력을 그대로 반환한다(fallback).
-        SafeExecutor.runSafely(
-            "스코어 일괄 재계산", scoreService::recalculateAllListedScores);
-    }
-
-    private void collectWithRateLimitRetry(String stockCode) throws InterruptedException {
-        try {
-            dailyPriceService.collectDailyPrice(stockCode);
-        } catch (ExternalApiException e) {
-            if (!TossApiErrorCode.RATE_LIMIT_EXCEEDED.getCode().equals(e.getCode())) {
-                throw e;
-            }
-            log.warn("Rate Limit 도달, {}ms 대기 후 1회 재시도: stockCode={}",
-                RATE_LIMIT_BACKOFF_MS, stockCode);
-            Thread.sleep(RATE_LIMIT_BACKOFF_MS);
-            dailyPriceService.collectDailyPrice(stockCode);
-        }
+        SafeExecutor.runSafely("전종목 가격/스코어 갱신", marketDataRefreshService::refreshAll);
     }
 }

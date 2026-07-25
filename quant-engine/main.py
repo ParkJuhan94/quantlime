@@ -1,7 +1,11 @@
 """QuantLime 퀀트 엔진 (FastAPI).
 
-Spring 백엔드가 관심 종목의 OHLCV 이력을 넘기면, 기술적 지표를 계산해
-추세추종/평균회귀 서브스코어 + 종합점수 + 등급 + AI 코멘트를 반환한다.
+Spring 백엔드가 종목의 OHLCV 이력을 넘기면, 기술적 지표를 계산해 날짜별
+추세추종/평균회귀 서브스코어 + 종합점수 + 등급 시계열을 반환한다.
+
+AI 코멘트 생성(calculator/commentary.py)은 날짜별 스코어 이력 도입과 함께
+당분간 호출하지 않는다(수천 종목×수백 일마다 LLM 호출은 비용/속도상
+비합리적) - 재도입 여부는 별도 TODO(docs/ROADMAP.md 참고).
 """
 
 from __future__ import annotations
@@ -12,21 +16,21 @@ from fastapi import FastAPI
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from calculator.backtest import run_backtest
-from calculator.commentary import generate_comment
 from calculator.indicators import compute_all_indicators
-from calculator.scorer import SCORE_VERSION, calculate_score, compute_scores
+from calculator.scorer import SCORE_VERSION, compute_scores
 from schemas import (
     AxisBacktestResponse,
     BacktestRequest,
     BacktestResponse,
     BucketStatResponse,
+    DailyScoreResponse,
     DivergenceResponse,
     HorizonStatResponse,
     ScoreBatchRequest,
-    ScoreBatchResponse,
+    ScoreSeriesBatchResponse,
     StabilityStatResponse,
     StockScoreRequest,
-    StockScoreResponse,
+    StockScoreSeriesResponse,
 )
 
 load_dotenv()
@@ -45,39 +49,58 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-def _score_single_stock(stock: StockScoreRequest) -> StockScoreResponse:
-    df = pd.DataFrame([item.model_dump() for item in stock.ohlcv])
-    df = df.sort_values("date").reset_index(drop=True)
+def _clean(value):
+    """compute_scores가 채운 None이 DataFrame 왕복 중 pandas에 의해 NaN으로
+    바뀌는 경우가 있어(특히 object dtype 컬럼도 예외 아님), pydantic
+    직렬화 전에 다시 None으로 되돌린다 - NaN은 유효한 JSON이 아니다."""
+    return None if pd.isna(value) else value
 
-    enriched = compute_all_indicators(df)
-    latest = enriched.iloc[-1].to_dict()
 
-    score = calculate_score(latest)
-    comment = generate_comment(stock.stock_code, score, latest)
-
-    divergence_response = None
-    if score.divergence is not None:
-        divergence_response = DivergenceResponse(
-            flag=score.divergence.flag, message=score.divergence.message
+def _to_daily_score_response(row: dict) -> DailyScoreResponse:
+    trend_score = _clean(row.get("trend_score"))
+    mean_reversion_score = _clean(row.get("mean_reversion_score"))
+    composite_score = _clean(row.get("composite_score"))
+    divergence_flag = _clean(row.get("divergence_flag"))
+    divergence = None
+    if divergence_flag is not None:
+        divergence = DivergenceResponse(
+            flag=bool(divergence_flag), message=_clean(row.get("divergence_message"))
         )
-
-    return StockScoreResponse(
-        stock_code=stock.stock_code,
-        trend_score=score.trend_score,
-        mean_reversion_score=score.mean_reversion_score,
-        composite_score=score.composite_score,
-        grade=score.grade,
-        quadrant=score.quadrant,
-        divergence=divergence_response,
-        comment=comment,
-        insufficient_data=score.insufficient_data,
+    return DailyScoreResponse(
+        date=row["date"],
+        close=float(row["close"]),
+        trend_score=float(trend_score) if trend_score is not None else None,
+        mean_reversion_score=float(mean_reversion_score) if mean_reversion_score is not None else None,
+        composite_score=float(composite_score) if composite_score is not None else None,
+        quadrant=_clean(row.get("quadrant")),
+        grade=_clean(row.get("grade")),
+        divergence=divergence,
+        insufficient_data=bool(row.get("insufficient_data", False)),
     )
 
 
-@app.post("/calculate/score/batch", response_model=ScoreBatchResponse)
-def calculate_score_batch(request: ScoreBatchRequest) -> ScoreBatchResponse:
-    results = [_score_single_stock(stock) for stock in request.stocks]
-    return ScoreBatchResponse(scores=results)
+def _compute_score_series(stock: StockScoreRequest) -> list[DailyScoreResponse]:
+    df = (
+        pd.DataFrame([item.model_dump() for item in stock.ohlcv])
+        .sort_values("date")
+        .reset_index(drop=True)
+    )
+    scores_df = compute_scores(compute_all_indicators(df))
+    return [_to_daily_score_response(row) for row in scores_df.to_dict("records")]
+
+
+@app.post("/calculate/score/series", response_model=ScoreSeriesBatchResponse)
+def calculate_score_series(request: ScoreBatchRequest) -> ScoreSeriesBatchResponse:
+    """종목별 OHLCV 전 구간을 한 번에 넣으면 날짜별 스코어 시계열을 통째로
+    반환한다 - Spring이 "오늘자 갱신"과 "과거 결측일 백필"을 같은 호출로
+    처리할 수 있게 한다(지표가 전부 과거방향 롤링 윈도우라 각 날짜 값이
+    그 시점 기준으로 그대로 유효하므로, 날짜별로 반복 호출할 필요가 없다).
+    """
+    results = [
+        StockScoreSeriesResponse(stock_code=stock.stock_code, daily_scores=_compute_score_series(stock))
+        for stock in request.stocks
+    ]
+    return ScoreSeriesBatchResponse(scores=results)
 
 
 @app.post("/backtest/score", response_model=BacktestResponse)
@@ -100,6 +123,7 @@ def backtest_score(request: BacktestRequest) -> BacktestResponse:
         stock_code=request.stock_code,
         score_version=SCORE_VERSION,
         sample_days=len(scores_df),
+        daily_scores=[_to_daily_score_response(row) for row in scores_df.to_dict("records")],
         axes=[
             AxisBacktestResponse(
                 axis=axis_result.axis,

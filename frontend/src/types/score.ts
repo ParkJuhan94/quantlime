@@ -7,7 +7,6 @@ export interface ScoreResponse {
   grade: string | null
   divergenceFlag: boolean | null
   divergenceMessage: string | null
-  comment: string
   insufficientData: boolean
 }
 

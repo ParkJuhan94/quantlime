@@ -78,8 +78,6 @@ export function ScoreSummaryRow({ score }: { score: ScoreResponse }) {
           </div>
         </div>
       </div>
-
-      {score.comment && <p className="mt-2 line-clamp-2 text-xs leading-snug text-gray-500">{score.comment}</p>}
     </div>
   )
 }

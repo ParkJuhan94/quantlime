@@ -96,6 +96,16 @@ public class NaverFinanceApiClient {
     }
 
     public List<NaverIndexCandleResponse> getWorldIndexPrices(String reutersCode, int pageSize) {
+        return getWorldIndexPrices(reutersCode, pageSize, 1);
+    }
+
+    /**
+     * page를 늘려가며 호출하면 국내 지수(getIndexPrices)와 동일하게 이전 페이지
+     * 바로 이전 거래일부터 이어서 내려온다 - 해외 벤치마크 이력 백필
+     * (BenchmarkIndexBackfillService)이 pageSize(최대 60) 상한을 페이지네이션으로
+     * 우회하기 위해 사용한다.
+     */
+    public List<NaverIndexCandleResponse> getWorldIndexPrices(String reutersCode, int pageSize, int page) {
         return ExternalApiInvoker.call(
             NaverFinanceApiErrorCode.INDEX_CHART_INQUIRY_FAILED,
             () -> {
@@ -103,7 +113,7 @@ public class NaverFinanceApiClient {
                     .uri(uriBuilder -> uriBuilder
                         .path("/index/{code}/price")
                         .queryParam("pageSize", pageSize)
-                        .queryParam("page", 1)
+                        .queryParam("page", page)
                         .build(reutersCode))
                     .retrieve()
                     .body(NaverIndexCandleResponse[].class);

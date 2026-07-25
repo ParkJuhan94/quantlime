@@ -9,5 +9,7 @@ public interface ScoreRepository extends JpaRepository<Score, Long>, ScoreQueryR
 
     Optional<Score> findByStockCodeAndScoreDate(String stockCode, LocalDate scoreDate);
 
+    boolean existsByStockCodeAndScoreDate(String stockCode, LocalDate scoreDate);
+
     Optional<Score> findTopByStockCodeOrderByScoreDateDesc(String stockCode);
 }

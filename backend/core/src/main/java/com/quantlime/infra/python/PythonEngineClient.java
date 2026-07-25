@@ -5,7 +5,7 @@ import com.quantlime.common.util.ExternalApiInvoker;
 import com.quantlime.infra.python.dto.BacktestApiRequest;
 import com.quantlime.infra.python.dto.BacktestApiResponse;
 import com.quantlime.infra.python.dto.ScoreBatchApiRequest;
-import com.quantlime.infra.python.dto.ScoreBatchApiResponse;
+import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse;
 import com.quantlime.infra.python.exception.PythonEngineErrorCode;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -30,16 +30,16 @@ public class PythonEngineClient {
     private final RestClient pythonEngineRestClient;
     private final MeterRegistry meterRegistry;
 
-    public ScoreBatchApiResponse calculateScoreBatch(ScoreBatchApiRequest request) {
+    public ScoreSeriesBatchApiResponse calculateScoreSeries(ScoreBatchApiRequest request) {
         Timer.Sample sample = Timer.start(meterRegistry);
         try {
-            ScoreBatchApiResponse response = ExternalApiInvoker.call(
+            ScoreSeriesBatchApiResponse response = ExternalApiInvoker.call(
                 PythonEngineErrorCode.SCORE_CALCULATION_FAILED, () ->
                     pythonEngineRestClient.post()
-                        .uri("/calculate/score/batch")
+                        .uri("/calculate/score/series")
                         .body(request)
                         .retrieve()
-                        .body(ScoreBatchApiResponse.class));
+                        .body(ScoreSeriesBatchApiResponse.class));
             recordOutcome(OUTCOME_SUCCESS, sample);
             return response;
         } catch (ExternalApiException e) {

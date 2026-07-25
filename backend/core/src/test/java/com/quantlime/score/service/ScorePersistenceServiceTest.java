@@ -1,7 +1,8 @@
 package com.quantlime.score.service;
 
-import com.quantlime.infra.python.dto.ScoreBatchApiResponse.DivergenceApiResponse;
-import com.quantlime.infra.python.dto.ScoreBatchApiResponse.StockScoreApiResponse;
+import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.DailyScoreSeriesApiResponse;
+import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.DivergenceApiResponse;
+import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.StockScoreSeriesApiResponse;
 import com.quantlime.score.domain.Divergence;
 import com.quantlime.score.domain.Quadrant;
 import com.quantlime.score.domain.Score;
@@ -32,6 +33,7 @@ import static org.mockito.Mockito.verify;
 class ScorePersistenceServiceTest {
 
     private static final String STOCK_CODE = "005930";
+    private static final LocalDate TODAY = LocalDate.now();
 
     @Mock
     private ScoreRepository scoreRepository;
@@ -73,8 +75,8 @@ class ScorePersistenceServiceTest {
     @DisplayName("[같은 날 재계산이면 기존 행을 갱신하고 새로 저장하지 않는다]")
     void saveAll_existingScoreToday_updatesInPlaceWithoutSave() {
         // given
-        Score existing = Score.of(STOCK_CODE, LocalDate.now(), 50.0, 50.0, 50.0,
-            null, null, Divergence.of(false, null), "이전 코멘트", false);
+        Score existing = Score.of(STOCK_CODE, TODAY, 50.0, 50.0, 50.0,
+            null, null, Divergence.of(false, null), false);
         given(scoreRepository.findByStockCodeAndScoreDate(eq(STOCK_CODE), any()))
             .willReturn(Optional.of(existing));
 
@@ -128,9 +130,9 @@ class ScorePersistenceServiceTest {
         given(scoreRepository.findByStockCodeAndScoreDate(eq(invalidGradeCode), any()))
             .willReturn(Optional.empty());
 
-        StockScoreApiResponse invalidGradeResponse = new StockScoreApiResponse(
-            invalidGradeCode, 70.0, 50.0, 60.0, "UNKNOWN_GRADE", null,
-            new DivergenceApiResponse(false, null), "코멘트", false);
+        StockScoreSeriesApiResponse invalidGradeResponse = seriesResponse(invalidGradeCode,
+            new DailyScoreSeriesApiResponse(TODAY.toString(), 70.0, 50.0, 60.0, "UNKNOWN_GRADE", null,
+                new DivergenceApiResponse(false, null), false));
 
         // when: Grade.of()가 ValidationException을 던져도 예외가 전파되지 않아야 한다
         scorePersistenceService.saveAll(List.of(
@@ -140,9 +142,13 @@ class ScorePersistenceServiceTest {
         verify(scoreRepository, times(1)).save(any(Score.class));
     }
 
-    private StockScoreApiResponse successResponse(String stockCode, double compositeScore) {
-        return new StockScoreApiResponse(
-            stockCode, 70.0, 50.0, compositeScore, "BUY", "trend_up_oversold",
-            new DivergenceApiResponse(false, null), "코멘트", false);
+    private StockScoreSeriesApiResponse successResponse(String stockCode, double compositeScore) {
+        return seriesResponse(stockCode, new DailyScoreSeriesApiResponse(
+            TODAY.toString(), 70.0, 50.0, compositeScore, "BUY", "trend_up_oversold",
+            new DivergenceApiResponse(false, null), false));
+    }
+
+    private StockScoreSeriesApiResponse seriesResponse(String stockCode, DailyScoreSeriesApiResponse dailyScore) {
+        return new StockScoreSeriesApiResponse(stockCode, List.of(dailyScore));
     }
 }
