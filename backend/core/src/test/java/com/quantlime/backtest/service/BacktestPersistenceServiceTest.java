@@ -2,7 +2,9 @@ package com.quantlime.backtest.service;
 
 import com.quantlime.backtest.domain.BacktestAxis;
 import com.quantlime.backtest.domain.BacktestBucket;
+import com.quantlime.backtest.domain.BacktestDailyScore;
 import com.quantlime.backtest.domain.BacktestResult;
+import com.quantlime.backtest.repository.BacktestDailyScoreRepository;
 import com.quantlime.backtest.repository.BacktestResultRepository;
 import java.time.LocalDate;
 import java.util.List;
@@ -31,6 +33,9 @@ class BacktestPersistenceServiceTest {
 
     @Mock
     private BacktestResultRepository backtestResultRepository;
+
+    @Mock
+    private BacktestDailyScoreRepository backtestDailyScoreRepository;
 
     @InjectMocks
     private BacktestPersistenceService backtestPersistenceService;
@@ -90,6 +95,21 @@ class BacktestPersistenceServiceTest {
 
         // then: 3건 모두 저장 시도(10일은 실패하지만 5/20일은 성공)
         verify(backtestResultRepository, times(3)).save(any(BacktestResult.class));
+    }
+
+    @Test
+    @DisplayName("[일별 스코어는 재실행 시 기존 것을 전부 지우고 새로 저장한다]")
+    void replaceDailyScores_deletesExistingThenSavesNew() {
+        // given
+        List<BacktestDailyScore> dailyScores = List.of(
+            BacktestDailyScore.of(STOCK_CODE, "v2.1", LocalDate.now(), 70000.0, 60.0, 55.0, null, null));
+
+        // when
+        backtestPersistenceService.replaceDailyScores(STOCK_CODE, "v2.1", dailyScores);
+
+        // then
+        verify(backtestDailyScoreRepository).deleteByStockCodeAndScoreVersion(STOCK_CODE, "v2.1");
+        verify(backtestDailyScoreRepository).saveAll(dailyScores);
     }
 
     private BacktestResult result(int horizonDays, Double rankIc) {

@@ -1,6 +1,8 @@
 package com.quantlime.backtest.service;
 
+import com.quantlime.backtest.domain.BacktestDailyScore;
 import com.quantlime.backtest.domain.BacktestResult;
+import com.quantlime.backtest.repository.BacktestDailyScoreRepository;
 import com.quantlime.backtest.repository.BacktestResultRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class BacktestPersistenceService {
 
     private final BacktestResultRepository backtestResultRepository;
+    private final BacktestDailyScoreRepository backtestDailyScoreRepository;
 
     /**
      * (축, horizon) 행 하나의 저장 실패가 나머지 행 저장까지 막지 않도록
@@ -47,5 +50,16 @@ public class BacktestPersistenceService {
                     result.getRankIcCiLow(), result.getRankIcCiHigh(),
                     result.getScoreAutocorrelation(), result.getGradeFlipRate(), result.getBuckets()),
                 () -> backtestResultRepository.save(result));
+    }
+
+    /**
+     * 일별 스코어는 BacktestResult처럼 고정된 소수 행이 아니라 종목당
+     * 300~400건에 달하고, 재실행 시 "이전 계산분을 전부 교체"하는 의미가
+     * 더 명확하다 - 행별 find-or-update 대신 통째로 지우고 다시 넣는다.
+     */
+    @Transactional
+    public void replaceDailyScores(String stockCode, String scoreVersion, List<BacktestDailyScore> dailyScores) {
+        backtestDailyScoreRepository.deleteByStockCodeAndScoreVersion(stockCode, scoreVersion);
+        backtestDailyScoreRepository.saveAll(dailyScores);
     }
 }

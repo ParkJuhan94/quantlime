@@ -2,15 +2,20 @@ package com.quantlime.backtest.dto.mapper;
 
 import com.quantlime.backtest.domain.BacktestAxis;
 import com.quantlime.backtest.domain.BacktestBucket;
+import com.quantlime.backtest.domain.BacktestDailyScore;
 import com.quantlime.backtest.domain.BacktestResult;
 import com.quantlime.backtest.dto.response.BacktestResponse;
 import com.quantlime.backtest.dto.response.BacktestResponse.AxisBacktestResponse;
 import com.quantlime.backtest.dto.response.BacktestResponse.BucketResponse;
+import com.quantlime.backtest.dto.response.BacktestResponse.DailyScoreResponse;
 import com.quantlime.backtest.dto.response.BacktestResponse.HorizonBacktestResponse;
 import com.quantlime.infra.python.dto.BacktestApiResponse;
 import com.quantlime.infra.python.dto.BacktestApiResponse.AxisBacktestApiResponse;
 import com.quantlime.infra.python.dto.BacktestApiResponse.BucketStatApiResponse;
+import com.quantlime.infra.python.dto.BacktestApiResponse.DailyScoreApiResponse;
 import com.quantlime.infra.python.dto.BacktestApiResponse.HorizonStatApiResponse;
+import com.quantlime.score.domain.Grade;
+import com.quantlime.score.domain.Quadrant;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
@@ -65,11 +70,36 @@ public final class BacktestMapper {
     }
 
     /**
-     * 저장된 (축, horizon) 행들을 축 기준으로 묶어 조회 응답으로 재구성한다 -
-     * toBacktestResults가 펼친 것의 역변환.
+     * 백테스트 기간 전체의 일별 원시 스코어를 엔티티로 변환한다 - Phase F
+     * 프론트 차트 오버레이/히스토그램용(BacktestResult의 요약 통계와 별개).
+     */
+    public static List<BacktestDailyScore> toBacktestDailyScores(BacktestApiResponse apiResponse) {
+        return apiResponse.dailyScores().stream()
+            .map(daily -> toBacktestDailyScore(apiResponse.stockCode(), apiResponse.scoreVersion(), daily))
+            .toList();
+    }
+
+    private static BacktestDailyScore toBacktestDailyScore(
+        String stockCode, String scoreVersion, DailyScoreApiResponse daily) {
+        return BacktestDailyScore.of(
+            stockCode,
+            scoreVersion,
+            LocalDate.parse(daily.date()),
+            daily.close(),
+            daily.trendScore(),
+            daily.meanReversionScore(),
+            daily.quadrant() != null ? Quadrant.of(daily.quadrant()) : null,
+            daily.grade() != null ? Grade.of(daily.grade()) : null
+        );
+    }
+
+    /**
+     * 저장된 (축, horizon) 행들을 축 기준으로 묶고, 일별 스코어 시계열을
+     * 곁들여 조회 응답으로 재구성한다 - toBacktestResults가 펼친 것의 역변환.
      */
     public static BacktestResponse toBacktestResponse(
-        String stockCode, String scoreVersion, List<BacktestResult> results) {
+        String stockCode, String scoreVersion,
+        List<BacktestResult> results, List<BacktestDailyScore> dailyScores) {
         LocalDate backtestDate = results.stream()
             .map(BacktestResult::getBacktestDate)
             .max(Comparator.naturalOrder())
@@ -83,7 +113,22 @@ public final class BacktestMapper {
             .sorted(Comparator.comparing(AxisBacktestResponse::axis))
             .toList();
 
-        return new BacktestResponse(stockCode, scoreVersion, backtestDate, axes);
+        List<DailyScoreResponse> dailyScoreResponses = dailyScores.stream()
+            .map(BacktestMapper::toDailyScoreResponse)
+            .toList();
+
+        return new BacktestResponse(stockCode, scoreVersion, backtestDate, axes, dailyScoreResponses);
+    }
+
+    private static DailyScoreResponse toDailyScoreResponse(BacktestDailyScore daily) {
+        return new DailyScoreResponse(
+            daily.getTradeDate(),
+            daily.getClosePrice(),
+            daily.getTrendScore(),
+            daily.getMeanReversionScore(),
+            daily.getQuadrant() != null ? daily.getQuadrant().getLabel() : null,
+            daily.getGrade() != null ? daily.getGrade().getLabel() : null
+        );
     }
 
     private static AxisBacktestResponse toAxisResponse(BacktestAxis axis, List<BacktestResult> results) {

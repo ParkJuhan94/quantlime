@@ -1,14 +1,18 @@
 package com.quantlime.backtest.dto.mapper;
 
 import com.quantlime.backtest.domain.BacktestAxis;
+import com.quantlime.backtest.domain.BacktestDailyScore;
 import com.quantlime.backtest.domain.BacktestResult;
 import com.quantlime.backtest.dto.response.BacktestResponse;
 import com.quantlime.backtest.dto.response.BacktestResponse.AxisBacktestResponse;
 import com.quantlime.infra.python.dto.BacktestApiResponse;
 import com.quantlime.infra.python.dto.BacktestApiResponse.AxisBacktestApiResponse;
 import com.quantlime.infra.python.dto.BacktestApiResponse.BucketStatApiResponse;
+import com.quantlime.infra.python.dto.BacktestApiResponse.DailyScoreApiResponse;
 import com.quantlime.infra.python.dto.BacktestApiResponse.HorizonStatApiResponse;
 import com.quantlime.infra.python.dto.BacktestApiResponse.StabilityStatApiResponse;
+import com.quantlime.score.domain.Grade;
+import com.quantlime.score.domain.Quadrant;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -38,7 +42,8 @@ class BacktestMapperTest {
                     "mean_reversion",
                     List.of(new HorizonStatApiResponse(5, -0.05, -0.2, 0.1, 300, List.of())),
                     new StabilityStatApiResponse(0.25, 0.3))
-            )
+            ),
+            List.of()
         );
 
         // when
@@ -74,7 +79,7 @@ class BacktestMapperTest {
 
         // when
         BacktestResponse response = BacktestMapper.toBacktestResponse(
-            "005930", "v2.1", List.of(trend5, trend10, meanReversion5));
+            "005930", "v2.1", List.of(trend5, trend10, meanReversion5), List.of());
 
         // then
         assertThat(response.axes()).hasSize(2);
@@ -82,5 +87,47 @@ class BacktestMapperTest {
             .filter(a -> a.axis().equals("TREND")).findFirst().orElseThrow();
         assertThat(trendAxis.horizons()).extracting("horizonDays").containsExactly(5, 10);
         assertThat(trendAxis.scoreAutocorrelation()).isEqualTo(0.15);
+    }
+
+    @Test
+    @DisplayName("[퀀트 엔진의 일별 스코어 코드를 파싱해 BacktestDailyScore로 변환한다 (워밍업 구간은 null 유지)]")
+    void toBacktestDailyScores_parsesCodesAndKeepsWarmupNulls() {
+        // given
+        BacktestApiResponse apiResponse = new BacktestApiResponse(
+            "005930", "v2.1", 2,
+            List.of(),
+            List.of(
+                new DailyScoreApiResponse("2026-01-01", 70000.0, null, null, null, null),
+                new DailyScoreApiResponse("2026-01-02", 71000.0, 62.5, 58.0, "trend_up_oversold", "BUY"))
+        );
+
+        // when
+        List<BacktestDailyScore> dailyScores = BacktestMapper.toBacktestDailyScores(apiResponse);
+
+        // then
+        assertThat(dailyScores).hasSize(2);
+        assertThat(dailyScores.get(0).getTrendScore()).isNull();
+        assertThat(dailyScores.get(0).getQuadrant()).isNull();
+        assertThat(dailyScores.get(1).getTrendScore()).isEqualTo(62.5);
+        assertThat(dailyScores.get(1).getQuadrant()).isEqualTo(Quadrant.TREND_UP_OVERSOLD);
+        assertThat(dailyScores.get(1).getGrade()).isEqualTo(Grade.BUY);
+    }
+
+    @Test
+    @DisplayName("[저장된 일별 스코어를 한글 표시명으로 변환해 응답에 담는다]")
+    void toBacktestResponse_includesDailyScoresWithLabels() {
+        // given
+        BacktestDailyScore daily = BacktestDailyScore.of(
+            "005930", "v2.1", LocalDate.of(2026, 1, 2), 71000.0, 62.5, 58.0,
+            Quadrant.TREND_UP_OVERSOLD, Grade.BUY);
+
+        // when
+        BacktestResponse response = BacktestMapper.toBacktestResponse(
+            "005930", "v2.1", List.of(), List.of(daily));
+
+        // then
+        assertThat(response.dailyScores()).hasSize(1);
+        assertThat(response.dailyScores().get(0).quadrant()).isEqualTo(Quadrant.TREND_UP_OVERSOLD.getLabel());
+        assertThat(response.dailyScores().get(0).grade()).isEqualTo(Grade.BUY.getLabel());
     }
 }
