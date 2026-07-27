@@ -103,8 +103,14 @@ public class ChannelVelocityInitializationService {
 
     @Transactional
     void persistMedianVelocity(Long channelId, BigDecimal median) {
+        // initializeMedianVelocity()가 같은 빈 내부에서 이 메서드를 self-invocation으로
+        // 호출하기 때문에 이 @Transactional은 프록시를 거치지 않아 실제로는 적용되지
+        // 않는다 - findById로 가져온 엔티티가 트랜잭션 없이 곧바로 detached 상태가 돼
+        // updateMedianVelocity() 변경분이 그냥 버려지던 버그가 있었다. save()를 명시적으로
+        // 호출해 리포지토리 메서드 자체의 트랜잭션 경계로 merge/update가 실제 반영되게 함.
         Channel channel = channelRepository.findById(channelId)
             .orElseThrow(() -> new NotFoundException(VideoFeedErrorCode.NOT_FOUND_CHANNEL));
         channel.updateMedianVelocity(median);
+        channelRepository.save(channel);
     }
 }

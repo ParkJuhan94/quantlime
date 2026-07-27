@@ -18,19 +18,13 @@ import org.springframework.transaction.annotation.Transactional;
  * ddl-auto=update만 쓰는 프로젝트라 StockMasterInitializer와 동일한
  * ApplicationRunner 방식을 그대로 따른다(이미 있는 채널은 skip).
  *
- * <p><b>channelId 검증 상태(중요)</b>: 아래 3개 채널ID는 유튜브 페이지를
- * 직접 열어 확인한 게 아니라 웹 검색 스니펫(vidiq/noxinfluencer/유튜브
- * 검색 결과 링크)만으로 교차 확인한 값이다 - 이 세션에서는 유튜브
- * 도메인 자체가 프록시에서 403으로 막혀 있어 채널 페이지나
- * feeds/videos.xml로 직접 재검증하지 못했다. 실제 운영 투입 전
- * `GET channels.list?part=id&forHandle=@핸들&key=API_KEY`로 반드시
- * 재확인할 것(§4 채널ID 확보 방법 2번).
- * - 한국경제TV(@hkwowtv): UCF8AeLlUbEpKju6v1H6p8Eg (구독자 수·설명이
- *   일치하는 vidiq 통계 페이지에서 확인, 상대적으로 신뢰도 높음)
- * - 런던고라니=김희욱(@gorany): UC4-Y6u1a0j2et5k35EQHU0w (noxinfluencer
- *   분석 페이지 제목에서만 확인, 교차 출처 없음)
- * - 주덕: UChZFFQS6ThJ_VmuE-Yzao8Q (검색 결과의 유튜브 채널 링크 +
- *   socialerus 분석 페이지 2곳에서 동일 ID 확인)
+ * <p><b>channelId 검증 완료(2026-07-27)</b>: 아래 3개는
+ * `channels.list?part=snippet&id=...`(제목/customUrl 일치)와
+ * `channels.list?part=id&forHandle=...`(역조회 ID 일치) 양방향으로
+ * 실제 YouTube Data API 호출을 통해 재검증했다.
+ * - 한국경제TV: UCF8AeLlUbEpKju6v1H6p8Eg (customUrl=@hkwowtv, 구독자 139만)
+ * - 런던고라니=김희욱: UC4-Y6u1a0j2et5k35EQHU0w (customUrl=@gorany, 구독자 12만)
+ * - 주덕: UChZFFQS6ThJ_VmuE-Yzao8Q (customUrl=@joodeok, 구독자 18.8만)
  */
 @Slf4j
 @Component
