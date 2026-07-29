@@ -14,10 +14,14 @@ package com.quantlime.price.dto.response;
  * 현재가 API(getCurrentPrices)는 거래량을 주지 않고, 이를 얻으려면 더
  * 빡빡한 레이트리밋 그룹(MARKET_DATA_CHART)의 캔들 API를 매 틱마다
  * 추가로 호출해야 해 실익 대비 비용이 크다.
+ *
+ * <p>{@code currentPrice}는 2026-07-29 해외(USD) 실시간가 지원을 위해
+ * Long에서 Double로 확대됐다 - 국내(KRW)는 원래도 소수점이 없어 값
+ * 자체는 그대로, 표시 시점(프론트)에서 반올림한다.
  */
 public record PriceSnapshot(
     String stockCode,
-    Long currentPrice,
+    Double currentPrice,
     Double changeRate,
     String timestamp
 ) {

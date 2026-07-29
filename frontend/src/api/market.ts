@@ -33,12 +33,13 @@ export async function getExchangeRateChart(): Promise<IndexChartPoint[]> {
 }
 
 export async function getMarketRanking(
-  sort: 'gainers' | 'losers',
+  scope: 'domestic' | 'overseas',
+  sort: 'gainers' | 'losers' | 'amount',
   limit = 10,
   watchlistOnly = false,
 ): Promise<MarketRankingResponse[]> {
   const { data } = await apiClient.get<MarketRankingResponse[]>('/api/market/ranking', {
-    params: { sort, limit, watchlistOnly },
+    params: { scope, sort, limit, watchlistOnly },
   })
   return data
 }

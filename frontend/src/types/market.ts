@@ -49,7 +49,15 @@ export interface IndexMinuteChartPoint {
 export interface MarketRankingResponse {
   stockCode: string
   stockName: string
-  sector: string
+  // 해외 상위 종목이 로컬 stock 테이블(백테스트 유니버스)에 없으면
+  // null - 이 경우 stockName엔 심볼 원문이 대신 채워진다(백엔드
+  // TossMarketRankingCache 참고).
+  sector: string | null
   currentPrice: number
   changeRate: number
+  // 2026-07-29 Toss 랭킹 API 연동으로 추가 - 국내 관심종목만 보기(자체
+  // 계산 경로)에서는 항상 null.
+  currency: 'KRW' | 'USD' | null
+  tradingVolume: number | null
+  tradingAmount: number | null
 }

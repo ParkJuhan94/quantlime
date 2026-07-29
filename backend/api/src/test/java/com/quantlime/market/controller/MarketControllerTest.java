@@ -7,6 +7,7 @@ import com.quantlime.market.cache.IndexChartCache;
 import com.quantlime.market.cache.IndexMinuteChartCache;
 import com.quantlime.market.cache.MarketIndexCache;
 import com.quantlime.market.cache.MarketRankingCache;
+import com.quantlime.market.cache.TossMarketRankingCache;
 import com.quantlime.market.cache.WorldIndexChartCache;
 import com.quantlime.market.dto.response.IndexChartResponse;
 import com.quantlime.market.dto.response.IndexMinuteChartResponse;
@@ -33,12 +34,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * MarketIndexCache/MarketRankingCache/IndexChartCache는 짧은 TTL을 가진
- * 상태 저장 빈이라(같은 스프링 컨텍스트를 공유하는 다른 테스트가 채워둔
- * 값이 남아있을 수 있음) 직접 목으로 대체한다 - PriceControllerTest가
- * PriceCacheStore를 목으로 대체하는 것과 동일한 이유. 캐시 자체의
- * 갱신/TTL 로직은 MarketIndexCacheTest/MarketRankingCacheTest에서 이미
- * 검증한다.
+ * MarketIndexCache/MarketRankingCache/TossMarketRankingCache/IndexChartCache는
+ * 짧은 TTL을 가진 상태 저장 빈이라(같은 스프링 컨텍스트를 공유하는 다른
+ * 테스트가 채워둔 값이 남아있을 수 있음) 직접 목으로 대체한다 -
+ * PriceControllerTest가 PriceCacheStore를 목으로 대체하는 것과 동일한
+ * 이유. 캐시 자체의 갱신/TTL 로직은
+ * MarketIndexCacheTest/MarketRankingCacheTest/TossMarketRankingCacheTest에서
+ * 이미 검증한다.
+ *
+ * <p>랭킹 조회는 두 경로로 갈린다(MarketRankingService 참고): 관심종목만
+ * 보기+등락률 정렬은 국내는 {@code marketRankingCache}, 해외는 자체 계산
+ * (여기선 시세 캐시 미스 처리만 검증), 그 외는 전부
+ * {@code tossMarketRankingCache}.
  */
 @Tag("integration")
 class MarketControllerTest extends ApiTestSupport {
@@ -48,6 +55,9 @@ class MarketControllerTest extends ApiTestSupport {
 
     @MockBean
     private MarketRankingCache marketRankingCache;
+
+    @MockBean
+    private TossMarketRankingCache tossMarketRankingCache;
 
     @MockBean
     private IndexChartCache indexChartCache;
@@ -187,25 +197,28 @@ class MarketControllerTest extends ApiTestSupport {
     }
 
     @Test
-    @DisplayName("[급상승 랭킹 조회 성공 시 200을 반환한다]")
-    void getRanking_gainers_returns200() throws Exception {
-        // given
-        given(marketRankingCache.getGainers(10, null)).willReturn(
-            List.of(new MarketRankingResponse("005930", "삼성전자", "전기전자", 71400L, 2.0)));
+    @DisplayName("[국내 급상승 랭킹 조회 성공 시 200과 Toss 랭킹 캐시 결과를 반환한다]")
+    void getRanking_domesticGainers_returns200() throws Exception {
+        // given: watchlistOnly=false(기본)면 국내/해외 모두 TossMarketRankingCache 경로
+        given(tossMarketRankingCache.get("domestic", "gainers")).willReturn(
+            List.of(new MarketRankingResponse("005930", "삼성전자", "전기전자",
+                71400.0, 2.0, "KRW", 1000000.0, 71400000000.0)));
 
         // when & then
         mockMvc.perform(get("/api/market/ranking").param("sort", "gainers"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$[0].stockCode").value("005930"))
-            .andExpect(jsonPath("$[0].changeRate").value(2.0));
+            .andExpect(jsonPath("$[0].changeRate").value(2.0))
+            .andExpect(jsonPath("$[0].currency").value("KRW"));
     }
 
     @Test
-    @DisplayName("[급하락 랭킹 조회 시 losers 캐시를 사용한다]")
-    void getRanking_losers_usesLosersCache() throws Exception {
+    @DisplayName("[급하락 랭킹 조회 시 losers 타입으로 Toss 랭킹 캐시를 조회한다]")
+    void getRanking_losers_usesTossRankingCacheWithLosersSort() throws Exception {
         // given
-        given(marketRankingCache.getLosers(5, null)).willReturn(
-            List.of(new MarketRankingResponse("035420", "NAVER", "서비스업", 100000L, -4.5)));
+        given(tossMarketRankingCache.get("domestic", "losers")).willReturn(
+            List.of(new MarketRankingResponse("035420", "NAVER", "서비스업",
+                100000.0, -4.5, "KRW", 500000.0, 50000000000.0)));
 
         // when & then
         mockMvc.perform(get("/api/market/ranking")
@@ -216,9 +229,33 @@ class MarketControllerTest extends ApiTestSupport {
     }
 
     @Test
-    @DisplayName("[sort 값이 gainers/losers가 아니면 400을 반환한다]")
+    @DisplayName("[해외 거래대금 랭킹 조회 시 scope=overseas로 Toss 랭킹 캐시를 조회한다]")
+    void getRanking_overseasAmount_usesTossRankingCacheWithUsScope() throws Exception {
+        // given
+        given(tossMarketRankingCache.get("overseas", "amount")).willReturn(
+            List.of(new MarketRankingResponse("AAPL", "AAPL", null,
+                341.43, 0.4, "USD", 51859042.0, 17631000000.0)));
+
+        // when & then
+        mockMvc.perform(get("/api/market/ranking")
+                .param("scope", "overseas")
+                .param("sort", "amount"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].stockCode").value("AAPL"))
+            .andExpect(jsonPath("$[0].currency").value("USD"));
+    }
+
+    @Test
+    @DisplayName("[scope 값이 domestic/overseas가 아니면 400을 반환한다]")
+    void getRanking_invalidScope_returns400() throws Exception {
+        mockMvc.perform(get("/api/market/ranking").param("scope", "global"))
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("[sort 값이 gainers/losers/amount/volume이 아니면 400을 반환한다]")
     void getRanking_invalidSort_returns400() throws Exception {
-        mockMvc.perform(get("/api/market/ranking").param("sort", "amount"))
+        mockMvc.perform(get("/api/market/ranking").param("sort", "invalid-sort"))
             .andExpect(status().isBadRequest());
     }
 
@@ -237,7 +274,7 @@ class MarketControllerTest extends ApiTestSupport {
         String accessToken = jwtTokenProvider.createAccessToken(user.getId(), user.getRole());
         given(watchlistService.getWatchlistStockCodes(user.getId())).willReturn(Set.of("005930"));
         given(marketRankingCache.getGainers(10, Set.of("005930"))).willReturn(
-            List.of(new MarketRankingResponse("005930", "삼성전자", "전기전자", 71400L, 2.0)));
+            List.of(new MarketRankingResponse("005930", "삼성전자", "전기전자", 71400.0, 2.0, null, null, null)));
 
         // when & then
         mockMvc.perform(get("/api/market/ranking")

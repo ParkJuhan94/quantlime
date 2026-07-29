@@ -20,6 +20,7 @@ interface RankingTableProps {
 
 export type Scope = 'all' | 'domestic' | 'overseas'
 export type SortKey = 'score' | 'amount' | 'gainers' | 'losers'
+type RankingScope = 'domestic' | 'overseas'
 export type Period = '실시간' | '1일' | '1주일' | '1개월' | '3개월' | '6개월' | '1년'
 
 const SCOPE_OPTIONS: { key: Scope; label: string }[] = [
@@ -48,6 +49,8 @@ interface DisplayRow {
   logoUrl: string
   price: number | null
   changeRate: number | null
+  currency: 'KRW' | 'USD' | null
+  tradingAmount: number | null
   compositeScore?: number | null
   grade?: string | null
 }
@@ -119,7 +122,9 @@ function RankingRow({ row, index, isWatched, onToggleWatch }: {
           </div>
         </div>
       </td>
-      <td className="py-2.5 text-right text-sm font-semibold text-gray-900">{formatPrice(row.price)}</td>
+      <td className="py-2.5 text-right text-sm font-semibold text-gray-900">
+        {formatPrice(row.price, row.currency ?? 'KRW')}
+      </td>
       <td className="py-2.5 text-right">
         <span
           className={`rounded px-1.5 py-0.5 text-sm font-light transition-colors duration-[1500ms] ${changeRateColorClass(row.changeRate)} ${flashClass}`}
@@ -145,7 +150,13 @@ function RankingRow({ row, index, isWatched, onToggleWatch }: {
           <span className="text-sm text-gray-300">-</span>
         )}
       </td>
-      <td className="py-2.5 text-right text-sm text-gray-300">-</td>
+      <td className="py-2.5 text-right text-sm text-gray-900">
+        {row.tradingAmount != null ? (
+          formatPrice(row.tradingAmount, row.currency ?? 'KRW')
+        ) : (
+          <span className="text-gray-300">-</span>
+        )}
+      </td>
       <td className="max-w-[140px] py-2.5 pl-4">
         {/* 업종명이 길면("측정, 시험, 항해, 제어 및 기타 정밀기기 제조업;
             광학기기 제외" 등) 표 전체 너비를 밀어내 레이아웃이 흔들렸다 -
@@ -190,19 +201,23 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
     rankingFilterStorage.write({ scope, sortKey, period, watchlistOnly: next })
   }
 
-  const isRealMode = sortKey === 'gainers' || sortKey === 'losers'
+  // scope='all'은 기존과 동일하게 domestic으로 취급한다(2026-07-29 -
+  // 국내+해외를 진짜로 합쳐 정렬하는 기능은 이번 스코프 밖. 원래도 'all'과
+  // 'domestic'은 결과가 같았다 - 이전엔 scope 자체가 쿼리에 전달되지
+  // 않았기 때문).
+  const rankingScope: RankingScope = scope === 'overseas' ? 'overseas' : 'domestic'
+  const isRealMode = sortKey === 'gainers' || sortKey === 'losers' || sortKey === 'amount'
   const isScoreMode = sortKey === 'score'
-  const isAmountMode = sortKey === 'amount'
   // 스코어/급상승/급하락/거래대금 4개 필터 전부 "관심종목만/전체" 토글을
   // 공통으로 둔다(2026-07-18 피드백에서 스코어·급상승·급하락까지 우선
-  // 통합했고, 2026-07-19 피드백으로 거래대금도 동일하게 맞춤) - 거래대금은
-  // 아직 데이터 자체가 없어 토글을 눌러도 지금 당장은 결과가 안 바뀌지만,
-  // 데이터가 붙었을 때 이 토글이 이미 자리 잡고 있도록 UI를 먼저 통일해둔다.
+  // 통합했고, 2026-07-19 피드백으로 거래대금도 동일하게 맞춤). 스코어
+  // 대시보드는 국내/해외 구분이 없어 scope와 무관하게 항상 노출한다.
   const showWatchlistOnlyToggle = isAuthenticated
   const effectiveWatchlistOnly = showWatchlistOnlyToggle && watchlistOnly
 
   const rankingQuery = useMarketRankingQuery(
-    sortKey === 'losers' ? 'losers' : 'gainers',
+    rankingScope,
+    sortKey === 'gainers' || sortKey === 'losers' || sortKey === 'amount' ? sortKey : 'gainers',
     10,
     isRealMode,
     effectiveWatchlistOnly,
@@ -228,6 +243,8 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
             logoUrl: buildStockLogoUrl(item.stockCode),
             price: livePrice?.currentPrice ?? null,
             changeRate: livePrice?.changeRate ?? null,
+            currency: null,
+            tradingAmount: null,
             compositeScore: item.compositeScore,
             grade: item.grade,
           }
@@ -238,6 +255,8 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
           stockName: row.stockName,
           sector: row.sector,
           logoUrl: buildStockLogoUrl(row.stockCode),
+          currency: row.currency,
+          tradingAmount: row.tradingAmount,
           price: row.currentPrice,
           changeRate: row.changeRate,
         }))
@@ -256,7 +275,7 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
               하트 아이콘 온오프 토글로 바꾸고(2026-07-20 피드백), 종목별
               관심종목 하트와 동일한 색상 패턴(빨강=on)을 재사용해 같은
               화면 안에서 하트 색상 규칙이 하나로 통일되게 한다. */}
-          {scope !== 'overseas' && showWatchlistOnlyToggle && (
+          {showWatchlistOnlyToggle && (
             <button
               type="button"
               onClick={() => setWatchlistOnly(!watchlistOnly)}
@@ -318,100 +337,91 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
             </button>
           ))}
         </div>
-        {scope !== 'overseas' && (
-          <div className="flex rounded-xl bg-gray-100 p-1">
-            {SORT_OPTIONS.map((option) => (
-              <button
-                key={option.key}
-                type="button"
-                onClick={() => setSortKey(option.key)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                  sortKey === option.key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="flex rounded-xl bg-gray-100 p-1">
+          {SORT_OPTIONS.map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              onClick={() => setSortKey(option.key)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                sortKey === option.key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {scope === 'overseas' ? (
-        <p className="py-10 text-center text-sm text-gray-400">해외 주식은 아직 지원하지 않아요.</p>
-      ) : (
-        <>
-          <p className="mb-2 text-xs text-gray-400">
-            {period !== '실시간' && '기간별 랭킹은 아직 준비 중이라 실시간 기준으로 보여드려요 · '}
-            {isScoreMode &&
-              (effectiveWatchlistOnly
-                ? '관심종목 중 종합점수가 높은 순입니다'
-                : '전 상장종목 중 종합점수가 높은 순입니다')}
-            {isRealMode &&
-              (effectiveWatchlistOnly
-                ? '관심종목만 실제 등락률로 정렬했습니다 · 장중에만 갱신됩니다'
-                : '실제 등락률로 정렬한 전종목 랭킹입니다 · 장중에만 갱신됩니다')}
-            {isAmountMode && '거래대금 랭킹은 아직 준비 중이에요'}
-          </p>
+      <p className="mb-2 text-xs text-gray-400">
+        {period !== '실시간' && '기간별 랭킹은 아직 준비 중이라 실시간 기준으로 보여드려요 · '}
+        {isScoreMode &&
+          (effectiveWatchlistOnly
+            ? '관심종목 중 종합점수가 높은 순입니다'
+            : '전 상장종목 중 종합점수가 높은 순입니다')}
+        {isRealMode &&
+          sortKey !== 'amount' &&
+          (effectiveWatchlistOnly
+            ? '관심종목만 실제 등락률로 정렬했습니다 · 장중에만 갱신됩니다'
+            : '실제 등락률로 정렬한 전종목 랭킹입니다 · 장중에만 갱신됩니다')}
+        {isRealMode &&
+          sortKey === 'amount' &&
+          (effectiveWatchlistOnly
+            ? '관심종목만 거래대금 기준으로 정렬했습니다(상위 100위 이내) · 장중에만 갱신됩니다'
+            : '실제 거래대금으로 정렬한 랭킹입니다(상위 100위) · 장중에만 갱신됩니다')}
+      </p>
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left">
-              <thead>
-                <tr className="border-b border-gray-100 text-xs font-medium text-gray-400">
-                  <th className="w-14 pb-2">순위</th>
-                  <th className="pb-2">종목</th>
-                  <th className="pb-2 text-right">현재가</th>
-                  <th className="pb-2 text-right">등락률</th>
-                  <th className="pb-2 text-right">스코어</th>
-                  <th className="pb-2 text-right">거래대금</th>
-                  <th className="pb-2 pl-4 text-left">산업</th>
-                </tr>
-              </thead>
-              <tbody>
-                {isLoading && (
-                  <tr>
-                    <td colSpan={7} className="py-6 text-center text-sm text-gray-400">
-                      불러오는 중...
-                    </td>
-                  </tr>
-                )}
-                {isAmountMode && (
-                  <tr>
-                    <td colSpan={7} className="py-6 text-center text-sm text-gray-400">
-                      거래대금 랭킹은 아직 준비 중이에요.
-                    </td>
-                  </tr>
-                )}
-                {!isLoading && !isAmountMode && displayRows.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="py-6 text-center text-sm text-gray-400">
-                      {isScoreMode &&
-                        effectiveWatchlistOnly &&
-                        '관심 종목이 없거나 아직 계산된 스코어가 없습니다.'}
-                      {isScoreMode && !effectiveWatchlistOnly && '아직 계산된 스코어가 없습니다.'}
-                      {isRealMode &&
-                        effectiveWatchlistOnly &&
-                        '관심 종목이 없거나, 관심종목 중 지금 등락률 데이터가 있는 종목이 없습니다.'}
-                      {isRealMode &&
-                        !effectiveWatchlistOnly &&
-                        '장이 열려 있지 않거나 아직 데이터가 준비되지 않았습니다.'}
-                    </td>
-                  </tr>
-                )}
-                {!isAmountMode &&
-                  displayRows.map((row, index) => (
-                    <RankingRow
-                      key={row.stockCode}
-                      row={row}
-                      index={index}
-                      isWatched={watchlistCodes.has(row.stockCode)}
-                      onToggleWatch={onToggleWatch}
-                    />
-                  ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[640px] text-left">
+          <thead>
+            <tr className="border-b border-gray-100 text-xs font-medium text-gray-400">
+              <th className="w-14 pb-2">순위</th>
+              <th className="pb-2">종목</th>
+              <th className="pb-2 text-right">현재가</th>
+              <th className="pb-2 text-right">등락률</th>
+              <th className="pb-2 text-right">스코어</th>
+              <th className="pb-2 text-right">거래대금</th>
+              <th className="pb-2 pl-4 text-left">산업</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading && (
+              <tr>
+                <td colSpan={7} className="py-6 text-center text-sm text-gray-400">
+                  불러오는 중...
+                </td>
+              </tr>
+            )}
+            {!isLoading && displayRows.length === 0 && (
+              <tr>
+                <td colSpan={7} className="py-6 text-center text-sm text-gray-400">
+                  {isScoreMode &&
+                    effectiveWatchlistOnly &&
+                    '관심 종목이 없거나 아직 계산된 스코어가 없습니다.'}
+                  {isScoreMode && !effectiveWatchlistOnly && '아직 계산된 스코어가 없습니다.'}
+                  {isRealMode &&
+                    effectiveWatchlistOnly &&
+                    '관심 종목이 없거나, 관심종목 중 지금 데이터가 있는 종목이 없습니다.'}
+                  {isRealMode &&
+                    !effectiveWatchlistOnly &&
+                    (rankingScope === 'overseas'
+                      ? '미국장이 열려 있지 않거나 아직 데이터가 준비되지 않았습니다.'
+                      : '장이 열려 있지 않거나 아직 데이터가 준비되지 않았습니다.')}
+                </td>
+              </tr>
+            )}
+            {displayRows.map((row, index) => (
+              <RankingRow
+                key={row.stockCode}
+                row={row}
+                index={index}
+                isWatched={watchlistCodes.has(row.stockCode)}
+                onToggleWatch={onToggleWatch}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
     </section>
   )
 }

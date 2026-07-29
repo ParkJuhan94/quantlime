@@ -15,7 +15,9 @@ public enum TossApiErrorCode implements ErrorCode {
     RATE_LIMIT_EXCEEDED("토스증권 API 요청 한도를 초과했습니다.", "TOSS_004"),
     INVALID_RESPONSE("토스증권 API 응답이 유효하지 않습니다.", "TOSS_005"),
     MARKET_CALENDAR_INQUIRY_FAILED("토스증권 API 장 운영 캘린더 조회에 실패했습니다.", "TOSS_006"),
-    EXCHANGE_RATE_INQUIRY_FAILED("토스증권 API 환율 조회에 실패했습니다.", "TOSS_007");
+    EXCHANGE_RATE_INQUIRY_FAILED("토스증권 API 환율 조회에 실패했습니다.", "TOSS_007"),
+    RANKING_INQUIRY_FAILED("토스증권 API 랭킹 조회에 실패했습니다.", "TOSS_008"),
+    US_MARKET_CALENDAR_INQUIRY_FAILED("토스증권 API 해외 장 운영 캘린더 조회에 실패했습니다.", "TOSS_009");
 
     private final String message;
     private final String code;

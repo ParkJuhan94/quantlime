@@ -91,6 +91,6 @@ class MarketRankingCacheTest {
     }
 
     private MarketRankingResponse ranking(String stockCode, double changeRate) {
-        return new MarketRankingResponse(stockCode, stockCode + "-name", "전기전자", 10000L, changeRate);
+        return new MarketRankingResponse(stockCode, stockCode + "-name", "전기전자", 10000.0, changeRate, null, null, null);
     }
 }

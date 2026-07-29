@@ -60,13 +60,13 @@ class StockPriceServiceTest {
         String stockCode = stock.getStockCode();
         given(stockMasterService.getStockByCode(stockCode)).willReturn(stock);
         given(priceCacheStore.find(stockCode)).willReturn(Optional.of(
-            new PriceSnapshot(stockCode, 70000L, 1.5, "2026-07-06T09:00:00+09:00")));
+            new PriceSnapshot(stockCode, 70000.0, 1.5, "2026-07-06T09:00:00+09:00")));
 
         // when
         CurrentPriceResponse response = stockPriceService.getCurrentPrice(stockCode);
 
         // then
-        assertThat(response.price()).isEqualTo(70000L);
+        assertThat(response.price()).isEqualTo(70000.0);
         verify(dailyPriceRepository, never()).findTopByStockCodeOrderByTradeDateDesc(stockCode);
     }
 
@@ -89,8 +89,8 @@ class StockPriceServiceTest {
         // when
         CurrentPriceResponse response = stockPriceService.getCurrentPrice(stockCode);
 
-        // then: DailyPriceFixture의 종가는 105L 고정값
-        assertThat(response.price()).isEqualTo(105L);
+        // then: DailyPriceFixture의 종가는 105L 고정값(응답은 Double로 확대됨)
+        assertThat(response.price()).isEqualTo(105.0);
         assertThat(response.currency()).isEqualTo("KRW");
         assertThat(response.changeRate()).isCloseTo(5.0, org.assertj.core.data.Offset.offset(0.001));
     }

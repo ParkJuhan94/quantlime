@@ -6,6 +6,8 @@ import com.quantlime.infra.toss.dto.TossCandleResponse;
 import com.quantlime.infra.toss.dto.TossExchangeRateResponse;
 import com.quantlime.infra.toss.dto.TossMarketCalendarResponse;
 import com.quantlime.infra.toss.dto.TossPriceResponse;
+import com.quantlime.infra.toss.dto.TossRankingResponse;
+import com.quantlime.infra.toss.dto.TossUsMarketCalendarResponse;
 import com.quantlime.infra.toss.exception.TossApiErrorCode;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -105,6 +107,52 @@ public class TossApiClient {
                 .header("authorization", "Bearer " + token)
                 .retrieve()
                 .body(TossMarketCalendarResponse.class)));
+    }
+
+    /**
+     * 주식 랭킹 조회(신규, 2026-07-29 toss-openapi.json 갱신으로 확인).
+     * Rate Limits Group이 시세 조회(MARKET_DATA)와 분리된 RANKING이라
+     * 별도 예산을 쓴다. {@code marketCountry}는 "KR"/"US", {@code type}은
+     * MARKET_TRADING_AMOUNT/MARKET_TRADING_VOLUME/TOP_GAINERS/TOP_LOSERS/
+     * TOSS_SECURITIES_TRADING_AMOUNT/TOSS_SECURITIES_TRADING_VOLUME,
+     * {@code duration}은 realtime/1d/1w/1mo/3mo/6mo/1y - 단
+     * TOP_GAINERS/TOP_LOSERS는 realtime을 지원하지 않는다(400
+     * unsupported-ranking-duration). 응답 항목의 changeRate는 소수
+     * 비율(0.0125=1.25%)이라 호출 측에서 ×100 필요(TossRankingResponse
+     * 참고).
+     */
+    public TossRankingResponse getRankings(String type, String marketCountry, String duration, int count) {
+        return withTokenRetry("rankings", token -> ExternalApiInvoker.call(
+            TossApiErrorCode.RANKING_INQUIRY_FAILED,
+            () -> tossRestClient.get()
+                .uri(uriBuilder -> uriBuilder
+                    .path("/api/v1/rankings")
+                    .queryParam("type", type)
+                    .queryParam("marketCountry", marketCountry)
+                    .queryParam("duration", duration)
+                    .queryParam("count", count)
+                    .build())
+                .header("authorization", "Bearer " + token)
+                .retrieve()
+                .body(TossRankingResponse.class),
+            HttpClientErrorException.TooManyRequests.class,
+            TossApiErrorCode.RATE_LIMIT_EXCEEDED));
+    }
+
+    /**
+     * 해외(미국) 장 운영 캘린더 조회. Rate Limits Group이 시세 조회
+     * (MARKET_DATA)와 분리된 MARKET_INFO라 별도 예산을 쓴다 - 호출 측
+     * (UsMarketCalendarCache)이 하루 1회만 호출하도록 캐싱한다. 국내
+     * 캘린더와 응답 형태가 다르다(TossUsMarketCalendarResponse 주석 참고).
+     */
+    public TossUsMarketCalendarResponse getUsMarketCalendar() {
+        return withTokenRetry("us-market-calendar", token -> ExternalApiInvoker.call(
+            TossApiErrorCode.US_MARKET_CALENDAR_INQUIRY_FAILED,
+            () -> tossRestClient.get()
+                .uri("/api/v1/market-calendar/US")
+                .header("authorization", "Bearer " + token)
+                .retrieve()
+                .body(TossUsMarketCalendarResponse.class)));
     }
 
     /**

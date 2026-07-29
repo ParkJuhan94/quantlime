@@ -43,7 +43,7 @@ class PriceCacheStoreTest {
         // given
         given(redisTemplate.opsForValue()).willReturn(valueOperations);
         PriceSnapshot snapshot =
-            new PriceSnapshot(STOCK_CODE, 70000L, 1.5, "2026-07-06T09:00:00+09:00");
+            new PriceSnapshot(STOCK_CODE, 70000.0, 1.5, "2026-07-06T09:00:00+09:00");
         String[] savedJson = new String[1];
         org.mockito.Mockito.doAnswer(invocation -> {
             savedJson[0] = invocation.getArgument(1);

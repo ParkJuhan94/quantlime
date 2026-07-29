@@ -75,7 +75,7 @@ class WatchlistPriceRelaySchedulerTest {
     @DisplayName("[Redis에 캐시된 시세가 있으면 그대로 토픽으로 브로드캐스트한다(Toss를 직접 호출하지 않음)]")
     void broadcast_cacheHit_broadcastsWithoutCallingToss() {
         // given
-        PriceSnapshot cached = new PriceSnapshot(STOCK_CODE, 71400L, 2.0, "2026-07-15T09:00:00+09:00");
+        PriceSnapshot cached = new PriceSnapshot(STOCK_CODE, 71400.0, 2.0, "2026-07-15T09:00:00+09:00");
         given(marketCalendarCache.isMarketOpenNow()).willReturn(true);
         given(watchlistedStockCodeCache.get()).willReturn(List.of(STOCK_CODE));
         given(priceCacheStore.find(STOCK_CODE)).willReturn(Optional.of(cached));

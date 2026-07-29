@@ -1,5 +1,6 @@
 package com.quantlime.watchlist.repository;
 
+import com.quantlime.stock.domain.MarketType;
 import com.quantlime.watchlist.domain.Watchlist;
 import java.util.List;
 import java.util.Optional;
@@ -32,6 +33,13 @@ public interface WatchlistRepository extends JpaRepository<Watchlist, Long> {
 
     @Query("select distinct w.stock.stockCode from Watchlist w")
     List<String> findDistinctStockCodes();
+
+    // 해외 관심종목 실시간가 스케줄러(OverseasWatchlistPriceScheduler)용 -
+    // findDistinctStockCodes()는 시장 구분 없이 전체를 반환하므로, 국내
+    // WatchlistPriceRelayScheduler와 겹치지 않게 해외(marketTypes)만 걸러
+    // 별도로 조회한다.
+    @Query("select distinct w.stock.stockCode from Watchlist w where w.stock.marketType in :marketTypes")
+    List<String> findDistinctStockCodesByMarketTypeIn(@Param("marketTypes") List<MarketType> marketTypes);
 
     // 검색모달 "인기 종목" - 관심종목으로 등록한 사용자 수(중복 등록 방지
     // 유니크 제약 덕분에 count(distinct user)=행 개수와 동일하지만 의미를

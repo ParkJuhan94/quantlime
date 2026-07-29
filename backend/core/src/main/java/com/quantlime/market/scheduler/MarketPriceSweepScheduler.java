@@ -11,6 +11,7 @@ import com.quantlime.price.cache.MarketCalendarCache;
 import com.quantlime.price.cache.PreviousCloseCache;
 import com.quantlime.price.cache.PriceCacheStore;
 import com.quantlime.price.dto.response.PriceSnapshot;
+import com.quantlime.price.util.ChangeRateCalculator;
 import com.quantlime.stock.domain.Stock;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -164,23 +165,40 @@ public class MarketPriceSweepScheduler {
         if (!StringUtils.hasText(price.lastPrice())) {
             return null;
         }
-        Long currentPrice = Long.parseLong(price.lastPrice());
+        Long currentPrice = parseLastPrice(price.lastPrice());
+        if (currentPrice == null) {
+            // 정수가 아닌 lastPrice가 하나라도 오면 여기서 예외가 나
+            // fetchChunk의 종목 루프를 뚫고 doRefresh까지 전파돼(그 위는
+            // ExternalApiException만 잡는다) 그 틱의 랭킹 갱신 + 남은 청크가
+            // 통째로 스킵된다 - "나쁜 종목은 건너뛰고 계속 간다"는 이
+            // 클래스의 설계 철학에 맞춰 해당 심볼만 버린다.
+            log.warn("현재가 파싱 실패로 해당 종목만 스킵: symbol={}, lastPrice={}",
+                price.symbol(), price.lastPrice());
+            return null;
+        }
         Long previousClose = previousCloseByStockCode.get(price.symbol());
-        Double changeRate = calculateChangeRate(currentPrice, previousClose);
-        priceCacheStore.save(new PriceSnapshot(price.symbol(), currentPrice, changeRate, price.timestamp()));
+        Double changeRate = ChangeRateCalculator.calculate(
+            currentPrice.doubleValue(), previousClose == null ? null : previousClose.doubleValue());
+        priceCacheStore.save(new PriceSnapshot(price.symbol(), currentPrice.doubleValue(), changeRate, price.timestamp()));
 
         Stock stock = stockByCode.get(price.symbol());
         if (stock == null || changeRate == null) {
             return null;
         }
-        return new MarketRankingResponse(stock.getStockCode(), stock.getStockName(), stock.getSector(), currentPrice, changeRate);
+        // 거래량/거래대금/통화는 이 자체 계산 경로(국내 관심종목만 보기 전용,
+        // MarketRankingCache)에서 다루지 않는 값이라 null - Toss `prices`가
+        // 애초에 거래량을 안 주고(PriceSnapshot 주석 참고), 통화는 국내
+        // 전용 경로라 항상 KRW이므로 프론트에서 굳이 표시할 필요가 없다.
+        return new MarketRankingResponse(stock.getStockCode(), stock.getStockName(), stock.getSector(),
+            currentPrice.doubleValue(), changeRate, null, null, null);
     }
 
-    private Double calculateChangeRate(Long currentPrice, Long previousClose) {
-        if (previousClose == null || previousClose == 0) {
+    private Long parseLastPrice(String lastPrice) {
+        try {
+            return Long.parseLong(lastPrice.trim());
+        } catch (NumberFormatException e) {
             return null;
         }
-        return (currentPrice - previousClose) * 100.0 / previousClose;
     }
 
     private List<List<String>> chunk(List<String> items, int size) {

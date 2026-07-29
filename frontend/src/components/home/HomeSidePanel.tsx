@@ -4,7 +4,7 @@ import type { WatchlistGroupResponse, WatchlistResponse } from '../../types/watc
 import type { PriceBroadcastMessage } from '../../types/realtime'
 import type { RecentlyViewedStock } from '../../storage/recentlyViewedStorage'
 import { StockLogo } from '../common/StockLogo'
-import { changeRateColorClass, formatChangeRate, formatPrice } from '../../utils/priceFormat'
+import { changeRateColorClass, currencyForMarketType, formatChangeRate, formatPrice } from '../../utils/priceFormat'
 import { buildStockLogoUrl } from '../../utils/stockLogo'
 import { WatchlistGroupMenu } from './WatchlistGroupMenu'
 import { GroupNameDialog } from './GroupNameDialog'
@@ -39,12 +39,17 @@ function StockRow({
   stockCode,
   stockName,
   logoUrl,
+  marketType,
   live,
   onRemove,
 }: {
   stockCode: string
   stockName: string
   logoUrl: string
+  // 관심종목(WatchlistResponse)엔 있지만 최근 본 종목(RecentlyViewedStock,
+  // 로컬 스토리지 기록)엔 없다 - 없으면 기존과 동일하게 KRW로 취급한다
+  // (currencyForMarketType 기본값).
+  marketType?: string
   live?: PriceBroadcastMessage
   onRemove?: () => void
 }) {
@@ -56,7 +61,9 @@ function StockRow({
       </Link>
       <div className="flex items-center gap-2">
         <div className="text-right">
-          <p className="text-xs font-semibold text-gray-900">{formatPrice(live?.currentPrice)}</p>
+          <p className="text-xs font-semibold text-gray-900">
+            {formatPrice(live?.currentPrice, currencyForMarketType(marketType))}
+          </p>
           <p className={`text-xs font-light ${changeRateColorClass(live?.changeRate)}`}>
             {formatChangeRate(live?.changeRate)}
           </p>
@@ -168,6 +175,7 @@ function GroupSection({
               stockCode={item.stockCode}
               stockName={item.stockName}
               logoUrl={buildStockLogoUrl(item.stockCode)}
+              marketType={item.marketType}
               live={watchlistLivePrices[item.stockCode]}
               onRemove={() => onRemoveWatch(item.stockCode)}
             />
@@ -233,6 +241,7 @@ export function HomeSidePanel({
                       stockCode={item.stockCode}
                       stockName={item.stockName}
                       logoUrl={buildStockLogoUrl(item.stockCode)}
+                      marketType={item.marketType}
                       live={watchlistLivePrices[item.stockCode]}
                       onRemove={() => onRemoveWatch(item.stockCode)}
                     />

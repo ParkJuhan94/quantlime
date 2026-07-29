@@ -1,9 +1,11 @@
 package com.quantlime.price.dto.mapper;
 
 import com.quantlime.price.domain.DailyPrice;
+import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.price.dto.response.CurrentPriceResponse;
 import com.quantlime.price.dto.response.DailyChartResponse;
 import com.quantlime.price.dto.response.PriceSnapshot;
+import com.quantlime.price.util.ChangeRateCalculator;
 import lombok.NoArgsConstructor;
 
 import static lombok.AccessLevel.PRIVATE;
@@ -12,6 +14,7 @@ import static lombok.AccessLevel.PRIVATE;
 public final class PriceMapper {
 
     private static final String KRW = "KRW";
+    private static final String USD = "USD";
 
     // 캐시 미스(관심종목이 아니거나 스윕 스케줄러가 아직 한 틱도 안 돈
     // 경우) 경로는 Toss를 직접 호출하지 않고 DB에 이미 있는 마지막 종가로
@@ -21,25 +24,32 @@ public final class PriceMapper {
     // 조회해 넘겨준 전일종가와 비교해 계산한다.
     public static CurrentPriceResponse toCurrentPriceResponse(DailyPrice latestClose, Long previousClose) {
         Long price = latestClose.getClosePrice();
+        Double changeRate = ChangeRateCalculator.calculate(
+            price == null ? null : price.doubleValue(),
+            previousClose == null ? null : previousClose.doubleValue());
         return new CurrentPriceResponse(
-            latestClose.getStockCode(), price, calculateChangeRate(price, previousClose),
+            latestClose.getStockCode(), price == null ? null : price.doubleValue(), changeRate,
             KRW, latestClose.getTradeDate().toString());
     }
 
-    // 캐시(PriceCacheStore)에 저장된 실시간 스냅샷은 통화 정보를 들고 있지
-    // 않다(국내 주식만 다루는 프로젝트 범위상 원화 고정) - 조회 API 응답
-    // 형태를 그대로 맞추기 위해 KRW로 채운다.
-    public static CurrentPriceResponse toCurrentPriceResponse(PriceSnapshot snapshot) {
+    // 해외 종목의 캐시 미스 폴백(StockPriceService 참고) - 국내와 동일한
+    // "DB의 마지막 확정 종가로 응답, Toss는 다시 호출 안 함" 원칙이지만
+    // OverseasDailyPrice는 가격이 Double(USD)이라 별도 오버로드로 둔다.
+    public static CurrentPriceResponse toCurrentPriceResponse(OverseasDailyPrice latestClose, Double previousClose) {
+        Double price = latestClose.getClosePrice();
+        Double changeRate = ChangeRateCalculator.calculate(price, previousClose);
         return new CurrentPriceResponse(
-            snapshot.stockCode(), snapshot.currentPrice(), snapshot.changeRate(),
-            KRW, snapshot.timestamp());
+            latestClose.getStockCode(), price, changeRate,
+            USD, latestClose.getTradeDate().toString());
     }
 
-    private static Double calculateChangeRate(Long currentPrice, Long previousClose) {
-        if (currentPrice == null || previousClose == null || previousClose == 0) {
-            return null;
-        }
-        return (currentPrice - previousClose) * 100.0 / previousClose;
+    // 캐시(PriceCacheStore)에 저장된 실시간 스냅샷은 통화 정보를 들고 있지
+    // 않으므로(PriceSnapshot 참고) 호출 측이 종목의 시장 구분으로 판별한
+    // 통화를 넘겨준다.
+    public static CurrentPriceResponse toCurrentPriceResponse(PriceSnapshot snapshot, String currency) {
+        return new CurrentPriceResponse(
+            snapshot.stockCode(), snapshot.currentPrice(), snapshot.changeRate(),
+            currency, snapshot.timestamp());
     }
 
     public static DailyChartResponse toDailyChartResponse(DailyPrice dailyPrice) {

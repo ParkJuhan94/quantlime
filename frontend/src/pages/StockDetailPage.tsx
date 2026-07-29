@@ -107,6 +107,10 @@ export function StockDetailPage() {
   // 브로드캐스트 폴링 대상이 아닌 경우 등) REST 조회값을 baseline으로 쓴다.
   const currentPrice = livePrice?.currentPrice ?? priceQuery.data?.price ?? null
   const changeRate = livePrice?.changeRate ?? priceQuery.data?.changeRate ?? null
+  // 실시간 브로드캐스트(livePrice)는 통화 정보를 안 들고 있으므로
+  // (PriceSnapshot 참고) REST 기준값(priceQuery)의 currency를 그대로
+  // 쓴다 - 종목의 통화는 실시간/REST 어느 소스든 항상 같다.
+  const currency = priceQuery.data?.currency === 'USD' ? 'USD' : 'KRW'
 
   return (
     <div className="space-y-6">
@@ -120,7 +124,7 @@ export function StockDetailPage() {
           <div>
             <div className="flex items-baseline gap-2">
               <h1 className="text-2xl font-bold text-gray-900">{stock.stockName}</h1>
-              <span className="text-lg font-semibold text-gray-900">{formatPrice(currentPrice)}</span>
+              <span className="text-lg font-semibold text-gray-900">{formatPrice(currentPrice, currency)}</span>
               <span className={`text-sm font-light ${changeRateColorClass(changeRate)}`}>
                 {formatChangeRate(changeRate)}
               </span>

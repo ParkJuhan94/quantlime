@@ -33,4 +33,10 @@ public enum MarketType {
     public static List<MarketType> domesticValues() {
         return Arrays.stream(values()).filter(MarketType::isDomestic).toList();
     }
+
+    // 해외 관심종목 실시간가(OverseasWatchlistedStockCodeCache)용 -
+    // domesticValues()의 반대 짝.
+    public static List<MarketType> overseasValues() {
+        return Arrays.stream(values()).filter(m -> !m.isDomestic()).toList();
+    }
 }

@@ -15,6 +15,8 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import com.quantlime.common.exception.ExternalApiException;
 import com.quantlime.infra.toss.dto.TossMarketCalendarResponse;
+import com.quantlime.infra.toss.dto.TossRankingResponse;
+import com.quantlime.infra.toss.dto.TossUsMarketCalendarResponse;
 import com.quantlime.infra.toss.exception.TossApiErrorCode;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
@@ -108,6 +110,61 @@ class TossApiClientTest {
             .isInstanceOf(ExternalApiException.class)
             .hasFieldOrPropertyWithValue("code", TossApiErrorCode.RATE_LIMIT_EXCEEDED.getCode());
         verify(tokenManager, never()).invalidateToken();
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("[랭킹 조회 시 type/marketCountry/duration/count 쿼리 파라미터를 그대로 전달한다]")
+    void getRankings_success_buildsQueryParamsAndParsesResponse() {
+        // given
+        when(tokenManager.getAccessToken()).thenReturn("token");
+        String uri = BASE_URL
+            + "/api/v1/rankings?type=TOP_GAINERS&marketCountry=US&duration=1d&count=10";
+        mockServer.expect(requestTo(uri))
+            .andExpect(method(GET))
+            .andRespond(withSuccess(
+                "{\"result\":{\"rankedAt\":\"2026-07-29T17:43:34+09:00\",\"rankings\":"
+                    + "[{\"rank\":1,\"symbol\":\"AAPL\",\"currency\":\"USD\","
+                    + "\"price\":{\"lastPrice\":\"341.43\",\"basePrice\":\"340\",\"changeRate\":\"0.0042\"},"
+                    + "\"tradingVolume\":\"84921\",\"tradingAmount\":\"29000000\"}]}}",
+                MediaType.APPLICATION_JSON));
+
+        // when
+        TossRankingResponse response = tossApiClient.getRankings("TOP_GAINERS", "US", "1d", 10);
+
+        // then
+        assertThat(response.result().rankings()).hasSize(1);
+        assertThat(response.result().rankings().get(0).symbol()).isEqualTo("AAPL");
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("[해외 장 운영 캘린더 조회 시 3영업일 응답을 그대로 파싱한다]")
+    void getUsMarketCalendar_success_parsesThreeBusinessDays() {
+        // given
+        when(tokenManager.getAccessToken()).thenReturn("token");
+        String uri = BASE_URL + "/api/v1/market-calendar/US";
+        mockServer.expect(requestTo(uri))
+            .andExpect(method(GET))
+            .andRespond(withSuccess(
+                "{\"result\":{"
+                    + "\"previousBusinessDay\":{\"date\":\"2026-07-28\",\"dayMarket\":null,"
+                    + "\"preMarket\":null,\"regularMarket\":{\"startTime\":\"2026-07-28T22:30:00+09:00\","
+                    + "\"endTime\":\"2026-07-29T05:00:00+09:00\"},\"afterMarket\":null},"
+                    + "\"today\":{\"date\":\"2026-07-29\",\"dayMarket\":null,\"preMarket\":null,"
+                    + "\"regularMarket\":{\"startTime\":\"2026-07-29T22:30:00+09:00\","
+                    + "\"endTime\":\"2026-07-30T05:00:00+09:00\"},\"afterMarket\":null},"
+                    + "\"nextBusinessDay\":{\"date\":\"2026-07-30\",\"dayMarket\":null,"
+                    + "\"preMarket\":null,\"regularMarket\":null,\"afterMarket\":null}}}",
+                MediaType.APPLICATION_JSON));
+
+        // when
+        TossUsMarketCalendarResponse response = tossApiClient.getUsMarketCalendar();
+
+        // then
+        assertThat(response.result().today().date()).isEqualTo("2026-07-29");
+        assertThat(response.result().previousBusinessDay().regularMarket().startTime())
+            .isEqualTo("2026-07-28T22:30:00+09:00");
         mockServer.verify();
     }
 }

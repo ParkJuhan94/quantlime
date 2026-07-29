@@ -9,20 +9,16 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 /**
- * 전체 사용자의 관심종목 중 국내 코드만 짧은 TTL로 캐싱한다. 관심종목
- * 등록/해제는 3초 단위로 일어나는 이벤트가 아니므로, 매 폴링 틱마다
- * DB를 다시 조회하는 대신 최대 {@value #REFRESH_INTERVAL_SECONDS}초의
- * 지연을 감수한다.
- *
- * <p>2026-07-29부터 국내로 범위를 좁혔다 - 해외는 별도
- * {@link OverseasWatchlistedStockCodeCache}/{@code OverseasWatchlistPriceScheduler}가
- * 전담하는데, 이 캐시가 시장 구분 없이 전체를 반환하면
- * {@code WatchlistPriceRelayScheduler}가 해외 종목까지 중계하려 해
- * 같은 시세가 두 파이프라인에서 중복 브로드캐스트된다.
+ * 전체 사용자의 관심종목 중 해외(NASDAQ/NYSE) 코드만 짧은 TTL로 캐싱한다.
+ * {@link WatchlistedStockCodeCache}와 동일한 목적·구조(30초 TTL)이나,
+ * 해외 관심종목 실시간가 스케줄러(OverseasWatchlistPriceScheduler) 전용
+ * 소스라 시장으로 걸러진 별도 캐시로 둔다 - 기존 캐시는 시장 구분 없이
+ * 전체를 반환해 국내 릴레이 스케줄러와 겹치면 같은 종목이 두 번
+ * 브로드캐스트될 수 있다.
  */
 @Component
 @RequiredArgsConstructor
-public class WatchlistedStockCodeCache {
+public class OverseasWatchlistedStockCodeCache {
 
     private static final int REFRESH_INTERVAL_SECONDS = 30;
 
@@ -46,7 +42,7 @@ public class WatchlistedStockCodeCache {
         if (!isStale()) {
             return; // 락 대기 중 다른 스레드가 이미 갱신함
         }
-        cachedCodes = watchlistRepository.findDistinctStockCodesByMarketTypeIn(MarketType.domesticValues());
+        cachedCodes = watchlistRepository.findDistinctStockCodesByMarketTypeIn(MarketType.overseasValues());
         lastRefreshedAt = Instant.now();
     }
 }

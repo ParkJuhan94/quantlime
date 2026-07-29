@@ -1,5 +1,6 @@
 package com.quantlime.price.repository;
 
+import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.price.dto.OverseasStockTradingValue;
 import java.time.LocalDate;
 import java.util.List;
@@ -13,4 +14,13 @@ public interface OverseasDailyPriceQueryRepository {
      * 별도 쿼리로 둔다.
      */
     List<OverseasStockTradingValue> findTopByTradingValue(LocalDate since, int limit);
+
+    /**
+     * 주어진 종목 코드들 중 각 종목의 {@code date} 이전 가장 최근
+     * (trade_date 최대) 시세 1건만 골라 반환한다. 국내
+     * {@code DailyPriceQueryRepository.findLatestBeforeDate}와 동일한
+     * 목적(해외 관심종목 실시간가 등락률 계산용 전일 종가) - 당일(date)
+     * 자체는 항상 제외한다.
+     */
+    List<OverseasDailyPrice> findLatestBeforeDate(List<String> stockCodes, LocalDate date);
 }

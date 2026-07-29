@@ -93,14 +93,19 @@ public class MarketController {
 
     @GetMapping("/ranking")
     @Operation(
-        summary = "전종목 급등락 실시간 랭킹 조회",
-        description = "전 상장 종목을 등락률 기준으로 정렬한 상위 N개를 조회한다(장중에만 갱신). "
+        summary = "전종목 급등락/거래대금/거래량 실시간 랭킹 조회",
+        description = "지정한 시장(scope)의 종목을 정렬 기준(sort)으로 정렬한 상위 N개를 조회한다(장중에만 갱신). "
+            + "scope=overseas는 Toss 랭킹 API(최대 100건) 기반이라 watchlistOnly=true여도 top100 밖의 "
+            + "관심종목은 gainers/losers일 때만 자체 계산으로 걸러진다(amount/volume은 top100 이내로 제한). "
             + "watchlistOnly=true면 로그인한 사용자의 관심종목만 걸러 정렬한다(비로그인이면 빈 배열)"
     )
     @ApiResponse(useReturnTypeSchema = true)
     public ResponseEntity<List<MarketRankingResponse>> getRanking(
+        @RequestParam(defaultValue = "domestic")
+        @Pattern(regexp = "domestic|overseas", message = "scope는 domestic 또는 overseas여야 합니다.") String scope,
         @RequestParam(defaultValue = "gainers")
-        @Pattern(regexp = "gainers|losers", message = "sort는 gainers 또는 losers여야 합니다.") String sort,
+        @Pattern(regexp = "gainers|losers|amount|volume",
+            message = "sort는 gainers, losers, amount, volume 중 하나여야 합니다.") String sort,
         @RequestParam(defaultValue = "10")
         @Min(value = 1, message = "limit는 1 이상이어야 합니다.")
         @Max(value = 50, message = "limit는 50 이하여야 합니다.") int limit,
@@ -110,6 +115,6 @@ public class MarketController {
             return ResponseEntity.ok(List.of());
         }
         Set<String> watchlistCodes = watchlistOnly ? watchlistService.getWatchlistStockCodes(userId) : null;
-        return ResponseEntity.ok(marketRankingService.getRanking(sort, limit, watchlistCodes));
+        return ResponseEntity.ok(marketRankingService.getRanking(scope, sort, limit, watchlistCodes));
     }
 }

@@ -1,5 +1,6 @@
 package com.quantlime.price.service;
 
+import com.quantlime.price.cache.OverseasPreviousCloseCache;
 import com.quantlime.price.cache.PreviousCloseCache;
 import com.quantlime.price.cache.PriceCacheStore;
 import com.quantlime.price.dto.mapper.PriceMapper;
@@ -7,6 +8,8 @@ import com.quantlime.price.dto.response.CurrentPriceResponse;
 import com.quantlime.price.dto.response.DailyChartResponse;
 import com.quantlime.price.dto.response.PriceSnapshot;
 import com.quantlime.price.repository.DailyPriceRepository;
+import com.quantlime.price.repository.OverseasDailyPriceRepository;
+import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.StockMasterService;
 import java.time.LocalDate;
 import java.util.List;
@@ -21,11 +24,16 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class StockPriceService {
 
+    private static final String KRW = "KRW";
+    private static final String USD = "USD";
+
     private final StockMasterService stockMasterService;
     private final DailyPriceService dailyPriceService;
     private final DailyPriceRepository dailyPriceRepository;
+    private final OverseasDailyPriceRepository overseasDailyPriceRepository;
     private final PriceCacheStore priceCacheStore;
     private final PreviousCloseCache previousCloseCache;
+    private final OverseasPreviousCloseCache overseasPreviousCloseCache;
 
     /**
      * 전종목 시세 스윕 스케줄러({@code MarketPriceSweepScheduler})가 관심종목
@@ -49,13 +57,22 @@ public class StockPriceService {
      */
     @Transactional(readOnly = true)
     public CurrentPriceResponse getCurrentPrice(String stockCode) {
-        stockMasterService.getStockByCode(stockCode);
+        Stock stock = stockMasterService.getStockByCode(stockCode);
 
         Optional<PriceSnapshot> cached = priceCacheStore.find(stockCode);
         if (cached.isPresent()) {
-            return PriceMapper.toCurrentPriceResponse(cached.get());
+            String currency = stock.getMarketType().isDomestic() ? KRW : USD;
+            return PriceMapper.toCurrentPriceResponse(cached.get(), currency);
         }
 
+        return stock.getMarketType().isDomestic()
+            ? domesticFallback(stockCode)
+            : overseasFallback(stockCode);
+    }
+
+    // 캐시 미스 시 DB의 마지막 확정 종가로 응답 - Toss 재호출 금지 원칙
+    // (아래 클래스 주석 참고)은 국내/해외 동일하게 적용한다.
+    private CurrentPriceResponse domesticFallback(String stockCode) {
         return dailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(stockCode)
             .map(latestClose -> {
                 Long previousClose = previousCloseCache.get(List.of(stockCode)).get(stockCode);
@@ -63,6 +80,18 @@ public class StockPriceService {
             })
             .orElseGet(() -> {
                 log.warn("현재가 없음: stockCode={}", stockCode);
+                return new CurrentPriceResponse(stockCode, null, null, null, null);
+            });
+    }
+
+    private CurrentPriceResponse overseasFallback(String stockCode) {
+        return overseasDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(stockCode)
+            .map(latestClose -> {
+                Double previousClose = overseasPreviousCloseCache.get(List.of(stockCode)).get(stockCode);
+                return PriceMapper.toCurrentPriceResponse(latestClose, previousClose);
+            })
+            .orElseGet(() -> {
+                log.warn("현재가 없음(해외): stockCode={}", stockCode);
                 return new CurrentPriceResponse(stockCode, null, null, null, null);
             });
     }
