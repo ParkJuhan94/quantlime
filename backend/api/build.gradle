@@ -14,6 +14,11 @@ dependencies {
 
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
 
+    // Hibernate 자체 SQL 로거(show-sql)는 파라미터가 ?로 남고 실행시간이
+    // 안 찍혀 datasource-proxy로 대체(파라미터 바인딩 + 실행시간 포함
+    // 완성형 SQL). 1.12.1이 Spring Boot 3.x 호환 버전(README 호환표 기준).
+    implementation 'com.github.gavlyukovskiy:datasource-proxy-spring-boot-starter:1.12.1'
+
     runtimeOnly 'me.paulschwarz:spring-dotenv:4.0.0'
 }
 
