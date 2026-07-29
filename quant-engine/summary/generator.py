@@ -37,14 +37,35 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from typing import Literal
 
 from google import genai
 from google.genai import types
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from transcript.fetcher import chunk_text
 
-_MODEL = "gemini-3.6-flash"
+# 투자 권유 아님 고지 문구는 LLM이 매번 새로 생성하지 않고 고정 문자열을 쓴다
+# (2026-07-30 결정) - 컴플라이언스 성격의 문구가 호출마다 미묘하게 달라지는 걸
+# 막고, 출력 스키마에서 이 필드를 아예 빼 토큰도 아낀다.
+_FIXED_CAVEAT = "본 요약은 AI가 자동 생성한 정보 참고용 콘텐츠이며, 투자 권유나 매수·매도 추천이 아닙니다. 투자 판단과 그 결과에 대한 책임은 투자자 본인에게 있습니다."
+
+# 한 영상에 태깅되는 종목 수의 하드 캡. 실제 선별(어떤 종목을 포함할지)은
+# 프롬프트 지시(_PROMPT_INSTRUCTIONS)가 담당하고, 이건 그게 실패했을 때의
+# 안전상한일 뿐이다 - Gemini의 maxItems 강제는 "가장 중요한 것"을 고르는 게
+# 아니라 생성 순서대로 자르는 방식이라(라이브 테스트로 확인, 8개 언급된
+# 문장에서 앞에서부터 5개만 남기고 뒤는 잘림), 개수 조절의 1차 수단으로 쓰면
+# 안 된다.
+_MAX_TAGGED_TICKERS = 7
+
+# gemini-3.6-flash(무료 티어 계정별 하루 20회 확인, docs/CHANGELOG.md
+# 2026-07-29 참고)에서 gemini-3.5-flash-lite로 전환(2026-07-30) - 무료
+# RPD가 모델마다 별도 할당이라 flash-lite 쪽이 더 넉넉한지는 실제 배치로
+# 확인. capability가 "minimal" 등급이라 지시사항 준수력이 낮아(자유
+# 텍스트 프롬프트로만 stance 어휘를 강제했을 때 "negative" 같은 스키마
+# 밖 값을 낸 적이 실제로 있었음) _TickerMentionSchema.stance를
+# `Literal[...]`로 바꿔 API 레벨에서 값 자체를 강제하도록 보완.
+_MODEL = "gemini-3.5-flash-lite"
 _CHUNK_SUMMARY_MAX_OUTPUT_TOKENS = 300
 _LONG_TRANSCRIPT_THRESHOLD = 50_000
 
@@ -67,15 +88,14 @@ def _get_client() -> genai.Client:
 class _TickerMentionSchema(BaseModel):
     ticker_code: str
     ticker_name: str | None = None
-    stance: str
+    stance: Literal["BULLISH", "BEARISH", "NEUTRAL", "MENTIONED"]
     confidence: float
 
 
 class _SummarySchema(BaseModel):
     summary: str
     key_points: list[str]
-    mentioned_tickers: list[_TickerMentionSchema]
-    caveat: str
+    mentioned_tickers: list[_TickerMentionSchema] = Field(max_length=_MAX_TAGGED_TICKERS)
 
 
 @dataclass(frozen=True)
@@ -91,20 +111,32 @@ class SummaryResult:
     summary: str
     key_points: list[str]
     mentioned_tickers: list[TickerMention] = field(default_factory=list)
-    caveat: str = ""
+    caveat: str = _FIXED_CAVEAT
     model: str = _MODEL
     input_tokens: int = 0
     output_tokens: int = 0
 
 
 _PROMPT_INSTRUCTIONS = (
-    "다음은 국내 주식 투자 관련 유튜브 영상의 자막입니다. 영상 핵심 내용을 "
-    "2~4문장으로 요약하고, 핵심 포인트와 언급된 종목을 정리하세요.\n\n"
-    "종목코드를 정확히 모르면 mentioned_tickers에서 그 종목을 아예 빼세요 - "
-    "틀린 6자리 KRX 코드를 추측해서 채우지 마세요. stance는 BULLISH/BEARISH/"
-    "NEUTRAL/MENTIONED 중 하나로, confidence는 0.0~1.0로 답하세요. caveat에는 "
-    "이 요약이 투자 권유가 아니라 정보 참고용이라는 고지 문구를 반드시 넣으세요. "
-    "과도한 확신이나 투자 권유 표현은 피하세요."
+    "다음은 국내/해외 주식 투자 관련 유튜브 영상의 자막입니다. summary와 "
+    "key_points는 반드시 한국어로 답하세요(자막이 한국어라도 영어로 답하는 "
+    "경우가 있어 명시함). 영상 핵심 내용을 2~4문장으로 요약하고, 핵심 포인트를 "
+    "정리하세요.\n\n"
+    "mentioned_tickers는 자막에서 이름만 스치듯 언급된 종목이 아니라, 실제로 "
+    "논의(실적/주가 흐름/전망/이슈 등)된 종목만 포함하세요. 목표는 5개 "
+    f"이하이고, 아무리 많아도 {_MAX_TAGGED_TICKERS}개를 넘기지 마세요 - 애매하면 "
+    "빼는 쪽을 택하세요.\n\n"
+    "ticker_code는 국내 종목이면 6자리 숫자 코드(예: 005930), 해외 종목이면 "
+    "티커 심볼(예: AAPL)로 답하세요. 정확한 코드/심볼을 모르면 그 종목은 "
+    "mentioned_tickers에서 아예 빼세요 - 틀린 값을 추측해서 채우지 마세요.\n\n"
+    "confidence(0.0~1.0)는 \"이 종목이 영상에서 스치듯 언급된 게 아니라 실제로 "
+    "유의미하게 논의됐다는 확신도\"를 뜻합니다 - 종목별로 실제 논의 비중에 "
+    "따라 차등을 두세요(모든 종목에 같은 값을 반복해서 채우지 마세요). "
+    "stance는 BULLISH/BEARISH/NEUTRAL/MENTIONED 중 하나로 답하세요.\n\n"
+    "자막에 명확히 나오지 않는 구체적인 수치(가격, 등락률, 날짜 등)는 "
+    "지어내지 말고, 확실하지 않으면 그 수치를 언급하지 마세요(자동 생성 자막은 "
+    "숫자를 잘못 인식하는 경우가 흔합니다). 과도한 확신이나 투자 권유 표현은 "
+    "피하세요."
 )
 
 
@@ -150,7 +182,7 @@ def generate_summary(video_title: str, channel_name: str, transcript_content: st
         summary=parsed.summary,
         key_points=list(parsed.key_points),
         mentioned_tickers=tickers,
-        caveat=parsed.caveat,
+        caveat=_FIXED_CAVEAT,
         model=_MODEL,
         input_tokens=input_tokens,
         output_tokens=output_tokens,

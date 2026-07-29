@@ -44,7 +44,6 @@ class TestGenerateSummary:
                 _TickerMentionSchema(
                     ticker_code="005930", ticker_name="삼성전자", stance="BULLISH", confidence=0.8)
             ],
-            caveat="투자 권유가 아닙니다.",
         )
         mock_client = MagicMock()
         mock_client.models.generate_content.return_value = _fake_response(parsed)
@@ -57,14 +56,36 @@ class TestGenerateSummary:
         assert len(result.mentioned_tickers) == 1
         assert result.mentioned_tickers[0].ticker_code == "005930"
         assert result.mentioned_tickers[0].confidence == 0.8
-        assert result.caveat == "투자 권유가 아닙니다."
-        assert result.model == "gemini-3.6-flash"
+        assert result.model == "gemini-3.5-flash-lite"
         assert result.input_tokens == 100
         assert result.output_tokens == 50
 
+    def test_caveat_is_always_the_fixed_string_not_llm_generated(self, monkeypatch):
+        # given: caveat 필드 자체가 더 이상 LLM 출력 스키마에 없음(2026-07-30 결정 -
+        # 컴플라이언스 문구가 호출마다 미묘하게 달라지는 걸 막기 위해 고정 문자열로 통일)
+        monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+        parsed = _SummarySchema(summary="요약", key_points=[], mentioned_tickers=[])
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = _fake_response(parsed)
+
+        with patch("summary.generator.genai.Client", return_value=mock_client):
+            result = generate_summary("제목", "채널", "자막")
+
+        assert result.caveat == generator_module._FIXED_CAVEAT
+        assert "투자 권유" in result.caveat
+
+    def test_ticker_schema_enforces_max_count_at_schema_level(self):
+        # given/when: Pydantic이 만드는 JSON 스키마에 maxItems가 실제로 박히는지 확인
+        # (라이브 테스트로 Gemini가 이 제약을 실제로 지키는 것까지 확인했음 - 여기서는
+        # 스키마 생성 자체가 깨지지 않는지만 회귀 검증)
+        schema = _SummarySchema.model_json_schema()
+
+        # then
+        assert schema["properties"]["mentioned_tickers"]["maxItems"] == generator_module._MAX_TAGGED_TICKERS
+
     def test_returns_empty_tickers_when_none_mentioned(self, monkeypatch):
         monkeypatch.setenv("GEMINI_API_KEY", "test-key")
-        parsed = _SummarySchema(summary="요약", key_points=[], mentioned_tickers=[], caveat="고지")
+        parsed = _SummarySchema(summary="요약", key_points=[], mentioned_tickers=[])
         mock_client = MagicMock()
         mock_client.models.generate_content.return_value = _fake_response(parsed)
 
@@ -91,7 +112,7 @@ class TestGenerateSummary:
         # response_schema가 있는지로 "최종 호출"과 "청크 요약 호출"을 구분한다.
         monkeypatch.setenv("GEMINI_API_KEY", "test-key")
         long_content = "가" * 60_000
-        final_parsed = _SummarySchema(summary="긴 영상 요약", key_points=[], mentioned_tickers=[], caveat="고지")
+        final_parsed = _SummarySchema(summary="긴 영상 요약", key_points=[], mentioned_tickers=[])
 
         call_count = {"chunk": 0}
 
