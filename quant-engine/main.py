@@ -31,9 +31,13 @@ from schemas import (
     StabilityStatResponse,
     StockScoreRequest,
     StockScoreSeriesResponse,
+    SummarizeRequest,
+    SummarizeResponse,
+    TickerMentionResponse,
     TranscribeRequest,
     TranscribeResponse,
 )
+from summary.generator import generate_summary
 from transcript.fetcher import fetch_transcript
 
 load_dotenv()
@@ -159,3 +163,26 @@ def transcribe(request: TranscribeRequest) -> TranscribeResponse:
     500으로 응답하고, Spring 쪽에서 재시도 대상으로 처리한다."""
     result = fetch_transcript(request.video_id)
     return TranscribeResponse(**vars(result))
+
+
+@app.post("/summarize", response_model=SummarizeResponse)
+def summarize(request: SummarizeRequest) -> SummarizeResponse:
+    """API 키 미설정이나 호출 실패는 여기서 폴백하지 않고 그대로 예외를
+    올려 500으로 응답한다 - Summary.model에 "어떤 모델이 분석했는지"가
+    영속화되므로, 가짜 폴백 문구를 진짜 분석 결과처럼 저장하면 안 된다
+    (summary/generator.py 모듈 docstring 참고)."""
+    result = generate_summary(request.video_title, request.channel_name, request.transcript_content)
+    return SummarizeResponse(
+        summary=result.summary,
+        key_points=result.key_points,
+        mentioned_tickers=[
+            TickerMentionResponse(
+                ticker_code=t.ticker_code, ticker_name=t.ticker_name,
+                stance=t.stance, confidence=t.confidence)
+            for t in result.mentioned_tickers
+        ],
+        caveat=result.caveat,
+        model=result.model,
+        input_tokens=result.input_tokens,
+        output_tokens=result.output_tokens,
+    )

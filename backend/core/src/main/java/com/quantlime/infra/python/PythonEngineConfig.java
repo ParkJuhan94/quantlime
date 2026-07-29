@@ -15,7 +15,12 @@ import org.springframework.web.client.RestClient;
 public class PythonEngineConfig {
 
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(3);
-    private static final Duration READ_TIMEOUT = Duration.ofSeconds(10);
+    // P4(AI 요약) 도입 전에는 10초였다 - 실제 자막(4.6만자)으로 라이브 테스트해보니
+    // Gemini 구조화 출력 호출 하나가 약 12초 걸려 그대로 컷당하는 걸 확인했다
+    // (2026-07-29). score/backtest/transcribe 호출부는 전부 @Transactional 밖에서
+    // 실행돼(ScoreService/BacktestService/*CollectionFacade 확인) 이 값을 늘려도
+    // DB 트랜잭션을 더 오래 붙드는 부작용이 없어 공유 클라이언트 값 자체를 올렸다.
+    private static final Duration READ_TIMEOUT = Duration.ofSeconds(60);
 
     private final PythonEngineProperties properties;
 

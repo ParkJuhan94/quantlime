@@ -1,0 +1,115 @@
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+import summary.generator as generator_module
+from summary.generator import _SummarySchema, _TickerMentionSchema, generate_summary
+
+
+@pytest.fixture(autouse=True)
+def _reset_client_cache():
+    # generator._client/_client_initialized는 commentary.py와 동일한 지연
+    # 초기화 캐시 패턴이라, 테스트마다 초기화하지 않으면 이전 테스트의
+    # mock 클라이언트가 다음 테스트에도 그대로 남는다.
+    generator_module._client = None
+    generator_module._client_initialized = False
+    yield
+    generator_module._client = None
+    generator_module._client_initialized = False
+
+
+def _fake_response(parsed, prompt_tokens: int = 100, candidates_tokens: int = 50):
+    return SimpleNamespace(
+        parsed=parsed,
+        text=None,
+        usage_metadata=SimpleNamespace(
+            prompt_token_count=prompt_tokens, candidates_token_count=candidates_tokens),
+    )
+
+
+class TestGenerateSummary:
+    def test_raises_when_api_key_missing(self, monkeypatch):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+
+        with pytest.raises(RuntimeError):
+            generate_summary("영상 제목", "채널명", "자막 내용")
+
+    def test_returns_parsed_result_when_available(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+        parsed = _SummarySchema(
+            summary="요약 내용입니다.",
+            key_points=["포인트1", "포인트2"],
+            mentioned_tickers=[
+                _TickerMentionSchema(
+                    ticker_code="005930", ticker_name="삼성전자", stance="BULLISH", confidence=0.8)
+            ],
+            caveat="투자 권유가 아닙니다.",
+        )
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = _fake_response(parsed)
+
+        with patch("summary.generator.genai.Client", return_value=mock_client):
+            result = generate_summary("영상 제목", "채널명", "짧은 자막")
+
+        assert result.summary == "요약 내용입니다."
+        assert result.key_points == ["포인트1", "포인트2"]
+        assert len(result.mentioned_tickers) == 1
+        assert result.mentioned_tickers[0].ticker_code == "005930"
+        assert result.mentioned_tickers[0].confidence == 0.8
+        assert result.caveat == "투자 권유가 아닙니다."
+        assert result.model == "gemini-3.6-flash"
+        assert result.input_tokens == 100
+        assert result.output_tokens == 50
+
+    def test_returns_empty_tickers_when_none_mentioned(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+        parsed = _SummarySchema(summary="요약", key_points=[], mentioned_tickers=[], caveat="고지")
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = _fake_response(parsed)
+
+        with patch("summary.generator.genai.Client", return_value=mock_client):
+            result = generate_summary("제목", "채널", "자막")
+
+        assert result.mentioned_tickers == []
+
+    def test_raises_when_response_not_parseable(self, monkeypatch):
+        # given: 스키마 강제에도 불구하고 parsed가 비는 비정상 상황(라이브러리 문서상
+        # 발생 가능하다고 명시된 엣지케이스)
+        monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = _fake_response(None)
+
+        with patch("summary.generator.genai.Client", return_value=mock_client):
+            with pytest.raises(ValueError):
+                generate_summary("제목", "채널", "자막")
+
+    def test_long_transcript_uses_map_reduce_and_accumulates_tokens(self, monkeypatch):
+        # given: 임계값(5만자)을 넘는 긴 자막 - 청크 요약 호출 여러 번(response_schema
+        # 없이 plain text) + 최종 구조화 호출 1번. 청크 수는 chunk_text의 슬라이딩
+        # 윈도우 계산에 의존하므로 정확한 횟수를 하드코딩하지 않고, config에
+        # response_schema가 있는지로 "최종 호출"과 "청크 요약 호출"을 구분한다.
+        monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+        long_content = "가" * 60_000
+        final_parsed = _SummarySchema(summary="긴 영상 요약", key_points=[], mentioned_tickers=[], caveat="고지")
+
+        call_count = {"chunk": 0}
+
+        def fake_generate_content(*, model, contents, config):
+            if config.response_schema is None:
+                call_count["chunk"] += 1
+                return SimpleNamespace(
+                    parsed=None, text="- 불릿 요약",
+                    usage_metadata=SimpleNamespace(prompt_token_count=1000, candidates_token_count=100))
+            return _fake_response(final_parsed, prompt_tokens=2000, candidates_tokens=200)
+
+        mock_client = MagicMock()
+        mock_client.models.generate_content.side_effect = fake_generate_content
+
+        with patch("summary.generator.genai.Client", return_value=mock_client):
+            result = generate_summary("제목", "채널", long_content)
+
+        assert result.summary == "긴 영상 요약"
+        assert call_count["chunk"] > 1
+        assert result.input_tokens == 1000 * call_count["chunk"] + 2000
+        assert result.output_tokens == 100 * call_count["chunk"] + 200

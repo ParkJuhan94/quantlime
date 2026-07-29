@@ -57,7 +57,7 @@ class TranscriptCollectionFacadeTest {
     void runBatch_available_persistsAndReturnsSuccess() {
         // given
         Video video = videoOf(1L, "vid-1");
-        given(videoRepository.findByStatusInAndRetryCountLessThanOrderByPublishedAtAsc(any(), anyInt(), any()))
+        given(videoRepository.findTranscribeCandidates(any(), anyInt(), any()))
             .willReturn(new SliceImpl<>(List.of(video)));
         TranscribeApiResponse response = new TranscribeApiResponse(
             true, "youtube_auto_caption", "ko", "내용", 2, null);
@@ -78,7 +78,7 @@ class TranscriptCollectionFacadeTest {
     void runBatch_unavailable_persistsAndReturnsUnavailable() {
         // given
         Video video = videoOf(1L, "vid-1");
-        given(videoRepository.findByStatusInAndRetryCountLessThanOrderByPublishedAtAsc(any(), anyInt(), any()))
+        given(videoRepository.findTranscribeCandidates(any(), anyInt(), any()))
             .willReturn(new SliceImpl<>(List.of(video)));
         TranscribeApiResponse response = new TranscribeApiResponse(
             false, null, null, null, null, "TranscriptsDisabled");
@@ -100,7 +100,7 @@ class TranscriptCollectionFacadeTest {
         // given
         Video failing = videoOf(1L, "vid-fail");
         Video succeeding = videoOf(2L, "vid-ok");
-        given(videoRepository.findByStatusInAndRetryCountLessThanOrderByPublishedAtAsc(any(), anyInt(), any()))
+        given(videoRepository.findTranscribeCandidates(any(), anyInt(), any()))
             .willReturn(new SliceImpl<>(List.of(failing, succeeding)));
         given(pythonEngineClient.fetchTranscript(new TranscribeApiRequest("vid-fail")))
             .willThrow(new ExternalApiException(com.quantlime.infra.python.exception.PythonEngineErrorCode.TRANSCRIPT_FETCH_FAILED));

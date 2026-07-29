@@ -111,3 +111,26 @@ class TranscribeResponse(BaseModel):
     content: str | None = None
     char_count: int | None = None
     reason: str | None = None
+
+
+class SummarizeRequest(BaseModel):
+    video_title: str
+    channel_name: str
+    transcript_content: str
+
+
+class TickerMentionResponse(BaseModel):
+    ticker_code: str
+    ticker_name: str | None = None
+    stance: str
+    confidence: float
+
+
+class SummarizeResponse(BaseModel):
+    summary: str
+    key_points: list[str]
+    mentioned_tickers: list[TickerMentionResponse]
+    caveat: str
+    model: str
+    input_tokens: int
+    output_tokens: int

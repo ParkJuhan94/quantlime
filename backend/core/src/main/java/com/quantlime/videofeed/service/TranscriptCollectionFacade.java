@@ -33,7 +33,7 @@ public class TranscriptCollectionFacade {
     private final TranscriptPersistService transcriptPersistService;
 
     public List<TranscribeResult> runBatch() {
-        Slice<Video> candidates = videoRepository.findByStatusInAndRetryCountLessThanOrderByPublishedAtAsc(
+        Slice<Video> candidates = videoRepository.findTranscribeCandidates(
             List.of(VideoStatus.SELECTED, VideoStatus.FAILED), MAX_RETRY_COUNT,
             PageRequest.of(0, BATCH_SIZE));
 

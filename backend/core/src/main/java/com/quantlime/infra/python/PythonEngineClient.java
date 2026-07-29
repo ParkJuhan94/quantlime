@@ -6,6 +6,8 @@ import com.quantlime.infra.python.dto.BacktestApiRequest;
 import com.quantlime.infra.python.dto.BacktestApiResponse;
 import com.quantlime.infra.python.dto.ScoreBatchApiRequest;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse;
+import com.quantlime.infra.python.dto.SummarizeApiRequest;
+import com.quantlime.infra.python.dto.SummarizeApiResponse;
 import com.quantlime.infra.python.dto.TranscribeApiRequest;
 import com.quantlime.infra.python.dto.TranscribeApiResponse;
 import com.quantlime.infra.python.exception.PythonEngineErrorCode;
@@ -78,6 +80,24 @@ public class PythonEngineClient {
                         .body(request)
                         .retrieve()
                         .body(TranscribeApiResponse.class));
+            recordOutcome(OUTCOME_SUCCESS, sample);
+            return response;
+        } catch (ExternalApiException e) {
+            recordOutcome(OUTCOME_FAILURE, sample);
+            throw e;
+        }
+    }
+
+    public SummarizeApiResponse summarize(SummarizeApiRequest request) {
+        Timer.Sample sample = Timer.start(meterRegistry);
+        try {
+            SummarizeApiResponse response = ExternalApiInvoker.call(
+                PythonEngineErrorCode.SUMMARY_GENERATION_FAILED, () ->
+                    pythonEngineRestClient.post()
+                        .uri("/summarize")
+                        .body(request)
+                        .retrieve()
+                        .body(SummarizeApiResponse.class));
             recordOutcome(OUTCOME_SUCCESS, sample);
             return response;
         } catch (ExternalApiException e) {

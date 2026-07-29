@@ -4,6 +4,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from main import app
+from summary.generator import SummaryResult, TickerMention
 from transcript.fetcher import TranscriptResult
 
 client = TestClient(app)
@@ -183,3 +184,31 @@ class TestTranscribe:
             assert body["available"] is False
             assert body["reason"] == "TranscriptsDisabled"
             assert body["content"] is None
+
+
+class TestSummarize:
+    def test_returns_structured_summary(self):
+        with patch("main.generate_summary") as mock_generate:
+            mock_generate.return_value = SummaryResult(
+                summary="요약 내용",
+                key_points=["포인트1"],
+                mentioned_tickers=[
+                    TickerMention(ticker_code="005930", ticker_name="삼성전자",
+                                  stance="BULLISH", confidence=0.8)
+                ],
+                caveat="투자 권유 아님",
+                model="claude-haiku-4-5",
+                input_tokens=100,
+                output_tokens=50,
+            )
+
+            response = client.post("/summarize", json={
+                "video_title": "제목", "channel_name": "채널", "transcript_content": "자막",
+            })
+
+            assert response.status_code == 200
+            body = response.json()
+            assert body["summary"] == "요약 내용"
+            assert body["mentioned_tickers"][0]["ticker_code"] == "005930"
+            assert body["input_tokens"] == 100
+            mock_generate.assert_called_once_with("제목", "채널", "자막")
