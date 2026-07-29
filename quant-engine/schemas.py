@@ -98,3 +98,16 @@ class BacktestResponse(BaseModel):
     # 과거 400일치를 재현하지 못하므로, 백테스트가 이미 계산해둔
     # compute_scores(df) 결과를 그대로 함께 내려준다.
     daily_scores: list[DailyScoreResponse]
+
+
+class TranscribeRequest(BaseModel):
+    video_id: str
+
+
+class TranscribeResponse(BaseModel):
+    available: bool
+    source: str | None = None
+    lang: str | None = None
+    content: str | None = None
+    char_count: int | None = None
+    reason: str | None = None

@@ -1,8 +1,10 @@
 from datetime import date, timedelta
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 from main import app
+from transcript.fetcher import TranscriptResult
 
 client = TestClient(app)
 
@@ -153,3 +155,31 @@ class TestBacktestScore:
         assert daily_scores[0]["quadrant"] is None
         assert daily_scores[-1]["trend_score"] is not None
         assert daily_scores[-1]["close"] > 0
+
+
+class TestTranscribe:
+    def test_returns_available_transcript(self):
+        with patch("main.fetch_transcript") as mock_fetch:
+            mock_fetch.return_value = TranscriptResult(
+                available=True, source="youtube_auto_caption", lang="ko",
+                content="안녕하세요 반갑습니다", char_count=11)
+
+            response = client.post("/transcribe", json={"video_id": "abc123"})
+
+            assert response.status_code == 200
+            body = response.json()
+            assert body["available"] is True
+            assert body["content"] == "안녕하세요 반갑습니다"
+            mock_fetch.assert_called_once_with("abc123")
+
+    def test_returns_unavailable_when_video_has_no_captions(self):
+        with patch("main.fetch_transcript") as mock_fetch:
+            mock_fetch.return_value = TranscriptResult(available=False, reason="TranscriptsDisabled")
+
+            response = client.post("/transcribe", json={"video_id": "abc123"})
+
+            assert response.status_code == 200
+            body = response.json()
+            assert body["available"] is False
+            assert body["reason"] == "TranscriptsDisabled"
+            assert body["content"] is None

@@ -1,8 +1,10 @@
 package com.quantlime.videofeed.controller;
 
 import com.quantlime.videofeed.dto.CollectResult;
+import com.quantlime.videofeed.dto.TranscribeResult;
 import com.quantlime.videofeed.service.ChannelVelocityInitializationService;
 import com.quantlime.videofeed.service.FeedCollectionFacade;
+import com.quantlime.videofeed.service.TranscriptCollectionFacade;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,12 +30,20 @@ public class FeedCollectionAdminController {
 
     private final FeedCollectionFacade feedCollectionFacade;
     private final ChannelVelocityInitializationService channelVelocityInitializationService;
+    private final TranscriptCollectionFacade transcriptCollectionFacade;
 
     @PostMapping("/collect")
     @Operation(summary = "전체 채널 영상 수집 수동 트리거", description = "채널별 수집→적재→필터링을 즉시 실행한다")
     @ApiResponse(useReturnTypeSchema = true)
     public ResponseEntity<List<CollectResult>> collect() {
         return ResponseEntity.ok(feedCollectionFacade.runAll());
+    }
+
+    @PostMapping("/transcribe")
+    @Operation(summary = "자막 수집 수동 트리거", description = "SELECTED(+ 재시도 상한 이내 FAILED) 영상 배치의 자막을 즉시 수집한다")
+    @ApiResponse(useReturnTypeSchema = true)
+    public ResponseEntity<List<TranscribeResult>> transcribe() {
+        return ResponseEntity.ok(transcriptCollectionFacade.runBatch());
     }
 
     @PostMapping("/channels/{channelId}/velocity/initialize")

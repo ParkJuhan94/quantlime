@@ -10,7 +10,8 @@ public enum VideoFeedErrorCode implements ErrorCode {
 
     NOT_FOUND_CHANNEL("해당 채널을 찾을 수 없습니다.", "VF_000"),
     INVALID_PLATFORM("올바른 플랫폼을 입력해주세요.", "VF_001"),
-    INVALID_VIDEO_STATUS("올바른 영상 상태를 입력해주세요.", "VF_002");
+    INVALID_VIDEO_STATUS("올바른 영상 상태를 입력해주세요.", "VF_002"),
+    NOT_FOUND_VIDEO("해당 영상을 찾을 수 없습니다.", "VF_003");
 
     private final String message;
     private final String code;

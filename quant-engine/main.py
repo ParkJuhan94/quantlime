@@ -31,7 +31,10 @@ from schemas import (
     StabilityStatResponse,
     StockScoreRequest,
     StockScoreSeriesResponse,
+    TranscribeRequest,
+    TranscribeResponse,
 )
+from transcript.fetcher import fetch_transcript
 
 load_dotenv()
 
@@ -146,3 +149,13 @@ def backtest_score(request: BacktestRequest) -> BacktestResponse:
             for axis_result in axis_results
         ],
     )
+
+
+@app.post("/transcribe", response_model=TranscribeResponse)
+def transcribe(request: TranscribeRequest) -> TranscribeResponse:
+    """자막이 아예 없는 영상은 정상적인 비즈니스 결과이므로 200 +
+    available=false로 응답한다(§6 현재가 API의 "404 아니라 200+null"
+    컨벤션과 동일). IP 차단 등 그 외 예외는 그대로 올라가 FastAPI가
+    500으로 응답하고, Spring 쪽에서 재시도 대상으로 처리한다."""
+    result = fetch_transcript(request.video_id)
+    return TranscribeResponse(**vars(result))

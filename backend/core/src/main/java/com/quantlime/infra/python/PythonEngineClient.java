@@ -6,6 +6,8 @@ import com.quantlime.infra.python.dto.BacktestApiRequest;
 import com.quantlime.infra.python.dto.BacktestApiResponse;
 import com.quantlime.infra.python.dto.ScoreBatchApiRequest;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse;
+import com.quantlime.infra.python.dto.TranscribeApiRequest;
+import com.quantlime.infra.python.dto.TranscribeApiResponse;
 import com.quantlime.infra.python.exception.PythonEngineErrorCode;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -58,6 +60,24 @@ public class PythonEngineClient {
                         .body(request)
                         .retrieve()
                         .body(BacktestApiResponse.class));
+            recordOutcome(OUTCOME_SUCCESS, sample);
+            return response;
+        } catch (ExternalApiException e) {
+            recordOutcome(OUTCOME_FAILURE, sample);
+            throw e;
+        }
+    }
+
+    public TranscribeApiResponse fetchTranscript(TranscribeApiRequest request) {
+        Timer.Sample sample = Timer.start(meterRegistry);
+        try {
+            TranscribeApiResponse response = ExternalApiInvoker.call(
+                PythonEngineErrorCode.TRANSCRIPT_FETCH_FAILED, () ->
+                    pythonEngineRestClient.post()
+                        .uri("/transcribe")
+                        .body(request)
+                        .retrieve()
+                        .body(TranscribeApiResponse.class));
             recordOutcome(OUTCOME_SUCCESS, sample);
             return response;
         } catch (ExternalApiException e) {
