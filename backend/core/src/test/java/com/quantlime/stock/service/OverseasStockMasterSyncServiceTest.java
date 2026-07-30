@@ -9,7 +9,9 @@ import static org.mockito.Mockito.verify;
 
 import com.quantlime.infra.kis.KisOverseasStockMasterClient;
 import com.quantlime.infra.kis.dto.KisOverseasStockMasterEntry;
+import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
+import com.quantlime.stock.domain.Stock;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -65,6 +67,39 @@ class OverseasStockMasterSyncServiceTest {
         // then
         verify(stockMasterService, never())
             .registerStock(anyString(), anyString(), any(), any());
+    }
+
+    @Test
+    @DisplayName("[6자 이하여도 Toss가 거부하는 문자(/)가 섞인 심볼은 등록하지 않는다]")
+    void syncMarket_skipsSymbolsWithSlash() {
+        // given: "AAC/UN"은 6자라 길이 필터는 통과하지만 Toss 심볼 패턴(영문/숫자/.,- 만 허용)엔 위배됨
+        given(kisOverseasStockMasterClient.fetchStockMaster("nys")).willReturn(List.of(
+            new KisOverseasStockMasterEntry("AAC/UN", "SOME SPAC UNIT", "2", "720")
+        ));
+
+        // when
+        overseasStockMasterSyncService.syncMarket(MarketType.NYSE);
+
+        // then
+        verify(stockMasterService, never())
+            .registerStock(anyString(), anyString(), any(), any());
+    }
+
+    @Test
+    @DisplayName("[이미 등록된 종목 중 Toss가 거부하는 형식이 있으면 price_unsupported로 표시한다]")
+    void syncMarket_marksExistingInvalidFormatStocksUnsupported() {
+        // given: 필터 추가 전에 이미 저장된 "AAC/UN" 같은 종목이 있다고 가정
+        given(kisOverseasStockMasterClient.fetchStockMaster("nys")).willReturn(List.of());
+        Stock invalidFormatStock = Stock.of("AAC/UN", "SOME SPAC UNIT", MarketType.NYSE, ListingStatus.LISTED, "720");
+        Stock validStock = Stock.of("AA", "ALCOA CORPORATION", MarketType.NYSE, ListingStatus.LISTED, "720");
+        given(stockMasterService.getAllListedStocks()).willReturn(List.of(invalidFormatStock, validStock));
+
+        // when
+        overseasStockMasterSyncService.syncMarket(MarketType.NYSE);
+
+        // then
+        verify(stockMasterService, times(1)).markPriceUnsupported("AAC/UN");
+        verify(stockMasterService, never()).markPriceUnsupported("AA");
     }
 
     @Test

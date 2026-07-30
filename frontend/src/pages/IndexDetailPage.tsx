@@ -12,6 +12,7 @@ import { LoadingSpinner } from '../components/common/LoadingSpinner'
 import { ErrorState } from '../components/common/ErrorState'
 import { EmptyState } from '../components/common/EmptyState'
 import { ChartIntervalSelector } from '../components/chart/ChartIntervalSelector'
+import { InvestorTradingSummary } from '../components/market/InvestorTradingSummary'
 import { changeRateColorClass, formatChangeRate, formatPrice } from '../utils/priceFormat'
 import { DEFAULT_INDICATOR_SETTINGS } from '../utils/indicators'
 import { aggregateCandles, type ChartInterval } from '../utils/candleAggregation'
@@ -70,6 +71,8 @@ export function IndexDetailPage() {
   const isUsd = upperCode === 'USDKRW'
   const isTreasury = upperCode === 'TREASURY-YIELD'
   const isBitcoin = upperCode === 'BITCOIN'
+  // 투자자별 매매대금은 Toss가 코스피/코스닥 지수만 지원한다(§4).
+  const isDomesticIndexCode = upperCode === 'KOSPI' || upperCode === 'KOSDAQ'
 
   const indicesQuery = useMarketIndicesQuery()
   // React Hook은 조건부로 호출할 수 없어 쿼리를 전부 선언하고 enabled로만
@@ -166,7 +169,12 @@ export function IndexDetailPage() {
         ) : (
           <>
             {!isBitcoin && (
-              <div className="mb-3 flex justify-end">
+              <div
+                className={`mb-3 flex flex-wrap items-center gap-2 ${
+                  isDomesticIndexCode ? 'justify-between' : 'justify-end'
+                }`}
+              >
+                {isDomesticIndexCode && <InvestorTradingSummary code={upperCode as 'KOSPI' | 'KOSDAQ'} />}
                 <ChartIntervalSelector value={chartInterval} onChange={setChartInterval} />
               </div>
             )}

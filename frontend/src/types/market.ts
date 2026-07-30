@@ -22,7 +22,7 @@ export interface MarketIndexResponse {
   // 일봉이 아니라 몇 분 단위 스냅샷이다. 홈 카드 미니 차트에만 쓴다.
   usTreasuryYield10yHistory: number[]
   bitcoinChangeRate: number | null
-  // 네이버 금융 비공식 API 조회가 실패하면 null - 프론트는 자리만 유지하고 값을 비워 보여준다.
+  // Toss 조회가 실패하면 null - 프론트는 자리만 유지하고 값을 비워 보여준다.
   kospi: IndexQuote | null
   kosdaq: IndexQuote | null
   nasdaq: IndexQuote | null
@@ -44,6 +44,25 @@ export interface IndexChartPoint {
 export interface IndexMinuteChartPoint {
   time: string
   price: number
+}
+
+export type InvestorTradingInterval = 'weekly' | 'monthly'
+
+// 순매수(매수-매도, KRW) - 개인/외국인/기관계+세부7종/기타법인. 백엔드가
+// 이미 순매수로 계산해서 내려준다(InvestorTradingMapper 참고).
+export interface InvestorTradingResponse {
+  baseDate: string
+  individualNetBuyAmount: number
+  foreignerNetBuyAmount: number
+  institutionNetBuyAmount: number
+  financialInvestmentNetBuyAmount: number
+  insuranceNetBuyAmount: number
+  trustNetBuyAmount: number
+  privateEquityFundNetBuyAmount: number
+  bankNetBuyAmount: number
+  otherFinancialInstitutionNetBuyAmount: number
+  pensionFundNetBuyAmount: number
+  otherCorporationNetBuyAmount: number
 }
 
 export interface MarketRankingResponse {

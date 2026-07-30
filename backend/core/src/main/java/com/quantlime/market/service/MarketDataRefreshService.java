@@ -1,5 +1,7 @@
 package com.quantlime.market.service;
 
+import com.quantlime.common.exception.ExternalApiException;
+import com.quantlime.common.util.SafeExecutor;
 import com.quantlime.price.domain.DailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.price.repository.DailyPriceRepository;
@@ -7,25 +9,25 @@ import com.quantlime.price.repository.OverseasDailyPriceRepository;
 import com.quantlime.price.service.PriceGapFillService;
 import com.quantlime.score.repository.ScoreRepository;
 import com.quantlime.score.service.ScoreService;
-import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.StockMasterService;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
 
 /**
  * 트리거1(운영 갱신) - 전체 상장종목(국내+해외)의 가격+스코어를 "마지막
  * 저장일 다음날부터 오늘까지"만 gap-fill한다({@link PriceGapFillService} 참고).
- * 국내/해외는 서로 다른 외부 API(Toss/KIS)라 레이트리밋이 독립적이므로 별도
- * 스레드에서 병렬 실행한다.
+ * 국내/해외 모두 이제 같은 Toss 캔들 API를 쓰지만(2026-07-29, 해외는 KIS에서
+ * 이관), 한쪽이 느려져도 다른 쪽 갱신이 막히지 않도록 여전히 별도 스레드에서
+ * 병렬 실행한다.
  *
  * <p>이 서비스 하나가 dev 수동 트리거(/dev/refresh), 매일 16:00 배치
  * (OhlcvCollectorScheduler), 로컬 백엔드 기동 시 자동 캐치업
@@ -38,11 +40,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class MarketDataRefreshService {
 
-    private static final Map<MarketType, String> OVERSEAS_EXCHANGE_CODE = Map.of(
-        MarketType.NASDAQ, "NAS",
-        MarketType.NYSE, "NYS"
-    );
-    // 종목 간 API 호출 딜레이(Toss/KIS 공통, 기존 OhlcvCollectorScheduler/
+    // 종목 간 API 호출 딜레이(기존 OhlcvCollectorScheduler/
     // OverseasUniverseSelectionService와 동일한 값) - 실제로 외부 API를
     // 호출한 종목 다음에만 걸어, 이미 최신이라 스킵된 종목까지 매번 딜레이를
     // 물지 않는다(그래야 정상 상태에서 전종목 스윕이 빠르게 끝난다).
@@ -54,16 +52,22 @@ public class MarketDataRefreshService {
     private final ScoreRepository scoreRepository;
     private final PriceGapFillService priceGapFillService;
     private final ScoreService scoreService;
+    private final BenchmarkIndexBackfillService benchmarkIndexBackfillService;
+    private final InvestorTradingBackfillService investorTradingBackfillService;
     private final TaskExecutor domesticMarketDataRefreshTaskExecutor;
     private final TaskExecutor overseasMarketDataRefreshTaskExecutor;
 
     public void refreshAll() {
+        // 가격 소스가 커버하지 않는 것으로 이미 표시된 종목(price_unsupported)은
+        // 제외한다 - 매 기동마다 같은 stock-not-found(404)를 반복하지 않기 위함.
         List<Stock> stocks = stockMasterService.getAllListedStocks();
         List<Stock> domestic = stocks.stream()
             .filter(stock -> stock.getMarketType().isDomestic())
+            .filter(stock -> !stock.isPriceUnsupported())
             .toList();
         List<Stock> overseas = stocks.stream()
             .filter(stock -> !stock.getMarketType().isDomestic())
+            .filter(stock -> !stock.isPriceUnsupported())
             .toList();
 
         CompletableFuture<Void> domesticDone = CompletableFuture.runAsync(
@@ -71,6 +75,18 @@ public class MarketDataRefreshService {
         CompletableFuture<Void> overseasDone = CompletableFuture.runAsync(
             () -> refreshOverseas(overseas), overseasMarketDataRefreshTaskExecutor);
         CompletableFuture.allOf(domesticDone, overseasDone).join();
+
+        // 국내 지수(코스피/코스닥) 일봉 갭필 + 투자자별 매매대금(주/월)을 같은
+        // 트리거에 편입한다(2026-07-29, 사용자 요청) - MarketIndexCache의 지수
+        // 등락률 자체계산(전일 종가 기준)이 이 데이터에 의존하게 되면서 매일
+        // 갱신될 필요가 생겼다. backfillAllIfNeeded()(딥백필, 백테스트 데이터셋
+        // 준비 트리거 전용)가 아니라 refreshRecentIfNeeded()를 쓴다 - 딥백필은
+        // "이미 400일치가 있으면 스킵"이라 여기 물려두면 최신 종가가 영원히
+        // 안 갱신되는 버그가 있었다(2026-07-30 실제 발견 - 이 스킵 로직 때문에
+        // KOSPI 벤치마크가 2주 전 날짜에 멈춰 등락률이 완전히 틀어졌었음).
+        // 실패해도 전종목 가격 갱신 자체는 막지 않는다.
+        SafeExecutor.runSafely("국내 지수 벤치마크 최신 갭필", benchmarkIndexBackfillService::refreshRecentIfNeeded);
+        SafeExecutor.runSafely("투자자별 매매대금 갱신", investorTradingBackfillService::refreshAllIfNeeded);
 
         log.info("전종목 가격+스코어 갱신 완료: 국내={}종목, 해외={}종목", domestic.size(), overseas.size());
     }
@@ -94,8 +110,7 @@ public class MarketDataRefreshService {
                     break;
                 }
             } catch (Exception e) {
-                log.error("국내 가격 갱신 실패(해당 종목만 스킵): stockCode={}, error={}",
-                    stockCode, e.getMessage(), e);
+                handleDomesticFailure(stockCode, e);
             }
             if (needsScoreRefresh(stockCode, latestPriceDate(stockCode))) {
                 needsScoreRefresh.add(stockCode);
@@ -108,24 +123,81 @@ public class MarketDataRefreshService {
         List<String> needsScoreRefresh = new ArrayList<>();
         for (Stock stock : stocks) {
             String stockCode = stock.getStockCode();
-            String exchangeCode = OVERSEAS_EXCHANGE_CODE.get(stock.getMarketType());
-            if (exchangeCode == null) {
-                continue;
-            }
             try {
-                boolean calledApi = priceGapFillService.fillOverseasGap(stockCode, exchangeCode);
+                boolean calledApi = priceGapFillService.fillOverseasGap(stockCode);
                 if (calledApi && !sleepBetweenStocks()) {
                     break;
                 }
             } catch (Exception e) {
-                log.error("해외 가격 갱신 실패(해당 종목만 스킵): stockCode={}, error={}",
-                    stockCode, e.getMessage(), e);
+                handleOverseasFailure(stockCode, e);
             }
             if (needsScoreRefresh(stockCode, latestOverseasPriceDate(stockCode))) {
                 needsScoreRefresh.add(stockCode);
             }
         }
         scoreService.recalculateOverseasScores(needsScoreRefresh);
+    }
+
+    /**
+     * 국내 가격 갱신 실패를 처리한다. Toss 캔들 API가 커버하지 않는 종목
+     * (KONEX·스팩·상폐 잔존 등)은 조회 시 stock-not-found(404)만 반복하므로,
+     * 이 경우 해당 종목을 '가격 미커버'로 표시해 이후 기동의 갭필 및 랭킹
+     * 스윕(AllListedStockCache) 대상에서 제외한다 - 매 기동 404 폭주와
+     * 불필요한 Toss 쿼터 소모를 근본 차단한다. 그 외 실패(레이트리밋·일시
+     * 장애 등)는 다음 기동에 재시도해야 하므로 표시하지 않고 에러 로그만 남긴다.
+     */
+    private void handleDomesticFailure(String stockCode, Exception e) {
+        if (isStockNotFound(e)) {
+            stockMasterService.markPriceUnsupported(stockCode);
+            log.info("Toss 미커버 종목(stock-not-found)으로 표시, 이후 갭필/스윕에서 제외: stockCode={}", stockCode);
+            return;
+        }
+        log.error("국내 가격 갱신 실패(해당 종목만 스킵): stockCode={}, error={}",
+            stockCode, e.getMessage(), e);
+    }
+
+    /**
+     * 해외 가격 갱신 실패를 처리한다. 국내(handleDomesticFailure)와 대칭 -
+     * 해외도 이제 같은 Toss 캔들 API를 쓰므로(2026-07-29, KIS에서 이관)
+     * stock-not-found 판별 로직을 그대로 공유한다. 이 안전장치가 없던 이전
+     * 버전에서는 KIS 전용 마스터에만 있고 실제로는 조회 불가능한 종목이
+     * 매 스윕마다 계속 실패하면서도 영원히 제외되지 않아, 레이트리밋 예산을
+     * 갉아먹으며 다른 정상 종목의 산발적 실패(레이트리밋)를 유발하는 원인
+     * 중 하나였다.
+     *
+     * <p>해외는 여기에 더해 {@code isUnsupportedSymbolFormat}도 함께 본다 -
+     * KIS 해외주식 마스터파일에서 유래한 종목코드 중 "AAC/UN"·"ABR/F"처럼
+     * "/"가 섞인 SPAC 유닛/우선주 표기가 있는데(길이 6자 제한만으로는 안
+     * 걸러짐, OverseasStockMasterSyncService 참고), Toss 심볼 파라미터는
+     * `^[A-Za-z0-9.,\-]+$`만 허용해 이런 종목은 항상 404가 아니라 400으로
+     * 거부된다(실측 - 2026-07-30). 404만 보던 기존 체크로는 이 400이
+     * 잡히지 않아 매 기동 무한 반복 실패의 원인이 됐다.
+     */
+    private void handleOverseasFailure(String stockCode, Exception e) {
+        if (isStockNotFound(e) || isUnsupportedSymbolFormat(e)) {
+            stockMasterService.markPriceUnsupported(stockCode);
+            log.info("Toss 미커버 해외종목(stock-not-found/invalid-symbol)으로 표시, 이후 갭필/스윕에서 제외: stockCode={}", stockCode);
+            return;
+        }
+        log.error("해외 가격 갱신 실패(해당 종목만 스킵): stockCode={}, error={}",
+            stockCode, e.getMessage(), e);
+    }
+
+    /**
+     * Toss 캔들/현재가 API는 심볼이 자신의 문자 패턴(`^[A-Za-z0-9.,\-]+$`)을
+     * 벗어나면 400 Bad Request로 거부한다 - 우리 쪽 요청 파라미터 자체는
+     * 항상 올바르게 구성되므로(stockCode는 DB에 이미 저장된 값을 그대로
+     * 전달), 이 400은 사실상 항상 "이 심볼은 Toss가 절대 못 받는다"는
+     * 영구적 신호다(일시적 장애가 아님).
+     */
+    private boolean isUnsupportedSymbolFormat(Exception e) {
+        return e instanceof ExternalApiException
+            && e.getCause() instanceof HttpClientErrorException.BadRequest;
+    }
+
+    private boolean isStockNotFound(Exception e) {
+        return e instanceof ExternalApiException
+            && e.getCause() instanceof HttpClientErrorException.NotFound;
     }
 
     private boolean sleepBetweenStocks() {

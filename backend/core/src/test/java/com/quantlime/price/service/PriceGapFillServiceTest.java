@@ -29,7 +29,6 @@ class PriceGapFillServiceTest {
 
     private static final String STOCK_CODE = "005930";
     private static final String OVERSEAS_STOCK_CODE = "AAPL";
-    private static final String EXCHANGE_CODE = "NAS";
 
     @Mock
     private DailyPriceRepository dailyPriceRepository;
@@ -118,43 +117,46 @@ class PriceGapFillServiceTest {
             .willReturn(Optional.empty());
 
         // when
-        priceGapFillService.fillOverseasGap(OVERSEAS_STOCK_CODE, EXCHANGE_CODE);
+        priceGapFillService.fillOverseasGap(OVERSEAS_STOCK_CODE);
 
         // then
         verify(overseasDailyPriceBackfillService)
-            .backfillHistoryIfNeeded(OVERSEAS_STOCK_CODE, EXCHANGE_CODE, 200);
-        verify(overseasDailyPriceBackfillService, never()).collectRecentPrices(any(), any());
+            .backfillHistoryIfNeeded(OVERSEAS_STOCK_CODE, 200);
+        verify(overseasDailyPriceBackfillService, never()).collectRecentPrices(any(), anyInt());
     }
 
     @Test
-    @DisplayName("[해외 종목은 갭이 작으면 단일 호출(collectRecentPrices)로 채운다]")
+    @DisplayName("[해외 종목은 갭이 작으면 그 갭만큼만 단일 호출(collectRecentPrices)로 채운다]")
     void fillOverseasGap_smallGap_collectsRecentPricesOnce() {
-        // given
+        // given: 3일 전까지만 저장돼 있음
         given(overseasDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(OVERSEAS_STOCK_CODE))
             .willReturn(Optional.of(overseasDailyPrice(LocalDate.now().minusDays(3))));
 
         // when
-        priceGapFillService.fillOverseasGap(OVERSEAS_STOCK_CODE, EXCHANGE_CODE);
+        priceGapFillService.fillOverseasGap(OVERSEAS_STOCK_CODE);
 
         // then
-        verify(overseasDailyPriceBackfillService).collectRecentPrices(OVERSEAS_STOCK_CODE, EXCHANGE_CODE);
-        verify(overseasDailyPriceBackfillService, never()).backfillHistoryIfNeeded(any(), any(), anyInt());
+        ArgumentCaptor<Integer> lookbackCaptor = ArgumentCaptor.forClass(Integer.class);
+        verify(overseasDailyPriceBackfillService)
+            .collectRecentPrices(eq(OVERSEAS_STOCK_CODE), lookbackCaptor.capture());
+        assertThat(lookbackCaptor.getValue()).isEqualTo(8); // 3일 갭 + 5일 버퍼
+        verify(overseasDailyPriceBackfillService, never()).backfillHistoryIfNeeded(any(), anyInt());
     }
 
     @Test
-    @DisplayName("[해외 종목도 갭이 100거래일(KIS 단일 호출 한도)을 넘으면 깊은 백필로 대체한다]")
+    @DisplayName("[해외 종목도 갭이 단일 호출 한도(200일, 국내와 동일)를 넘으면 깊은 백필로 대체한다]")
     void fillOverseasGap_largeGap_fallsBackToDeepBackfill() {
         // given
         given(overseasDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(OVERSEAS_STOCK_CODE))
-            .willReturn(Optional.of(overseasDailyPrice(LocalDate.now().minusDays(200))));
+            .willReturn(Optional.of(overseasDailyPrice(LocalDate.now().minusDays(400))));
 
         // when
-        priceGapFillService.fillOverseasGap(OVERSEAS_STOCK_CODE, EXCHANGE_CODE);
+        priceGapFillService.fillOverseasGap(OVERSEAS_STOCK_CODE);
 
         // then
         verify(overseasDailyPriceBackfillService)
-            .backfillHistoryIfNeeded(OVERSEAS_STOCK_CODE, EXCHANGE_CODE, 200);
-        verify(overseasDailyPriceBackfillService, never()).collectRecentPrices(any(), any());
+            .backfillHistoryIfNeeded(OVERSEAS_STOCK_CODE, 200);
+        verify(overseasDailyPriceBackfillService, never()).collectRecentPrices(any(), anyInt());
     }
 
     private DailyPrice dailyPrice(LocalDate tradeDate) {

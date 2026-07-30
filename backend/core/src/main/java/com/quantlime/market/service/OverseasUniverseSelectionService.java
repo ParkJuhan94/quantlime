@@ -3,7 +3,6 @@ package com.quantlime.market.service;
 import com.quantlime.price.dto.OverseasStockTradingValue;
 import com.quantlime.price.repository.OverseasDailyPriceRepository;
 import com.quantlime.price.service.OverseasDailyPriceBackfillService;
-import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.StockMasterService;
 import java.time.LocalDate;
@@ -29,10 +28,6 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class OverseasUniverseSelectionService {
 
-    private static final Map<MarketType, String> EXCHANGE_CODE = Map.of(
-        MarketType.NASDAQ, "NAS",
-        MarketType.NYSE, "NYS"
-    );
     // KisOverseasStockMasterEntry.INDUSTRY_CODE_REAL_ESTATE와 동일한 값 -
     // Stock.sector에 저장되는 시점(OverseasStockMasterSyncService)에는 record
     // 상수를 그대로 재사용했지만, 여기서는 Stock 엔티티의 문자열 필드와
@@ -42,13 +37,9 @@ public class OverseasUniverseSelectionService {
     private static final int SCAN_TARGET_DAYS = 60;
     private static final int UNIVERSE_TARGET_DAYS = 400;
     private static final int UNIVERSE_SIZE = 500;
-    // 종목 간 호출 딜레이. OverseasDailyPriceBackfillService는 같은 종목의
-    // 페이지 사이에만 150ms를 두므로, 대부분 1페이지(≤100건)로 끝나는
-    // 최초 백필에서는 종목이 바뀔 때 딜레이 없이 연속 호출돼 KIS 초당
-    // 토큰 버킷을 즉시 넘겨 429가 연쇄로 발생했다(실측). 국내(Toss) 쪽
-    // DomesticUniverseSelectionService에는 이 딜레이가 없지만, 그쪽은
-    // 이미 대부분 종목이 목표일수를 채워 API 호출 자체를 스킵하는 경우가
-    // 많아 같은 문제가 드러나지 않았을 뿐이다.
+    // 종목 간 호출 딜레이. 해외도 이제 국내와 같은 Toss 캔들 API를 쓰지만
+    // (2026-07-29, KIS에서 이관), 최초 백필처럼 대부분 종목이 API를 실제로
+    // 호출하는 상황에서는 여전히 레이트리밋 여유를 두는 게 안전하다.
     private static final long INTER_STOCK_DELAY_MS = 150;
 
     private final StockMasterService stockMasterService;
@@ -57,7 +48,7 @@ public class OverseasUniverseSelectionService {
 
     public List<String> selectAndBackfillUniverse() {
         List<Stock> candidates = stockMasterService.getAllListedStocks().stream()
-            .filter(stock -> EXCHANGE_CODE.containsKey(stock.getMarketType()))
+            .filter(stock -> !stock.getMarketType().isDomestic())
             .filter(stock -> !isRealEstateSector(stock))
             .toList();
         log.info("해외 유니버스 후보 종목(부동산 섹터 제외): {}건", candidates.size());
@@ -85,13 +76,11 @@ public class OverseasUniverseSelectionService {
 
     private void backfillEach(List<Stock> stocks, int targetDays) {
         for (Stock stock : stocks) {
-            String exchangeCode = EXCHANGE_CODE.get(stock.getMarketType());
             try {
-                overseasDailyPriceBackfillService.backfillHistoryIfNeeded(
-                    stock.getStockCode(), exchangeCode, targetDays);
+                overseasDailyPriceBackfillService.backfillHistoryIfNeeded(stock.getStockCode(), targetDays);
             } catch (Exception e) {
-                log.error("해외 유니버스 백필 실패: stockCode={}, exchangeCode={}, targetDays={}, error={}",
-                    stock.getStockCode(), exchangeCode, targetDays, e.getMessage(), e);
+                log.error("해외 유니버스 백필 실패: stockCode={}, targetDays={}, error={}",
+                    stock.getStockCode(), targetDays, e.getMessage(), e);
             }
             if (!sleepBetweenStocks()) {
                 return;

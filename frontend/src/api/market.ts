@@ -3,6 +3,8 @@ import type {
   ChartIndexCode,
   IndexChartPoint,
   IndexMinuteChartPoint,
+  InvestorTradingInterval,
+  InvestorTradingResponse,
   MarketIndexResponse,
   MarketRankingResponse,
 } from '../types/market'
@@ -29,6 +31,18 @@ export async function getBitcoinChart(): Promise<IndexMinuteChartPoint[]> {
 
 export async function getExchangeRateChart(): Promise<IndexChartPoint[]> {
   const { data } = await apiClient.get<IndexChartPoint[]>('/api/market/indices/usdkrw/chart')
+  return data
+}
+
+export async function getInvestorTrading(
+  code: 'KOSPI' | 'KOSDAQ',
+  interval: InvestorTradingInterval,
+  count = 52,
+): Promise<InvestorTradingResponse[]> {
+  const { data } = await apiClient.get<InvestorTradingResponse[]>(
+    `/api/market/indices/${code}/investor-trading`,
+    { params: { interval, count } },
+  )
   return data
 }
 

@@ -7,6 +7,8 @@ import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.quantlime.common.exception.ExternalApiException;
+import com.quantlime.infra.toss.exception.TossApiErrorCode;
 import com.quantlime.price.domain.DailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.price.repository.DailyPriceRepository;
@@ -31,6 +33,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.task.TaskExecutor;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.client.HttpClientErrorException;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
@@ -58,6 +63,12 @@ class MarketDataRefreshServiceTest {
     private ScoreService scoreService;
 
     @Mock
+    private BenchmarkIndexBackfillService benchmarkIndexBackfillService;
+
+    @Mock
+    private InvestorTradingBackfillService investorTradingBackfillService;
+
+    @Mock
     private TaskExecutor domesticMarketDataRefreshTaskExecutor;
 
     @Mock
@@ -73,6 +84,7 @@ class MarketDataRefreshServiceTest {
         marketDataRefreshService = new MarketDataRefreshService(
             stockMasterService, dailyPriceRepository, overseasDailyPriceRepository,
             scoreRepository, priceGapFillService, scoreService,
+            benchmarkIndexBackfillService, investorTradingBackfillService,
             domesticMarketDataRefreshTaskExecutor, overseasMarketDataRefreshTaskExecutor);
     }
 
@@ -117,7 +129,7 @@ class MarketDataRefreshServiceTest {
 
         // then
         verify(priceGapFillService).fillDomesticGap(DOMESTIC_CODE);
-        verify(priceGapFillService).fillOverseasGap(OVERSEAS_CODE, "NAS");
+        verify(priceGapFillService).fillOverseasGap(OVERSEAS_CODE);
 
         // 국내는 국내 전용 스코어 재계산에 삼성전자만 포함
         ArgumentCaptor<List<String>> domesticScoreCaptor = ArgumentCaptor.forClass(List.class);
@@ -128,6 +140,42 @@ class MarketDataRefreshServiceTest {
         ArgumentCaptor<List<String>> overseasScoreCaptor = ArgumentCaptor.forClass(List.class);
         verify(scoreService).recalculateOverseasScores(overseasScoreCaptor.capture());
         org.assertj.core.api.Assertions.assertThat(overseasScoreCaptor.getValue()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("[국내 종목이 Toss stock-not-found(404)를 내면 가격 미커버로 표시해 이후 대상에서 제외한다]")
+    void refreshAll_domesticStockNotFound_marksPriceUnsupported() {
+        // given
+        stubExecutorsToRunSynchronously();
+        Stock domestic = Stock.of(DOMESTIC_CODE, "삼성전자", MarketType.KOSPI, ListingStatus.LISTED, "전기전자");
+        given(stockMasterService.getAllListedStocks()).willReturn(List.of(domestic));
+        HttpClientErrorException notFound = HttpClientErrorException.create(
+            HttpStatus.NOT_FOUND, "Not Found", HttpHeaders.EMPTY, new byte[0], null);
+        given(priceGapFillService.fillDomesticGap(DOMESTIC_CODE))
+            .willThrow(new ExternalApiException(TossApiErrorCode.CANDLE_INQUIRY_FAILED, notFound));
+
+        // when
+        marketDataRefreshService.refreshAll();
+
+        // then
+        verify(stockMasterService).markPriceUnsupported(DOMESTIC_CODE);
+    }
+
+    @Test
+    @DisplayName("[국내 종목이 404가 아닌 실패를 내면 미커버로 표시하지 않는다(다음 기동 재시도)]")
+    void refreshAll_domesticNon404Failure_doesNotMark() {
+        // given
+        stubExecutorsToRunSynchronously();
+        Stock domestic = Stock.of(DOMESTIC_CODE, "삼성전자", MarketType.KOSPI, ListingStatus.LISTED, "전기전자");
+        given(stockMasterService.getAllListedStocks()).willReturn(List.of(domestic));
+        given(priceGapFillService.fillDomesticGap(DOMESTIC_CODE))
+            .willThrow(new ExternalApiException(TossApiErrorCode.RATE_LIMIT_EXCEEDED));
+
+        // when
+        marketDataRefreshService.refreshAll();
+
+        // then
+        verify(stockMasterService, never()).markPriceUnsupported(any());
     }
 
     @Test
@@ -144,7 +192,63 @@ class MarketDataRefreshServiceTest {
 
         // then
         verify(priceGapFillService).fillDomesticGap(DOMESTIC_CODE);
-        verify(priceGapFillService, never()).fillOverseasGap(any(), any());
+        verify(priceGapFillService, never()).fillOverseasGap(any());
+    }
+
+    @Test
+    @DisplayName("[해외 종목이 Toss stock-not-found(404)를 내면 가격 미커버로 표시해 이후 대상에서 제외한다]")
+    void refreshAll_overseasStockNotFound_marksPriceUnsupported() {
+        // given
+        stubExecutorsToRunSynchronously();
+        Stock overseas = Stock.of(OVERSEAS_CODE, "APPLE INC", MarketType.NASDAQ, ListingStatus.LISTED, "720");
+        given(stockMasterService.getAllListedStocks()).willReturn(List.of(overseas));
+        HttpClientErrorException notFound = HttpClientErrorException.create(
+            HttpStatus.NOT_FOUND, "Not Found", HttpHeaders.EMPTY, new byte[0], null);
+        given(priceGapFillService.fillOverseasGap(OVERSEAS_CODE))
+            .willThrow(new ExternalApiException(TossApiErrorCode.CANDLE_INQUIRY_FAILED, notFound));
+
+        // when
+        marketDataRefreshService.refreshAll();
+
+        // then
+        verify(stockMasterService).markPriceUnsupported(OVERSEAS_CODE);
+    }
+
+    @Test
+    @DisplayName("[해외 종목이 Toss 400(심볼 형식 미지원)을 내면 가격 미커버로 표시한다 - "
+        + "\"AAC/UN\" 같은 \"/\" 포함 심볼이 404가 아닌 400으로 거부되며 실제로 겪은 무한 반복 버그]")
+    void refreshAll_overseasUnsupportedSymbolFormat_marksPriceUnsupported() {
+        // given
+        stubExecutorsToRunSynchronously();
+        Stock overseas = Stock.of("AAC/UN", "SOME SPAC UNIT", MarketType.NYSE, ListingStatus.LISTED, "720");
+        given(stockMasterService.getAllListedStocks()).willReturn(List.of(overseas));
+        HttpClientErrorException badRequest = HttpClientErrorException.create(
+            HttpStatus.BAD_REQUEST, "Bad Request", HttpHeaders.EMPTY, new byte[0], null);
+        given(priceGapFillService.fillOverseasGap("AAC/UN"))
+            .willThrow(new ExternalApiException(TossApiErrorCode.CANDLE_INQUIRY_FAILED, badRequest));
+
+        // when
+        marketDataRefreshService.refreshAll();
+
+        // then
+        verify(stockMasterService).markPriceUnsupported("AAC/UN");
+    }
+
+    @Test
+    @DisplayName("[해외 종목이 404가 아닌 실패를 내면 미커버로 표시하지 않는다(다음 기동 재시도) - 이 안전장치가 없으면 레이트리밋 실패가 매 스윕마다 계속 반복돼 다른 종목의 예산까지 갉아먹는다]")
+    void refreshAll_overseasNon404Failure_doesNotMark() {
+        // given
+        stubExecutorsToRunSynchronously();
+        Stock overseas = Stock.of(OVERSEAS_CODE, "APPLE INC", MarketType.NASDAQ, ListingStatus.LISTED, "720");
+        given(stockMasterService.getAllListedStocks()).willReturn(List.of(overseas));
+        given(priceGapFillService.fillOverseasGap(OVERSEAS_CODE))
+            .willThrow(new ExternalApiException(TossApiErrorCode.RATE_LIMIT_EXCEEDED));
+
+        // when
+        marketDataRefreshService.refreshAll();
+
+        // then
+        verify(stockMasterService, never()).markPriceUnsupported(any());
     }
 
     private DailyPrice dailyPrice(LocalDate tradeDate) {

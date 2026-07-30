@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
 import type { ScoreResponse } from '../../types/score'
-import { formatScore } from '../../utils/scoreFormat'
+import { formatScore, formatScoreDate } from '../../utils/scoreFormat'
 
 // 등급을 매도~매수 5단계로 표시한다(백엔드 Grade enum과 동일한 5단계,
 // com.quantlime.score.domain.Grade 참고). 국내 주식 관례대로 매수 쪽은
@@ -18,32 +18,35 @@ const GRADE_SCALE: { label: string; activeClass: string; glowColor: string }[] =
 // 코멘트는 그 아래로 내린다(예전엔 박스 옆에 나란히 둬서 박스 폭이
 // 좁아졌었다 - 사용자 피드백, 2026-07-16). 세로로 쌓이는 대신 박스 자체가
 // 넓어지고 padding도 넉넉해져 종합점수 숫자에 숨 쉴 공간이 생긴다.
+// 2026-07-30: 박스 안 글자가 답답해 보인다는 피드백으로 컨테이너 폭
+// 상한을 늘리고(max-w-md → max-w-xl) 박스 내부 gap·padding·글자 크기도
+// 한 단계씩 키움.
 export function ScoreSummaryRow({ score }: { score: ScoreResponse }) {
   return (
-    <div className="max-w-md flex-1 rounded-2xl border border-gray-100 bg-gradient-to-br from-white to-gray-50 p-4">
+    <div className="max-w-xl flex-1 rounded-2xl border border-gray-100 bg-gradient-to-br from-white to-gray-50 p-4">
       <div className="mb-1.5 flex items-center justify-between">
         <p className="text-xs font-semibold text-gray-700">종합 스코어</p>
-        <p className="text-[10px] text-gray-400">최근 거래일 종가 기준</p>
+        <p className="text-[10px] text-gray-400">{formatScoreDate(score.scoreDate)} 종가 기준</p>
       </div>
 
-      <div className="grid grid-cols-5 gap-2">
+      <div className="grid grid-cols-5 gap-3">
         {GRADE_SCALE.map((tier) => {
           const isActive = tier.label === score.grade
           return (
             <div
               key={tier.label}
               style={isActive ? ({ '--glow-color': tier.glowColor } as CSSProperties) : undefined}
-              className={`flex flex-col items-center justify-center gap-1 rounded-xl py-3 text-center transition ${
+              className={`flex flex-col items-center justify-center gap-1.5 rounded-xl py-4 text-center transition ${
                 isActive
                   ? `${tier.activeClass} animate-glow-pulse`
                   : 'border border-gray-200 bg-gray-50 text-gray-500'
               }`}
             >
-              <span className="text-[10px] font-medium">{tier.label}</span>
+              <span className="text-xs font-medium">{tier.label}</span>
               {isActive && (
-                <span className="flex items-baseline gap-0.5">
-                  <span className="text-base font-bold">{formatScore(score.compositeScore)}</span>
-                  <span className="text-[9px] font-medium opacity-70">/100</span>
+                <span className="flex items-baseline gap-1">
+                  <span className="text-lg font-bold">{formatScore(score.compositeScore)}</span>
+                  <span className="text-[10px] font-medium opacity-70">/100</span>
                 </span>
               )}
             </div>

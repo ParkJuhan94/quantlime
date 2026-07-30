@@ -8,13 +8,19 @@ import com.quantlime.infra.naver.exception.NaverFinanceApiErrorCode;
 import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.toss.dto.TossExchangeRateResponse;
 import com.quantlime.infra.toss.dto.TossExchangeRateResponse.ExchangeRateResult;
+import com.quantlime.infra.toss.dto.TossMarketIndicatorPriceResponse;
 import com.quantlime.infra.tradingview.TradingViewApiClient;
 import com.quantlime.infra.tradingview.dto.TradingViewSymbolResponse;
 import com.quantlime.infra.upbit.UpbitApiClient;
 import com.quantlime.infra.upbit.dto.UpbitTicker;
+import com.quantlime.market.domain.BenchmarkIndex;
 import com.quantlime.market.dto.response.MarketIndexResponse;
+import com.quantlime.market.repository.BenchmarkIndexRepository;
+import com.quantlime.price.cache.MarketCalendarCache;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -25,7 +31,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -45,6 +54,12 @@ class MarketIndexCacheTest {
 
     @Mock
     private TradingViewApiClient tradingViewApiClient;
+
+    @Mock
+    private BenchmarkIndexRepository benchmarkIndexRepository;
+
+    @Mock
+    private MarketCalendarCache marketCalendarCache;
 
     @InjectMocks
     private MarketIndexCache marketIndexCache;
@@ -112,32 +127,62 @@ class MarketIndexCacheTest {
     }
 
     @Test
-    @DisplayName("[코스피/코스닥 시세는 콤마를 제거해 파싱하고 marketStatus로 장중 여부를 판단한다]")
-    void get_withNaverIndices_parsesKospiAndKosdaq() {
+    @DisplayName("[코스피/코스닥 현재가는 Toss에서, 등락률은 전일 종가 대비 자체 계산, 장중여부는 MarketCalendarCache로 판단한다]")
+    void get_withTossIndices_computesChangeRateFromPreviousClose() {
         // given
         stubExchangeRateAndBitcoin();
-        given(naverFinanceApiClient.getIndexBasic("KOSPI")).willReturn(
-            new NaverIndexBasicResponse("코스피", "7,284.41", "427.58", "6.24", "CLOSE", "2026-07-15T18:59:00+09:00", null));
-        given(naverFinanceApiClient.getIndexBasic("KOSDAQ")).willReturn(
-            new NaverIndexBasicResponse("코스닥", "829.43", "45.45", "5.80", "OPEN", "2026-07-15T14:00:00+09:00", null));
+        given(tossApiClient.getMarketIndicatorPrices("KOSPI,KOSDAQ")).willReturn(
+            new TossMarketIndicatorPriceResponse(List.of(
+                new TossMarketIndicatorPriceResponse.MarketIndicatorPrice("KOSPI", null, "7284.41"),
+                new TossMarketIndicatorPriceResponse.MarketIndicatorPrice("KOSDAQ", null, "829.43"))));
+        given(benchmarkIndexRepository.findTopByIndexCodeAndTradeDateLessThanOrderByTradeDateDesc(
+            eq("KOSPI"), any(LocalDate.class)))
+            .willReturn(Optional.of(benchmarkIndex("KOSPI", 6856.83)));
+        given(benchmarkIndexRepository.findTopByIndexCodeAndTradeDateLessThanOrderByTradeDateDesc(
+            eq("KOSDAQ"), any(LocalDate.class)))
+            .willReturn(Optional.of(benchmarkIndex("KOSDAQ", 800.00)));
+        given(marketCalendarCache.isMarketOpenNow()).willReturn(true);
 
         // when
         MarketIndexResponse result = marketIndexCache.get();
 
         // then
         assertThat(result.kospi().value()).isEqualTo(7284.41);
-        assertThat(result.kospi().changeAmount()).isEqualTo(427.58);
-        assertThat(result.kospi().changeRate()).isEqualTo(6.24);
-        assertThat(result.kospi().marketOpen()).isFalse();
+        assertThat(result.kospi().changeAmount()).isEqualTo(427.58, within(0.001));
+        assertThat(result.kospi().changeRate()).isEqualTo(
+            (7284.41 - 6856.83) * 100.0 / 6856.83, within(0.0001));
+        assertThat(result.kospi().marketOpen()).isTrue();
         assertThat(result.kosdaq().marketOpen()).isTrue();
     }
 
     @Test
-    @DisplayName("[네이버 금융 조회가 실패해도 환율·비트코인은 그대로 응답하고 지수는 null로 폴백한다]")
-    void get_naverFails_fallsBackToNullIndicesWithoutBreakingOthers() {
+    @DisplayName("[전일 종가를 아직 못 구했으면 등락률만 null로 두고 현재가는 그대로 응답한다]")
+    void get_noPreviousClose_returnsValueWithNullChangeRate() {
         // given
         stubExchangeRateAndBitcoin();
-        given(naverFinanceApiClient.getIndexBasic(anyString()))
+        given(tossApiClient.getMarketIndicatorPrices("KOSPI,KOSDAQ")).willReturn(
+            new TossMarketIndicatorPriceResponse(List.of(
+                new TossMarketIndicatorPriceResponse.MarketIndicatorPrice("KOSPI", null, "7284.41"),
+                new TossMarketIndicatorPriceResponse.MarketIndicatorPrice("KOSDAQ", null, "829.43"))));
+        given(benchmarkIndexRepository.findTopByIndexCodeAndTradeDateLessThanOrderByTradeDateDesc(any(), any()))
+            .willReturn(Optional.empty());
+        given(marketCalendarCache.isMarketOpenNow()).willReturn(false);
+
+        // when
+        MarketIndexResponse result = marketIndexCache.get();
+
+        // then
+        assertThat(result.kospi().value()).isEqualTo(7284.41);
+        assertThat(result.kospi().changeAmount()).isNull();
+        assertThat(result.kospi().changeRate()).isNull();
+    }
+
+    @Test
+    @DisplayName("[Toss 국내 지수 조회가 실패해도 환율·비트코인은 그대로 응답하고 지수는 null로 폴백한다]")
+    void get_tossIndicesFail_fallsBackToNullIndicesWithoutBreakingOthers() {
+        // given
+        stubExchangeRateAndBitcoin();
+        given(tossApiClient.getMarketIndicatorPrices(anyString()))
             .willThrow(new ExternalApiException(NaverFinanceApiErrorCode.INDEX_INQUIRY_FAILED));
 
         // when
@@ -147,6 +192,10 @@ class MarketIndexCacheTest {
         assertThat(result.usdKrwRate()).isEqualTo(1380.5);
         assertThat(result.kospi()).isNull();
         assertThat(result.kosdaq()).isNull();
+    }
+
+    private BenchmarkIndex benchmarkIndex(String indexCode, double closePrice) {
+        return BenchmarkIndex.of(indexCode, LocalDate.now().minusDays(1), closePrice, closePrice, closePrice, closePrice);
     }
 
     @Test

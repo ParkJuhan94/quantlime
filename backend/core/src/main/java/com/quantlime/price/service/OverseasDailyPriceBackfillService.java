@@ -1,13 +1,12 @@
 package com.quantlime.price.service;
 
 import com.quantlime.common.exception.ExternalApiException;
-import com.quantlime.infra.kis.KisApiClient;
-import com.quantlime.infra.kis.dto.KisOverseasDailyPriceResponse;
-import com.quantlime.infra.kis.exception.KisApiErrorCode;
-import com.quantlime.price.domain.OverseasDailyPrice;
+import com.quantlime.infra.toss.TossApiClient;
+import com.quantlime.infra.toss.dto.TossCandleResponse;
+import com.quantlime.infra.toss.dto.TossPriceMapper;
+import com.quantlime.infra.toss.exception.TossApiErrorCode;
 import com.quantlime.price.repository.OverseasDailyPriceRepository;
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,38 +14,34 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 /**
- * 해외주식 일별 OHLCV 백필. 구조는 {@link DailyPriceService}의 토스 백필과
- * 동일(전체를 하나의 트랜잭션으로 묶지 않고 건별 저장)하되, 페이지네이션
- * 방식이 다르다 - 토스는 count/before 커서인 반면 KIS는 BYMD(기준일자)를
- * 이전 페이지 최고령일의 하루 전으로 갱신하는 방식이다(실제 호출로
- * BYMD=20260713 조회 시 그 날짜부터 과거 100건이 내려옴을 확인).
+ * 해외주식 일별 OHLCV 백필. 원래 KIS(한국투자증권) 기간별시세 API를 썼으나,
+ * Toss `/api/v1/candles`가 처음부터 해외 티커를 지원한다는 게 확인되면서
+ * (2026-07-29 세션, `toss-openapi.json` 교체 계기로 라이브 재검증) KIS
+ * 연동을 걷어내고 국내와 동일한 count/before 커서 페이지네이션으로
+ * 통일했다 - 구조는 {@link DailyPriceService}의 백필과 완전히 동일하고,
+ * 차이는 저장 대상이 {@link com.quantlime.price.domain.OverseasDailyPrice}
+ * (Double 가격)라는 점뿐이다.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class OverseasDailyPriceBackfillService {
 
-    // KIS 해외주식 기간별시세는 호출당 최대 100건을 준다(실제 응답의
-    // output1.nrec로 확인).
-    private static final int BACKFILL_PAGE_SIZE = 100;
+    private static final int BACKFILL_PAGE_SIZE = 200;
     private static final long API_DELAY_MS = 150;
     private static final long RATE_LIMIT_BACKOFF_MS = 3000;
-    private static final DateTimeFormatter BASE_DATE_FORMAT = DateTimeFormatter.BASIC_ISO_DATE;
 
     private final OverseasDailyPriceRepository overseasDailyPriceRepository;
-    private final KisApiClient kisApiClient;
+    private final TossApiClient tossApiClient;
 
     /**
-     * KIS 기간별시세는 Toss와 달리 count 파라미터가 없어(호출당 항상 최대
-     * {@value #BACKFILL_PAGE_SIZE}건 고정) "정확히 N일치"를 요청할 수 없다.
-     * 대신 baseDate 없이 1회만 호출하면 항상 최근 100거래일치가 내려오므로,
-     * {@link PriceGapFillService}가 종목별 마지막 저장일 다음날부터의 갭이
-     * 이 범위 안에 들 때(대부분의 다운타임 캐치업 상황) 페이지네이션 없이
-     * 한 번의 호출 + 건별 dedup 저장으로 채운다.
+     * lookbackDays는 호출측({@link PriceGapFillService})이 "마지막 저장일부터
+     * 오늘까지의 실제 갭"만큼만 지정한다(DailyPriceService.collectDailyPrice와
+     * 동일한 의도).
      */
-    public void collectRecentPrices(String stockCode, String exchangeCode) {
-        KisOverseasDailyPriceResponse response = fetchWithRetry(exchangeCode, stockCode, null);
-        List<KisOverseasDailyPriceResponse.Candle> candles = response.output2();
+    public void collectRecentPrices(String stockCode, int lookbackDays) {
+        TossCandleResponse response = fetchCandlesWithRetry(stockCode, lookbackDays, null);
+        List<TossCandleResponse.TossCandle> candles = response.result().candles();
         if (candles == null || candles.isEmpty()) {
             log.warn("해외 시세 데이터 없음: stockCode={}", stockCode);
             return;
@@ -60,64 +55,62 @@ public class OverseasDailyPriceBackfillService {
         }
     }
 
-    public void backfillHistoryIfNeeded(String stockCode, String exchangeCode, int targetDays) {
+    /**
+     * 외부 API 왕복과 딜레이가 여러 번 발생할 수 있어 전체를 하나의 트랜잭션으로
+     * 묶지 않는다(DailyPriceService.backfillHistoryIfNeeded와 동일한 이유).
+     */
+    public void backfillHistoryIfNeeded(String stockCode, int targetDays) {
         long existingCount = overseasDailyPriceRepository.countByStockCode(stockCode);
         if (existingCount >= targetDays) {
             log.debug("해외 이력 백필 불필요: stockCode={}, 기존건수={}", stockCode, existingCount);
             return;
         }
 
-        String baseDate = null;
+        log.info("해외 이력 백필 시작: stockCode={}, 목표={}일, 기존={}건",
+            stockCode, targetDays, existingCount);
+
+        String cursor = null;
         int savedCount = 0;
 
         while (savedCount < targetDays) {
-            KisOverseasDailyPriceResponse response =
-                fetchWithRetry(exchangeCode, stockCode, baseDate);
-            List<KisOverseasDailyPriceResponse.Candle> candles = response.output2();
+            TossCandleResponse response = fetchCandlesWithRetry(stockCode, BACKFILL_PAGE_SIZE, cursor);
+            List<TossCandleResponse.TossCandle> candles = response.result().candles();
             if (candles == null || candles.isEmpty()) {
                 break;
             }
 
             savedCount += saveNewCandles(stockCode, candles);
 
-            boolean noMoreHistory = candles.size() < BACKFILL_PAGE_SIZE;
+            boolean noMoreHistory = candles.size() < BACKFILL_PAGE_SIZE
+                || response.result().nextBefore() == null;
             if (noMoreHistory) {
                 break;
             }
-            baseDate = previousDay(candles.get(candles.size() - 1).xymd());
+            cursor = response.result().nextBefore();
 
             if (!sleepBeforeNextPage(stockCode)) {
                 return;
             }
         }
+
+        log.info("해외 이력 백필 완료: stockCode={}, 신규저장={}건", stockCode, savedCount);
     }
 
-    private int saveNewCandles(String stockCode, List<KisOverseasDailyPriceResponse.Candle> candles) {
+    private int saveNewCandles(String stockCode, List<TossCandleResponse.TossCandle> candles) {
         int saved = 0;
-        for (KisOverseasDailyPriceResponse.Candle candle : candles) {
-            LocalDate tradeDate = LocalDate.parse(candle.xymd(), BASE_DATE_FORMAT);
+        for (TossCandleResponse.TossCandle candle : candles) {
+            LocalDate tradeDate = TossPriceMapper.toLocalDate(candle.timestamp());
             if (overseasDailyPriceRepository.existsByStockCodeAndTradeDate(stockCode, tradeDate)) {
                 continue;
             }
             try {
-                overseasDailyPriceRepository.save(OverseasDailyPrice.of(
-                    stockCode,
-                    tradeDate,
-                    Double.parseDouble(candle.open()),
-                    Double.parseDouble(candle.high()),
-                    Double.parseDouble(candle.low()),
-                    Double.parseDouble(candle.clos()),
-                    Long.parseLong(candle.tvol())));
+                overseasDailyPriceRepository.save(TossPriceMapper.toOverseasDailyPrice(stockCode, candle));
                 saved++;
             } catch (DataIntegrityViolationException e) {
                 log.debug("해외 이력 백필 중복 저장 스킵: stockCode={}, date={}", stockCode, tradeDate);
             }
         }
         return saved;
-    }
-
-    private String previousDay(String yyyymmdd) {
-        return LocalDate.parse(yyyymmdd, BASE_DATE_FORMAT).minusDays(1).format(BASE_DATE_FORMAT);
     }
 
     private boolean sleepBeforeNextPage(String stockCode) {
@@ -131,12 +124,11 @@ public class OverseasDailyPriceBackfillService {
         }
     }
 
-    private KisOverseasDailyPriceResponse fetchWithRetry(
-        String exchangeCode, String stockCode, String baseDate) {
+    private TossCandleResponse fetchCandlesWithRetry(String stockCode, int count, String before) {
         try {
-            return kisApiClient.getOverseasDailyPrice(exchangeCode, stockCode, baseDate);
+            return tossApiClient.getDailyCandles(stockCode, count, before);
         } catch (ExternalApiException e) {
-            if (!KisApiErrorCode.RATE_LIMIT_EXCEEDED.getCode().equals(e.getCode())) {
+            if (!TossApiErrorCode.RATE_LIMIT_EXCEEDED.getCode().equals(e.getCode())) {
                 throw e;
             }
             log.warn("Rate Limit 도달, {}ms 대기 후 1회 재시도: stockCode={}",
@@ -145,9 +137,9 @@ public class OverseasDailyPriceBackfillService {
                 Thread.sleep(RATE_LIMIT_BACKOFF_MS);
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
-                throw new ExternalApiException(KisApiErrorCode.RATE_LIMIT_EXCEEDED, interrupted);
+                throw new ExternalApiException(TossApiErrorCode.RATE_LIMIT_EXCEEDED, interrupted);
             }
-            return kisApiClient.getOverseasDailyPrice(exchangeCode, stockCode, baseDate);
+            return tossApiClient.getDailyCandles(stockCode, count, before);
         }
     }
 }

@@ -55,11 +55,11 @@ class OverseasUniverseSelectionServiceTest {
 
         // then
         verify(overseasDailyPriceBackfillService, times(1))
-            .backfillHistoryIfNeeded("AAPL", "NAS", 60);
+            .backfillHistoryIfNeeded("AAPL", 60);
         verify(overseasDailyPriceBackfillService, times(1))
-            .backfillHistoryIfNeeded("AA", "NYS", 60);
+            .backfillHistoryIfNeeded("AA", 60);
         verify(overseasDailyPriceBackfillService, times(0))
-            .backfillHistoryIfNeeded(eq("005930"), any(), org.mockito.ArgumentMatchers.anyInt());
+            .backfillHistoryIfNeeded(eq("005930"), org.mockito.ArgumentMatchers.anyInt());
         assertThat(selected).containsExactly("AAPL");
     }
 
@@ -78,9 +78,9 @@ class OverseasUniverseSelectionServiceTest {
 
         // then: 1차 스캔은 REIT(O)만 제외한 1종목에 대해서만 호출
         verify(overseasDailyPriceBackfillService, times(1))
-            .backfillHistoryIfNeeded("AAPL", "NAS", 60);
+            .backfillHistoryIfNeeded("AAPL", 60);
         verify(overseasDailyPriceBackfillService, org.mockito.Mockito.never())
-            .backfillHistoryIfNeeded(eq("O"), any(), org.mockito.ArgumentMatchers.anyInt());
+            .backfillHistoryIfNeeded(eq("O"), org.mockito.ArgumentMatchers.anyInt());
         assertThat(selected).containsExactly("AAPL");
     }
 
@@ -100,9 +100,9 @@ class OverseasUniverseSelectionServiceTest {
 
         // then
         verify(overseasDailyPriceBackfillService, times(1))
-            .backfillHistoryIfNeeded("AAPL", "NAS", 400);
+            .backfillHistoryIfNeeded("AAPL", 400);
         verify(overseasDailyPriceBackfillService, times(0))
-            .backfillHistoryIfNeeded(eq("MSFT"), any(), eq(400));
+            .backfillHistoryIfNeeded(eq("MSFT"), eq(400));
     }
 
     private Stock stock(String code, String name, MarketType marketType) {

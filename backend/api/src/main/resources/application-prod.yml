@@ -14,6 +14,11 @@ spring:
         format_sql: false
         use_sql_comments: false
 
+# 운영에서는 웹훅 시크릿이 비면 서명 없는 웹훅을 전부 거부(fail-closed).
+# 베이스 application.yml의 dev 편의용 true를 여기서 명시적으로 덮어쓴다.
+toss-payments:
+  allow-missing-webhook-secret: false
+
 logging:
   level:
     root: info

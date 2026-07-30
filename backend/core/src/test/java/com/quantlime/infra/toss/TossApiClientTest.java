@@ -167,4 +167,31 @@ class TossApiClientTest {
             .isEqualTo("2026-07-28T22:30:00+09:00");
         mockServer.verify();
     }
+
+    @Test
+    @DisplayName("[getDailyCandles를 연달아 호출하면 최소 간격만큼 대기한다 - "
+        + "국내/해외 스윕이 별도 스레드에서 같은 MARKET_DATA_CHART 예산을 나눠 쓰므로 "
+        + "호출측이 몇 개든 결합 호출률을 여기서 강제해야 한다]")
+    void getDailyCandles_consecutiveCalls_paceCombinedCallRate() {
+        // given
+        when(tokenManager.getAccessToken()).thenReturn("token");
+        String candlesUri = BASE_URL + "/api/v1/candles?symbol=005930&interval=1d&count=10&adjusted=true";
+        String candleBody = "{\"result\":{\"candles\":[],\"nextBefore\":null}}";
+        mockServer.expect(requestTo(candlesUri))
+            .andExpect(method(GET))
+            .andRespond(withSuccess(candleBody, MediaType.APPLICATION_JSON));
+        mockServer.expect(requestTo(candlesUri))
+            .andExpect(method(GET))
+            .andRespond(withSuccess(candleBody, MediaType.APPLICATION_JSON));
+
+        // when
+        long start = System.currentTimeMillis();
+        tossApiClient.getDailyCandles("005930", 10, null);
+        tossApiClient.getDailyCandles("005930", 10, null);
+        long elapsedMs = System.currentTimeMillis() - start;
+
+        // then: 두 번째 호출이 최소 간격(150ms)만큼 지연됐어야 한다
+        assertThat(elapsedMs).isGreaterThanOrEqualTo(140);
+        mockServer.verify();
+    }
 }

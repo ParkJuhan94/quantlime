@@ -19,6 +19,9 @@ import org.springframework.stereotype.Service;
  * "이미 충분히 쌓여 있으면" 스킵하므로, 이미 200~400일치가 있는 종목이
  * 서버 다운타임 동안 최근 며칠만 비어도 놓친다 - 이 서비스는 그 최근
  * 결측 구간만 정확히 겨냥한다(MarketDataRefreshService가 사용).
+ *
+ * <p>국내/해외 모두 이제 같은 Toss 캔들 API를 쓰므로(2026-07-29, 해외는
+ * KIS에서 이관) 갭 계산 로직이 완전히 대칭이다.
  */
 @Slf4j
 @Service
@@ -27,11 +30,9 @@ public class PriceGapFillService {
 
     // 토스 캔들 조회 count 파라미터 상한(DailyPriceService.BACKFILL_PAGE_SIZE와
     // 동일 값) - 갭이 이보다 크면 단일 호출로 못 채우므로 깊은 백필로 폴백한다.
-    private static final int DOMESTIC_SINGLE_CALL_CAP_DAYS = 200;
-    // KIS는 count 파라미터가 없어 baseDate 없이 호출하면 항상 최근 100거래일이
-    // 내려온다(OverseasDailyPriceBackfillService 참고) - 갭이 이 범위를
-    // 넘으면(장기 다운타임 등) 페이지네이션 백필로 폴백해야 한다.
-    private static final int OVERSEAS_SINGLE_CALL_CAP_DAYS = 100;
+    // 해외도 이제 같은 Toss 캔들 API를 쓰므로(2026-07-29, KIS 이관) 국내와
+    // 값이 같아져 상수 하나로 통합했다.
+    private static final int SINGLE_CALL_CAP_DAYS = 200;
     private static final int DEEP_BACKFILL_TARGET_DAYS = 200;
     // 갭은 거래일이 아니라 달력일로 계산하므로(휴장일 포함), 주말+연휴를
     // 감안해 약간의 여유를 둔다 - 부족하게 요청해 하루라도 놓치는 것보다
@@ -63,7 +64,7 @@ public class PriceGapFillService {
             return false;
         }
         int lookbackDays = (int) rawGapDays + GAP_BUFFER_DAYS;
-        if (lookbackDays > DOMESTIC_SINGLE_CALL_CAP_DAYS) {
+        if (lookbackDays > SINGLE_CALL_CAP_DAYS) {
             log.info("가격 갭이 단일 호출 한도 초과, 깊은 백필로 대체: stockCode={}, 갭={}일",
                 stockCode, rawGapDays);
             dailyPriceService.backfillHistoryIfNeeded(stockCode, DEEP_BACKFILL_TARGET_DAYS);
@@ -73,13 +74,12 @@ public class PriceGapFillService {
         return true;
     }
 
-    public boolean fillOverseasGap(String stockCode, String exchangeCode) {
+    public boolean fillOverseasGap(String stockCode) {
         Optional<LocalDate> latestTradeDate = overseasDailyPriceRepository
             .findTopByStockCodeOrderByTradeDateDesc(stockCode)
             .map(OverseasDailyPrice::getTradeDate);
         if (latestTradeDate.isEmpty()) {
-            overseasDailyPriceBackfillService.backfillHistoryIfNeeded(
-                stockCode, exchangeCode, DEEP_BACKFILL_TARGET_DAYS);
+            overseasDailyPriceBackfillService.backfillHistoryIfNeeded(stockCode, DEEP_BACKFILL_TARGET_DAYS);
             return true;
         }
 
@@ -88,14 +88,14 @@ public class PriceGapFillService {
             log.debug("해외 가격 갭 없음(이미 최신): stockCode={}, 최신저장일={}", stockCode, latestTradeDate.get());
             return false;
         }
-        if (rawGapDays + GAP_BUFFER_DAYS > OVERSEAS_SINGLE_CALL_CAP_DAYS) {
+        int lookbackDays = (int) rawGapDays + GAP_BUFFER_DAYS;
+        if (lookbackDays > SINGLE_CALL_CAP_DAYS) {
             log.info("해외 가격 갭이 단일 호출 한도 초과, 깊은 백필로 대체: stockCode={}, 갭={}일",
                 stockCode, rawGapDays);
-            overseasDailyPriceBackfillService.backfillHistoryIfNeeded(
-                stockCode, exchangeCode, DEEP_BACKFILL_TARGET_DAYS);
+            overseasDailyPriceBackfillService.backfillHistoryIfNeeded(stockCode, DEEP_BACKFILL_TARGET_DAYS);
             return true;
         }
-        overseasDailyPriceBackfillService.collectRecentPrices(stockCode, exchangeCode);
+        overseasDailyPriceBackfillService.collectRecentPrices(stockCode, lookbackDays);
         return true;
     }
 }

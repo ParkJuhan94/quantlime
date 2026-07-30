@@ -16,6 +16,7 @@ import com.quantlime.score.dto.response.ScoreRankingResponse;
 import com.quantlime.score.dto.response.ScoreResponse;
 import com.quantlime.score.exception.ScoreErrorCode;
 import com.quantlime.score.repository.ScoreRepository;
+import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.StockMasterService;
 import com.quantlime.watchlist.domain.Watchlist;
@@ -150,10 +151,12 @@ public class ScoreService {
     }
 
     @Transactional(readOnly = true)
-    public List<ScoreRankingResponse> getDashboardScores(Long userId) {
+    public List<ScoreRankingResponse> getDashboardScores(Long userId, String scope) {
         List<Watchlist> watchlist = watchlistRepository.findAllWithStockByUserId(userId);
         Map<String, Stock> stockByCode = watchlist.stream()
-            .collect(Collectors.toMap(w -> w.getStock().getStockCode(), Watchlist::getStock));
+            .map(Watchlist::getStock)
+            .filter(stock -> matchesScope(stock.getMarketType(), scope))
+            .collect(Collectors.toMap(Stock::getStockCode, stock -> stock));
 
         List<Score> latestScores = scoreRepository
             .findLatestScoresByStockCodesOrderByCompositeScoreDesc(
@@ -171,8 +174,9 @@ public class ScoreService {
     // 상장종목 중 상위 N개(2026-07-18, 관심종목만/전체 토글로 /dashboard
     // 별도 페이지를 대체).
     @Transactional(readOnly = true)
-    public List<ScoreRankingResponse> getAllStocksScoreRanking(int limit) {
-        List<Score> latestScores = scoreRepository.findTopScoresOrderByCompositeScoreDesc(limit);
+    public List<ScoreRankingResponse> getAllStocksScoreRanking(int limit, String scope) {
+        List<Score> latestScores = scoreRepository
+            .findTopScoresOrderByCompositeScoreDesc(limit, scopeToMarketTypes(scope));
         List<String> stockCodes = latestScores.stream().map(Score::getStockCode).toList();
         Map<String, Stock> stockByCode = stockMasterService.getStocksByCodesInOrder(stockCodes).stream()
             .collect(Collectors.toMap(Stock::getStockCode, stock -> stock));
@@ -183,6 +187,27 @@ public class ScoreService {
                 return ScoreMapper.toScoreRankingResponse(score, stock.getStockName(), stock.getSector());
             })
             .toList();
+    }
+
+    /**
+     * "all"(또는 null)이면 시장 구분 없이 전부, "domestic"/"overseas"면 그
+     * 시장만 - {@code MarketController.getRanking}의 scope 파라미터와
+     * 동일한 값 집합을 쓴다(2026-07-30 추가 - 이 필터가 없으면 국내/해외
+     * 스코어 분포 차이 때문에 상위 N개가 한쪽 시장으로만 쏠렸음).
+     */
+    private List<MarketType> scopeToMarketTypes(String scope) {
+        if ("domestic".equals(scope)) {
+            return MarketType.domesticValues();
+        }
+        if ("overseas".equals(scope)) {
+            return MarketType.overseasValues();
+        }
+        return null;
+    }
+
+    private boolean matchesScope(MarketType marketType, String scope) {
+        List<MarketType> allowed = scopeToMarketTypes(scope);
+        return allowed == null || allowed.contains(marketType);
     }
 
     private void recalculateScoresChunk(List<String> stockCodes) {

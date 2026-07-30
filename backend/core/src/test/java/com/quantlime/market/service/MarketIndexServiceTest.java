@@ -6,8 +6,10 @@ import com.quantlime.market.cache.IndexChartCache;
 import com.quantlime.market.cache.IndexMinuteChartCache;
 import com.quantlime.market.cache.MarketIndexCache;
 import com.quantlime.market.cache.WorldIndexChartCache;
+import com.quantlime.market.domain.BenchmarkIndex;
 import com.quantlime.market.dto.response.IndexChartResponse;
 import com.quantlime.market.dto.response.IndexMinuteChartResponse;
+import com.quantlime.market.repository.BenchmarkIndexRepository;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -19,6 +21,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 
 @Tag("unit")
@@ -43,8 +47,30 @@ class MarketIndexServiceTest {
     @Mock
     private ExchangeRateChartCache exchangeRateChartCache;
 
+    @Mock
+    private BenchmarkIndexRepository benchmarkIndexRepository;
+
     @InjectMocks
     private MarketIndexService marketIndexService;
+
+    @Test
+    @DisplayName("[국내 지수 차트는 영속 저장된 benchmark_index에서 조회한다 - "
+        + "2026-07-30 IndexChartCache(60초 TTL, 영속 저장 안 함)에서 이관, 종목 상세페이지처럼 영속 이력 조회]")
+    void getIndexChart_domestic_readsFromBenchmarkIndex() {
+        // given
+        given(benchmarkIndexRepository.findByIndexCodeAndTradeDateBetweenOrderByTradeDateAsc(
+            eq("KOSPI"), any(), any()))
+            .willReturn(List.of(
+                BenchmarkIndex.of("KOSPI", LocalDate.of(2026, 7, 15), 7082.91, 7424.18, 7082.91, 7284.41)));
+
+        // when
+        List<IndexChartResponse> result = marketIndexService.getIndexChart("KOSPI");
+
+        // then
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).close()).isEqualTo(7284.41);
+        assertThat(result.get(0).tradeDate()).isEqualTo(LocalDate.of(2026, 7, 15));
+    }
 
     @Test
     @DisplayName("[분봉이 있으면 분봉을 그대로 반환한다]")

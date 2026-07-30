@@ -211,7 +211,9 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
   // 스코어/급상승/급하락/거래대금 4개 필터 전부 "관심종목만/전체" 토글을
   // 공통으로 둔다(2026-07-18 피드백에서 스코어·급상승·급하락까지 우선
   // 통합했고, 2026-07-19 피드백으로 거래대금도 동일하게 맞춤). 스코어
-  // 대시보드는 국내/해외 구분이 없어 scope와 무관하게 항상 노출한다.
+  // 탭도 scope(전체/국내/해외)를 그대로 넘긴다 - 예전엔 scope와 무관하게
+  // 항상 전체를 섞어 정렬해, 국내/해외 스코어 분포 차이 때문에 상위 N개가
+  // 한쪽 시장으로만 쏠리는 버그가 있었다(2026-07-30 수정).
   const showWatchlistOnlyToggle = isAuthenticated
   const effectiveWatchlistOnly = showWatchlistOnlyToggle && watchlistOnly
 
@@ -222,7 +224,7 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
     isRealMode,
     effectiveWatchlistOnly,
   )
-  const scoreQuery = useDashboardScoresQuery(effectiveWatchlistOnly, 10)
+  const scoreQuery = useDashboardScoresQuery(effectiveWatchlistOnly, 10, scope)
   const scoreStockCodes = isScoreMode ? (scoreQuery.data ?? []).map((item) => item.stockCode) : []
   // WebSocket 실시간 브로드캐스트는 장중에만 오므로 소켓만 쓰면 장마감엔
   // 현재가/등락률이 전부 "-"로 보인다(AppSidePanel에서 이미 한 번 겪은
@@ -266,63 +268,14 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
 
   return (
     <section className="rounded-2xl border border-gray-100 bg-white p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-base font-semibold text-gray-900">실시간 랭킹</h2>
-        <div className="relative flex items-center gap-2">
-          {/* 별도 "관심종목 랭킹"/"/dashboard" 페이지를 새로 만드는 대신,
-              스코어/급상승/급하락/거래대금 전부에 "관심종목만 보기" 토글을
-              공통으로 붙였다(2026-07-18/19 피드백). 텍스트 버튼 대신
-              하트 아이콘 온오프 토글로 바꾸고(2026-07-20 피드백), 종목별
-              관심종목 하트와 동일한 색상 패턴(빨강=on)을 재사용해 같은
-              화면 안에서 하트 색상 규칙이 하나로 통일되게 한다. */}
-          {showWatchlistOnlyToggle && (
-            <button
-              type="button"
-              onClick={() => setWatchlistOnly(!watchlistOnly)}
-              aria-pressed={watchlistOnly}
-              aria-label={watchlistOnly ? '관심종목만 보기 해제' : '관심종목만 보기'}
-              className={`flex h-7 w-7 items-center justify-center rounded-lg border transition ${
-                watchlistOnly ? 'border-red-200 bg-red-50 hover:bg-red-100' : 'border-gray-200 hover:bg-gray-50'
-              }`}
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill={watchlistOnly ? '#dc2626' : 'none'}
-                stroke={watchlistOnly ? '#dc2626' : '#c6c6c6'}
-                strokeWidth="2"
-              >
-                <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z" />
-              </svg>
-            </button>
-          )}
-          <select
-            value={period}
-            onChange={(event) => setPeriod(event.target.value as Period)}
-            className="appearance-none rounded-lg border border-gray-200 bg-white py-1.5 pl-2.5 pr-7 text-xs font-medium text-gray-600 transition outline-none hover:bg-gray-50 focus:border-gray-400"
-          >
-            {PERIOD_OPTIONS.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-          <svg
-            className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2"
-            width="10"
-            height="10"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#9ca3af"
-            strokeWidth="2.5"
-          >
-            <path d="m6 9 6 6 6-6" />
-          </svg>
-        </div>
-      </div>
+      <h2 className="mb-3 text-base font-semibold text-gray-900">실시간 랭킹</h2>
 
-      <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+      {/* 필터를 전부 왼쪽에 붙여 한 흐름으로 배치한다(2026-07-30 요청 -
+          예전엔 관심종목 토글·기간 드롭다운이 우측 상단, 범위·정렬 토글이
+          그 아래 좌/우로 나뉘어 있어 시선이 여러 번 오갔음). 범위(scope) →
+          정렬(sort) → 관심종목만 보기 → 기간 순으로, 좁은 필터에서 넓은
+          필터 순으로 왼쪽부터 자연스럽게 읽히게 배치. */}
+      <div className="relative mb-2.5 flex flex-wrap items-center gap-2">
         <div className="flex rounded-xl bg-gray-100 p-1">
           {SCOPE_OPTIONS.map((option) => (
             <button
@@ -350,6 +303,58 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
               {option.label}
             </button>
           ))}
+        </div>
+        {/* 별도 "관심종목 랭킹"/"/dashboard" 페이지를 새로 만드는 대신,
+            스코어/급상승/급하락/거래대금 전부에 "관심종목만 보기" 토글을
+            공통으로 붙였다(2026-07-18/19 피드백). 텍스트 버튼 대신
+            하트 아이콘 온오프 토글로 바꾸고(2026-07-20 피드백), 종목별
+            관심종목 하트와 동일한 색상 패턴(빨강=on)을 재사용해 같은
+            화면 안에서 하트 색상 규칙이 하나로 통일되게 한다. */}
+        {showWatchlistOnlyToggle && (
+          <button
+            type="button"
+            onClick={() => setWatchlistOnly(!watchlistOnly)}
+            aria-pressed={watchlistOnly}
+            aria-label={watchlistOnly ? '관심종목만 보기 해제' : '관심종목만 보기'}
+            className={`flex h-7 w-7 items-center justify-center rounded-lg border transition ${
+              watchlistOnly ? 'border-red-200 bg-red-50 hover:bg-red-100' : 'border-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill={watchlistOnly ? '#dc2626' : 'none'}
+              stroke={watchlistOnly ? '#dc2626' : '#c6c6c6'}
+              strokeWidth="2"
+            >
+              <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z" />
+            </svg>
+          </button>
+        )}
+        <div className="relative flex items-center">
+          <select
+            value={period}
+            onChange={(event) => setPeriod(event.target.value as Period)}
+            className="appearance-none rounded-lg border border-gray-200 bg-white py-1.5 pl-2.5 pr-7 text-xs font-medium text-gray-600 transition outline-none hover:bg-gray-50 focus:border-gray-400"
+          >
+            {PERIOD_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+          <svg
+            className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2"
+            width="10"
+            height="10"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#9ca3af"
+            strokeWidth="2.5"
+          >
+            <path d="m6 9 6 6 6-6" />
+          </svg>
         </div>
       </div>
 

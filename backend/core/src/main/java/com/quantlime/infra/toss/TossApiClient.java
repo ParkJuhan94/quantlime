@@ -4,7 +4,10 @@ import com.quantlime.common.exception.ExternalApiException;
 import com.quantlime.common.util.ExternalApiInvoker;
 import com.quantlime.infra.toss.dto.TossCandleResponse;
 import com.quantlime.infra.toss.dto.TossExchangeRateResponse;
+import com.quantlime.infra.toss.dto.TossInvestorTradingResponse;
 import com.quantlime.infra.toss.dto.TossMarketCalendarResponse;
+import com.quantlime.infra.toss.dto.TossMarketIndicatorCandleResponse;
+import com.quantlime.infra.toss.dto.TossMarketIndicatorPriceResponse;
 import com.quantlime.infra.toss.dto.TossPriceResponse;
 import com.quantlime.infra.toss.dto.TossRankingResponse;
 import com.quantlime.infra.toss.dto.TossUsMarketCalendarResponse;
@@ -33,11 +36,25 @@ public class TossApiClient {
     private static final String OUTCOME_TOKEN_INVALID = "token_invalid";
     private static final String OUTCOME_ERROR = "error";
 
+    // /api/v1/candles는 MARKET_DATA_CHART 레이트리밋 그룹 하나를 국내(domestic
+    // TaskExecutor)/해외(overseas TaskExecutor) 스윕이 동시에 나눠 쓴다
+    // (2026-07-29 해외를 KIS에서 이 엔드포인트로 이관하면서 생긴 변화 - 이전엔
+    // KIS가 독립된 예산이었음). 각 스레드가 자기 쪽에서만 150ms 딜레이를 두면
+    // 두 스레드의 호출이 서로 무관하게 겹쳐 실질 결합 호출률이 그 2배 가까이
+    // 치솟아 429가 급증했다(2026-07-30 실측 - 두 스레드의 실패 로그가 수 ms
+    // 간격으로 번갈아 찍힘). 이 클라이언트 레벨에서 전역으로 최소 간격을
+    // 강제해 몇 개 스레드가 동시에 부르든 결합 호출률이 이 값을 넘지 않게 한다.
+    private static final long MIN_CANDLE_CALL_INTERVAL_MS = 150;
+
     private final RestClient tossRestClient;
     private final TossTokenManager tokenManager;
     private final MeterRegistry meterRegistry;
 
+    private final Object candleRateLimitLock = new Object();
+    private volatile long lastCandleCallAtMillis = 0;
+
     public TossCandleResponse getDailyCandles(String symbol, int count, String before) {
+        awaitCandleRateLimit();
         return withTokenRetry("candles", token -> ExternalApiInvoker.call(
             TossApiErrorCode.CANDLE_INQUIRY_FAILED,
             () -> tossRestClient.get()
@@ -153,6 +170,105 @@ public class TossApiClient {
                 .header("authorization", "Bearer " + token)
                 .retrieve()
                 .body(TossUsMarketCalendarResponse.class)));
+    }
+
+    /**
+     * 시장 지표(국내 지수·국채) 현재가 조회(신규, 2026-07-29). Rate Limits
+     * Group이 시세 조회(MARKET_DATA)와 분리된 MARKET_INDICATOR라 별도
+     * 예산을 쓴다. {@code symbols}는 콤마 구분(예: "KOSPI,KOSDAQ"). 응답에
+     * {@code lastPrice}만 있고 등락률·장중여부는 없어 호출 측(MarketIndexCache)이
+     * 직접 계산해야 한다.
+     */
+    public TossMarketIndicatorPriceResponse getMarketIndicatorPrices(String symbols) {
+        return withTokenRetry("market-indicator-prices", token -> ExternalApiInvoker.call(
+            TossApiErrorCode.MARKET_INDICATOR_PRICE_INQUIRY_FAILED,
+            () -> tossRestClient.get()
+                .uri(uriBuilder -> uriBuilder
+                    .path("/api/v1/market-indicators/prices")
+                    .queryParam("symbols", symbols)
+                    .build())
+                .header("authorization", "Bearer " + token)
+                .retrieve()
+                .body(TossMarketIndicatorPriceResponse.class),
+            HttpClientErrorException.TooManyRequests.class,
+            TossApiErrorCode.RATE_LIMIT_EXCEEDED));
+    }
+
+    /**
+     * 시장 지표(국내 지수·국채) 캔들 조회(신규, 2026-07-29). {@code interval}
+     * {@code 1m}(분봉)은 KOSPI/KOSDAQ만 지원, 국채는 {@code 1d}(일봉)만
+     * 지원한다(호출 측이 지수 코드에 맞게 선택). Rate Limits Group은 위
+     * 현재가 조회와 동일한 MARKET_INDICATOR.
+     */
+    public TossMarketIndicatorCandleResponse getMarketIndicatorCandles(
+        String symbol, String interval, int count, String before) {
+        return withTokenRetry("market-indicator-candles", token -> ExternalApiInvoker.call(
+            TossApiErrorCode.MARKET_INDICATOR_CANDLE_INQUIRY_FAILED,
+            () -> tossRestClient.get()
+                .uri(uriBuilder -> {
+                    var builder = uriBuilder
+                        .path("/api/v1/market-indicators/{symbol}/candles")
+                        .queryParam("interval", interval)
+                        .queryParam("count", count);
+                    if (before != null) {
+                        builder.queryParam("before", before);
+                    }
+                    return builder.build(symbol);
+                })
+                .header("authorization", "Bearer " + token)
+                .retrieve()
+                .body(TossMarketIndicatorCandleResponse.class),
+            HttpClientErrorException.TooManyRequests.class,
+            TossApiErrorCode.RATE_LIMIT_EXCEEDED));
+    }
+
+    /**
+     * 투자자별 매매대금 조회(신규, 2026-07-29) - KOSPI/KOSDAQ만 지원(그 외
+     * 심볼은 400 unsupported-symbol). {@code interval}은 1d/1w/1mo/1y,
+     * {@code until}은 페이지네이션 커서(이전 응답의 nextUntil을 그대로
+     * 전달, 최초 호출 시 null). Rate Limits Group은 MARKET_INDICATOR로
+     * 위 두 메서드와 동일.
+     */
+    public TossInvestorTradingResponse getInvestorTrading(
+        String symbol, String interval, int count, String until) {
+        return withTokenRetry("investor-trading", token -> ExternalApiInvoker.call(
+            TossApiErrorCode.INVESTOR_TRADING_INQUIRY_FAILED,
+            () -> tossRestClient.get()
+                .uri(uriBuilder -> {
+                    var builder = uriBuilder
+                        .path("/api/v1/market-indicators/{symbol}/investor-trading")
+                        .queryParam("interval", interval)
+                        .queryParam("count", count);
+                    if (until != null) {
+                        builder.queryParam("until", until);
+                    }
+                    return builder.build(symbol);
+                })
+                .header("authorization", "Bearer " + token)
+                .retrieve()
+                .body(TossInvestorTradingResponse.class),
+            HttpClientErrorException.TooManyRequests.class,
+            TossApiErrorCode.RATE_LIMIT_EXCEEDED));
+    }
+
+    /**
+     * getDailyCandles를 호출하는 스레드가 몇 개든 이 메서드가 결합 호출률을
+     * {@value #MIN_CANDLE_CALL_INTERVAL_MS}ms당 1회로 강제한다 - 락을 쥔 채
+     * sleep해 대기 중인 다른 스레드가 동시에 통과하지 못하게 한다(그래야
+     * "직전 호출 이후 최소 간격"이라는 불변식이 스레드 수와 무관하게 유지됨).
+     */
+    private void awaitCandleRateLimit() {
+        synchronized (candleRateLimitLock) {
+            long waitMs = lastCandleCallAtMillis + MIN_CANDLE_CALL_INTERVAL_MS - System.currentTimeMillis();
+            if (waitMs > 0) {
+                try {
+                    Thread.sleep(waitMs);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            lastCandleCallAtMillis = System.currentTimeMillis();
+        }
     }
 
     /**

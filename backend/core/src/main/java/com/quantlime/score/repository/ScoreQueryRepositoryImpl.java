@@ -2,9 +2,12 @@ package com.quantlime.score.repository;
 
 import com.querydsl.jpa.JPAExpressions;
 import com.querydsl.jpa.JPQLQuery;
+import com.querydsl.jpa.impl.JPAQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.quantlime.score.domain.QScore;
 import com.quantlime.score.domain.Score;
+import com.quantlime.stock.domain.MarketType;
+import com.quantlime.stock.domain.QStock;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -37,13 +40,23 @@ public class ScoreQueryRepositoryImpl implements ScoreQueryRepository {
     }
 
     @Override
-    public List<Score> findTopScoresOrderByCompositeScoreDesc(int limit) {
+    public List<Score> findTopScoresOrderByCompositeScoreDesc(int limit, List<MarketType> marketTypes) {
         QScore score = QScore.score;
         QScore latest = new QScore("latest");
+        QStock stock = QStock.stock;
 
-        return queryFactory
+        JPAQuery<Score> query = queryFactory
             .selectFrom(score)
-            .where(score.scoreDate.eq(latestScoreDateSubquery(latest, score)))
+            .where(score.scoreDate.eq(latestScoreDateSubquery(latest, score)));
+
+        if (marketTypes != null && !marketTypes.isEmpty()) {
+            query.where(score.stockCode.in(
+                JPAExpressions.select(stock.stockCode)
+                    .from(stock)
+                    .where(stock.marketType.in(marketTypes))));
+        }
+
+        return query
             .orderBy(score.compositeScore.desc().nullsLast())
             .limit(limit)
             .fetch();

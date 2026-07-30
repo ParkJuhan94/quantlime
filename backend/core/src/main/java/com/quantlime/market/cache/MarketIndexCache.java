@@ -5,18 +5,26 @@ import com.quantlime.infra.naver.NaverFinanceApiClient;
 import com.quantlime.infra.naver.dto.NaverIndexBasicResponse;
 import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.toss.dto.TossExchangeRateResponse;
+import com.quantlime.infra.toss.dto.TossMarketIndicatorPriceResponse;
 import com.quantlime.infra.tradingview.TradingViewApiClient;
 import com.quantlime.infra.tradingview.dto.TradingViewSymbolResponse;
 import com.quantlime.infra.upbit.UpbitApiClient;
 import com.quantlime.infra.upbit.dto.UpbitTicker;
+import com.quantlime.market.domain.BenchmarkIndex;
 import com.quantlime.market.domain.WorldIndexCode;
 import com.quantlime.market.dto.response.MarketIndexResponse;
 import com.quantlime.market.exception.MarketErrorCode;
+import com.quantlime.market.repository.BenchmarkIndexRepository;
+import com.quantlime.price.cache.MarketCalendarCache;
+import com.quantlime.price.util.ChangeRateCalculator;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -54,6 +62,8 @@ public class MarketIndexCache {
     private final UpbitApiClient upbitApiClient;
     private final NaverFinanceApiClient naverFinanceApiClient;
     private final TradingViewApiClient tradingViewApiClient;
+    private final BenchmarkIndexRepository benchmarkIndexRepository;
+    private final MarketCalendarCache marketCalendarCache;
 
     private volatile MarketIndexResponse cached;
     private volatile Instant cachedAt = Instant.EPOCH;
@@ -82,6 +92,7 @@ public class MarketIndexCache {
         UpbitTicker bitcoinTicker = getBitcoinTicker();
         TradingViewSymbolResponse treasuryYield = fetchUsTreasuryYield();
         recordTreasuryYieldHistory(treasuryYield);
+        Map<String, String> domesticIndexPrices = fetchDomesticIndexPrices();
 
         cached = new MarketIndexResponse(
             Double.parseDouble(exchangeRate.rate()),
@@ -92,8 +103,8 @@ public class MarketIndexCache {
             treasuryYield != null ? treasuryYield.close() : null,
             treasuryYield != null ? treasuryYield.changeRate() : null,
             List.copyOf(treasuryYieldHistory),
-            fetchIndexQuote(KOSPI_CODE),
-            fetchIndexQuote(KOSDAQ_CODE),
+            fetchIndexQuote(KOSPI_CODE, domesticIndexPrices),
+            fetchIndexQuote(KOSDAQ_CODE, domesticIndexPrices),
             fetchWorldIndexQuote(WorldIndexCode.NASDAQ),
             fetchWorldIndexQuote(WorldIndexCode.SP500),
             fetchWorldIndexQuote(WorldIndexCode.SOXX)
@@ -153,26 +164,55 @@ public class MarketIndexCache {
     }
 
     /**
-     * 네이버 금융은 문서화되지 않은 비공식 API라(토스에 지수 심볼이
-     * 없어 대안으로 씀) 환율·비트코인과 달리 실패를 전파하지 않고
-     * null로 흡수한다 - 이미 잘 동작하던 나머지 위젯까지 이 호출
-     * 하나 때문에 통째로 깨지면 안 된다. 프론트는 null이면 예시
-     * 데이터로 폴백한다.
+     * 국내 지수(코스피/코스닥) 현재가를 한 번의 Toss 호출로 함께 조회한다
+     * (2026-07-29, 네이버에서 이관 - 지수당 1회씩 호출하던 걸 통합).
+     * 실패해도 예외를 전파하지 않고 빈 맵으로 흡수한다 - 이미 잘 동작하던
+     * 나머지 위젯까지 이 호출 하나 때문에 통째로 깨지면 안 된다.
      */
-    private MarketIndexResponse.IndexQuote fetchIndexQuote(String indexCode) {
+    private Map<String, String> fetchDomesticIndexPrices() {
         try {
-            NaverIndexBasicResponse basic = naverFinanceApiClient.getIndexBasic(indexCode);
-            double value = parseNumber(basic.closePrice());
-            double changeAmount = parseNumber(basic.compareToPreviousClosePrice());
-            double changeRate = parseNumber(basic.fluctuationsRatio());
-            boolean marketOpen = MARKET_STATUS_OPEN.equalsIgnoreCase(basic.marketStatus());
-            // 국내 지수는 프리/애프터마켓 개념이 없다(응답 필드 자체가 없음).
-            return new MarketIndexResponse.IndexQuote(value, changeAmount, changeRate, marketOpen, null, null, null);
+            TossMarketIndicatorPriceResponse response =
+                tossApiClient.getMarketIndicatorPrices(KOSPI_CODE + "," + KOSDAQ_CODE);
+            List<TossMarketIndicatorPriceResponse.MarketIndicatorPrice> prices = response.result();
+            if (prices == null) {
+                return Map.of();
+            }
+            return prices.stream()
+                .collect(Collectors.toMap(
+                    TossMarketIndicatorPriceResponse.MarketIndicatorPrice::symbol,
+                    TossMarketIndicatorPriceResponse.MarketIndicatorPrice::lastPrice));
         } catch (Exception e) {
-            log.warn("네이버 금융 지수 조회 실패, 예시 데이터로 폴백: indexCode={}, error={}",
-                indexCode, e.getMessage());
+            log.warn("Toss 국내 지수 현재가 조회 실패, 예시 데이터로 폴백: error={}", e.getMessage());
+            return Map.of();
+        }
+    }
+
+    /**
+     * Toss market-indicators/prices는 현재가(lastPrice)만 주고 등락률·
+     * 장중여부는 주지 않아(네이버는 둘 다 제공했음) 직접 계산한다
+     * (2026-07-29, 네이버에서 이관). 등락률은 영속 저장된 전일 종가
+     * (benchmark_index, InvestorTradingBackfillService와 같은 트리거로
+     * 매일 갱신됨) 대비로 계산하고, 장중여부는 기존 MarketCalendarCache를
+     * 재사용한다 - 추가 API 호출 없이 이미 있는 데이터로 채운다. 전일
+     * 종가를 아직 못 구했으면(백필 전 등) 등락률만 null로 두고 현재가는
+     * 그대로 보여준다(값을 꾸며내지 않음).
+     */
+    private MarketIndexResponse.IndexQuote fetchIndexQuote(String indexCode, Map<String, String> prices) {
+        String lastPrice = prices.get(indexCode);
+        if (lastPrice == null) {
+            log.warn("Toss 응답에 국내 지수 현재가 없음, 예시 데이터로 폴백: indexCode={}", indexCode);
             return null;
         }
+        double value = Double.parseDouble(lastPrice);
+        Double previousClose = benchmarkIndexRepository
+            .findTopByIndexCodeAndTradeDateLessThanOrderByTradeDateDesc(indexCode, LocalDate.now())
+            .map(BenchmarkIndex::getClosePrice)
+            .orElse(null);
+        Double changeAmount = previousClose == null ? null : value - previousClose;
+        Double changeRate = ChangeRateCalculator.calculate(value, previousClose);
+        boolean marketOpen = marketCalendarCache.isMarketOpenNow();
+        // 국내 지수는 프리/애프터마켓 개념이 없다.
+        return new MarketIndexResponse.IndexQuote(value, changeAmount, changeRate, marketOpen, null, null, null);
     }
 
     /** 해외지수는 조회 방식만 다를 뿐(로이터 코드, api.stock.naver.com)

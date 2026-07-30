@@ -3,16 +3,17 @@ package com.quantlime.market.controller;
 import com.quantlime.auth.jwt.JwtTokenProvider;
 import com.quantlime.market.cache.BitcoinChartCache;
 import com.quantlime.market.cache.ExchangeRateChartCache;
-import com.quantlime.market.cache.IndexChartCache;
 import com.quantlime.market.cache.IndexMinuteChartCache;
 import com.quantlime.market.cache.MarketIndexCache;
 import com.quantlime.market.cache.MarketRankingCache;
 import com.quantlime.market.cache.TossMarketRankingCache;
 import com.quantlime.market.cache.WorldIndexChartCache;
+import com.quantlime.market.domain.BenchmarkIndex;
 import com.quantlime.market.dto.response.IndexChartResponse;
 import com.quantlime.market.dto.response.IndexMinuteChartResponse;
 import com.quantlime.market.dto.response.MarketIndexResponse;
 import com.quantlime.market.dto.response.MarketRankingResponse;
+import com.quantlime.market.repository.BenchmarkIndexRepository;
 import com.quantlime.support.ApiTestSupport;
 import com.quantlime.user.UserFixture;
 import com.quantlime.user.domain.User;
@@ -60,9 +61,6 @@ class MarketControllerTest extends ApiTestSupport {
     private TossMarketRankingCache tossMarketRankingCache;
 
     @MockBean
-    private IndexChartCache indexChartCache;
-
-    @MockBean
     private IndexMinuteChartCache indexMinuteChartCache;
 
     @MockBean
@@ -82,6 +80,9 @@ class MarketControllerTest extends ApiTestSupport {
 
     @Autowired
     private JwtTokenProvider jwtTokenProvider;
+
+    @Autowired
+    private BenchmarkIndexRepository benchmarkIndexRepository;
 
     @Test
     @DisplayName("[주요 지수 조회 성공 시 200과 환율·비트코인·코스피/코스닥/해외지수 시세를 반환한다]")
@@ -118,11 +119,11 @@ class MarketControllerTest extends ApiTestSupport {
     }
 
     @Test
-    @DisplayName("[코스피 차트 조회 성공 시 200을 반환한다]")
+    @DisplayName("[코스피 차트 조회 성공 시 200을 반환한다 - 2026-07-30 영속 저장된 benchmark_index로 이관]")
     void getIndexChart_kospi_returns200() throws Exception {
         // given
-        given(indexChartCache.get("KOSPI")).willReturn(
-            List.of(new IndexChartResponse(LocalDate.of(2026, 7, 15), 7082.91, 7424.18, 7082.91, 7284.41)));
+        benchmarkIndexRepository.save(
+            BenchmarkIndex.of("KOSPI", LocalDate.of(2026, 7, 15), 7082.91, 7424.18, 7082.91, 7284.41));
 
         // when & then
         mockMvc.perform(get("/api/market/indices/{code}/chart", "KOSPI"))
@@ -147,6 +148,29 @@ class MarketControllerTest extends ApiTestSupport {
     @DisplayName("[지수 차트 code가 지원하는 값이 아니면 400을 반환한다]")
     void getIndexChart_invalidCode_returns400() throws Exception {
         mockMvc.perform(get("/api/market/indices/{code}/chart", "DOWJONES"))
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("[투자자별 순매수 조회 성공 시 200과 빈 배열을 반환한다(데이터 없음)]")
+    void getInvestorTrading_kospi_returns200() throws Exception {
+        mockMvc.perform(get("/api/market/indices/{code}/investor-trading", "KOSPI"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$").isArray())
+            .andExpect(jsonPath("$").isEmpty());
+    }
+
+    @Test
+    @DisplayName("[투자자별 순매수 조회 code가 KOSPI/KOSDAQ가 아니면 400을 반환한다]")
+    void getInvestorTrading_invalidCode_returns400() throws Exception {
+        mockMvc.perform(get("/api/market/indices/{code}/investor-trading", "NASDAQ"))
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("[투자자별 순매수 조회 interval이 weekly/monthly가 아니면 400을 반환한다]")
+    void getInvestorTrading_invalidInterval_returns400() throws Exception {
+        mockMvc.perform(get("/api/market/indices/{code}/investor-trading?interval=daily", "KOSPI"))
             .andExpect(status().isBadRequest());
     }
 

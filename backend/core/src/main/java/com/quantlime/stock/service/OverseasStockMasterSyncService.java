@@ -3,8 +3,10 @@ package com.quantlime.stock.service;
 import com.quantlime.infra.kis.KisOverseasStockMasterClient;
 import com.quantlime.infra.kis.dto.KisOverseasStockMasterEntry;
 import com.quantlime.stock.domain.MarketType;
+import com.quantlime.stock.domain.Stock;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -30,6 +32,13 @@ public class OverseasStockMasterSyncService {
     // (실제 마스터파일 확인 결과 NYSE 기준 전체의 약 1.4%, 유동성 낮은
     // 예외적 종목이라 국내 컬럼을 넓히는 것보다 스킵이 최소 침습적).
     private static final int MAX_STOCK_CODE_LENGTH = 6;
+    // Toss 심볼 파라미터가 허용하는 문자 집합(toss-openapi.json의 symbols
+    // 패턴과 동일) - "AAC/UN"·"ABR/F"처럼 "/"가 섞인 SPAC 유닛/우선주
+    // 표기는 길이 제한(6자)만으로는 안 걸러지는데(둘 다 6자 이하), Toss가
+    // 이런 심볼을 항상 400으로 거부한다는 게 실측으로 확인됐다
+    // (MarketDataRefreshService.isUnsupportedSymbolFormat 참고) - 등록
+    // 자체를 막아 애초에 가격 조회 시도가 발생하지 않게 한다.
+    private static final Pattern TOSS_SYMBOL_PATTERN = Pattern.compile("^[A-Za-z0-9.,-]+$");
 
     private final KisOverseasStockMasterClient kisOverseasStockMasterClient;
     private final StockMasterService stockMasterService;
@@ -49,6 +58,7 @@ public class OverseasStockMasterSyncService {
         List<KisOverseasStockMasterEntry> entries = kisOverseasStockMasterClient.fetchStockMaster(exchangeCode);
         int registered = 0;
         int skippedTooLong = 0;
+        int skippedInvalidFormat = 0;
         for (KisOverseasStockMasterEntry entry : entries) {
             if (!entry.isStock()) {
                 continue;
@@ -57,11 +67,38 @@ public class OverseasStockMasterSyncService {
                 skippedTooLong++;
                 continue;
             }
+            if (!TOSS_SYMBOL_PATTERN.matcher(entry.symbol()).matches()) {
+                skippedInvalidFormat++;
+                continue;
+            }
             stockMasterService.registerStock(
                 entry.symbol(), entry.englishName(), marketType, entry.industryCode());
             registered++;
         }
-        log.info("해외 종목마스터 동기화 완료: marketType={}, 전체={}건, 등록시도={}건, 코드길이초과스킵={}건",
-            marketType, entries.size(), registered, skippedTooLong);
+        int markedUnsupported = markExistingInvalidFormatStocksUnsupported(marketType);
+        log.info("해외 종목마스터 동기화 완료: marketType={}, 전체={}건, 등록시도={}건, "
+                + "코드길이초과스킵={}건, Toss미지원형식스킵={}건, 기존종목중미지원표시={}건",
+            marketType, entries.size(), registered, skippedTooLong, skippedInvalidFormat, markedUnsupported);
+    }
+
+    /**
+     * 위 신규 등록 필터를 추가하기 전에 이미 저장된 종목(예: "AAC/UN") 중
+     * Toss가 거부하는 형식이 섞여 있어, 매 동기화마다 재검증해 있다면
+     * price_unsupported로 표시한다 - 이걸 안 하면 매 기동 가격 갱신
+     * 스윕에서 같은 400 실패가 계속 반복된다(2026-07-30, 실제 로그로
+     * 확인된 무한 반복 버그).
+     */
+    private int markExistingInvalidFormatStocksUnsupported(MarketType marketType) {
+        int marked = 0;
+        for (Stock stock : stockMasterService.getAllListedStocks()) {
+            if (stock.getMarketType() != marketType || stock.isPriceUnsupported()) {
+                continue;
+            }
+            if (!TOSS_SYMBOL_PATTERN.matcher(stock.getStockCode()).matches()) {
+                stockMasterService.markPriceUnsupported(stock.getStockCode());
+                marked++;
+            }
+        }
+        return marked;
     }
 }

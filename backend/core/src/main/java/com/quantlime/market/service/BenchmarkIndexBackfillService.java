@@ -78,6 +78,25 @@ public class BenchmarkIndexBackfillService {
             page -> naverFinanceApiClient.getWorldIndexPrices(worldIndexCode.getReutersCode(), PAGE_SIZE, page));
     }
 
+    /**
+     * 국내 지수(코스피/코스닥)의 최신 종가만 갱신한다 - {@link #backfillAllIfNeeded}는
+     * "이미 목표치만큼 쌓였으면 스킵"하는 1회성 딥백필 로직이라, 400일치가
+     * 이미 있으면 그 뒤로 며칠이 지나든 최신 종가를 영원히 갱신하지 않는다
+     * (2026-07-30 실제로 겪은 버그 - 이 메서드가 매일 트리거에 물려 있었는데도
+     * KOSPI 벤치마크가 2주 전 날짜에 멈춰 있었고, 그 stale 종가를
+     * {@code MarketIndexCache}가 "전일 종가"로 잘못 사용해 등락률이 완전히
+     * 틀어졌다). 항상 최신 페이지(1페이지=최근 60일) 하나만 조회해 신규
+     * 거래일만 저장한다 - {@link PriceGapFillService}가 딥백필과 별개로
+     * "최근 갭만" 채우는 것과 동일한 설계.
+     */
+    public void refreshRecentIfNeeded() {
+        for (String indexCode : DOMESTIC_INDEX_CODES) {
+            List<NaverIndexCandleResponse> candles = naverFinanceApiClient.getIndexPrices(indexCode, PAGE_SIZE);
+            int saved = saveNewCandles(indexCode, candles);
+            log.info("지수 벤치마크 최신 갭필 완료: indexCode={}, 신규저장={}건", indexCode, saved);
+        }
+    }
+
     private void backfill(String indexCode, int targetDays, IntFunction<List<NaverIndexCandleResponse>> fetchPage) {
         long existingCount = benchmarkIndexRepository.countByIndexCode(indexCode);
         if (existingCount >= targetDays) {

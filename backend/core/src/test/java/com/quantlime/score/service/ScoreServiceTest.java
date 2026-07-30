@@ -260,11 +260,11 @@ class ScoreServiceTest {
         Score score = Score.of(STOCK_CODE, LocalDate.now(), 80.0, 40.0, 90.0,
             null, null, Divergence.of(false, null), false);
         Stock stock = StockFixture.createStock(STOCK_CODE, "삼성전자");
-        given(scoreRepository.findTopScoresOrderByCompositeScoreDesc(10)).willReturn(List.of(score));
+        given(scoreRepository.findTopScoresOrderByCompositeScoreDesc(10, null)).willReturn(List.of(score));
         given(stockMasterService.getStocksByCodesInOrder(List.of(STOCK_CODE))).willReturn(List.of(stock));
 
         // when
-        var result = scoreService.getAllStocksScoreRanking(10);
+        var result = scoreService.getAllStocksScoreRanking(10, "all");
 
         // then
         assertThat(result).hasSize(1);

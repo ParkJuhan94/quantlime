@@ -17,6 +17,20 @@ export function formatPrice(price: number | null | undefined, currency: 'KRW' | 
   return `${Math.round(price).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}원`
 }
 
+const EOK = 100_000_000 // 억
+const JO = 1_000_000_000_000 // 조
+
+// 큰 단위 원화 금액(투자자별 순매수 등)을 억/조 단위로 압축 표시한다.
+// 부호를 붙여 순매수(+)/순매도(-)를 구분한다(음수는 Math.abs 후 직접 -를 붙임).
+export function formatKrwAmount(amount: number | null | undefined): string {
+  if (amount == null) return '-'
+  const sign = amount > 0 ? '+' : amount < 0 ? '-' : ''
+  const abs = Math.abs(amount)
+  if (abs >= JO) return `${sign}${(abs / JO).toFixed(1)}조`
+  if (abs >= EOK) return `${sign}${Math.round(abs / EOK).toLocaleString('ko-KR')}억`
+  return `${sign}${Math.round(abs).toLocaleString('ko-KR')}원`
+}
+
 export function formatChangeRate(rate: number | null | undefined): string {
   if (rate == null) return '-'
   const sign = rate > 0 ? '+' : ''

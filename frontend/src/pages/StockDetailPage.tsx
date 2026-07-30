@@ -122,12 +122,29 @@ export function StockDetailPage() {
         <div className="flex items-start gap-3">
           <StockLogo logoUrl={stock.logoUrl} stockName={stock.stockName} className="h-12 w-12" />
           <div>
+            {/* 관심종목 하트를 종목명 헤더 바로 옆으로 이동(2026-07-30 요청) -
+                예전엔 헤더 최우측(스코어 카드 옆)에 독립 배치했었으나, 다시
+                이름 줄로 옮긴다. */}
             <div className="flex items-baseline gap-2">
               <h1 className="text-2xl font-bold text-gray-900">{stock.stockName}</h1>
               <span className="text-lg font-semibold text-gray-900">{formatPrice(currentPrice, currency)}</span>
               <span className={`text-sm font-light ${changeRateColorClass(changeRate)}`}>
                 {formatChangeRate(changeRate)}
               </span>
+              <button
+                type="button"
+                aria-label={isWatched ? '관심종목에서 삭제' : '관심종목에 추가'}
+                onClick={toggleWatch}
+                className={`shrink-0 rounded-lg border p-1.5 transition ${
+                  isWatched
+                    ? 'border-red-200 bg-red-50 hover:bg-red-100'
+                    : 'border-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill={isWatched ? '#dc2626' : 'none'} stroke={isWatched ? '#dc2626' : '#c6c6c6'} strokeWidth="2">
+                  <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z" />
+                </svg>
+              </button>
             </div>
             <p className="text-sm text-gray-500">
               {stock.stockCode} · {stock.marketType} · {stock.sector}
@@ -141,28 +158,7 @@ export function StockDetailPage() {
           </div>
         </div>
 
-        {/* 관심종목 하트는 이름 줄 안이 아니라 헤더 섹션 전체의
-            최우측(스코어 카드보다 더 바깥)에 독립 배치한다 - 이름 줄에
-            끼어 있으면 스코어 카드와 가까이 붙어 "스코어에 속한 버튼"처럼
-            보인다는 피드백(2026-07-19). 종목 페이지 전체에 대한 액션이라는
-            걸 위치로 분명히 하기 위해 스코어 유무와 무관하게 항상 이 자리에 둔다. */}
-        <div className="flex items-start gap-3">
-          {scoreQuery.data && <ScoreSummaryRow score={scoreQuery.data} />}
-          <button
-            type="button"
-            aria-label={isWatched ? '관심종목에서 삭제' : '관심종목에 추가'}
-            onClick={toggleWatch}
-            className={`shrink-0 rounded-lg border p-1.5 transition ${
-              isWatched
-                ? 'border-red-200 bg-red-50 hover:bg-red-100'
-                : 'border-gray-200 hover:bg-gray-50'
-            }`}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill={isWatched ? '#dc2626' : 'none'} stroke={isWatched ? '#dc2626' : '#c6c6c6'} strokeWidth="2">
-              <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z" />
-            </svg>
-          </button>
-        </div>
+        {scoreQuery.data && <ScoreSummaryRow score={scoreQuery.data} />}
       </section>
 
       {addTargetStockCode && (

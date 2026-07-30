@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -42,7 +43,8 @@ public class ScoreController {
     @Operation(
         summary = "스코어 랭킹 조회",
         description = "watchlistOnly=true(기본값)면 로그인 사용자의 관심 종목만, false면 전 상장종목 상위 N개를 "
-            + "종합점수 내림차순으로 조회한다(watchlistOnly=true인데 비로그인이면 빈 배열, 실시간 랭킹 '스코어' 탭용)"
+            + "종합점수 내림차순으로 조회한다(watchlistOnly=true인데 비로그인이면 빈 배열, 실시간 랭킹 '스코어' 탭용). "
+            + "scope=domestic|overseas로 시장을 좁힐 수 있고, 기본값 all은 국내/해외를 구분 없이 섞어 정렬한다."
     )
     @ApiResponse(useReturnTypeSchema = true)
     public ResponseEntity<List<ScoreRankingResponse>> getDashboardScores(
@@ -50,13 +52,15 @@ public class ScoreController {
         @RequestParam(defaultValue = "10")
         @Min(value = 1, message = "limit는 1 이상이어야 합니다.")
         @Max(value = 50, message = "limit는 50 이하여야 합니다.") int limit,
+        @RequestParam(defaultValue = "all")
+        @Pattern(regexp = "all|domestic|overseas", message = "scope는 all, domestic, overseas 중 하나여야 합니다.") String scope,
         @OptionalLoginUser Long userId) {
         if (watchlistOnly) {
             if (userId == null) {
                 return ResponseEntity.ok(List.of());
             }
-            return ResponseEntity.ok(scoreService.getDashboardScores(userId));
+            return ResponseEntity.ok(scoreService.getDashboardScores(userId, scope));
         }
-        return ResponseEntity.ok(scoreService.getAllStocksScoreRanking(limit));
+        return ResponseEntity.ok(scoreService.getAllStocksScoreRanking(limit, scope));
     }
 }

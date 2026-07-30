@@ -3,8 +3,10 @@ package com.quantlime.market.controller;
 import com.quantlime.auth.resolver.OptionalLoginUser;
 import com.quantlime.market.dto.response.IndexChartResponse;
 import com.quantlime.market.dto.response.IndexMinuteChartResponse;
+import com.quantlime.market.dto.response.InvestorTradingResponse;
 import com.quantlime.market.dto.response.MarketIndexResponse;
 import com.quantlime.market.dto.response.MarketRankingResponse;
+import com.quantlime.market.service.InvestorTradingService;
 import com.quantlime.market.service.MarketIndexService;
 import com.quantlime.market.service.MarketRankingService;
 import com.quantlime.watchlist.service.WatchlistService;
@@ -34,6 +36,7 @@ public class MarketController {
 
     private final MarketIndexService marketIndexService;
     private final MarketRankingService marketRankingService;
+    private final InvestorTradingService investorTradingService;
     private final WatchlistService watchlistService;
 
     @GetMapping("/indices")
@@ -89,6 +92,24 @@ public class MarketController {
     @ApiResponse(useReturnTypeSchema = true)
     public ResponseEntity<List<IndexChartResponse>> getExchangeRateChart() {
         return ResponseEntity.ok(marketIndexService.getExchangeRateChart());
+    }
+
+    @GetMapping("/indices/{code}/investor-trading")
+    @Operation(
+        summary = "지수 투자자별 순매수 조회",
+        description = "코스피/코스닥의 투자자별(개인/외국인/기관계+세부7종/기타법인) 순매수(매수-매도) 이력을 "
+            + "주간(weekly) 또는 월간(monthly) 단위로 조회한다(오름차순, 과거→최신)"
+    )
+    @ApiResponse(useReturnTypeSchema = true)
+    public ResponseEntity<List<InvestorTradingResponse>> getInvestorTrading(
+        @PathVariable
+        @Pattern(regexp = "KOSPI|KOSDAQ", message = "code는 KOSPI 또는 KOSDAQ여야 합니다.") String code,
+        @RequestParam(defaultValue = "weekly")
+        @Pattern(regexp = "weekly|monthly", message = "interval은 weekly 또는 monthly여야 합니다.") String interval,
+        @RequestParam(defaultValue = "52")
+        @Min(value = 1, message = "count는 1 이상이어야 합니다.")
+        @Max(value = 100, message = "count는 100 이하여야 합니다.") int count) {
+        return ResponseEntity.ok(investorTradingService.getInvestorTrading(code, interval, count));
     }
 
     @GetMapping("/ranking")

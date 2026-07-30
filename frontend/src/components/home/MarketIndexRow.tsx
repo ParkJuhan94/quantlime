@@ -13,14 +13,20 @@ export function formatRate(rate: number | null): string {
   return rate != null ? rate.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'
 }
 
-// 등락 방향에 따라 카드 배경·테두리를 은은하게 물들인다 - 국내 주식
-// 관례대로 상승은 빨강, 하락은 파랑 계열(bg는 /60 투명도로 옅게 눌러
-// 텍스트 대비를 해치지 않는 선에서만). 삼각형(▲▼)은 색상만으로도 방향이
-// 충분히 구분돼 뺐다(사용자 피드백, 2026-07-16 - "삼각형 상승,하락은 제거").
-function cardToneClass(isUp: boolean | null): string {
-  if (isUp === true) return 'border-red-100 bg-red-50/60'
-  if (isUp === false) return 'border-blue-100 bg-blue-50/60'
-  return 'border-gray-100 bg-gray-50'
+// 카드 배경은 방향과 무관하게 항상 흰색 계열로 통일한다(2026-07-30 요청 -
+// 예전엔 상승/하락에 따라 카드 배경 자체를 red-50/blue-50으로 물들였는데,
+// 그 신호는 이제 지수 수치(valueText) 색상 하나로 충분히 전달되므로
+// 배경까지 물들이면 중복이라 뺐다).
+function cardToneClass(): string {
+  return 'border-gray-100 bg-white'
+}
+
+// 지수 수치·등락률에 공통으로 쓰는 방향별 색상(국내 주식 관례: 상승
+// 빨강/하락 파랑). 배경 통일(위 cardToneClass)과 별개로, 값 자체는
+// 방향에 따라 색을 입혀 신호를 유지한다(2026-07-30).
+function directionColorClass(isUp: boolean | null): string {
+  if (isUp == null) return 'text-gray-500'
+  return isUp ? 'text-red-600' : 'text-blue-600'
 }
 
 // 촘촘한 원시 데이터(코스피/코스닥 1분봉은 최대 391개)를 카드 안 작은
@@ -39,6 +45,11 @@ const CHART_HEIGHT = 30
 // 찍는다 - "지금 실시간으로 움직이는 중"이라는 신호를 상태 라벨 옆
 // 고정된 위치가 아니라 차트가 실제로 갱신되는 지점에 붙여야 자연스럽다
 // (2026-07-16, 이전엔 상태 라벨 옆 고정 위치였는데 어색하다는 피드백).
+// 상승/하락 라인 색(2026-07-30 요청 - "형광색을 좀 더 입힌 파랑/빨강"으로
+// 기존 red-600/blue-600보다 밝고 선명한 톤으로 교체).
+const NEON_RED = '#ff3b30'
+const NEON_BLUE = '#0a84ff'
+
 function MiniChart({ prices, isUp, live }: { prices: number[]; isUp: boolean | null; live?: boolean }) {
   if (prices.length < 2) return null
 
@@ -51,8 +62,12 @@ function MiniChart({ prices, isUp, live }: { prices: number[]; isUp: boolean | n
     y: CHART_HEIGHT - ((value - min) / range) * CHART_HEIGHT,
   }))
   const points = coords.map(({ x, y }) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')
-  const strokeColor = isUp === false ? '#2563eb' : '#dc2626'
+  const strokeColor = isUp === false ? NEON_BLUE : NEON_RED
   const last = coords[coords.length - 1]
+  // "0%" 기준선 - 이 미니차트엔 전일종가가 별도로 없어 시리즈 시작값
+  // (prices[0])을 기준으로 삼는다. 그 지점부터 지금까지 위/아래로 얼마나
+  // 움직였는지 한눈에 보이게 하는 용도(2026-07-30 요청).
+  const baselineY = coords[0].y
 
   return (
     <div className="h-[30px] w-16 shrink-0">
@@ -66,7 +81,16 @@ function MiniChart({ prices, isUp, live }: { prices: number[]; isUp: boolean | n
         preserveAspectRatio="none"
         style={{ overflow: 'visible' }}
       >
-        <polyline points={points} fill="none" stroke={strokeColor} strokeWidth="1.5" />
+        <line
+          x1="0"
+          y1={baselineY}
+          x2={CHART_WIDTH}
+          y2={baselineY}
+          stroke="#9ca3af"
+          strokeWidth="1"
+          strokeDasharray="2 2"
+        />
+        <polyline points={points} fill="none" stroke={strokeColor} strokeWidth="3" />
         {live && (
           <>
             <circle
@@ -121,6 +145,7 @@ function IndexCard({
   isUp,
   statusLabel,
   subInfo,
+  subInfoIsUp,
   live,
   chart,
   onClick,
@@ -132,17 +157,18 @@ function IndexCard({
   isUp: boolean | null
   statusLabel?: string
   subInfo?: string
+  subInfoIsUp?: boolean | null
   live?: boolean
   chart?: number[]
   onClick?: () => void
 }) {
-  const color = isUp == null ? 'text-gray-500' : isUp ? 'text-red-600' : 'text-blue-600'
+  const color = directionColorClass(isUp)
 
   return (
     <div
       onClick={onClick}
       role={onClick ? 'button' : undefined}
-      className={`flex min-w-0 items-center justify-between gap-2 rounded-xl border p-3 transition ${cardToneClass(isUp)} ${
+      className={`flex min-w-0 items-center justify-between gap-2 rounded-xl border p-3 transition ${cardToneClass()} ${
         onClick ? 'cursor-pointer hover:brightness-95' : ''
       }`}
     >
@@ -151,12 +177,19 @@ function IndexCard({
           <span className="truncate text-xs font-semibold text-gray-900">{label}</span>
           {tooltip && <InfoTooltip text={tooltip} />}
         </div>
-        <p className="mt-0.5 truncate text-base font-bold text-gray-900">{valueText}</p>
+        {/* 지수 수치도 등락 방향에 따라 색을 입힌다(2026-07-30 요청 - 예전엔
+            배경만 물들이고 값 자체는 항상 무채색이었음). */}
+        <p className={`mt-0.5 truncate text-base font-bold ${color}`}>{valueText}</p>
         <div className="flex items-center gap-1.5">
           <span className={`rounded px-1 py-0.5 text-xs font-light ${color}`}>{changeText}</span>
-          {statusLabel && <span className="text-[10px] text-gray-400">{statusLabel}</span>}
+          {/* statusLabel도 changeText와 같은 text-xs로 맞춰 한 행 안 텍스트
+              크기를 통일한다(2026-07-30 요청 - 예전엔 text-[10px]로 더 작았음). */}
+          {statusLabel && <span className="text-xs text-gray-400">{statusLabel}</span>}
         </div>
-        {subInfo && <p className="mt-0.5 truncate text-[10px] text-gray-400">{subInfo}</p>}
+        {/* 애프터마켓 등락률도 방향에 따라 색을 입힌다(2026-07-30 요청 -
+            예전엔 항상 무채색 gray-400이었음), 크기는 changeText/statusLabel과
+            동일한 text-xs로 통일. */}
+        {subInfo && <p className={`mt-0.5 truncate text-xs ${directionColorClass(subInfoIsUp ?? null)}`}>{subInfo}</p>}
       </div>
       {chart && chart.length > 1 && <MiniChart prices={chart} isUp={isUp} live={live} />}
     </div>
@@ -255,6 +288,8 @@ function WorldIndexCard({ code, quote }: { code: WorldIndexCode; quote: IndexQuo
     isPreMarket && quote.overMarketChangeRate != null ? quote.overMarketChangeRate : quote.changeRate
   const subInfo =
     isAfterMarket && quote.overMarketChangeRate != null ? formatChangeRate(quote.overMarketChangeRate) : undefined
+  const subInfoIsUp =
+    isAfterMarket && quote.overMarketChangeRate != null ? directionOf(quote.overMarketChangeRate) : null
 
   return (
     <IndexCard
@@ -265,6 +300,7 @@ function WorldIndexCard({ code, quote }: { code: WorldIndexCode; quote: IndexQuo
       isUp={directionOf(displayChangeRate)}
       statusLabel={statusLabel}
       subInfo={subInfo}
+      subInfoIsUp={subInfoIsUp}
       live={quote.marketOpen}
       chart={prices}
       onClick={() => navigate(`/indices/${code.toLowerCase()}`)}
