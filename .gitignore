@@ -31,7 +31,7 @@ quant-engine/docs/SCORING_DESIGN.md
 quant-engine/docs/BACKTEST_METHODOLOGY_REVIEW.md
 
 # 포트폴리오 어필 포인트 초안 (공개 저장소 노출 방지, 로컬 전용)
-backend/docs/PORTFOLIO_HIGHLIGHTS.md
+docs/PORTFOLIO_HIGHLIGHTS.md
 
 # 사용자 업로드 이미지(로컬 디스크 저장, FileStorageService 참고) - 실행 시
 # 자동 생성되는 런타임 데이터라 저장소에 커밋하지 않는다. 실행 위치(루트
