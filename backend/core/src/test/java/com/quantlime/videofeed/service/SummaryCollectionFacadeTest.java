@@ -1,6 +1,7 @@
 package com.quantlime.videofeed.service;
 
 import com.quantlime.common.exception.ExternalApiException;
+import com.quantlime.common.lock.RedisLockService;
 import com.quantlime.infra.python.PythonEngineClient;
 import com.quantlime.infra.python.dto.SummarizeApiRequest;
 import com.quantlime.infra.python.dto.SummarizeApiResponse;
@@ -16,6 +17,7 @@ import com.quantlime.videofeed.repository.VideoRepository;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -31,10 +33,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
 class SummaryCollectionFacadeTest {
+
+    @Mock
+    private RedisLockService redisLockService;
 
     @Mock
     private VideoRepository videoRepository;
@@ -111,5 +117,45 @@ class SummaryCollectionFacadeTest {
         assertThat(results.get(1).success()).isTrue();
         verify(summaryPersistService).markSummarizeFailed(org.mockito.ArgumentMatchers.eq(1L), any());
         verify(summaryPersistService).persistResult(2L, okResponse);
+    }
+
+    @Test
+    @DisplayName("[runBatchExclusively는 락을 획득하면 runBatch 결과를 감싼 Optional을 반환한다]")
+    void runBatchExclusively_whenLockAcquired_returnsBatchResult() {
+        // given
+        Video video = videoOf(1L, "제목1");
+        given(videoRepository.findSummarizeCandidates(any(), anyInt(), any()))
+            .willReturn(new SliceImpl<>(List.of(video)));
+        given(transcriptRepository.findByVideo(video)).willReturn(Optional.of(transcriptOf(video, "자막 내용")));
+        SummarizeApiResponse response = new SummarizeApiResponse(
+            "요약", List.of(), List.of(), "고지", "gemini-3.6-flash", 100, 50);
+        given(pythonEngineClient.summarize(new SummarizeApiRequest("제목1", "테스트 채널", "자막 내용")))
+            .willReturn(response);
+        given(redisLockService.runExclusively(any(), any(), any())).willAnswer(invocation -> {
+            Supplier<List<SummarizeResult>> task = invocation.getArgument(2);
+            return Optional.of(task.get());
+        });
+
+        // when
+        Optional<List<SummarizeResult>> result = summaryCollectionFacade.runBatchExclusively();
+
+        // then
+        assertThat(result).isPresent();
+        assertThat(result.get()).hasSize(1);
+        verify(summaryPersistService).persistResult(1L, response);
+    }
+
+    @Test
+    @DisplayName("[runBatchExclusively는 락 획득에 실패하면 배치를 실행하지 않고 빈 Optional을 반환한다]")
+    void runBatchExclusively_whenLockNotAcquired_skipsBatch() {
+        // given
+        given(redisLockService.runExclusively(any(), any(), any())).willReturn(Optional.empty());
+
+        // when
+        Optional<List<SummarizeResult>> result = summaryCollectionFacade.runBatchExclusively();
+
+        // then
+        assertThat(result).isEmpty();
+        verifyNoInteractions(pythonEngineClient);
     }
 }

@@ -1,8 +1,10 @@
 package com.quantlime.videofeed.controller;
 
+import com.quantlime.common.exception.ValidationException;
 import com.quantlime.videofeed.dto.CollectResult;
 import com.quantlime.videofeed.dto.SummarizeResult;
 import com.quantlime.videofeed.dto.TranscribeResult;
+import com.quantlime.videofeed.exception.VideoFeedErrorCode;
 import com.quantlime.videofeed.service.ChannelVelocityInitializationService;
 import com.quantlime.videofeed.service.FeedCollectionFacade;
 import com.quantlime.videofeed.service.SummaryCollectionFacade;
@@ -36,24 +38,32 @@ public class FeedCollectionAdminController {
     private final SummaryCollectionFacade summaryCollectionFacade;
 
     @PostMapping("/collect")
-    @Operation(summary = "전체 채널 영상 수집 수동 트리거", description = "채널별 수집→적재→필터링을 즉시 실행한다")
+    @Operation(summary = "전체 채널 영상 수집 수동 트리거",
+        description = "채널별 수집→적재→필터링을 즉시 실행한다. 정규 스케줄러가 이미 실행 중이면 거절된다")
     @ApiResponse(useReturnTypeSchema = true)
     public ResponseEntity<List<CollectResult>> collect() {
-        return ResponseEntity.ok(feedCollectionFacade.runAll());
+        return ResponseEntity.ok(feedCollectionFacade.runAllExclusively()
+            .orElseThrow(() -> new ValidationException(VideoFeedErrorCode.FEED_JOB_IN_PROGRESS)));
     }
 
     @PostMapping("/transcribe")
-    @Operation(summary = "자막 수집 수동 트리거", description = "SELECTED(+ 재시도 상한 이내 FAILED) 영상 배치의 자막을 즉시 수집한다")
+    @Operation(summary = "자막 수집 수동 트리거",
+        description = "SELECTED(+ 재시도 상한 이내 FAILED) 영상 배치의 자막을 즉시 수집한다. "
+            + "정규 스케줄러가 이미 실행 중이면 거절된다")
     @ApiResponse(useReturnTypeSchema = true)
     public ResponseEntity<List<TranscribeResult>> transcribe() {
-        return ResponseEntity.ok(transcriptCollectionFacade.runBatch());
+        return ResponseEntity.ok(transcriptCollectionFacade.runBatchExclusively()
+            .orElseThrow(() -> new ValidationException(VideoFeedErrorCode.FEED_JOB_IN_PROGRESS)));
     }
 
     @PostMapping("/summarize")
-    @Operation(summary = "AI 요약 생성 수동 트리거", description = "TRANSCRIBED(+ 재시도 상한 이내 FAILED) 영상 배치의 AI 요약을 즉시 생성한다")
+    @Operation(summary = "AI 요약 생성 수동 트리거",
+        description = "TRANSCRIBED(+ 재시도 상한 이내 FAILED) 영상 배치의 AI 요약을 즉시 생성한다. "
+            + "정규 스케줄러가 이미 실행 중이면 거절된다")
     @ApiResponse(useReturnTypeSchema = true)
     public ResponseEntity<List<SummarizeResult>> summarize() {
-        return ResponseEntity.ok(summaryCollectionFacade.runBatch());
+        return ResponseEntity.ok(summaryCollectionFacade.runBatchExclusively()
+            .orElseThrow(() -> new ValidationException(VideoFeedErrorCode.FEED_JOB_IN_PROGRESS)));
     }
 
     @PostMapping("/channels/{channelId}/velocity/initialize")

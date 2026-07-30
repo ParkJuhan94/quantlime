@@ -1,6 +1,7 @@
 package com.quantlime.videofeed.service;
 
 import com.quantlime.common.exception.ExternalApiException;
+import com.quantlime.common.lock.RedisLockService;
 import com.quantlime.infra.python.PythonEngineClient;
 import com.quantlime.infra.python.dto.TranscribeApiRequest;
 import com.quantlime.infra.python.dto.TranscribeApiResponse;
@@ -12,6 +13,8 @@ import com.quantlime.videofeed.dto.TranscribeResult;
 import com.quantlime.videofeed.repository.VideoRepository;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -27,10 +30,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
 class TranscriptCollectionFacadeTest {
+
+    @Mock
+    private RedisLockService redisLockService;
 
     @Mock
     private VideoRepository videoRepository;
@@ -117,5 +124,43 @@ class TranscriptCollectionFacadeTest {
         assertThat(results.get(1).success()).isTrue();
         verify(transcriptPersistService).markFetchFailed(org.mockito.ArgumentMatchers.eq(1L), any());
         verify(transcriptPersistService).persistResult(2L, okResponse);
+    }
+
+    @Test
+    @DisplayName("[runBatchExclusively는 락을 획득하면 runBatch 결과를 감싼 Optional을 반환한다]")
+    void runBatchExclusively_whenLockAcquired_returnsBatchResult() {
+        // given
+        Video video = videoOf(1L, "vid-1");
+        given(videoRepository.findTranscribeCandidates(any(), anyInt(), any()))
+            .willReturn(new SliceImpl<>(List.of(video)));
+        TranscribeApiResponse response = new TranscribeApiResponse(
+            true, "youtube_auto_caption", "ko", "내용", 2, null);
+        given(pythonEngineClient.fetchTranscript(new TranscribeApiRequest("vid-1"))).willReturn(response);
+        given(redisLockService.runExclusively(any(), any(), any())).willAnswer(invocation -> {
+            Supplier<List<TranscribeResult>> task = invocation.getArgument(2);
+            return Optional.of(task.get());
+        });
+
+        // when
+        Optional<List<TranscribeResult>> result = transcriptCollectionFacade.runBatchExclusively();
+
+        // then
+        assertThat(result).isPresent();
+        assertThat(result.get()).hasSize(1);
+        verify(transcriptPersistService).persistResult(1L, response);
+    }
+
+    @Test
+    @DisplayName("[runBatchExclusively는 락 획득에 실패하면 배치를 실행하지 않고 빈 Optional을 반환한다]")
+    void runBatchExclusively_whenLockNotAcquired_skipsBatch() {
+        // given
+        given(redisLockService.runExclusively(any(), any(), any())).willReturn(Optional.empty());
+
+        // when
+        Optional<List<TranscribeResult>> result = transcriptCollectionFacade.runBatchExclusively();
+
+        // then
+        assertThat(result).isEmpty();
+        verifyNoInteractions(pythonEngineClient);
     }
 }

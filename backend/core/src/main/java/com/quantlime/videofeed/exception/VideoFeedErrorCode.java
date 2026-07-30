@@ -12,7 +12,8 @@ public enum VideoFeedErrorCode implements ErrorCode {
     INVALID_PLATFORM("올바른 플랫폼을 입력해주세요.", "VF_001"),
     INVALID_VIDEO_STATUS("올바른 영상 상태를 입력해주세요.", "VF_002"),
     NOT_FOUND_VIDEO("해당 영상을 찾을 수 없습니다.", "VF_003"),
-    NOT_FOUND_TRANSCRIPT("해당 영상의 자막을 찾을 수 없습니다.", "VF_004");
+    NOT_FOUND_TRANSCRIPT("해당 영상의 자막을 찾을 수 없습니다.", "VF_004"),
+    FEED_JOB_IN_PROGRESS("이미 실행 중인 수집 작업이 있습니다.", "VF_005");
 
     private final String message;
     private final String code;

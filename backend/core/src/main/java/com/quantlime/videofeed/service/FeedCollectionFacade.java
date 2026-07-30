@@ -1,14 +1,17 @@
 package com.quantlime.videofeed.service;
 
 import com.quantlime.common.exception.NotFoundException;
+import com.quantlime.common.lock.RedisLockService;
 import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.dto.CollectResult;
 import com.quantlime.videofeed.dto.CollectedVideo;
 import com.quantlime.videofeed.exception.VideoFeedErrorCode;
 import com.quantlime.videofeed.repository.ChannelRepository;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -23,10 +26,29 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class FeedCollectionFacade {
 
+    private static final String LOCK_KEY = "lock:feed-collect";
+    private static final Duration LOCK_TTL = Duration.ofMinutes(30);
+
+    private final RedisLockService redisLockService;
     private final ChannelRepository channelRepository;
     private final YoutubeVideoCollector youtubeVideoCollector;
     private final VideoPersistService videoPersistService;
     private final VideoFilterService videoFilterService;
+
+    /**
+     * 락을 잡은 채로 runAll() + reevaluatePendingReview()를 한 번에 실행한다
+     * (원래 FeedCollectionScheduler가 두 단계를 순서대로 부르던 것을 그대로
+     * 유지 - 두 단계 사이에 다른 실행이 끼어들지 못하게 하나의 락 구간으로
+     * 묶는다). FeedCollectionScheduler·FeedCollectionAdminController(수동
+     * 트리거) 둘 다 이 진입점만 호출해야 서로 중복 실행을 막을 수 있다.
+     */
+    public Optional<List<CollectResult>> runAllExclusively() {
+        return redisLockService.runExclusively(LOCK_KEY, LOCK_TTL, () -> {
+            List<CollectResult> results = runAll();
+            reevaluatePendingReview();
+            return results;
+        });
+    }
 
     public List<CollectResult> runAll() {
         List<Channel> channels = channelRepository.findByEnabledTrueOrderByPriorityAsc();
