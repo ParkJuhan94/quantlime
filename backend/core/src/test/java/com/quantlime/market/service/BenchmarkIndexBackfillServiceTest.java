@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verify;
 
 import com.quantlime.infra.naver.NaverFinanceApiClient;
 import com.quantlime.infra.naver.dto.NaverIndexCandleResponse;
+import com.quantlime.market.domain.WorldIndexCode;
 import com.quantlime.market.repository.BenchmarkIndexRepository;
 import java.time.LocalDate;
 import java.util.List;
@@ -102,6 +103,7 @@ class BenchmarkIndexBackfillServiceTest {
         // given: countByIndexCode를 스텁하지 않음 - 호출되면 안 됨을 아래에서 검증
         given(naverFinanceApiClient.getIndexPrices(eq("KOSPI"), eq(60))).willReturn(page(2, "2026-07-30"));
         given(naverFinanceApiClient.getIndexPrices(eq("KOSDAQ"), eq(60))).willReturn(page(1, "2026-07-30"));
+        given(naverFinanceApiClient.getWorldIndexPrices(any(), eq(60))).willReturn(List.of());
         given(benchmarkIndexRepository.existsByIndexCodeAndTradeDate(any(), any())).willReturn(false);
 
         // when
@@ -119,6 +121,7 @@ class BenchmarkIndexBackfillServiceTest {
         // given
         given(naverFinanceApiClient.getIndexPrices(eq("KOSPI"), eq(60))).willReturn(page(2, "2026-07-30"));
         given(naverFinanceApiClient.getIndexPrices(eq("KOSDAQ"), eq(60))).willReturn(page(2, "2026-07-30"));
+        given(naverFinanceApiClient.getWorldIndexPrices(any(), eq(60))).willReturn(List.of());
         given(benchmarkIndexRepository.existsByIndexCodeAndTradeDate(any(), any())).willReturn(true);
 
         // when
@@ -126,6 +129,28 @@ class BenchmarkIndexBackfillServiceTest {
 
         // then
         verify(benchmarkIndexRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("[refreshRecentIfNeeded는 해외 지수(나스닥/S&P500)도 목표건수 체크 없이 최신 페이지를 갱신한다 - "
+        + "국내만 고쳐졌던 2026-07-30 수정에서 해외가 빠져 NASDAQ/SP500 벤치마크가 계속 갭인 채로 "
+        + "남아있던 걸 2026-07-31에 마저 수정]")
+    void refreshRecentIfNeeded_alwaysFetchesLatestOverseasPageRegardlessOfExistingCount() {
+        // given: 국내는 빈 페이지로 스텁, 해외만 검증 대상
+        given(naverFinanceApiClient.getIndexPrices(any(), eq(60))).willReturn(List.of());
+        given(naverFinanceApiClient.getWorldIndexPrices(eq(WorldIndexCode.NASDAQ.getReutersCode()), eq(60)))
+            .willReturn(page(2, "2026-07-31"));
+        given(naverFinanceApiClient.getWorldIndexPrices(eq(WorldIndexCode.SP500.getReutersCode()), eq(60)))
+            .willReturn(page(1, "2026-07-31"));
+        given(benchmarkIndexRepository.existsByIndexCodeAndTradeDate(any(), any())).willReturn(false);
+
+        // when
+        benchmarkIndexBackfillService.refreshRecentIfNeeded();
+
+        // then
+        verify(benchmarkIndexRepository, never()).countByIndexCode(any());
+        verify(benchmarkIndexRepository, times(2)).save(argThat(b -> b.getIndexCode().equals("NASDAQ")));
+        verify(benchmarkIndexRepository, times(1)).save(argThat(b -> b.getIndexCode().equals("SP500")));
     }
 
     /** localTradedAt이 startDate부터 하루씩 과거로 내려가는 candle 목록. */

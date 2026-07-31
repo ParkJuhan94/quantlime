@@ -27,7 +27,12 @@ import org.springframework.stereotype.Service;
  * <p>해외(나스닥/S&amp;P500)는 홈 화면 지수카드가 쓰는 것과 같은 데이터
  * 소스(WorldIndexChartCache/NaverFinanceApiClient.getWorldIndexPrices)를
  * 재사용하되, 그쪽은 60초 TTL 캐시일 뿐 영속 저장을 안 해서 백테스트용
- * 영속 이력은 이 서비스가 별도로 쌓는다.
+ * 영속 이력은 이 서비스가 별도로 쌓는다. 홈 화면 실시간 지수 표시
+ * ({@code MarketIndexCache}/{@code IndexChartCache})는 2026-07-30 세션에서
+ * 토스 공식 API(market-indicators)로 이관됐지만, 그건 이 클래스와 별개
+ * 캐시 계층이다 - 이 백테스트 벤치마크 백필은 국내/해외 모두 계속
+ * 네이버 소스를 쓴다(토스 시장 지표 심볼 카탈로그는 국내 지수·국채만
+ * 지원해 해외는 애초에 대상이 아니었고, 국내도 아직 이관하지 않았다).
  *
  * <p>OHLCV 수집 배치와 동일하게 장 마감(15:30) 이후 실행을 전제로 한다 -
  * 장중 호출 시 당일 종가가 아직 확정되지 않은 값으로 저장될 수 있다
@@ -79,7 +84,7 @@ public class BenchmarkIndexBackfillService {
     }
 
     /**
-     * 국내 지수(코스피/코스닥)의 최신 종가만 갱신한다 - {@link #backfillAllIfNeeded}는
+     * 국내+해외 지수의 최신 종가만 갱신한다 - {@link #backfillAllIfNeeded}는
      * "이미 목표치만큼 쌓였으면 스킵"하는 1회성 딥백필 로직이라, 400일치가
      * 이미 있으면 그 뒤로 며칠이 지나든 최신 종가를 영원히 갱신하지 않는다
      * (2026-07-30 실제로 겪은 버그 - 이 메서드가 매일 트리거에 물려 있었는데도
@@ -88,13 +93,25 @@ public class BenchmarkIndexBackfillService {
      * 틀어졌다). 항상 최신 페이지(1페이지=최근 60일) 하나만 조회해 신규
      * 거래일만 저장한다 - {@link PriceGapFillService}가 딥백필과 별개로
      * "최근 갭만" 채우는 것과 동일한 설계.
+     *
+     * <p>이 수정은 최초 국내 지수(코스피/코스닥)에만 적용됐고 해외
+     * (NASDAQ/SP500)는 빠져 있어 동일 증상(백테스트 벤치마크가 며칠씩
+     * 갭인 채로 멈춤)이 남아있던 것을 2026-07-31에 마저 수정했다 - 토스
+     * 신규 API 검토 중 실제 DB에서 해외 지수만 8거래일 갭이 벌어진 걸
+     * 발견함.
      */
     public void refreshRecentIfNeeded() {
         for (String indexCode : DOMESTIC_INDEX_CODES) {
             List<NaverIndexCandleResponse> candles = naverFinanceApiClient.getIndexPrices(indexCode, PAGE_SIZE);
             int saved = saveNewCandles(indexCode, candles);
-            log.info("지수 벤치마크 최신 갭필 완료: indexCode={}, 신규저장={}건", indexCode, saved);
+            log.info("국내 지수 벤치마크 최신 갭필 완료: indexCode={}, 신규저장={}건", indexCode, saved);
         }
+        OVERSEAS_INDEX_CODES.forEach((indexCode, worldIndexCode) -> {
+            List<NaverIndexCandleResponse> candles =
+                naverFinanceApiClient.getWorldIndexPrices(worldIndexCode.getReutersCode(), PAGE_SIZE);
+            int saved = saveNewCandles(indexCode, candles);
+            log.info("해외 지수 벤치마크 최신 갭필 완료: indexCode={}, 신규저장={}건", indexCode, saved);
+        });
     }
 
     private void backfill(String indexCode, int targetDays, IntFunction<List<NaverIndexCandleResponse>> fetchPage) {
