@@ -66,6 +66,11 @@ public class Channel extends TimeBaseEntity {
     @Column(name = "last_collected_at")
     private LocalDateTime lastCollectedAt;
 
+    // P6(프론트 피드 노출)에서 채널 아바타 표시용으로 추가 - 시딩 시점엔 비워두고
+    // ChannelSeedInitializer의 백필 로직이 유튜브 channels.list로 채운다.
+    @Column(name = "profile_image_url", length = 500)
+    private String profileImageUrl;
+
     @Builder
     private Channel(Platform platform, String externalChannelId, String uploadsPlaylistId,
                      String name, boolean enabled, int priority, ChannelFilterConfig filterConfig) {
@@ -100,6 +105,11 @@ public class Channel extends TimeBaseEntity {
     public void updateMedianVelocity(BigDecimal medianVelocity) {
         Assert.notNull(medianVelocity, "중앙값 업로드 속도는 필수입니다.");
         this.medianVelocity = medianVelocity;
+    }
+
+    public void updateProfileImageUrl(String profileImageUrl) {
+        Assert.hasText(profileImageUrl, "프로필 이미지 URL은 필수입니다.");
+        this.profileImageUrl = profileImageUrl;
     }
 
     private void validateChannel(Platform platform, String externalChannelId, String name,

@@ -1,6 +1,7 @@
 package com.quantlime.infra.youtube;
 
 import com.quantlime.common.util.ExternalApiInvoker;
+import com.quantlime.infra.youtube.dto.YoutubeChannelsResponse;
 import com.quantlime.infra.youtube.dto.YoutubePlaylistItemsResponse;
 import com.quantlime.infra.youtube.dto.YoutubeVideosResponse;
 import com.quantlime.infra.youtube.exception.YoutubeApiErrorCode;
@@ -62,6 +63,28 @@ public class YoutubeApiClient {
                     .build())
                 .retrieve()
                 .body(YoutubeVideosResponse.class),
+            HttpClientErrorException.Forbidden.class,
+            YoutubeApiErrorCode.QUOTA_EXCEEDED);
+    }
+
+    /**
+     * 채널 프로필 사진(thumbnails.default.url) 조회 전용 - 시딩된 채널 3개처럼
+     * 소수 채널의 부가정보 백필용이라 playlistItems/videos처럼 자주 불리지 않는다.
+     * @param channelIds 최대 50개(그 이상은 호출측에서 분할해야 함)
+     */
+    public YoutubeChannelsResponse getChannels(List<String> channelIds) {
+        String ids = String.join(",", channelIds);
+        return ExternalApiInvoker.call(
+            YoutubeApiErrorCode.CHANNELS_INQUIRY_FAILED,
+            () -> youtubeRestClient.get()
+                .uri(uriBuilder -> uriBuilder
+                    .path("/channels")
+                    .queryParam("part", "snippet")
+                    .queryParam("id", ids)
+                    .queryParam("key", properties.getApiKey())
+                    .build())
+                .retrieve()
+                .body(YoutubeChannelsResponse.class),
             HttpClientErrorException.Forbidden.class,
             YoutubeApiErrorCode.QUOTA_EXCEEDED);
     }

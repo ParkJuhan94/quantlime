@@ -6,6 +6,7 @@ import { Toast } from './components/common/Toast'
 import { OAuthCallbackPage } from './pages/OAuthCallbackPage'
 import { HomePage } from './pages/HomePage'
 import { FeedPage } from './pages/FeedPage'
+import { VideoFeedPage } from './pages/VideoFeedPage'
 import { StockDetailPage } from './pages/StockDetailPage'
 import { BacktestPage } from './pages/BacktestPage'
 import { IndexDetailPage } from './pages/IndexDetailPage'
@@ -52,6 +53,7 @@ function App() {
             <Route path="/indices/:code" element={<IndexDetailPage />} />
             <Route path="/" element={<HomePage />} />
             <Route path="/feed" element={<FeedPage />} />
+            <Route path="/videos" element={<VideoFeedPage />} />
             <Route element={<ProtectedRoute />}>
               <Route path="/me" element={<MyInfoPage />} />
               <Route path="/subscribe" element={<SubscribePage />} />

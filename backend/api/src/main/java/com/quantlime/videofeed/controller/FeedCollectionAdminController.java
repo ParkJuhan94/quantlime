@@ -9,6 +9,7 @@ import com.quantlime.videofeed.service.ChannelVelocityInitializationService;
 import com.quantlime.videofeed.service.FeedCollectionFacade;
 import com.quantlime.videofeed.service.SummaryCollectionFacade;
 import com.quantlime.videofeed.service.TranscriptCollectionFacade;
+import com.quantlime.videofeed.service.VideoRetentionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -36,6 +37,7 @@ public class FeedCollectionAdminController {
     private final ChannelVelocityInitializationService channelVelocityInitializationService;
     private final TranscriptCollectionFacade transcriptCollectionFacade;
     private final SummaryCollectionFacade summaryCollectionFacade;
+    private final VideoRetentionService videoRetentionService;
 
     @PostMapping("/collect")
     @Operation(summary = "전체 채널 영상 수집 수동 트리거",
@@ -71,5 +73,15 @@ public class FeedCollectionAdminController {
     @ApiResponse(useReturnTypeSchema = true)
     public ResponseEntity<BigDecimal> initializeVelocity(@PathVariable Long channelId) {
         return ResponseEntity.ok(channelVelocityInitializationService.initializeMedianVelocity(channelId));
+    }
+
+    @PostMapping("/retention/cleanup")
+    @Operation(summary = "보존 기간 초과 영상 데이터 수동 정리",
+        description = "발행일이 보존 기간(10일)을 초과한 영상+자막+요약+태깅종목을 즉시 삭제한다. "
+            + "정규 스케줄러(매일 새벽 3시)가 이미 실행 중이면 거절된다")
+    @ApiResponse(useReturnTypeSchema = true)
+    public ResponseEntity<Integer> cleanupRetention() {
+        return ResponseEntity.ok(videoRetentionService.runExclusively()
+            .orElseThrow(() -> new ValidationException(VideoFeedErrorCode.RETENTION_JOB_IN_PROGRESS)));
     }
 }

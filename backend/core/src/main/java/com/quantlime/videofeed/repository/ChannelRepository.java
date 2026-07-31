@@ -13,4 +13,6 @@ public interface ChannelRepository extends JpaRepository<Channel, Long> {
     Optional<Channel> findByPlatformAndExternalChannelId(Platform platform, String externalChannelId);
 
     List<Channel> findByEnabledTrueOrderByPriorityAsc();
+
+    List<Channel> findByProfileImageUrlIsNull();
 }

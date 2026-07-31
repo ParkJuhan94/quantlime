@@ -5,6 +5,7 @@ import com.quantlime.videofeed.domain.Video;
 import com.quantlime.videofeed.domain.VideoStatus;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -53,4 +54,34 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
     Slice<Video> findSummarizeCandidates(
         @Param("statuses") List<VideoStatus> statuses, @Param("maxRetryCount") int maxRetryCount,
         Pageable pageable);
+
+    // P6(프론트 피드 노출) - 요약까지 끝난 영상만 최신순으로 공개 노출한다.
+    // tickerCode/publishedFrom/publishedTo는 전부 선택 필터라 널이면 그
+    // 조건 자체를 건너뛴다(JPQL의 ":param is null or ..." 패턴) - 종목
+    // 필터만 있는 경우/날짜 필터만 있는 경우/둘 다 있는 경우를 각각
+    // 별도 쿼리 메서드로 만들지 않기 위함. join fetch로 channel을 미리
+    // 로딩(채널명/프로필사진 표시용, 위 findSummarizeCandidates와 동일한
+    // LazyInitializationException 방지 이유).
+    @Query("select v from Video v join fetch v.channel "
+        + "where v.status = com.quantlime.videofeed.domain.VideoStatus.SUMMARIZED "
+        + "and (:tickerCode is null or exists "
+        + "  (select 1 from VideoTicker vt where vt.video = v and vt.tickerCode = :tickerCode)) "
+        + "and (:publishedFrom is null or v.publishedAt >= :publishedFrom) "
+        + "and (:publishedTo is null or v.publishedAt < :publishedTo) "
+        + "order by v.publishedAt desc")
+    Slice<Video> findSummarizedVideos(
+        @Param("tickerCode") String tickerCode,
+        @Param("publishedFrom") LocalDateTime publishedFrom,
+        @Param("publishedTo") LocalDateTime publishedTo,
+        Pageable pageable);
+
+    @Query("select v from Video v join fetch v.channel "
+        + "where v.id = :videoId and v.status = com.quantlime.videofeed.domain.VideoStatus.SUMMARIZED")
+    Optional<Video> findSummarizedVideoById(@Param("videoId") Long videoId);
+
+    // 보존 기간(VideoRetentionService.RETENTION_DAYS) 정리용 - 상태 무관하게
+    // 발행일 기준으로만 대상을 잡는다(DISCOVERED/FILTERED_OUT처럼 애초에
+    // 피드에 노출된 적 없는 영상도 함께 정리 대상).
+    @Query("select v.id from Video v where v.publishedAt < :cutoff")
+    List<Long> findIdsByPublishedAtBefore(@Param("cutoff") LocalDateTime cutoff);
 }

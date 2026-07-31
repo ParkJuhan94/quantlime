@@ -89,6 +89,10 @@ public class SecurityConfig {
                 // 있어야 한다 - 구독 상태/결제/해지 등 나머지 /api/subscription/**
                 // 는 여전히 인증 필요(anyRequest().authenticated()로 커버).
                 .requestMatchers(HttpMethod.GET, "/api/subscription/plans").permitAll()
+                // 투자 콘텐츠 요약 피드(영상 요약) 열람은 커뮤니티 피드 글 조회와
+                // 동일하게 누구나 볼 수 있어야 한다 - 수집/요약 트리거는 여전히
+                // /api/admin/**로 막혀 있고 이건 조회 전용 GET만 연다.
+                .requestMatchers(HttpMethod.GET, "/api/video-feed/**").permitAll()
                 // 투자 콘텐츠 요약 피드 수집 수동 트리거 등 관리자 전용
                 // API - UserRole.ADMIN인 사용자만(JwtAuthenticationFilter가
                 // 부여하는 ROLE_ADMIN) 호출 가능하다.
