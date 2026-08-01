@@ -23,7 +23,7 @@ import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.OverseasStockMasterSyncService;
 import com.quantlime.stock.service.StockMasterService;
-import com.quantlime.stock.service.StockMasterSyncService;
+import com.quantlime.stock.service.DomesticStockMasterSyncService;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -52,7 +52,7 @@ class MarketDataRefreshServiceTest {
     private StockMasterService stockMasterService;
 
     @Mock
-    private StockMasterSyncService stockMasterSyncService;
+    private DomesticStockMasterSyncService domesticStockMasterSyncService;
 
     @Mock
     private OverseasStockMasterSyncService overseasStockMasterSyncService;
@@ -95,7 +95,7 @@ class MarketDataRefreshServiceTest {
     @BeforeEach
     void setUp() {
         marketDataRefreshService = new MarketDataRefreshService(
-            stockMasterService, stockMasterSyncService, overseasStockMasterSyncService,
+            stockMasterService, domesticStockMasterSyncService, overseasStockMasterSyncService,
             domesticDailyPriceRepository, overseasDailyPriceRepository,
             scoreRepository, priceGapFillService, scoreService,
             benchmarkIndexBackfillService, investorTradingBackfillService, redisLockService,
@@ -156,14 +156,14 @@ class MarketDataRefreshServiceTest {
         marketDataRefreshService.refreshAll();
 
         // then
-        verify(stockMasterSyncService).syncStockMaster();
+        verify(domesticStockMasterSyncService).syncStockMaster();
         verify(overseasStockMasterSyncService).syncAll();
         verify(priceGapFillService).fillDomesticGap(DOMESTIC_CODE);
         verify(priceGapFillService).fillOverseasGap(OVERSEAS_CODE);
 
         // 국내는 국내 전용 스코어 재계산에 삼성전자만 포함
         ArgumentCaptor<List<String>> domesticScoreCaptor = ArgumentCaptor.forClass(List.class);
-        verify(scoreService).recalculateScores(domesticScoreCaptor.capture());
+        verify(scoreService).recalculateDomesticScores(domesticScoreCaptor.capture());
         org.assertj.core.api.Assertions.assertThat(domesticScoreCaptor.getValue()).containsExactly(DOMESTIC_CODE);
 
         // 해외는 이미 최신이라 해외 전용 스코어 재계산 대상에서 제외
@@ -294,7 +294,7 @@ class MarketDataRefreshServiceTest {
 
         // then
         org.assertj.core.api.Assertions.assertThat(result).contains(Boolean.TRUE);
-        verify(stockMasterSyncService).syncStockMaster();
+        verify(domesticStockMasterSyncService).syncStockMaster();
         verify(overseasStockMasterSyncService).syncAll();
     }
 
@@ -310,7 +310,7 @@ class MarketDataRefreshServiceTest {
 
         // then
         org.assertj.core.api.Assertions.assertThat(result).isEmpty();
-        verify(stockMasterSyncService, never()).syncStockMaster();
+        verify(domesticStockMasterSyncService, never()).syncStockMaster();
         verify(stockMasterService, never()).getAllListedStocks();
     }
 

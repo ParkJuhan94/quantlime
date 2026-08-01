@@ -78,7 +78,7 @@ public class WatchlistService {
             () -> domesticDailyPriceService.backfillHistoryIfNeeded(stockCode));
         SafeExecutor.runSafely(
             "관심종목 등록 시 스코어 계산(stockCode=" + stockCode + ")",
-            () -> scoreService.recalculateScore(stockCode));
+            () -> scoreService.recalculateDomesticScore(stockCode));
     }
 
     @Transactional

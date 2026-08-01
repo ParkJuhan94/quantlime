@@ -12,7 +12,7 @@ import com.quantlime.infra.oauth.dto.OAuthUserInfo;
 import com.quantlime.market.service.MarketDataRefreshService;
 import com.quantlime.stock.dto.StockMasterSyncResult;
 import com.quantlime.stock.service.OverseasStockMasterSyncService;
-import com.quantlime.stock.service.StockMasterSyncService;
+import com.quantlime.stock.service.DomesticStockMasterSyncService;
 import com.quantlime.user.domain.OAuthProvider;
 import com.quantlime.user.domain.User;
 import com.quantlime.user.service.UserService;
@@ -39,7 +39,7 @@ public class DevController {
 
     private static final String DEV_TEST_PROVIDER_ID = "dev-test-user";
 
-    private final StockMasterSyncService stockMasterSyncService;
+    private final DomesticStockMasterSyncService domesticStockMasterSyncService;
     private final OverseasStockMasterSyncService overseasStockMasterSyncService;
     private final MarketDataRefreshService marketDataRefreshService;
     private final BacktestDatasetPreparationService backtestDatasetPreparationService;
@@ -54,7 +54,7 @@ public class DevController {
     @Operation(summary = "[개발용] 종목마스터 동기화(신규상장/상장폐지 반영) 수동 트리거")
     public ResponseEntity<String> triggerStockMasterSync() {
         log.info("[dev] 국내 종목마스터 동기화 수동 트리거 시작");
-        StockMasterSyncResult result = stockMasterSyncService.syncStockMaster();
+        StockMasterSyncResult result = domesticStockMasterSyncService.syncStockMaster();
         log.info("[dev] 국내 종목마스터 동기화 수동 트리거 완료: 신규상장={}건, 상장폐지={}건",
             result.newlyListedCount(), result.delistedCount());
         return ResponseEntity.ok(

@@ -219,7 +219,7 @@ class WatchlistServiceTest {
         watchlistService.addWatchlist(userId, stockCode, groupId);
 
         // then
-        verify(scoreService).recalculateScore(stockCode);
+        verify(scoreService).recalculateDomesticScore(stockCode);
     }
 
     @Test
@@ -237,7 +237,7 @@ class WatchlistServiceTest {
         given(watchlistRepository.save(org.mockito.ArgumentMatchers.any(Watchlist.class)))
             .willAnswer(invocation -> invocation.getArgument(0));
         willThrow(new RuntimeException("퀀트 엔진 장애"))
-            .given(scoreService).recalculateScore(stockCode);
+            .given(scoreService).recalculateDomesticScore(stockCode);
 
         // when
         Watchlist result = watchlistService.addWatchlist(userId, stockCode, groupId);

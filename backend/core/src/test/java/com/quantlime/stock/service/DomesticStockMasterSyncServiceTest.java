@@ -26,7 +26,7 @@ import static org.mockito.Mockito.verify;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
-class StockMasterSyncServiceTest {
+class DomesticStockMasterSyncServiceTest {
 
     @Mock
     private KindApiClient kindApiClient;
@@ -35,7 +35,7 @@ class StockMasterSyncServiceTest {
     private StockRepository stockRepository;
 
     @InjectMocks
-    private StockMasterSyncService stockMasterSyncService;
+    private DomesticStockMasterSyncService domesticStockMasterSyncService;
 
     @Test
     @DisplayName("[KIND 목록에는 있는데 DB에 없는 종목은 신규상장으로 등록한다]")
@@ -50,7 +50,7 @@ class StockMasterSyncServiceTest {
             List.of(StockFixture.createStock("005930", "삼성전자")));
 
         // when
-        StockMasterSyncResult result = stockMasterSyncService.syncStockMaster();
+        StockMasterSyncResult result = domesticStockMasterSyncService.syncStockMaster();
 
         // then
         ArgumentCaptor<Stock> savedCaptor = ArgumentCaptor.forClass(Stock.class);
@@ -72,7 +72,7 @@ class StockMasterSyncServiceTest {
         given(stockRepository.findAll()).willReturn(List.of(delistedCandidate));
 
         // when
-        StockMasterSyncResult result = stockMasterSyncService.syncStockMaster();
+        StockMasterSyncResult result = domesticStockMasterSyncService.syncStockMaster();
 
         // then
         assertThat(delistedCandidate.getListingStatus()).isEqualTo(ListingStatus.DELISTED);
@@ -93,7 +93,7 @@ class StockMasterSyncServiceTest {
         given(stockRepository.findAll()).willReturn(List.of(overseasStock));
 
         // when
-        StockMasterSyncResult result = stockMasterSyncService.syncStockMaster();
+        StockMasterSyncResult result = domesticStockMasterSyncService.syncStockMaster();
 
         // then
         assertThat(overseasStock.getListingStatus()).isEqualTo(ListingStatus.LISTED);
@@ -112,7 +112,7 @@ class StockMasterSyncServiceTest {
         given(stockRepository.findAll()).willReturn(List.of(existing));
 
         // when
-        StockMasterSyncResult result = stockMasterSyncService.syncStockMaster();
+        StockMasterSyncResult result = domesticStockMasterSyncService.syncStockMaster();
 
         // then
         assertThat(result.newlyListedCount()).isEqualTo(0);

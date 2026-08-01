@@ -13,7 +13,7 @@ import com.quantlime.score.service.ScoreService;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.OverseasStockMasterSyncService;
 import com.quantlime.stock.service.StockMasterService;
-import com.quantlime.stock.service.StockMasterSyncService;
+import com.quantlime.stock.service.DomesticStockMasterSyncService;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -59,7 +59,7 @@ public class MarketDataRefreshService {
     private static final Duration LOCK_TTL = Duration.ofMinutes(60);
 
     private final StockMasterService stockMasterService;
-    private final StockMasterSyncService stockMasterSyncService;
+    private final DomesticStockMasterSyncService domesticStockMasterSyncService;
     private final OverseasStockMasterSyncService overseasStockMasterSyncService;
     private final DomesticDailyPriceRepository domesticDailyPriceRepository;
     private final OverseasDailyPriceRepository overseasDailyPriceRepository;
@@ -100,7 +100,7 @@ public class MarketDataRefreshService {
         // 스코어 갱신 대상에 들어왔다. 아래 getAllListedStocks() 조회보다
         // 먼저 실행해야 이번 실행에서 새로 등록된 종목까지 곧바로 반영된다.
         // 실패해도 전종목 가격 갱신 자체는 막지 않는다(다른 백필과 동일 패턴).
-        SafeExecutor.runSafely("국내 종목마스터 동기화", stockMasterSyncService::syncStockMaster);
+        SafeExecutor.runSafely("국내 종목마스터 동기화", domesticStockMasterSyncService::syncStockMaster);
         SafeExecutor.runSafely("해외 종목마스터 동기화", overseasStockMasterSyncService::syncAll);
 
         // 가격 소스가 커버하지 않는 것으로 이미 표시된 종목(price_unsupported)은
@@ -164,7 +164,7 @@ public class MarketDataRefreshService {
                 needsScoreRefresh.add(stockCode);
             }
         }
-        scoreService.recalculateScores(needsScoreRefresh);
+        scoreService.recalculateDomesticScores(needsScoreRefresh);
     }
 
     private void refreshOverseas(List<Stock> stocks, AtomicInteger failures) {

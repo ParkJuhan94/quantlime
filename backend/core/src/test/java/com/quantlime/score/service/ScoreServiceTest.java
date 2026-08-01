@@ -83,7 +83,7 @@ class ScoreServiceTest {
             .willReturn(List.of());
 
         // when
-        scoreService.recalculateScore(STOCK_CODE);
+        scoreService.recalculateDomesticScore(STOCK_CODE);
 
         // then
         verify(pythonEngineClient, never()).calculateScoreSeries(any());
@@ -102,7 +102,7 @@ class ScoreServiceTest {
             .willReturn(response);
 
         // when
-        scoreService.recalculateScore(STOCK_CODE);
+        scoreService.recalculateDomesticScore(STOCK_CODE);
 
         // then
         verify(scorePersistenceService).saveAll(response.scores());
@@ -118,7 +118,7 @@ class ScoreServiceTest {
             .willThrow(new ExternalApiException(PythonEngineErrorCode.SCORE_CALCULATION_FAILED));
 
         // when & then: 예외는 상위(WatchlistService/스케줄러)에서 잡으므로 여기선 전파돼야 함
-        assertThatThrownBy(() -> scoreService.recalculateScore(STOCK_CODE))
+        assertThatThrownBy(() -> scoreService.recalculateDomesticScore(STOCK_CODE))
             .isInstanceOf(ExternalApiException.class);
         verify(scorePersistenceService, never()).saveAll(any());
     }

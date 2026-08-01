@@ -20,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class StockMasterSyncService {
+public class DomesticStockMasterSyncService {
 
     private final KindApiClient kindApiClient;
     private final StockRepository stockRepository;

@@ -68,8 +68,8 @@ public class ScoreService {
     private final StockMasterService stockMasterService;
     private final MeterRegistry meterRegistry;
 
-    public void recalculateScore(String stockCode) {
-        recalculateScoresChunk(List.of(stockCode));
+    public void recalculateDomesticScore(String stockCode) {
+        recalculateDomesticScoresChunk(List.of(stockCode));
     }
 
     // 관심종목만이 아니라 전 상장종목을 대상으로 계산한다(2026-07-16 -
@@ -80,7 +80,7 @@ public class ScoreService {
         List<String> stockCodes = stockMasterService.getAllListedStocks().stream()
             .map(Stock::getStockCode)
             .toList();
-        recalculateScores(stockCodes);
+        recalculateDomesticScores(stockCodes);
     }
 
     /**
@@ -89,7 +89,7 @@ public class ScoreService {
      * 실제로 갱신이 필요한 종목만 걸러서 넘기면 같은 배치/격리 로직을 그대로
      * 재사용할 수 있다.
      */
-    public void recalculateScores(List<String> stockCodes) {
+    public void recalculateDomesticScores(List<String> stockCodes) {
         if (stockCodes.isEmpty()) {
             log.debug("스코어 재계산 스킵: 대상 종목 없음");
             return;
@@ -101,7 +101,7 @@ public class ScoreService {
         for (List<String> chunk : chunks) {
             chunkIndex++;
             try {
-                recalculateScoresChunk(chunk);
+                recalculateDomesticScoresChunk(chunk);
             } catch (Exception e) {
                 log.error("스코어 재계산 청크 실패(다음 청크는 계속 진행): chunkIndex={}/{}, error={}",
                     chunkIndex, chunks.size(), e.getMessage(), e);
@@ -112,7 +112,7 @@ public class ScoreService {
 
     /**
      * 해외종목 버전 - OHLCV를 {@code overseas_daily_price}에서 조회하는 것만
-     * 다르고, 청크/격리/영속화 로직은 {@link #recalculateScores}와 동일하다
+     * 다르고, 청크/격리/영속화 로직은 {@link #recalculateDomesticScores}와 동일하다
      * (PriceGapFillService의 국내/해외 분리 패턴과 동일한 이유).
      */
     public void recalculateOverseasScores(List<String> stockCodes) {
@@ -215,8 +215,8 @@ public class ScoreService {
         return allowed == null || allowed.contains(marketType);
     }
 
-    private void recalculateScoresChunk(List<String> stockCodes) {
-        Map<String, List<DomesticDailyPrice>> domesticDailyPricesByStockCode = fetchOhlcvHistories(stockCodes);
+    private void recalculateDomesticScoresChunk(List<String> stockCodes) {
+        Map<String, List<DomesticDailyPrice>> domesticDailyPricesByStockCode = fetchDomesticOhlcvHistories(stockCodes);
         if (domesticDailyPricesByStockCode.isEmpty()) {
             log.info("스코어 재계산 스킵: OHLCV 이력이 있는 종목 없음, stockCodes={}", stockCodes);
             return;
@@ -238,7 +238,7 @@ public class ScoreService {
      * 배치 요청에서 제외한다 - 포함하면 퀀트 엔진이 빈 OHLCV로 계산을 시도하다
      * 실패해 같은 배치에 포함된 다른 모든 종목의 스코어까지 갱신되지 못한다.
      */
-    private Map<String, List<DomesticDailyPrice>> fetchOhlcvHistories(List<String> stockCodes) {
+    private Map<String, List<DomesticDailyPrice>> fetchDomesticOhlcvHistories(List<String> stockCodes) {
         LocalDate end = LocalDate.now();
         LocalDate start = end.minusDays(OHLCV_LOOKBACK_DAYS);
         return domesticDailyPriceService.getDailyPrices(stockCodes, start, end).stream()

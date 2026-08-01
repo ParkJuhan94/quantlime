@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service;
 /**
  * KIS 해외주식 종목정보 마스터파일로 해외 종목 마스터(NASDAQ/NYSE/AMEX,
  * CLAUDE.md 백테스트 계획 Phase A/C 참고 - AMEX는 2026-08-01 추가)를
- * 등록한다. 국내 KIND 동기화(StockMasterSyncService)와 달리 상장폐지
+ * 등록한다. 국내 KIND 동기화(DomesticStockMasterSyncService)와 달리 상장폐지
  * 감지는 하지 않는다(v1 스코프 - 해외 유니버스는 거래대금 랭킹으로 매번
  * 다시 뽑으므로, 사라진 종목은 자연스럽게 다음 랭킹에서 제외될 뿐 별도
  * 삭제 처리가 필요 없음).

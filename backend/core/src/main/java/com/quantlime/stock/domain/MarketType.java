@@ -15,7 +15,7 @@ public enum MarketType {
     KOSDAQ("코스닥", true),
     KONEX("코넥스", true),
     // 백테스트 해외 유니버스(KIS 연동, CLAUDE.md 스코어링 백테스트 계획 참고)용.
-    // 국내 전용 소스(KIND)를 순회하는 기존 로직(StockMasterSyncService)이
+    // 국내 전용 소스(KIND)를 순회하는 기존 로직(DomesticStockMasterSyncService)이
     // 이 값들을 건드리지 않도록 domesticValues()로 명시적으로 걸러낸다.
     NASDAQ("나스닥", false),
     NYSE("뉴욕증권거래소", false),
