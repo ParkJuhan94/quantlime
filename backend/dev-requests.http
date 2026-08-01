@@ -1,0 +1,49 @@
+### 개발용 수동 트리거 모음 (DevController, dev 프로파일 전용)
+#
+# 사용법: 각 요청 왼쪽에 뜨는 초록색 실행 화살표(▷)를 클릭하면 바로
+# 호출된다 - 타이핑도, 별도 Postman 실행도 필요 없다. IntelliJ가 이
+# 파일을 열면 자동으로 인식한다(Ultimate/Community 모두 HTTP Client
+# 내장). 아래 baseUrl만 필요에 따라 바꿔서 쓰면 된다.
+#
+# 8080 = 평소 띄워두는 실제 개발 서버, 8081 = Claude Code 등이 검증용으로
+# 띄우는 별도 포트(CLAUDE.md 로컬 개발 서버 종료 원칙 참고) - 상황에 맞는
+# 쪽 주석을 풀어 쓴다.
+@baseUrl = http://localhost:8080
+# @baseUrl = http://localhost:8081
+
+### 국내 종목마스터 동기화(신규상장/상장폐지 반영)
+POST {{baseUrl}}/dev/stock-master/sync
+
+### 해외 종목마스터 동기화(NASDAQ/NYSE 신규상장 반영 + 한글명 백필)
+POST {{baseUrl}}/dev/stock-master/overseas/sync
+
+### 전종목(국내+해외) 가격/스코어 갱신
+# 2026-08-01부로 국내/해외 종목마스터 동기화가 이 안에 편입돼 있어(맨
+# 처음 실행됨) 위 두 요청을 따로 안 불러도 된다. 수 분~수십 분 걸릴 수
+# 있고, 이미 다른 실행(스케줄러/기동 캐치업) 중이면 스킵된다.
+POST {{baseUrl}}/dev/refresh
+
+### 단일 종목만 가격/스코어 갱신(디버깅용 - stockCode 바꿔서 사용)
+POST {{baseUrl}}/dev/refresh?stockCode=005930
+
+### 백테스트용 데이터셋 준비(국내/해외 유니버스 선정+백필 + 벤치마크 지수 백필)
+POST {{baseUrl}}/dev/backtest/prepare-dataset
+
+### 단일 종목 백테스트(stockCode 바꿔서 사용)
+POST {{baseUrl}}/dev/backtest/run?stockCode=005930
+
+### 유니버스 전체 백테스트(무거운 연산 - 수십 분 이상 소요될 수 있음)
+POST {{baseUrl}}/dev/backtest/run-universe
+
+### 개발용 로그인(실제 소셜 로그인 없이 테스트 유저 JWT 발급)
+# 응답의 accessToken을 client.global 변수(accessToken)로 캡처해둔다 -
+# 아래처럼 인증이 필요한 /api 요청에서 {{accessToken}}으로 바로 재사용 가능.
+POST {{baseUrl}}/dev/auth/token
+
+> {%
+    client.global.set("accessToken", response.body.accessToken);
+%}
+
+### (예시) 위에서 발급받은 토큰으로 인증 필요한 API 호출해보기 - 내 구독 상태 조회
+GET {{baseUrl}}/api/subscription/me
+Authorization: Bearer {{accessToken}}
