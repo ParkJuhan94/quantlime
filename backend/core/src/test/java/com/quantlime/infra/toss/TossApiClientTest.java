@@ -14,6 +14,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.quantlime.common.exception.ExternalApiException;
+import com.quantlime.infra.toss.dto.TossCandleResponse;
 import com.quantlime.infra.toss.dto.TossMarketCalendarResponse;
 import com.quantlime.infra.toss.dto.TossRankingResponse;
 import com.quantlime.infra.toss.dto.TossUsMarketCalendarResponse;
@@ -192,6 +193,32 @@ class TossApiClientTest {
 
         // then: 두 번째 호출이 최소 간격(150ms)만큼 지연됐어야 한다
         assertThat(elapsedMs).isGreaterThanOrEqualTo(140);
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("[getDailyCandles는 Rate Limit(429) 발생 시 대기 후 1회 재시도한다 - "
+        + "이전엔 DomesticDailyPriceService/OverseasDailyPriceBackfillService가 각자 재구현했는데 "
+        + "국내 갭필 경로(refreshRecent)만 이 재시도가 빠져 있어 429 후 재시도 없이 "
+        + "실패가 반복되는 실제 버그가 있었다 - 클라이언트로 옮겨 모든 호출부가 예외 없이 혜택을 받는다]")
+    void getDailyCandles_rateLimited_retriesOnce() {
+        // given
+        when(tokenManager.getAccessToken()).thenReturn("token");
+        String candlesUri = BASE_URL + "/api/v1/candles?symbol=005930&interval=1d&count=10&adjusted=true";
+        mockServer.expect(requestTo(candlesUri))
+            .andExpect(method(GET))
+            .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body("{\"error\":{\"code\":\"rate-limit\"}}"));
+        mockServer.expect(requestTo(candlesUri))
+            .andExpect(method(GET))
+            .andRespond(withSuccess("{\"result\":{\"candles\":[],\"nextBefore\":null}}", MediaType.APPLICATION_JSON));
+
+        // when
+        TossCandleResponse response = tossApiClient.getDailyCandles("005930", 10, null);
+
+        // then
+        assertThat(response.result().candles()).isEmpty();
         mockServer.verify();
     }
 }

@@ -40,7 +40,7 @@ public class Score extends TimeBaseEntity {
     @Column(name = "score_id")
     private Long id;
 
-    @Column(name = "stock_code", nullable = false, length = 6)
+    @Column(name = "stock_code", nullable = false, length = 10)
     private String stockCode;
 
     @Column(name = "score_date", nullable = false)

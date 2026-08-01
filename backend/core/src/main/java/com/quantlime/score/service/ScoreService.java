@@ -5,10 +5,10 @@ import com.quantlime.infra.python.PythonEngineClient;
 import com.quantlime.infra.python.dto.ScoreBatchApiRequest;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.StockScoreSeriesApiResponse;
-import com.quantlime.price.domain.DailyPrice;
+import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.price.repository.OverseasDailyPriceRepository;
-import com.quantlime.price.service.DailyPriceService;
+import com.quantlime.price.service.DomesticDailyPriceService;
 import com.quantlime.score.domain.Score;
 import com.quantlime.score.dto.mapper.ScoreMapper;
 import com.quantlime.score.dto.mapper.ScoreRequestMapper;
@@ -18,6 +18,7 @@ import com.quantlime.score.exception.ScoreErrorCode;
 import com.quantlime.score.repository.ScoreRepository;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
+import com.quantlime.stock.dto.mapper.StockMapper;
 import com.quantlime.stock.service.StockMasterService;
 import com.quantlime.watchlist.domain.Watchlist;
 import com.quantlime.watchlist.repository.WatchlistRepository;
@@ -58,7 +59,7 @@ public class ScoreService {
     // (OhlcvCollectorScheduler의 종목별 try-catch와 동일한 격리 원칙).
     private static final int SCORE_BATCH_CHUNK_SIZE = 100;
 
-    private final DailyPriceService dailyPriceService;
+    private final DomesticDailyPriceService domesticDailyPriceService;
     private final OverseasDailyPriceRepository overseasDailyPriceRepository;
     private final PythonEngineClient pythonEngineClient;
     private final ScorePersistenceService scorePersistenceService;
@@ -165,7 +166,9 @@ public class ScoreService {
         return latestScores.stream()
             .map(score -> {
                 Stock stock = stockByCode.get(score.getStockCode());
-                return ScoreMapper.toScoreRankingResponse(score, stock.getStockName(), stock.getSector());
+                return ScoreMapper.toScoreRankingResponse(
+                    score, stock.getDisplayName(), stock.getSector(), StockMapper.toLogoUrl(stock),
+                    !stock.getMarketType().isDomestic());
             })
             .toList();
     }
@@ -184,7 +187,9 @@ public class ScoreService {
         return latestScores.stream()
             .map(score -> {
                 Stock stock = stockByCode.get(score.getStockCode());
-                return ScoreMapper.toScoreRankingResponse(score, stock.getStockName(), stock.getSector());
+                return ScoreMapper.toScoreRankingResponse(
+                    score, stock.getDisplayName(), stock.getSector(), StockMapper.toLogoUrl(stock),
+                    !stock.getMarketType().isDomestic());
             })
             .toList();
     }
@@ -211,21 +216,21 @@ public class ScoreService {
     }
 
     private void recalculateScoresChunk(List<String> stockCodes) {
-        Map<String, List<DailyPrice>> dailyPricesByStockCode = fetchOhlcvHistories(stockCodes);
-        if (dailyPricesByStockCode.isEmpty()) {
+        Map<String, List<DomesticDailyPrice>> domesticDailyPricesByStockCode = fetchOhlcvHistories(stockCodes);
+        if (domesticDailyPricesByStockCode.isEmpty()) {
             log.info("스코어 재계산 스킵: OHLCV 이력이 있는 종목 없음, stockCodes={}", stockCodes);
             return;
         }
-        warnIfMissingHistory(stockCodes, dailyPricesByStockCode.keySet());
+        warnIfMissingHistory(stockCodes, domesticDailyPricesByStockCode.keySet());
 
         ScoreBatchApiRequest request =
-            ScoreRequestMapper.toScoreBatchApiRequest(dailyPricesByStockCode);
+            ScoreRequestMapper.toScoreBatchApiRequest(domesticDailyPricesByStockCode);
         ScoreSeriesBatchApiResponse response = pythonEngineClient.calculateScoreSeries(request);
 
-        warnIfMissingFromResponse(dailyPricesByStockCode.keySet(), response.scores());
+        warnIfMissingFromResponse(domesticDailyPricesByStockCode.keySet(), response.scores());
         scorePersistenceService.saveAll(response.scores());
 
-        log.info("스코어 재계산 완료: 대상종목수={}", dailyPricesByStockCode.size());
+        log.info("스코어 재계산 완료: 대상종목수={}", domesticDailyPricesByStockCode.size());
     }
 
     /**
@@ -233,11 +238,11 @@ public class ScoreService {
      * 배치 요청에서 제외한다 - 포함하면 퀀트 엔진이 빈 OHLCV로 계산을 시도하다
      * 실패해 같은 배치에 포함된 다른 모든 종목의 스코어까지 갱신되지 못한다.
      */
-    private Map<String, List<DailyPrice>> fetchOhlcvHistories(List<String> stockCodes) {
+    private Map<String, List<DomesticDailyPrice>> fetchOhlcvHistories(List<String> stockCodes) {
         LocalDate end = LocalDate.now();
         LocalDate start = end.minusDays(OHLCV_LOOKBACK_DAYS);
-        return dailyPriceService.getDailyPrices(stockCodes, start, end).stream()
-            .collect(Collectors.groupingBy(DailyPrice::getStockCode));
+        return domesticDailyPriceService.getDailyPrices(stockCodes, start, end).stream()
+            .collect(Collectors.groupingBy(DomesticDailyPrice::getStockCode));
     }
 
     private void recalculateOverseasScoresChunk(List<String> stockCodes) {

@@ -11,7 +11,7 @@ import static org.mockito.Mockito.verify;
 
 import com.quantlime.infra.naver.NaverFinanceApiClient;
 import com.quantlime.infra.naver.dto.NaverIndexCandleResponse;
-import com.quantlime.market.domain.WorldIndexCode;
+import com.quantlime.market.domain.OverseasIndexCode;
 import com.quantlime.market.repository.BenchmarkIndexRepository;
 import java.time.LocalDate;
 import java.util.List;
@@ -138,9 +138,9 @@ class BenchmarkIndexBackfillServiceTest {
     void refreshRecentIfNeeded_alwaysFetchesLatestOverseasPageRegardlessOfExistingCount() {
         // given: 국내는 빈 페이지로 스텁, 해외만 검증 대상
         given(naverFinanceApiClient.getIndexPrices(any(), eq(60))).willReturn(List.of());
-        given(naverFinanceApiClient.getWorldIndexPrices(eq(WorldIndexCode.NASDAQ.getReutersCode()), eq(60)))
+        given(naverFinanceApiClient.getWorldIndexPrices(eq(OverseasIndexCode.NASDAQ.getReutersCode()), eq(60)))
             .willReturn(page(2, "2026-07-31"));
-        given(naverFinanceApiClient.getWorldIndexPrices(eq(WorldIndexCode.SP500.getReutersCode()), eq(60)))
+        given(naverFinanceApiClient.getWorldIndexPrices(eq(OverseasIndexCode.SP500.getReutersCode()), eq(60)))
             .willReturn(page(1, "2026-07-31"));
         given(benchmarkIndexRepository.existsByIndexCodeAndTradeDate(any(), any())).willReturn(false);
 

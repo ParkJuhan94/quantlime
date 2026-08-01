@@ -37,17 +37,36 @@ public class StockMasterService {
                 StockErrorCode.NOT_FOUND_STOCK));
     }
 
+    /**
+     * 해외 종목마스터 동기화 전용({@link com.quantlime.stock.service.OverseasStockMasterSyncService}
+     * 유일 호출부) - 이미 등록된 종목이면 한글명만 최신 값으로 백필하고
+     * (주 1회 재동기화 때마다 KIS 마스터파일 값이 바뀌었을 수 있어), 나머지
+     * 필드는 최초 등록 시점 값을 유지한다.
+     */
     @Transactional
     public Stock registerStock(String stockCode, String stockName,
-                               MarketType marketType, String sector) {
-        if (stockRepository.existsByStockCode(stockCode)) {
-            log.debug("이미 등록된 종목: stockCode={}", stockCode);
-            return stockRepository.findByStockCode(stockCode).get();
+                               MarketType marketType, String sector, String koreanName) {
+        var existing = stockRepository.findByStockCode(stockCode);
+        if (existing.isPresent()) {
+            Stock stock = existing.get();
+            stock.updateKoreanName(koreanName);
+            return stock;
         }
 
         Stock stock = Stock.of(stockCode, stockName, marketType,
-            ListingStatus.LISTED, sector);
+            ListingStatus.LISTED, sector, koreanName);
         return stockRepository.save(stock);
+    }
+
+    /**
+     * 가격 소스(Toss)가 커버하지 않는 종목으로 표시한다(stock-not-found 404
+     * 반복 감지 시 {@link com.quantlime.market.service.MarketDataRefreshService}가
+     * 호출). 이미 표시돼 있으면 no-op에 가깝고, 대상이 없으면 조용히 넘어간다.
+     */
+    @Transactional
+    public void markPriceUnsupported(String stockCode) {
+        stockRepository.findByStockCode(stockCode)
+            .ifPresent(Stock::markPriceUnsupported);
     }
 
     @Transactional
@@ -59,8 +78,8 @@ public class StockMasterService {
     @Transactional(readOnly = true)
     public Slice<Stock> searchStocks(String keyword, Pageable pageable) {
         String trimmedKeyword = keyword.trim();
-        return stockRepository.findByStockNameContainingIgnoreCaseOrStockCodeContaining(
-            trimmedKeyword, trimmedKeyword, pageable);
+        return stockRepository.findByStockNameContainingIgnoreCaseOrStockCodeContainingOrKoreanNameContainingIgnoreCase(
+            trimmedKeyword, trimmedKeyword, trimmedKeyword, pageable);
     }
 
     /**

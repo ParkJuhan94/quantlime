@@ -10,7 +10,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  * 준다. 모든 시각 KST(+09:00) - 미국 정규장(regularMarket)은 KST
  * 22:30~다음날 05:00으로 자정을 넘기므로, "지금이 장중인가"를 판정하려면
  * today의 세션만으로는 부족하고 3영업일 전부를 봐야 한다
- * (UsMarketCalendarCache 참고). 휴장일에는 국내와 동일하게 해당 날짜의
+ * (OverseasMarketCalendarCache 참고). 휴장일에는 국내와 동일하게 해당 날짜의
  * 세션 필드가 전부 null로 내려온다(실제 응답으로 미확인 - 국내 패턴과
  * 동일하다고 가정, null-safe하게 처리).
  */

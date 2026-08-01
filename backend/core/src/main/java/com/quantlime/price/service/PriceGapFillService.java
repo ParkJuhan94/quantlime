@@ -1,8 +1,8 @@
 package com.quantlime.price.service;
 
-import com.quantlime.price.domain.DailyPrice;
+import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
-import com.quantlime.price.repository.DailyPriceRepository;
+import com.quantlime.price.repository.DomesticDailyPriceRepository;
 import com.quantlime.price.repository.OverseasDailyPriceRepository;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service;
 /**
  * 종목 하나의 마지막 저장일을 확인해, 없으면 깊은 백필로, 있으면 그 다음날
  * 부터 오늘까지의 갭만 최소 호출로 채운다 - 총 건수 기준으로 스킵 여부를
- * 판단하는 기존 백필 서비스({@link DailyPriceService#backfillHistoryIfNeeded}
+ * 판단하는 기존 백필 서비스({@link DomesticDailyPriceService#backfillHistoryIfNeeded}
  * / {@link OverseasDailyPriceBackfillService#backfillHistoryIfNeeded})는
  * "이미 충분히 쌓여 있으면" 스킵하므로, 이미 200~400일치가 있는 종목이
  * 서버 다운타임 동안 최근 며칠만 비어도 놓친다 - 이 서비스는 그 최근
@@ -28,7 +28,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class PriceGapFillService {
 
-    // 토스 캔들 조회 count 파라미터 상한(DailyPriceService.BACKFILL_PAGE_SIZE와
+    // 토스 캔들 조회 count 파라미터 상한(DomesticDailyPriceService.BACKFILL_PAGE_SIZE와
     // 동일 값) - 갭이 이보다 크면 단일 호출로 못 채우므로 깊은 백필로 폴백한다.
     // 해외도 이제 같은 Toss 캔들 API를 쓰므로(2026-07-29, KIS 이관) 국내와
     // 값이 같아져 상수 하나로 통합했다.
@@ -39,9 +39,9 @@ public class PriceGapFillService {
     // 여유분 며칠을 더 조회하는 편이 안전하다(중복은 존재 여부 체크로 스킵됨).
     private static final int GAP_BUFFER_DAYS = 5;
 
-    private final DailyPriceRepository dailyPriceRepository;
+    private final DomesticDailyPriceRepository domesticDailyPriceRepository;
     private final OverseasDailyPriceRepository overseasDailyPriceRepository;
-    private final DailyPriceService dailyPriceService;
+    private final DomesticDailyPriceService domesticDailyPriceService;
     private final OverseasDailyPriceBackfillService overseasDailyPriceBackfillService;
 
     /**
@@ -50,11 +50,11 @@ public class PriceGapFillService {
      * (이미 최신이라 스킵된 종목까지 매번 딜레이를 걸면 전종목 스윕이 불필요하게 느려진다).
      */
     public boolean fillDomesticGap(String stockCode) {
-        Optional<LocalDate> latestTradeDate = dailyPriceRepository
+        Optional<LocalDate> latestTradeDate = domesticDailyPriceRepository
             .findTopByStockCodeOrderByTradeDateDesc(stockCode)
-            .map(DailyPrice::getTradeDate);
+            .map(DomesticDailyPrice::getTradeDate);
         if (latestTradeDate.isEmpty()) {
-            dailyPriceService.backfillHistoryIfNeeded(stockCode, DEEP_BACKFILL_TARGET_DAYS);
+            domesticDailyPriceService.backfillHistoryIfNeeded(stockCode, DEEP_BACKFILL_TARGET_DAYS);
             return true;
         }
 
@@ -67,10 +67,10 @@ public class PriceGapFillService {
         if (lookbackDays > SINGLE_CALL_CAP_DAYS) {
             log.info("가격 갭이 단일 호출 한도 초과, 깊은 백필로 대체: stockCode={}, 갭={}일",
                 stockCode, rawGapDays);
-            dailyPriceService.backfillHistoryIfNeeded(stockCode, DEEP_BACKFILL_TARGET_DAYS);
+            domesticDailyPriceService.backfillHistoryIfNeeded(stockCode, DEEP_BACKFILL_TARGET_DAYS);
             return true;
         }
-        dailyPriceService.collectDailyPrice(stockCode, lookbackDays);
+        domesticDailyPriceService.refreshRecent(stockCode, lookbackDays);
         return true;
     }
 
@@ -95,7 +95,7 @@ public class PriceGapFillService {
             overseasDailyPriceBackfillService.backfillHistoryIfNeeded(stockCode, DEEP_BACKFILL_TARGET_DAYS);
             return true;
         }
-        overseasDailyPriceBackfillService.collectRecentPrices(stockCode, lookbackDays);
+        overseasDailyPriceBackfillService.refreshRecent(stockCode, lookbackDays);
         return true;
     }
 }

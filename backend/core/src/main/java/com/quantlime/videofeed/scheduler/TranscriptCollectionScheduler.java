@@ -1,6 +1,8 @@
 package com.quantlime.videofeed.scheduler;
 
+import com.quantlime.videofeed.dto.TranscribeResult;
 import com.quantlime.videofeed.service.TranscriptCollectionFacade;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -28,10 +30,23 @@ public class TranscriptCollectionScheduler {
     public void run() {
         try {
             transcriptCollectionFacade.runBatchExclusively().ifPresentOrElse(
-                results -> log.info("자막 수집 완료: results={}", results),
+                this::logSummary,
                 () -> log.info("이미 다른 실행이 자막 수집 중 - 이번 실행은 스킵"));
         } catch (Exception e) {
             log.error("자막 수집 스케줄 실행 실패: reason={}", e.getMessage(), e);
         }
+    }
+
+    // 영상 수가 늘어날수록 결과 레코드를 한 줄에 통째로 dump하면 스캔하기
+    // 어려워져, 총계 한 줄 + 실패 건만 별도로 남긴다.
+    private void logSummary(List<TranscribeResult> results) {
+        long succeeded = results.stream().filter(r -> r.success() && r.available()).count();
+        long unavailable = results.stream().filter(r -> r.success() && !r.available()).count();
+        long failed = results.stream().filter(r -> !r.success()).count();
+        log.info("자막 수집 완료: 총={}건, 성공={}, 자막없음={}, 실패={}",
+            results.size(), succeeded, unavailable, failed);
+        results.stream()
+            .filter(r -> !r.success())
+            .forEach(r -> log.warn("자막 수집 실패: videoId={}, reason={}", r.videoId(), r.reason()));
     }
 }

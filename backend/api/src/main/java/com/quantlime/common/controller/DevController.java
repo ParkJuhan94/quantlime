@@ -89,9 +89,15 @@ public class DevController {
         // 겪은 혼란 - 수동 트리거로 인한 결과인지 스케줄러/기동 캐치업
         // 때문인지 로그만 봐선 구분 불가했음).
         log.info("[dev] 가격/스코어 갱신 수동 트리거 시작(전종목)");
-        marketDataRefreshService.refreshAll();
-        log.info("[dev] 가격/스코어 갱신 수동 트리거 완료(전종목)");
-        return ResponseEntity.ok("전종목 가격/스코어 갱신 완료");
+        return marketDataRefreshService.refreshAllExclusively()
+            .map(result -> {
+                log.info("[dev] 가격/스코어 갱신 수동 트리거 완료(전종목)");
+                return ResponseEntity.ok("전종목 가격/스코어 갱신 완료");
+            })
+            .orElseGet(() -> {
+                log.info("[dev] 가격/스코어 갱신 수동 트리거 스킵 - 이미 다른 실행(스케줄러/기동 캐치업) 중");
+                return ResponseEntity.ok("이미 다른 실행이 갱신 중입니다 - 스킵");
+            });
     }
 
     @PostMapping("/backtest/prepare-dataset")

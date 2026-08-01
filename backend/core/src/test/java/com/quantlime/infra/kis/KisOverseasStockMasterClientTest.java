@@ -56,6 +56,7 @@ class KisOverseasStockMasterClientTest {
         // then
         assertThat(entries).hasSize(2);
         assertThat(entries.get(0).symbol()).isEqualTo("AA");
+        assertThat(entries.get(0).koreanName()).isEqualTo("알코아");
         assertThat(entries.get(0).englishName()).isEqualTo("ALCOA CORPORATION");
         assertThat(entries.get(0).isStock()).isTrue();
         assertThat(entries.get(0).industryCode()).isEqualTo("720");

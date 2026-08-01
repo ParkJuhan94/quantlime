@@ -10,6 +10,7 @@ public record WatchlistResponse(
     String sector,
     Long groupId,
     int sortOrder,
-    LocalDateTime createdAt
+    LocalDateTime createdAt,
+    String logoUrl
 ) {
 }

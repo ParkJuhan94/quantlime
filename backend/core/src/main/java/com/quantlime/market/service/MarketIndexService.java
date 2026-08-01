@@ -2,12 +2,12 @@ package com.quantlime.market.service;
 
 import com.quantlime.market.cache.BitcoinChartCache;
 import com.quantlime.market.cache.ExchangeRateChartCache;
-import com.quantlime.market.cache.IndexChartCache;
-import com.quantlime.market.cache.IndexMinuteChartCache;
+import com.quantlime.market.cache.DomesticIndexChartCache;
+import com.quantlime.market.cache.DomesticIndexMinuteChartCache;
 import com.quantlime.market.cache.MarketIndexCache;
-import com.quantlime.market.cache.WorldIndexChartCache;
+import com.quantlime.market.cache.OverseasIndexChartCache;
 import com.quantlime.market.domain.BenchmarkIndex;
-import com.quantlime.market.domain.WorldIndexCode;
+import com.quantlime.market.domain.OverseasIndexCode;
 import com.quantlime.market.dto.response.IndexChartResponse;
 import com.quantlime.market.dto.response.IndexMinuteChartResponse;
 import com.quantlime.market.dto.response.MarketIndexResponse;
@@ -29,9 +29,9 @@ public class MarketIndexService {
     private static final int CHART_LOOKBACK_DAYS = 365;
 
     private final MarketIndexCache marketIndexCache;
-    private final IndexChartCache indexChartCache;
-    private final IndexMinuteChartCache indexMinuteChartCache;
-    private final WorldIndexChartCache worldIndexChartCache;
+    private final DomesticIndexChartCache domesticIndexChartCache;
+    private final DomesticIndexMinuteChartCache domesticIndexMinuteChartCache;
+    private final OverseasIndexChartCache overseasIndexChartCache;
     private final BitcoinChartCache bitcoinChartCache;
     private final ExchangeRateChartCache exchangeRateChartCache;
     private final BenchmarkIndexRepository benchmarkIndexRepository;
@@ -42,8 +42,8 @@ public class MarketIndexService {
 
     /**
      * 국내(코스피/코스닥)는 영속 저장된 {@code benchmark_index}(종목 상세
-     * 페이지의 DailyPrice와 동일한 성격 - 매일 최신화됨, 2026-07-30 이관)를
-     * 직접 조회한다. 예전엔 {@link IndexChartCache}(Toss 실시간 조회, 60초
+     * 페이지의 DomesticDailyPrice와 동일한 성격 - 매일 최신화됨, 2026-07-30 이관)를
+     * 직접 조회한다. 예전엔 {@link DomesticIndexChartCache}(Toss 실시간 조회, 60초
      * TTL, 영속 저장 안 함)를 썼는데, 종목처럼 영속 이력에서 조회되길
      * 원하는 사용자 요청으로 교체 - 추가 API 호출 없이 이미 매일 갱신되는
      * 데이터를 재사용한다. 해외지수는 이 영속 이력이 없어(비공식 네이버
@@ -58,8 +58,8 @@ public class MarketIndexService {
                 .map(this::toChartResponse)
                 .toList();
         }
-        WorldIndexCode worldIndexCode = WorldIndexCode.from(code);
-        return worldIndexChartCache.get(worldIndexCode.getReutersCode(), worldIndexCode.isEtf());
+        OverseasIndexCode overseasIndexCode = OverseasIndexCode.from(code);
+        return overseasIndexChartCache.get(overseasIndexCode.getReutersCode(), overseasIndexCode.isEtf());
     }
 
     private IndexChartResponse toChartResponse(BenchmarkIndex benchmarkIndex) {
@@ -77,11 +77,11 @@ public class MarketIndexService {
     // 같은 모양(time/price)으로 변환해 대신 보여준다 - "장마감이어도
     // 최근 거래일 차트는 항상 보이게" 하기 위함.
     public List<IndexMinuteChartResponse> getIndexMinuteChart(String code) {
-        List<IndexMinuteChartResponse> minuteChart = indexMinuteChartCache.get(code);
+        List<IndexMinuteChartResponse> minuteChart = domesticIndexMinuteChartCache.get(code);
         if (!minuteChart.isEmpty()) {
             return minuteChart;
         }
-        return indexChartCache.get(code).stream()
+        return domesticIndexChartCache.get(code).stream()
             .map(candle -> new IndexMinuteChartResponse(candle.tradeDate().atStartOfDay(), candle.close()))
             .toList();
     }

@@ -1,5 +1,6 @@
 package com.quantlime.common.exception;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -59,12 +60,16 @@ public class GlobalExceptionHandler {
         return new ErrorResponseTemplate("파일 크기가 너무 큽니다.", "UPLOAD_002");
     }
 
+    // path를 함께 남긴다 - 이전엔 message/code만 있어 어느 엔드포인트가
+    // 실패했는지 로그만으론 알 수 없었다(2026-08-01, 랭킹에서 로컬
+    // 마스터에 없는 종목을 클릭했을 때 어느 API가 404를 냈는지 DB를 직접
+    // 뒤져서야 특정할 수 있었던 사례).
     @ResponseStatus(HttpStatus.NOT_FOUND)
     @ExceptionHandler(NotFoundException.class)
     public ErrorResponseTemplate handleNotFoundException(
-        NotFoundException e) {
-        log.warn("리소스 없음: message={}, code={}",
-            e.getMessage(), e.getCode());
+        NotFoundException e, HttpServletRequest request) {
+        log.warn("리소스 없음: message={}, code={}, path={}",
+            e.getMessage(), e.getCode(), request.getRequestURI());
         return new ErrorResponseTemplate(e.getMessage(), e.getCode());
     }
 
@@ -73,6 +78,15 @@ public class GlobalExceptionHandler {
     public ErrorResponseTemplate handleUnauthorizedException(
         UnauthorizedException e) {
         log.warn("인증 실패: message={}, code={}",
+            e.getMessage(), e.getCode());
+        return new ErrorResponseTemplate(e.getMessage(), e.getCode());
+    }
+
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    @ExceptionHandler(ForbiddenException.class)
+    public ErrorResponseTemplate handleForbiddenException(
+        ForbiddenException e) {
+        log.warn("권한 없음: message={}, code={}",
             e.getMessage(), e.getCode());
         return new ErrorResponseTemplate(e.getMessage(), e.getCode());
     }

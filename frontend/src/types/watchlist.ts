@@ -7,6 +7,7 @@ export interface WatchlistResponse {
   groupId: number | null
   sortOrder: number
   createdAt: string
+  logoUrl: string
 }
 
 export interface WatchlistGroupResponse {

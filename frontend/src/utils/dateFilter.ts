@@ -2,7 +2,7 @@
 // 한다(BE/FE 공유 설정 파일이 없는 프로젝트라 각자 상수로 둠) - 이 값을
 // 넘어가는 과거 데이터는 스케줄러가 실제로 삭제하므로, 프론트에서 그보다
 // 과거 날짜를 선택할 수 있게 열어둬도 어차피 빈 목록만 보인다.
-export const VIDEO_FEED_RETENTION_DAYS = 10
+export const VIDEO_FEED_RETENTION_DAYS = 14
 
 // new Date("yyyy-MM-dd")로 파싱하면 UTC 자정으로 해석돼(스펙상 date-only
 // 문자열은 UTC 기준) 이후 setDate 등 로컬 타임존 연산과 섞이면 자정
@@ -46,9 +46,30 @@ export function daysAgo(dateStr: string): number {
   return Math.round(diffMs / 86_400_000)
 }
 
+const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토']
+
 export function formatDayLabel(dateStr: string): string {
-  const [, month, day] = parseDateParts(dateStr)
-  const dateLabel = `${month}월 ${day}일`
+  const [year, month, day] = parseDateParts(dateStr)
+  const weekday = WEEKDAY_LABELS[new Date(year, month - 1, day).getDay()]
+  const dateLabel = `${month}월 ${day}일(${weekday})`
   const ago = daysAgo(dateStr)
   return ago === 0 ? `오늘 · ${dateLabel}` : `${dateLabel} · ${ago}일 전`
+}
+
+// 영상 카드의 "N일 전" 표기가 위 필터 라벨(daysAgo, 자정 기준 날짜 차이)과
+// 하루씩 어긋나던 버그 수정(2026-08-02) - 커뮤니티 피드에서 쓰는
+// formatRelativeTime(utils/relativeTime.ts)은 "정확히 24시간이 지났는가"를
+// 기준으로 하는 롤링 윈도우라, 예를 들어 어제 23시에 올라온 영상을 오늘
+// 09시에 보면 아직 24시간이 안 지나 그쪽은 "10시간"으로 표시하는데 필터는
+// 자정 기준으로 이미 "1일 전"이라 서로 다른 값이 보였다. 커뮤니티 피드
+// (FeedPostCard 등)는 진짜 실시간 경과 표기가 맞는 UX라 그 함수 자체는
+// 건드리지 않고, 영상 피드 전용으로 필터와 동일한 자정 기준 계산을 쓴다.
+export function formatVideoPublishedAt(isoDateTime: string): string {
+  const diffMs = Date.now() - new Date(isoDateTime).getTime()
+  const diffMinutes = Math.floor(diffMs / 60_000)
+  if (diffMinutes < 1) return '방금'
+  if (diffMinutes < 60) return `${diffMinutes}분`
+  const diffHours = Math.floor(diffMinutes / 60)
+  if (diffHours < 24) return `${diffHours}시간`
+  return `${daysAgo(toDateString(new Date(isoDateTime)))}일`
 }

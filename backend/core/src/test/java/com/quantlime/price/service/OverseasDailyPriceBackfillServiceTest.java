@@ -9,10 +9,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import com.quantlime.common.exception.ExternalApiException;
 import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.toss.dto.TossCandleResponse;
-import com.quantlime.infra.toss.exception.TossApiErrorCode;
 import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.price.repository.OverseasDailyPriceRepository;
 import java.time.LocalDate;
@@ -30,7 +28,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * KIS -> Toss 캔들로 이관(2026-07-29) 이후의 회귀 테스트 - 구조는
- * {@link DailyPriceServiceTest}와 동일한 count/before 커서 방식으로 통일됐다.
+ * {@link DomesticDailyPriceServiceTest}와 동일한 count/before 커서 방식으로 통일됐다.
  */
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
@@ -128,8 +126,8 @@ class OverseasDailyPriceBackfillServiceTest {
     }
 
     @Test
-    @DisplayName("[collectRecentPrices는 지정한 lookbackDays만큼 조회한다]")
-    void collectRecentPrices_fetchesWithGivenLookbackDays() {
+    @DisplayName("[refreshRecent는 지정한 lookbackDays만큼 조회한다]")
+    void refreshRecent_fetchesWithGivenLookbackDays() {
         // given
         TossCandleResponse page = candlePage(8, "2026-07-09", null);
         given(tossApiClient.getDailyCandles(eq(STOCK_CODE), eq(8), any())).willReturn(page);
@@ -137,30 +135,17 @@ class OverseasDailyPriceBackfillServiceTest {
             .willReturn(false);
 
         // when
-        overseasDailyPriceBackfillService.collectRecentPrices(STOCK_CODE, 8);
+        overseasDailyPriceBackfillService.refreshRecent(STOCK_CODE, 8);
 
         // then
         verify(tossApiClient, times(1)).getDailyCandles(eq(STOCK_CODE), eq(8), any());
         verify(overseasDailyPriceRepository, times(8)).save(any(OverseasDailyPrice.class));
     }
 
-    @Test
-    @DisplayName("[Rate Limit(429) 발생 시 대기 후 1회 재시도한다]")
-    void backfillHistoryIfNeeded_rateLimited_retriesOnce() {
-        // given
-        given(overseasDailyPriceRepository.countByStockCode(STOCK_CODE)).willReturn(0L);
-        TossCandleResponse page = candlePage(200, "2026-06-01", null);
-        given(tossApiClient.getDailyCandles(STOCK_CODE, 200, null))
-            .willThrow(new ExternalApiException(TossApiErrorCode.RATE_LIMIT_EXCEEDED))
-            .willReturn(page);
-
-        // when
-        overseasDailyPriceBackfillService.backfillHistoryIfNeeded(STOCK_CODE, 200);
-
-        // then
-        verify(tossApiClient, times(2)).getDailyCandles(eq(STOCK_CODE), eq(200), any());
-        verify(overseasDailyPriceRepository, times(200)).save(any(OverseasDailyPrice.class));
-    }
+    // Rate Limit(429) 재시도는 2026-08-01부터 TossApiClient.getDailyCandles
+    // 안으로 옮겨졌다(TossApiClientTest.getDailyCandles_rateLimited_retriesOnce
+    // 참고) - 이 서비스는 이제 그 결과를 그대로 받기만 하므로 여기서
+    // 재시도를 별도 검증하지 않는다.
 
     private TossCandleResponse candlePage(int count, String startDate, String nextBefore) {
         LocalDate start = LocalDate.parse(startDate);

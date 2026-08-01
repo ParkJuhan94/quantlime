@@ -30,6 +30,20 @@ public class SubscriptionService {
         return subscriptionRepository.findByUser_Id(userId);
     }
 
+    // 스코어/백테스트 등 프리미엄 기능 게이팅에 쓰는 엔타이틀먼트 판정.
+    // cancelAutoRenew()는 해지해도 현재 결제 주기가 끝날 때까지 status를
+    // ACTIVE로 유지하므로(자동갱신만 끔) 이 기준을 그대로 써도 맞다 -
+    // PAST_DUE(재시도 소진)·EXPIRED만 비구독으로 취급한다.
+    @Transactional(readOnly = true)
+    public boolean hasActivePremium(Long userId) {
+        if (userId == null) {
+            return false;
+        }
+        return subscriptionRepository.findByUser_Id(userId)
+            .map(subscription -> subscription.getStatus() == SubscriptionStatus.ACTIVE)
+            .orElse(false);
+    }
+
     @Transactional
     public void cancelAutoRenew(Long userId) {
         Subscription subscription = subscriptionRepository.findByUser_Id(userId)

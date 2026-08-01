@@ -17,10 +17,16 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
 
     List<Stock> findByListingStatusAndMarketTypeIn(ListingStatus listingStatus, List<MarketType> marketTypes);
 
+    List<Stock> findByListingStatusAndMarketTypeInAndPriceUnsupportedFalse(
+        ListingStatus listingStatus, List<MarketType> marketTypes);
+
     boolean existsByStockCode(String stockCode);
 
-    Slice<Stock> findByStockNameContainingIgnoreCaseOrStockCodeContaining(
-        String stockName, String stockCode, Pageable pageable);
+    // 해외 종목은 stockName에 영문명, koreanName에 한글명이 따로 저장돼
+    // 있어(국내는 koreanName이 항상 null) 검색어가 셋 중 어디에 걸리든
+    // 찾을 수 있게 OR로 묶는다(2026-08-01 - 한글/영문/티커 통합 검색 요청).
+    Slice<Stock> findByStockNameContainingIgnoreCaseOrStockCodeContainingOrKoreanNameContainingIgnoreCase(
+        String stockName, String stockCode, String koreanName, Pageable pageable);
 
     List<Stock> findByStockCodeIn(List<String> stockCodes);
 }

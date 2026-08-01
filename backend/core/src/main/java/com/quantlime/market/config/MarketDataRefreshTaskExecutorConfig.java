@@ -24,17 +24,6 @@ public class MarketDataRefreshTaskExecutorConfig {
         return singleThreadExecutor("overseas-refresh-");
     }
 
-    /**
-     * {@code MarketDataStartupRunner}가 {@code refreshAll()}(내부적으로 위 두
-     * 실행기에 위임 후 join)을 애플리케이션 기동 스레드에서 직접 부르면
-     * 그 join 때문에 기동 자체가 막힌다 - 이 실행기로 refreshAll() 호출
-     * 자체를 한 번 더 감싸 완전히 fire-and-forget으로 만든다.
-     */
-    @Bean
-    public TaskExecutor marketDataStartupTaskExecutor() {
-        return singleThreadExecutor("market-data-startup-");
-    }
-
     private TaskExecutor singleThreadExecutor(String threadNamePrefix) {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(1);

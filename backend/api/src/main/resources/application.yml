@@ -181,3 +181,18 @@ logging:
     root: info
     com.quantlime: info
     net.ttddyy.dsproxy.listener.logging.SLF4JQueryLoggingListener: warn
+
+---
+# 로컬 단일 인스턴스 개발 전용 콘솔 포맷 - Spring Boot 기본 패턴(풀 ISO
+# 타임스탬프+PID+앱이름+"---"+스레드명+로거명)은 다중 인스턴스/로그 수집기
+# 환경(prod)을 전제로 한 정보량이라 로컬에서는 매 줄이 불필요하게 길다.
+# 날짜(오늘 뻔함)·PID·앱이름·구분자를 빼고 시:분:초+레벨+스레드명(스케줄러
+# vs 웹요청 스레드 구분용)+로거명만 남긴다. prod는 이 문서가 적용되지
+# 않으므로(on-profile: dev) 기본 패턴 그대로 유지된다.
+spring:
+  config:
+    activate:
+      on-profile: dev
+logging:
+  pattern:
+    console: "%clr(%d{HH:mm:ss.SSS}){faint} %clr(%5p) %clr([%15.15t]){faint} %clr(%-40.40logger{40}){cyan} %clr(:){faint} %m%n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}"

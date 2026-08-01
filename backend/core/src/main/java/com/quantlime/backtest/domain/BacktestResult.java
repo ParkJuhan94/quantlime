@@ -57,7 +57,7 @@ public class BacktestResult extends TimeBaseEntity {
     @Column(name = "backtest_result_id")
     private Long id;
 
-    @Column(name = "stock_code", nullable = false, length = 6)
+    @Column(name = "stock_code", nullable = false, length = 10)
     private String stockCode;
 
     @Enumerated(EnumType.STRING)

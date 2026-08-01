@@ -58,7 +58,8 @@ public final class ScoreMapper {
         );
     }
 
-    public static ScoreRankingResponse toScoreRankingResponse(Score score, String stockName, String sector) {
+    public static ScoreRankingResponse toScoreRankingResponse(
+        Score score, String stockName, String sector, String logoUrl, boolean overseas) {
         return new ScoreRankingResponse(
             score.getStockCode(),
             stockName,
@@ -68,7 +69,9 @@ public final class ScoreMapper {
             score.getMeanReversionScore(),
             score.getCompositeScore(),
             gradeLabel(score.getGrade()),
-            score.isInsufficientData()
+            score.isInsufficientData(),
+            logoUrl,
+            overseas
         );
     }
 

@@ -67,7 +67,7 @@ class WatchlistControllerTest extends ApiTestSupport {
         accessToken = jwtTokenProvider.createAccessToken(user.getId(), user.getRole());
 
         // 빈 캔들 목록을 반환시켜 백필이 즉시 정상 종료되게 한다(캔들 매핑
-        // 자체는 이 테스트의 관심사가 아님 - DailyPriceServiceTest에서 별도 검증).
+        // 자체는 이 테스트의 관심사가 아님 - DomesticDailyPriceServiceTest에서 별도 검증).
         given(tossApiClient.getDailyCandles(anyString(), anyInt(), nullable(String.class)))
             .willReturn(new TossCandleResponse(
                 new TossCandleResponse.TossCandlePageResult(List.of(), null)));

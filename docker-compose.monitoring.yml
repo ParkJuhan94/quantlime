@@ -28,7 +28,7 @@ services:
       - --storage.tsdb.retention.time=15d
     ports:
       - "9090:9090"
-    restart: always
+    restart: on-failure:5
 
   alertmanager:
     image: prom/alertmanager:v0.27.0
@@ -56,7 +56,7 @@ services:
         exec /bin/alertmanager --config.file=/etc/alertmanager/alertmanager.yml --storage.path=/alertmanager
     ports:
       - "9093:9093"
-    restart: always
+    restart: on-failure:5
 
   # 호스트(EC2) CPU/메모리/디스크/네트워크 - node_memory_*/node_filesystem_*
   # 등을 Prometheus가 스크랩(monitoring/prometheus/rules/alerts.yml의
@@ -73,7 +73,7 @@ services:
       - --path.sysfs=/host/sys
       - --path.rootfs=/rootfs
       - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
-    restart: always
+    restart: on-failure:5
 
   # 컨테이너별 CPU/메모리/네트워크 사용량(어떤 컨테이너가 리소스를 먹는지
   # node-exporter의 호스트 합산 지표만으로는 안 보이는 부분을 보완).
@@ -85,7 +85,7 @@ services:
       - /var/run:/var/run:ro
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
-    restart: always
+    restart: on-failure:5
 
   grafana:
     image: grafana/grafana:11.3.1

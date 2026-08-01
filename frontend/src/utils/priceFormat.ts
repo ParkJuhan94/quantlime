@@ -31,6 +31,21 @@ export function formatKrwAmount(amount: number | null | undefined): string {
   return `${sign}${Math.round(abs).toLocaleString('ko-KR')}원`
 }
 
+// 랭킹 테이블 "거래대금" 전용(2026-08-01 요청) - formatPrice와 달리 부호를
+// 안 붙인다(거래대금은 항상 0 이상). 국내/해외 모두 억/조 단위로 압축하되
+// 단위 글자만 원/달러로 바꾼다 - K/M/B/T 영문 접미사보다 "17억달러"처럼
+// 한글 단위가 감이 더 잘 온다는 피드백으로 영문 접미사에서 전환
+// (1억=100,000,000은 통화와 무관한 숫자 단위라 원화 로직을 그대로 재사용).
+export function formatTradingAmount(amount: number | null | undefined, currency: 'KRW' | 'USD' = 'KRW'): string {
+  if (amount == null) return '-'
+  const abs = Math.abs(amount)
+  const unit = currency === 'USD' ? '달러' : '원'
+  const locale = currency === 'USD' ? 'en-US' : 'ko-KR'
+  if (abs >= JO) return `${(abs / JO).toFixed(1)}조${unit}`
+  if (abs >= EOK) return `${Math.round(abs / EOK).toLocaleString(locale)}억${unit}`
+  return `${Math.round(abs).toLocaleString(locale)}${unit}`
+}
+
 export function formatChangeRate(rate: number | null | undefined): string {
   if (rate == null) return '-'
   const sign = rate > 0 ? '+' : ''

@@ -24,7 +24,7 @@ import org.springframework.stereotype.Service;
  * "이미 충분히 쌓였으면 스킵" 방식이 아니라 매번 최신 100건을 그대로
  * 다시 조회해 신규는 추가하고 이미 있는 건 잠정치 갱신 여부만 확인한다 -
  * 그래야 당일/당주/당월처럼 장 종료 전까지 계속 갱신되는 잠정치를
- * 놓치지 않는다(sourceUpdatedAt 비교, DailyPriceService.upsertToday와
+ * 놓치지 않는다(sourceUpdatedAt 비교, DomesticDailyPriceService.upsertToday와
  * 같은 성격의 처리).
  */
 @Slf4j

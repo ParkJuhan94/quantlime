@@ -23,7 +23,7 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-quantlime}
     volumes:
       - mysql_data:/var/lib/mysql
-    restart: always
+    restart: on-failure:5
     healthcheck:
       test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
       interval: 10s
@@ -40,14 +40,29 @@ services:
     container_name: quantlime-prod-redis
     volumes:
       - redis_data:/data
-    restart: always
+    restart: on-failure:5
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   quant-engine:
     build: ./quant-engine
     image: ghcr.io/parkjuhan94/quantlime-quant-engine:latest
     container_name: quantlime-prod-quant-engine
     env_file: .env.prod
-    restart: always
+    restart: on-failure:5
+    healthcheck:
+      # curl/wget이 없는 python:3.11-slim 베이스라 표준 라이브러리로 대체
+      # (직접 pull해 실측 확인 - Dockerfile에 패키지를 추가하지 않고도
+      # 기존 이미지 그대로 헬스체크 가능)
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   backend:
     build: ./backend
@@ -72,10 +87,19 @@ services:
       mysql:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
       quant-engine:
-        condition: service_started
-    restart: always
+        condition: service_healthy
+    restart: on-failure:5
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/api/health" ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      # Spring Boot 컨텍스트(JPA/스케줄러/WebSocket 등) 부팅까지 여유
+      # 있게 - 너무 짧으면 정상 기동 중에도 unhealthy로 오탐돼 autoheal이
+      # 부팅 중인 컨테이너를 죽이는 역효과가 남
+      start_period: 40s
 
   frontend:
     build:
@@ -93,7 +117,34 @@ services:
       - "80:80"
     depends_on:
       - backend
+    restart: on-failure:5
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost/" ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # restart: on-failure:5는 컨테이너의 메인 프로세스가 "종료"돼야만
+  # 발동한다 - 프로세스는 살아있는데 응답만 안 하는 hang 상태(예: JVM이
+  # 데드락에 걸렸지만 프로세스 자체는 안 죽는 경우)는 on-failure로 잡히지
+  # 않는다. autoheal이 각 서비스의 healthcheck 결과(unhealthy)를 감시하다가
+  # 그런 컨테이너를 강제로 재시작시켜 이 사각지대를 메운다 - 즉
+  # on-failure(프로세스 종료 감지)와 healthcheck+autoheal(응답 없음 감지)은
+  # 서로 다른 장애 유형을 잡는 보완 관계.
+  autoheal:
+    image: willfarrell/autoheal:1.2.0
+    container_name: quantlime-prod-autoheal
     restart: always
+    environment:
+      # 개별 서비스마다 label을 붙이는 대신 healthcheck가 정의된 컨테이너를
+      # 전부 감시 - 새 서비스를 추가할 때 autoheal 설정을 따로 안 건드려도
+      # 헬스체크만 정의하면 자동으로 감시 대상에 포함된다
+      AUTOHEAL_CONTAINER_LABEL: all
+      AUTOHEAL_INTERVAL: 10
+      AUTOHEAL_START_PERIOD: 30
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:
   mysql_data:

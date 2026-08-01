@@ -4,7 +4,7 @@ import { LoadingSpinner } from '../common/LoadingSpinner'
 import { VideoFeedChannelAvatar } from './VideoFeedChannelAvatar'
 import { VideoFeedTickerChip } from './VideoFeedTickerChip'
 import type { VideoFeedItem } from '../../types/videoFeed'
-import { formatRelativeTime } from '../../utils/relativeTime'
+import { formatVideoPublishedAt } from '../../utils/dateFilter'
 
 export function VideoFeedCard({ video }: { video: VideoFeedItem }) {
   const [expanded, setExpanded] = useState(false)
@@ -18,7 +18,7 @@ export function VideoFeedCard({ video }: { video: VideoFeedItem }) {
           profileImageUrl={video.channelProfileImageUrl}
           channelUrl={video.channelUrl}
         />
-        <span>· {formatRelativeTime(video.publishedAt)}</span>
+        <span>· {formatVideoPublishedAt(video.publishedAt)}</span>
       </div>
 
       {video.videoUrl ? (

@@ -24,7 +24,7 @@ import org.springframework.web.client.RestClient;
  * 공통으로 거쳐가는 단일 지점인데, 과거엔 실패해도 재시도 간격을 강제하지 않아 캐시가
  * 안 채워지는 동안 모든 소비자가 각자 다시 이 메서드를 호출 - 429가 아니라 Akamai
  * 차단(깨진 바이너리 400 응답)을 유발·연장하는 실제 장애로 이어졌다(실측). 백오프 값을
- * {@link com.quantlime.price.cache.MarketCalendarCache}보다 길게 잡은 이유도 이
+ * {@link com.quantlime.price.cache.DomesticMarketCalendarCache}보다 길게 잡은 이유도 이
  * 차이 때문 - 시세 API는 짧게 재시도해도 안전하지만, 이미 봇 차단이 걸린 상태에서
  * 짧은 간격으로 재시도하면 차단이 오히려 갱신·연장될 위험이 있다.
  */
@@ -35,6 +35,10 @@ public class TossTokenManager {
 
     private static final String REDIS_TOKEN_KEY = "toss:access-token";
     private static final long TOKEN_REFRESH_MARGIN_SECONDS = 3600;
+    // 토스가 만료 마진(1h)보다 짧은 expiresIn을 주면 ttl이 음수가 돼
+    // redisTemplate.set(Duration)이 예외를 던진다 - 최소 60초로 바닥을
+    // 깔아 방어한다(현재 24h라 트리거되지 않지만, 스펙 변경/오응답 대비).
+    private static final long MIN_TOKEN_TTL_SECONDS = 60;
     private static final long FAILURE_BACKOFF_SECONDS = 30;
 
     private final RestClient tossRestClient;
@@ -86,7 +90,8 @@ public class TossTokenManager {
                 throw new ExternalApiException(TossApiErrorCode.TOKEN_ISSUANCE_FAILED);
             }
 
-            long ttl = response.expiresIn() - TOKEN_REFRESH_MARGIN_SECONDS;
+            long ttl = Math.max(
+                response.expiresIn() - TOKEN_REFRESH_MARGIN_SECONDS, MIN_TOKEN_TTL_SECONDS);
             redisTemplate.opsForValue().set(
                 REDIS_TOKEN_KEY,
                 response.accessToken(),

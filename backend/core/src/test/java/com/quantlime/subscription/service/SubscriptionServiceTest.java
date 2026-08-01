@@ -147,4 +147,77 @@ class SubscriptionServiceTest {
         assertThat(result.getInstallmentMonths()).isEqualTo(6);
         assertThat(result.isAutoRenew()).isTrue();
     }
+
+    @Test
+    @DisplayName("[비로그인(userId=null)은 프리미엄이 아니다]")
+    void hasActivePremium_nullUserId_returnsFalse() {
+        // when & then
+        assertThat(subscriptionService.hasActivePremium(null)).isFalse();
+    }
+
+    @Test
+    @DisplayName("[구독 이력이 없는 사용자는 프리미엄이 아니다]")
+    void hasActivePremium_noSubscription_returnsFalse() {
+        // given
+        Long userId = 1L;
+        given(subscriptionRepository.findByUser_Id(userId)).willReturn(Optional.empty());
+
+        // when & then
+        assertThat(subscriptionService.hasActivePremium(userId)).isFalse();
+    }
+
+    @Test
+    @DisplayName("[ACTIVE 상태인 구독자는 프리미엄이다]")
+    void hasActivePremium_active_returnsTrue() {
+        // given
+        Long userId = 1L;
+        Subscription subscription = SubscriptionFixture.createSubscription(user, plan);
+        given(subscriptionRepository.findByUser_Id(userId)).willReturn(Optional.of(subscription));
+
+        // when & then
+        assertThat(subscriptionService.hasActivePremium(userId)).isTrue();
+    }
+
+    @Test
+    @DisplayName("[해지했지만 아직 현재 주기가 안 끝난 구독자는 여전히 프리미엄이다]")
+    void hasActivePremium_cancelledWithinPeriod_returnsTrue() {
+        // given
+        Long userId = 1L;
+        Subscription subscription = SubscriptionFixture.createSubscription(user, plan);
+        subscription.cancelAutoRenew();
+        given(subscriptionRepository.findByUser_Id(userId)).willReturn(Optional.of(subscription));
+
+        // when & then
+        assertThat(subscriptionService.hasActivePremium(userId)).isTrue();
+    }
+
+    @Test
+    @DisplayName("[PAST_DUE 상태인 구독자는 프리미엄이 아니다]")
+    void hasActivePremium_pastDue_returnsFalse() {
+        // given
+        Long userId = 1L;
+        Subscription subscription = SubscriptionFixture.createSubscription(user, plan);
+        subscription.recordRenewalFailure();
+        subscription.recordRenewalFailure();
+        subscription.recordRenewalFailure();
+        subscription.markPastDue();
+        given(subscriptionRepository.findByUser_Id(userId)).willReturn(Optional.of(subscription));
+
+        // when & then
+        assertThat(subscriptionService.hasActivePremium(userId)).isFalse();
+    }
+
+    @Test
+    @DisplayName("[EXPIRED 상태인 구독자는 프리미엄이 아니다]")
+    void hasActivePremium_expired_returnsFalse() {
+        // given
+        Long userId = 1L;
+        Subscription subscription = SubscriptionFixture.createSubscription(user, plan);
+        subscription.cancelAutoRenew();
+        subscription.expire();
+        given(subscriptionRepository.findByUser_Id(userId)).willReturn(Optional.of(subscription));
+
+        // when & then
+        assertThat(subscriptionService.hasActivePremium(userId)).isFalse();
+    }
 }

@@ -47,7 +47,7 @@ public class ScorePersistenceService {
      * 종목 하나의 날짜별 스코어 시계열을 upsert한다 - 가장 최근 날짜(보통
      * 오늘/최신 거래일)는 재계산마다 항상 값을 덮어쓰고, 그보다 과거 날짜는
      * 이미 저장돼 있으면 스킵한다(가격 백필의 "오늘만 덮어쓰기, 과거는
-     * 존재하면 스킵" 규칙과 동일한 원칙 - DailyPriceService 참고). 지표
+     * 존재하면 스킵" 규칙과 동일한 원칙 - DomesticDailyPriceService 참고). 지표
      * 워밍업 구간(insufficient_data=true)은 저장할 값이 없어 건너뛴다.
      */
     private void saveSeries(String stockCode, List<DailyScoreSeriesApiResponse> dailyScores) {

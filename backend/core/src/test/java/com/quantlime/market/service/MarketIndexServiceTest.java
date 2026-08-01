@@ -2,10 +2,10 @@ package com.quantlime.market.service;
 
 import com.quantlime.market.cache.BitcoinChartCache;
 import com.quantlime.market.cache.ExchangeRateChartCache;
-import com.quantlime.market.cache.IndexChartCache;
-import com.quantlime.market.cache.IndexMinuteChartCache;
+import com.quantlime.market.cache.DomesticIndexChartCache;
+import com.quantlime.market.cache.DomesticIndexMinuteChartCache;
 import com.quantlime.market.cache.MarketIndexCache;
-import com.quantlime.market.cache.WorldIndexChartCache;
+import com.quantlime.market.cache.OverseasIndexChartCache;
 import com.quantlime.market.domain.BenchmarkIndex;
 import com.quantlime.market.dto.response.IndexChartResponse;
 import com.quantlime.market.dto.response.IndexMinuteChartResponse;
@@ -33,13 +33,13 @@ class MarketIndexServiceTest {
     private MarketIndexCache marketIndexCache;
 
     @Mock
-    private IndexChartCache indexChartCache;
+    private DomesticIndexChartCache domesticIndexChartCache;
 
     @Mock
-    private IndexMinuteChartCache indexMinuteChartCache;
+    private DomesticIndexMinuteChartCache domesticIndexMinuteChartCache;
 
     @Mock
-    private WorldIndexChartCache worldIndexChartCache;
+    private OverseasIndexChartCache overseasIndexChartCache;
 
     @Mock
     private BitcoinChartCache bitcoinChartCache;
@@ -55,7 +55,7 @@ class MarketIndexServiceTest {
 
     @Test
     @DisplayName("[국내 지수 차트는 영속 저장된 benchmark_index에서 조회한다 - "
-        + "2026-07-30 IndexChartCache(60초 TTL, 영속 저장 안 함)에서 이관, 종목 상세페이지처럼 영속 이력 조회]")
+        + "2026-07-30 DomesticIndexChartCache(60초 TTL, 영속 저장 안 함)에서 이관, 종목 상세페이지처럼 영속 이력 조회]")
     void getIndexChart_domestic_readsFromBenchmarkIndex() {
         // given
         given(benchmarkIndexRepository.findByIndexCodeAndTradeDateBetweenOrderByTradeDateAsc(
@@ -76,7 +76,7 @@ class MarketIndexServiceTest {
     @DisplayName("[분봉이 있으면 분봉을 그대로 반환한다]")
     void getIndexMinuteChart_minuteChartExists_returnsAsIs() {
         // given
-        given(indexMinuteChartCache.get("KOSPI")).willReturn(
+        given(domesticIndexMinuteChartCache.get("KOSPI")).willReturn(
             List.of(new IndexMinuteChartResponse(LocalDate.of(2026, 7, 15).atStartOfDay(), 7284.41)));
 
         // when
@@ -91,8 +91,8 @@ class MarketIndexServiceTest {
     @DisplayName("[분봉이 비어 있으면(장 시작 전·휴장) 최근 일봉으로 폴백한다]")
     void getIndexMinuteChart_minuteChartEmpty_fallsBackToDailyChart() {
         // given
-        given(indexMinuteChartCache.get("KOSPI")).willReturn(List.of());
-        given(indexChartCache.get("KOSPI")).willReturn(List.of(
+        given(domesticIndexMinuteChartCache.get("KOSPI")).willReturn(List.of());
+        given(domesticIndexChartCache.get("KOSPI")).willReturn(List.of(
             new IndexChartResponse(LocalDate.of(2026, 7, 14), 7082.91, 7424.18, 7082.91, 7284.41)));
 
         // when

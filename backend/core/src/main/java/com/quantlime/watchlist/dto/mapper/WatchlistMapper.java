@@ -1,5 +1,6 @@
 package com.quantlime.watchlist.dto.mapper;
 
+import com.quantlime.stock.dto.mapper.StockMapper;
 import com.quantlime.watchlist.domain.Watchlist;
 import com.quantlime.watchlist.domain.WatchlistGroup;
 import com.quantlime.watchlist.dto.response.WatchlistGroupResponse;
@@ -16,12 +17,13 @@ public final class WatchlistMapper {
         return new WatchlistResponse(
             watchlist.getId(),
             watchlist.getStock().getStockCode(),
-            watchlist.getStock().getStockName(),
+            watchlist.getStock().getDisplayName(),
             watchlist.getStock().getMarketType().getLabel(),
             watchlist.getStock().getSector(),
             group != null ? group.getId() : null,
             watchlist.getSortOrder(),
-            watchlist.getCreatedAt()
+            watchlist.getCreatedAt(),
+            StockMapper.toLogoUrl(watchlist.getStock())
         );
     }
 

@@ -5,3 +5,12 @@
 export function formatScore(score: number | null | undefined): string {
   return score != null ? score.toFixed(1) : '-'
 }
+
+// scoreDate는 "yyyy-MM-dd" 문자열로 내려온다(ScoreResponse.scoreDate,
+// @JsonFormat 고정 - 백엔드 컨벤션). new Date()로 파싱하면 UTC 자정
+// 기준이라 타임존에 따라 하루 밀릴 수 있어 문자열을 직접 쪼갠다.
+export function formatScoreDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return '-'
+  const [, month, day] = dateStr.split('-')
+  return `${Number(month)}월 ${Number(day)}일`
+}

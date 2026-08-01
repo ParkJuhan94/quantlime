@@ -6,10 +6,12 @@ package com.quantlime.infra.kis.dto;
  * [0]국가코드 [1]거래소ID [2]거래소코드 [3]거래소한글명 [4]종목코드
  * [5]거래소+종목코드 [6]한글종목명 [7]영문종목명 [8]종목구분(1:지수,
  * 2:주식, 3:ETP/ETF, 4:Warrant) ... [19]업종코드. 이 레코드는 유니버스
- * 선정에 필요한 최소 필드(종목코드, 영문명, 종목구분, 업종코드)만 담는다.
+ * 선정에 필요한 최소 필드(종목코드, 한글명, 영문명, 종목구분, 업종코드)만
+ * 담는다.
  */
 public record KisOverseasStockMasterEntry(
     String symbol,
+    String koreanName,
     String englishName,
     String securityType,
     String industryCode

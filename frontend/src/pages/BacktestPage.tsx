@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useBacktestQuery } from '../hooks/queries/useBacktest'
 import { useStockDetailQuery } from '../hooks/queries/useStockDetail'
+import { useIsPremium } from '../hooks/queries/useSubscription'
 import { LoadingSpinner } from '../components/common/LoadingSpinner'
 import { ErrorState } from '../components/common/ErrorState'
 import { EmptyState } from '../components/common/EmptyState'
+import { PremiumGate } from '../components/common/PremiumGate'
 import { getErrorMessage, isNotFoundStatus } from '../api/errors'
 import { BacktestPriceScoreChart } from '../components/backtest/BacktestPriceScoreChart'
 import { QuadrantSummary } from '../components/backtest/QuadrantSummary'
@@ -12,6 +14,7 @@ import { ScoreHistogram } from '../components/backtest/ScoreHistogram'
 import { RankIcBars } from '../components/backtest/RankIcBars'
 import { QuantileBucketTable } from '../components/backtest/QuantileBucketTable'
 import { BacktestDisclaimer } from '../components/backtest/BacktestDisclaimer'
+import { BacktestLockedPreview } from '../components/backtest/BacktestLockedPreview'
 import type { BacktestAxisCode } from '../types/backtest'
 
 const AXIS_TABS: { code: BacktestAxisCode; label: string }[] = [
@@ -24,7 +27,33 @@ export function BacktestPage() {
   const [axis, setAxis] = useState<BacktestAxisCode>('TREND')
 
   const detailQuery = useStockDetailQuery(stockCode)
-  const backtestQuery = useBacktestQuery(stockCode)
+  const { isPremium, isResolving } = useIsPremium()
+  const backtestQuery = useBacktestQuery(stockCode, isPremium)
+
+  // 구독 여부를 아직 모르는 찰나(로그인 직후)에는 락 UI가 번쩍였다
+  // 사라지는 걸 막기 위해 로딩만 보여준다(useIsPremium 참고).
+  if (isResolving) {
+    return <LoadingSpinner />
+  }
+
+  if (!isPremium) {
+    return (
+      <div className="space-y-6">
+        <section>
+          <Link to={`/stocks/${stockCode}`} className="text-xs text-gray-500 hover:underline">
+            ← 종목 상세로
+          </Link>
+          <h1 className="mt-1 text-xl font-bold text-gray-900">
+            {detailQuery.data?.stockName ?? stockCode} 백테스트
+          </h1>
+        </section>
+        <PremiumGate>
+          <BacktestLockedPreview />
+        </PremiumGate>
+        <BacktestDisclaimer />
+      </div>
+    )
+  }
 
   if (backtestQuery.isLoading) {
     return <LoadingSpinner />

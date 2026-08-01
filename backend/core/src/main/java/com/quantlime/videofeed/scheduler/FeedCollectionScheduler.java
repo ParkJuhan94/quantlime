@@ -1,6 +1,8 @@
 package com.quantlime.videofeed.scheduler;
 
+import com.quantlime.videofeed.dto.CollectResult;
 import com.quantlime.videofeed.service.FeedCollectionFacade;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -25,10 +27,23 @@ public class FeedCollectionScheduler {
     public void run() {
         try {
             feedCollectionFacade.runAllExclusively().ifPresentOrElse(
-                results -> log.info("피드 수집 완료: results={}", results),
+                this::logSummary,
                 () -> log.info("이미 다른 실행이 피드 수집 중 - 이번 실행은 스킵"));
         } catch (Exception e) {
             log.error("피드 수집 스케줄 실행 실패: reason={}", e.getMessage(), e);
         }
+    }
+
+    // 채널이 늘어날수록 결과 레코드를 한 줄에 통째로 dump하면 스캔하기
+    // 어려워져, 총계 한 줄 + 실패 채널만 별도로 남긴다.
+    private void logSummary(List<CollectResult> results) {
+        int discoveredTotal = results.stream().mapToInt(CollectResult::discoveredCount).sum();
+        long failedCount = results.stream().filter(result -> !result.success()).count();
+        log.info("피드 수집 완료: 채널={}, 신규발견={}건, 실패={}건",
+            results.size(), discoveredTotal, failedCount);
+        results.stream()
+            .filter(result -> !result.success())
+            .forEach(result -> log.warn("채널 수집 실패: channelName={}, error={}",
+                result.channelName(), result.errorMessage()));
     }
 }

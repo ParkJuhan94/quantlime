@@ -16,7 +16,7 @@ import com.quantlime.infra.upbit.dto.UpbitTicker;
 import com.quantlime.market.domain.BenchmarkIndex;
 import com.quantlime.market.dto.response.MarketIndexResponse;
 import com.quantlime.market.repository.BenchmarkIndexRepository;
-import com.quantlime.price.cache.MarketCalendarCache;
+import com.quantlime.price.cache.DomesticMarketCalendarCache;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -59,7 +59,7 @@ class MarketIndexCacheTest {
     private BenchmarkIndexRepository benchmarkIndexRepository;
 
     @Mock
-    private MarketCalendarCache marketCalendarCache;
+    private DomesticMarketCalendarCache domesticMarketCalendarCache;
 
     @InjectMocks
     private MarketIndexCache marketIndexCache;
@@ -127,7 +127,7 @@ class MarketIndexCacheTest {
     }
 
     @Test
-    @DisplayName("[코스피/코스닥 현재가는 Toss에서, 등락률은 전일 종가 대비 자체 계산, 장중여부는 MarketCalendarCache로 판단한다]")
+    @DisplayName("[코스피/코스닥 현재가는 Toss에서, 등락률은 전일 종가 대비 자체 계산, 장중여부는 DomesticMarketCalendarCache로 판단한다]")
     void get_withTossIndices_computesChangeRateFromPreviousClose() {
         // given
         stubExchangeRateAndBitcoin();
@@ -141,7 +141,7 @@ class MarketIndexCacheTest {
         given(benchmarkIndexRepository.findTopByIndexCodeAndTradeDateLessThanOrderByTradeDateDesc(
             eq("KOSDAQ"), any(LocalDate.class)))
             .willReturn(Optional.of(benchmarkIndex("KOSDAQ", 800.00)));
-        given(marketCalendarCache.isMarketOpenNow()).willReturn(true);
+        given(domesticMarketCalendarCache.isMarketOpenNow()).willReturn(true);
 
         // when
         MarketIndexResponse result = marketIndexCache.get();
@@ -166,7 +166,7 @@ class MarketIndexCacheTest {
                 new TossMarketIndicatorPriceResponse.MarketIndicatorPrice("KOSDAQ", null, "829.43"))));
         given(benchmarkIndexRepository.findTopByIndexCodeAndTradeDateLessThanOrderByTradeDateDesc(any(), any()))
             .willReturn(Optional.empty());
-        given(marketCalendarCache.isMarketOpenNow()).willReturn(false);
+        given(domesticMarketCalendarCache.isMarketOpenNow()).willReturn(false);
 
         // when
         MarketIndexResponse result = marketIndexCache.get();

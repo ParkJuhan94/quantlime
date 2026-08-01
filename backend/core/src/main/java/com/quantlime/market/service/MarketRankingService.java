@@ -1,12 +1,13 @@
 package com.quantlime.market.service;
 
-import com.quantlime.market.cache.MarketRankingCache;
+import com.quantlime.market.cache.DomesticMarketRankingCache;
 import com.quantlime.market.cache.TossMarketRankingCache;
 import com.quantlime.market.dto.response.MarketRankingResponse;
-import com.quantlime.price.cache.OverseasPreviousCloseCache;
+import com.quantlime.price.cache.PreviousCloseCache;
 import com.quantlime.price.cache.PriceCacheStore;
 import com.quantlime.price.util.ChangeRateCalculator;
 import com.quantlime.stock.domain.Stock;
+import com.quantlime.stock.dto.mapper.StockMapper;
 import com.quantlime.stock.repository.StockRepository;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -25,8 +26,8 @@ import org.springframework.stereotype.Service;
  *   <li>관심종목만 보기 + 등락률 정렬(gainers/losers) - 자체 계산 경로.
  *       Toss 랭킹 API가 top100까지만 줘서 관심종목이 그 밖에 있으면
  *       걸러질 수 있기 때문에(2026-07-29 결정), 국내는 기존
- *       {@link MarketRankingCache}(전종목 자체 계산), 해외는
- *       {@link PriceCacheStore}+{@link OverseasPreviousCloseCache}로
+ *       {@link DomesticMarketRankingCache}(전종목 자체 계산), 해외는
+ *       {@link PriceCacheStore}+{@link PreviousCloseCache}로
  *       직접 계산해 관심종목 전체를 대상으로 정확히 필터링한다.
  * </ul>
  */
@@ -39,11 +40,11 @@ public class MarketRankingService {
     private static final String SCOPE_OVERSEAS = TossMarketRankingCache.SCOPE_OVERSEAS;
     private static final String CURRENCY_USD = "USD";
 
-    private final MarketRankingCache marketRankingCache;
+    private final DomesticMarketRankingCache domesticMarketRankingCache;
     private final TossMarketRankingCache tossMarketRankingCache;
     private final StockRepository stockRepository;
     private final PriceCacheStore priceCacheStore;
-    private final OverseasPreviousCloseCache overseasPreviousCloseCache;
+    private final PreviousCloseCache overseasPreviousCloseCache;
 
     public List<MarketRankingResponse> getRanking(String scope, String sort, int limit, Set<String> watchlistCodes) {
         boolean isGainersOrLosers = SORT_GAINERS.equals(sort) || SORT_LOSERS.equals(sort);
@@ -62,14 +63,14 @@ public class MarketRankingService {
 
     private List<MarketRankingResponse> domesticWatchlistRanking(String sort, int limit, Set<String> watchlistCodes) {
         return SORT_LOSERS.equals(sort)
-            ? marketRankingCache.getLosers(limit, watchlistCodes)
-            : marketRankingCache.getGainers(limit, watchlistCodes);
+            ? domesticMarketRankingCache.getLosers(limit, watchlistCodes)
+            : domesticMarketRankingCache.getGainers(limit, watchlistCodes);
     }
 
     /**
      * 해외 관심종목 자체 계산 랭킹. {@link PriceCacheStore}는
      * {@code OverseasWatchlistPriceScheduler}가 이미 채워두고, 전일종가는
-     * {@link OverseasPreviousCloseCache}로 얻어 국내와 동일한 방식(전일
+     * {@link PreviousCloseCache}로 얻어 국내와 동일한 방식(전일
      * 종가 대비 등락률)으로 계산한다. 시세 캐시 미스(스케줄러가 아직
      * 한 틱도 안 돌았거나 미국장이 닫혀 있는 경우)인 종목은 결과에서
      * 조용히 제외한다.
@@ -91,8 +92,9 @@ public class MarketRankingService {
                 Double previousClose = previousCloseByCode.get(stock.getStockCode());
                 Double changeRate = ChangeRateCalculator.calculate(snapshot.currentPrice(), previousClose);
                 if (changeRate != null) {
-                    items.add(new MarketRankingResponse(stock.getStockCode(), stock.getStockName(), stock.getSector(),
-                        snapshot.currentPrice(), changeRate, CURRENCY_USD, null, null));
+                    items.add(new MarketRankingResponse(stock.getStockCode(), stock.getDisplayName(), stock.getSector(),
+                        snapshot.currentPrice(), changeRate, CURRENCY_USD, null, null, StockMapper.toLogoUrl(stock),
+                        true));
                 }
             });
         }

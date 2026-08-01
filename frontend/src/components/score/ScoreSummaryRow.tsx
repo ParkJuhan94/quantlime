@@ -14,6 +14,10 @@ const GRADE_SCALE: { label: string; activeClass: string; glowColor: string }[] =
   { label: '강력매수', activeClass: 'bg-red-600 text-white', glowColor: 'rgba(220, 38, 38, 0.55)' },
 ]
 
+type ScoreSummaryRowProps =
+  | { locked: true; score?: undefined }
+  | { locked?: false; score: ScoreResponse }
+
 // 등급 박스 5칸을 위쪽 전체 너비에 걸쳐 넓게 배치하고, 추세추종/평균회귀/
 // 코멘트는 그 아래로 내린다(예전엔 박스 옆에 나란히 둬서 박스 폭이
 // 좁아졌었다 - 사용자 피드백, 2026-07-16). 세로로 쌓이는 대신 박스 자체가
@@ -21,7 +25,38 @@ const GRADE_SCALE: { label: string; activeClass: string; glowColor: string }[] =
 // 2026-07-30: 박스 안 글자가 답답해 보인다는 피드백으로 컨테이너 폭
 // 상한을 늘리고(max-w-md → max-w-xl) 박스 내부 gap·padding·글자 크기도
 // 한 단계씩 키움.
-export function ScoreSummaryRow({ score }: { score: ScoreResponse }) {
+//
+// locked=true(비구독)면 실제 값을 아예 안 받고 회색 스켈레톤만 그린다 -
+// 어느 등급이 활성인지도 노출하면 안 되므로(등급 자체가 스코어의 결론이라
+// 게이팅이 무력화됨) 5칸 전부 비활성 스타일로 그리고, 숫자 자리는
+// PremiumGate가 블러+CTA로 덮는다(components/common/PremiumGate 참고).
+export function ScoreSummaryRow({ score, locked = false }: ScoreSummaryRowProps) {
+  if (locked) {
+    return (
+      <div className="max-w-xl flex-1 rounded-2xl border border-gray-100 bg-gradient-to-br from-white to-gray-50 p-4">
+        <div className="mb-1.5 flex items-center justify-between">
+          <p className="text-xs font-semibold text-gray-700">종합 스코어</p>
+          <span className="inline-block h-3 w-20 rounded bg-gray-200" />
+        </div>
+        <div className="grid grid-cols-5 gap-3">
+          {GRADE_SCALE.map((tier) => (
+            <div
+              key={tier.label}
+              className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-gray-50 py-4 text-center"
+            >
+              <span className="text-xs font-medium text-gray-400">{tier.label}</span>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 flex items-center gap-3 border-t border-gray-100 pt-3">
+          <LockedStat label="추세추종" />
+          <span className="h-6 w-px bg-gray-200" />
+          <LockedStat label="평균회귀" />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-xl flex-1 rounded-2xl border border-gray-100 bg-gradient-to-br from-white to-gray-50 p-4">
       <div className="mb-1.5 flex items-center justify-between">
@@ -90,6 +125,15 @@ function ScoreStat({ label, value }: { label: string; value: number | null }) {
     <div className="text-left">
       <p className="text-[10px] text-gray-400">{label}</p>
       <p className="text-xs font-semibold text-gray-900">{formatScore(value)}</p>
+    </div>
+  )
+}
+
+function LockedStat({ label }: { label: string }) {
+  return (
+    <div className="text-left">
+      <p className="text-[10px] text-gray-400">{label}</p>
+      <span className="mt-0.5 inline-block h-3 w-10 rounded bg-gray-200" />
     </div>
   )
 }

@@ -15,10 +15,10 @@ import com.quantlime.infra.python.dto.BacktestApiResponse.HorizonStatApiResponse
 import com.quantlime.infra.python.dto.BacktestApiResponse.StabilityStatApiResponse;
 import com.quantlime.market.domain.BenchmarkIndex;
 import com.quantlime.market.repository.BenchmarkIndexRepository;
-import com.quantlime.price.domain.DailyPrice;
+import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.price.repository.OverseasDailyPriceRepository;
-import com.quantlime.price.service.DailyPriceService;
+import com.quantlime.price.service.DomesticDailyPriceService;
 import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
@@ -52,7 +52,7 @@ class BacktestServiceTest {
     private StockMasterService stockMasterService;
 
     @Mock
-    private DailyPriceService dailyPriceService;
+    private DomesticDailyPriceService domesticDailyPriceService;
 
     @Mock
     private OverseasDailyPriceRepository overseasDailyPriceRepository;
@@ -80,8 +80,8 @@ class BacktestServiceTest {
     void runBacktest_domesticStock_fetchesDataAndPersists() {
         // given
         given(stockMasterService.getStockByCode(STOCK_CODE)).willReturn(stock(STOCK_CODE, MarketType.KOSPI));
-        given(dailyPriceService.getDailyPrices(eq(STOCK_CODE), any(), any()))
-            .willReturn(List.of(dailyPrice()));
+        given(domesticDailyPriceService.getDailyPrices(eq(STOCK_CODE), any(), any()))
+            .willReturn(List.of(domesticDailyPrice()));
         given(benchmarkIndexRepository.findByIndexCodeAndTradeDateBetweenOrderByTradeDateAsc(
             eq("KOSPI"), any(), any())).willReturn(List.of(benchmarkIndex()));
         given(pythonEngineClient.runBacktest(any())).willReturn(apiResponse());
@@ -113,7 +113,7 @@ class BacktestServiceTest {
         backtestService.runBacktest(overseasStockCode);
 
         // then: 해외종목은 국내 daily_price가 아니라 overseas_daily_price에서 조회한다
-        verify(dailyPriceService, never()).getDailyPrices(any(String.class), any(), any());
+        verify(domesticDailyPriceService, never()).getDailyPrices(any(String.class), any(), any());
         verify(pythonEngineClient).runBacktest(any());
         verify(backtestPersistenceService).saveAll(any());
     }
@@ -136,7 +136,7 @@ class BacktestServiceTest {
     void runBacktest_noDailyPriceHistory_throwsException() {
         // given
         given(stockMasterService.getStockByCode(STOCK_CODE)).willReturn(stock(STOCK_CODE, MarketType.KOSPI));
-        given(dailyPriceService.getDailyPrices(eq(STOCK_CODE), any(), any())).willReturn(List.of());
+        given(domesticDailyPriceService.getDailyPrices(eq(STOCK_CODE), any(), any())).willReturn(List.of());
 
         // when & then
         assertThatThrownBy(() -> backtestService.runBacktest(STOCK_CODE))
@@ -150,8 +150,8 @@ class BacktestServiceTest {
     void runBacktest_noBenchmarkHistory_throwsException() {
         // given
         given(stockMasterService.getStockByCode(STOCK_CODE)).willReturn(stock(STOCK_CODE, MarketType.KOSPI));
-        given(dailyPriceService.getDailyPrices(eq(STOCK_CODE), any(), any()))
-            .willReturn(List.of(dailyPrice()));
+        given(domesticDailyPriceService.getDailyPrices(eq(STOCK_CODE), any(), any()))
+            .willReturn(List.of(domesticDailyPrice()));
         given(benchmarkIndexRepository.findByIndexCodeAndTradeDateBetweenOrderByTradeDateAsc(
             eq("KOSPI"), any(), any())).willReturn(List.of());
 
@@ -203,8 +203,8 @@ class BacktestServiceTest {
         return Stock.of(code, "테스트종목", marketType, ListingStatus.LISTED, null);
     }
 
-    private DailyPrice dailyPrice() {
-        return DailyPrice.of(STOCK_CODE, LocalDate.now(), 100L, 105L, 95L, 100L, 1000L);
+    private DomesticDailyPrice domesticDailyPrice() {
+        return DomesticDailyPrice.of(STOCK_CODE, LocalDate.now(), 100L, 105L, 95L, 100L, 1000L);
     }
 
     private OverseasDailyPrice overseasDailyPrice(String stockCode) {

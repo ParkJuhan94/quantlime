@@ -39,26 +39,29 @@ class OverseasStockMasterSyncServiceTest {
     void syncMarket_registersOnlyStocks() {
         // given
         given(kisOverseasStockMasterClient.fetchStockMaster("nys")).willReturn(List.of(
-            new KisOverseasStockMasterEntry("AA", "ALCOA CORPORATION", "2", "720"),
-            new KisOverseasStockMasterEntry("SPY", "SPDR S&P 500 ETF", "3", "000")
+            new KisOverseasStockMasterEntry("AA", "알코아", "ALCOA CORPORATION", "2", "720"),
+            new KisOverseasStockMasterEntry("SPY", "SPY", "SPDR S&P 500 ETF", "3", "000")
         ));
 
         // when
         overseasStockMasterSyncService.syncMarket(MarketType.NYSE);
 
-        // then: ETF까지 등록됐다면 2회 호출됐을 것 - 실제로는 주식 1건만, 업종코드(720)를 sector로 전달
+        // then: ETF까지 등록됐다면 2회 호출됐을 것 - 실제로는 주식 1건만, 업종코드(720)를 sector로, 한글명을 함께 전달
         verify(stockMasterService, times(1))
-            .registerStock("AA", "ALCOA CORPORATION", MarketType.NYSE, "720");
+            .registerStock("AA", "ALCOA CORPORATION", MarketType.NYSE, "720", "알코아");
         verify(stockMasterService, times(1))
-            .registerStock(anyString(), anyString(), any(), any());
+            .registerStock(anyString(), anyString(), any(), any(), any());
     }
 
     @Test
-    @DisplayName("[6자를 초과하는 심볼은 등록하지 않고 건너뛴다]")
-    void syncMarket_skipsSymbolsLongerThanSix() {
-        // given
+    @DisplayName("[10자를 초과하는 심볼은 등록하지 않고 건너뛴다]")
+    void syncMarket_skipsSymbolsLongerThanTen() {
+        // given: "/"가 없는 순수 11자 심볼 - 슬래시 패턴이 아니라 길이
+        // 필터(2026-08-01 6→10 완화)만으로 걸러지는지 검증한다("XFLH/UN"
+        // 같은 슬래시 포함 심볼은 길이를 늘려도 아래 syncMarket_skipsSymbolsWithSlash
+        // 테스트가 검증하는 별도 필터에 걸리므로 이 테스트의 대상이 아님)
         given(kisOverseasStockMasterClient.fetchStockMaster("nys")).willReturn(List.of(
-            new KisOverseasStockMasterEntry("XFLH/UN", "SOME SPAC UNIT", "2", "720")
+            new KisOverseasStockMasterEntry("ABCDEFGHIJK", "11자 심볼", "ELEVEN CHAR SYMBOL", "2", "720")
         ));
 
         // when
@@ -66,7 +69,7 @@ class OverseasStockMasterSyncServiceTest {
 
         // then
         verify(stockMasterService, never())
-            .registerStock(anyString(), anyString(), any(), any());
+            .registerStock(anyString(), anyString(), any(), any(), any());
     }
 
     @Test
@@ -74,7 +77,7 @@ class OverseasStockMasterSyncServiceTest {
     void syncMarket_skipsSymbolsWithSlash() {
         // given: "AAC/UN"은 6자라 길이 필터는 통과하지만 Toss 심볼 패턴(영문/숫자/.,- 만 허용)엔 위배됨
         given(kisOverseasStockMasterClient.fetchStockMaster("nys")).willReturn(List.of(
-            new KisOverseasStockMasterEntry("AAC/UN", "SOME SPAC UNIT", "2", "720")
+            new KisOverseasStockMasterEntry("AAC/UN", "스팩 유닛", "SOME SPAC UNIT", "2", "720")
         ));
 
         // when
@@ -82,7 +85,7 @@ class OverseasStockMasterSyncServiceTest {
 
         // then
         verify(stockMasterService, never())
-            .registerStock(anyString(), anyString(), any(), any());
+            .registerStock(anyString(), anyString(), any(), any(), any());
     }
 
     @Test
@@ -103,11 +106,12 @@ class OverseasStockMasterSyncServiceTest {
     }
 
     @Test
-    @DisplayName("[syncAll은 NASDAQ/NYSE 둘 다 동기화한다]")
-    void syncAll_syncsBothMarkets() {
+    @DisplayName("[syncAll은 NASDAQ/NYSE/AMEX 전부 동기화한다]")
+    void syncAll_syncsAllMarkets() {
         // given
         given(kisOverseasStockMasterClient.fetchStockMaster("nas")).willReturn(List.of());
         given(kisOverseasStockMasterClient.fetchStockMaster("nys")).willReturn(List.of());
+        given(kisOverseasStockMasterClient.fetchStockMaster("ams")).willReturn(List.of());
 
         // when
         overseasStockMasterSyncService.syncAll();
@@ -115,5 +119,6 @@ class OverseasStockMasterSyncServiceTest {
         // then
         verify(kisOverseasStockMasterClient).fetchStockMaster("nas");
         verify(kisOverseasStockMasterClient).fetchStockMaster("nys");
+        verify(kisOverseasStockMasterClient).fetchStockMaster("ams");
     }
 }

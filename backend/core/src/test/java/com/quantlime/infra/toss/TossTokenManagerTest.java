@@ -81,6 +81,25 @@ class TossTokenManagerTest {
     }
 
     @Test
+    @DisplayName("[expiresIn이 만료 마진보다 짧아도 TTL을 최소값(60초)으로 바닥 처리해 음수 Duration 예외를 막는다]")
+    void getAccessToken_shortExpiresIn_flooredToMinTtl() {
+        // given: expiresIn(100) - 마진(3600) = 음수 → 바닥값 60초로 보정돼야 한다
+        when(valueOperations.get(REDIS_TOKEN_KEY)).thenReturn(null);
+        mockServer.expect(requestTo(BASE_URL + "/oauth2/token"))
+            .andRespond(withSuccess(
+                "{\"access_token\":\"new-token\",\"token_type\":\"Bearer\",\"expires_in\":100}",
+                MediaType.APPLICATION_JSON));
+
+        // when
+        String token = tossTokenManager.getAccessToken();
+
+        // then
+        assertThat(token).isEqualTo("new-token");
+        verify(valueOperations).set(REDIS_TOKEN_KEY, "new-token", Duration.ofSeconds(60));
+        mockServer.verify();
+    }
+
+    @Test
     @DisplayName("[invalidateToken 호출 시 Redis에 캐시된 토큰을 삭제한다]")
     void invalidateToken_deletesCachedToken() {
         // when

@@ -30,5 +30,9 @@ public class SubscriptionRenewalScheduler {
                 () -> paymentService.chargeRenewal(subscriptionId));
         }
         SafeExecutor.runSafely("해지된 구독 만료 처리", subscriptionService::expireLapsedSubscriptions);
+        // 개별 성공/실패는 PaymentService 로그에 이미 남는다 - 여기서는
+        // 배치가 도중에 죽지 않고 대상 건수만큼 다 돌았는지 확인할 수 있게
+        // 종료 신호만 남긴다.
+        log.info("구독 자동 갱신 배치 종료: 처리대상={}건", dueSubscriptionIds.size());
     }
 }

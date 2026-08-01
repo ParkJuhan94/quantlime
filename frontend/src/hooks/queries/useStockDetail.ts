@@ -34,12 +34,16 @@ export function useStockFundamentalsQuery(stockCode: string) {
   })
 }
 
-export function useStockScoreQuery(stockCode: string) {
+// enabled=false(비구독)면 요청 자체를 보내지 않는다 - 백엔드가 이제
+// 403으로 막긴 하지만, 프론트가 굳이 막힐 요청을 보내 네트워크 탭에
+// 흔적을 남길 이유가 없다(PremiumGate 참고).
+export function useStockScoreQuery(stockCode: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.stockScore(stockCode),
     queryFn: () => getScore(stockCode),
     staleTime: 60 * 1000,
     // 스코어 미계산(SC_000)은 404로 오는 정상 상태라 재시도가 무의미하다.
     retry: false,
+    enabled,
   })
 }

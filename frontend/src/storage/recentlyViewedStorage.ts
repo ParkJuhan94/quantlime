@@ -5,6 +5,9 @@ export interface RecentlyViewedStock {
   stockCode: string
   stockName: string
   logoUrl: string
+  // 해외 로고 배지 판별용(currencyForMarketType 참고) - 예전에 기록된
+  // 캐시 항목엔 없을 수 있어 read()에서 optional로 취급한다.
+  marketType?: string
 }
 
 function read(): RecentlyViewedStock[] {

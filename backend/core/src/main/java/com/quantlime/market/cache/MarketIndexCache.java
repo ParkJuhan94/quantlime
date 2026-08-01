@@ -11,11 +11,11 @@ import com.quantlime.infra.tradingview.dto.TradingViewSymbolResponse;
 import com.quantlime.infra.upbit.UpbitApiClient;
 import com.quantlime.infra.upbit.dto.UpbitTicker;
 import com.quantlime.market.domain.BenchmarkIndex;
-import com.quantlime.market.domain.WorldIndexCode;
+import com.quantlime.market.domain.OverseasIndexCode;
 import com.quantlime.market.dto.response.MarketIndexResponse;
 import com.quantlime.market.exception.MarketErrorCode;
 import com.quantlime.market.repository.BenchmarkIndexRepository;
-import com.quantlime.price.cache.MarketCalendarCache;
+import com.quantlime.price.cache.DomesticMarketCalendarCache;
 import com.quantlime.price.util.ChangeRateCalculator;
 import java.time.Duration;
 import java.time.Instant;
@@ -40,7 +40,7 @@ import org.springframework.stereotype.Component;
  * 비공식 스크래핑 대상(네이버·TradingView)이 IP 차단할 위험이 있다 -
  * 정확한 공개 레이트리밋 문서가 없어 "체감 실시간성 대 차단 위험"을
  * 저울질한 보수적 값. 429/차단 징후 없이 안정적이면 더 낮춰도 됨)
- * (MarketCalendarCache와 동일한 단순 TTL 캐시 패턴).
+ * (DomesticMarketCalendarCache와 동일한 단순 TTL 캐시 패턴).
  */
 @Slf4j
 @Component
@@ -63,7 +63,7 @@ public class MarketIndexCache {
     private final NaverFinanceApiClient naverFinanceApiClient;
     private final TradingViewApiClient tradingViewApiClient;
     private final BenchmarkIndexRepository benchmarkIndexRepository;
-    private final MarketCalendarCache marketCalendarCache;
+    private final DomesticMarketCalendarCache domesticMarketCalendarCache;
 
     private volatile MarketIndexResponse cached;
     private volatile Instant cachedAt = Instant.EPOCH;
@@ -105,9 +105,9 @@ public class MarketIndexCache {
             List.copyOf(treasuryYieldHistory),
             fetchIndexQuote(KOSPI_CODE, domesticIndexPrices),
             fetchIndexQuote(KOSDAQ_CODE, domesticIndexPrices),
-            fetchWorldIndexQuote(WorldIndexCode.NASDAQ),
-            fetchWorldIndexQuote(WorldIndexCode.SP500),
-            fetchWorldIndexQuote(WorldIndexCode.SOXX)
+            fetchWorldIndexQuote(OverseasIndexCode.NASDAQ),
+            fetchWorldIndexQuote(OverseasIndexCode.SP500),
+            fetchWorldIndexQuote(OverseasIndexCode.SOXX)
         );
         cachedAt = Instant.now();
     }
@@ -192,7 +192,7 @@ public class MarketIndexCache {
      * 장중여부는 주지 않아(네이버는 둘 다 제공했음) 직접 계산한다
      * (2026-07-29, 네이버에서 이관). 등락률은 영속 저장된 전일 종가
      * (benchmark_index, InvestorTradingBackfillService와 같은 트리거로
-     * 매일 갱신됨) 대비로 계산하고, 장중여부는 기존 MarketCalendarCache를
+     * 매일 갱신됨) 대비로 계산하고, 장중여부는 기존 DomesticMarketCalendarCache를
      * 재사용한다 - 추가 API 호출 없이 이미 있는 데이터로 채운다. 전일
      * 종가를 아직 못 구했으면(백필 전 등) 등락률만 null로 두고 현재가는
      * 그대로 보여준다(값을 꾸며내지 않음).
@@ -210,7 +210,7 @@ public class MarketIndexCache {
             .orElse(null);
         Double changeAmount = previousClose == null ? null : value - previousClose;
         Double changeRate = ChangeRateCalculator.calculate(value, previousClose);
-        boolean marketOpen = marketCalendarCache.isMarketOpenNow();
+        boolean marketOpen = domesticMarketCalendarCache.isMarketOpenNow();
         // 국내 지수는 프리/애프터마켓 개념이 없다.
         return new MarketIndexResponse.IndexQuote(value, changeAmount, changeRate, marketOpen, null, null, null);
     }
@@ -220,7 +220,7 @@ public class MarketIndexCache {
      * ETF인 경우 지수 엔드포인트가 아니라 종목 엔드포인트를 쓴다. 미국
      * 시장이라 정규장 마감 중엔 overMarketPriceInfo로 프리/애프터마켓
      * 시세가 함께 온다(실제 호출로 확인).  */
-    private MarketIndexResponse.IndexQuote fetchWorldIndexQuote(WorldIndexCode code) {
+    private MarketIndexResponse.IndexQuote fetchWorldIndexQuote(OverseasIndexCode code) {
         try {
             NaverIndexBasicResponse basic = code.isEtf()
                 ? naverFinanceApiClient.getWorldStockBasic(code.getReutersCode())

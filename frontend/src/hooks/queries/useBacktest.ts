@@ -2,7 +2,9 @@ import { useQuery } from '@tanstack/react-query'
 import { getBacktest } from '../../api/backtest'
 import { queryKeys } from '../queryKeys'
 
-export function useBacktestQuery(stockCode: string) {
+// enabled=false(비구독)면 요청 자체를 보내지 않는다(useStockScoreQuery와
+// 동일한 이유 - PremiumGate 참고).
+export function useBacktestQuery(stockCode: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.backtest(stockCode),
     queryFn: () => getBacktest(stockCode),
@@ -12,5 +14,6 @@ export function useBacktestQuery(stockCode: string) {
     // 백테스트 미계산(BT_000)은 404로 오는 정상 상태라 재시도가 무의미하다
     // (useStockScoreQuery와 동일한 이유).
     retry: false,
+    enabled,
   })
 }

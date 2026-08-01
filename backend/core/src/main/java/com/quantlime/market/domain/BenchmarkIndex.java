@@ -20,7 +20,7 @@ import static lombok.AccessLevel.PROTECTED;
 /**
  * 국내/해외 지수의 일별 종가 이력. 백테스트 초과수익률(종목수익률 - 지수
  * 수익률) 계산의 벤치마크 기준선으로만 쓰인다 - 홈 화면 지수 위젯의
- * {@code IndexChartCache}(60초 TTL, 60일 상한, 영속 저장 안 함)와는 목적이
+ * {@code DomesticIndexChartCache}(60초 TTL, 60일 상한, 영속 저장 안 함)와는 목적이
  * 다르다(그쪽은 실시간 표시용, 이쪽은 백테스트 재현성을 위한 영속 이력).
  */
 @Entity

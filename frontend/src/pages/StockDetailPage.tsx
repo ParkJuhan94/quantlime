@@ -22,8 +22,10 @@ import { ScoreSummaryRow } from '../components/score/ScoreSummaryRow'
 import { FundamentalsRow } from '../components/stock/FundamentalsRow'
 import { StockLogo } from '../components/common/StockLogo'
 import { AddToWatchlistGroupPicker } from '../components/home/AddToWatchlistGroupPicker'
+import { PremiumGate } from '../components/common/PremiumGate'
+import { useIsPremium } from '../hooks/queries/useSubscription'
 import { getErrorMessage, isNotFoundStatus } from '../api/errors'
-import { changeRateColorClass, formatChangeRate, formatPrice } from '../utils/priceFormat'
+import { changeRateColorClass, currencyForMarketType, formatChangeRate, formatPrice } from '../utils/priceFormat'
 import type { IndicatorSettings } from '../utils/indicators'
 import { aggregateCandles, type ChartInterval } from '../utils/candleAggregation'
 import { recentlyViewedStorage } from '../storage/recentlyViewedStorage'
@@ -59,7 +61,8 @@ export function StockDetailPage() {
     () => aggregateCandles(chartQuery.data ?? [], chartInterval),
     [chartQuery.data, chartInterval],
   )
-  const scoreQuery = useStockScoreQuery(stockCode)
+  const { isPremium, isResolving } = useIsPremium()
+  const scoreQuery = useStockScoreQuery(stockCode, isPremium)
   const fundamentalsQuery = useStockFundamentalsQuery(stockCode)
   const livePrices = useStockPriceSocket([stockCode])
   const livePrice = livePrices[stockCode]
@@ -89,6 +92,7 @@ export function StockDetailPage() {
       stockCode: detailQuery.data.stockCode,
       stockName: detailQuery.data.stockName,
       logoUrl: detailQuery.data.logoUrl,
+      marketType: detailQuery.data.marketType,
     })
   }, [detailQuery.data])
 
@@ -120,7 +124,12 @@ export function StockDetailPage() {
             하다 보니 부가정보 줄이 늘어날 때마다 로고가 아래로 처지는
             것처럼 보였다(2026-07-17 피드백). */}
         <div className="flex items-start gap-3">
-          <StockLogo logoUrl={stock.logoUrl} stockName={stock.stockName} className="h-12 w-12" />
+          <StockLogo
+            logoUrl={stock.logoUrl}
+            stockName={stock.stockName}
+            overseas={currencyForMarketType(stock.marketType) === 'USD'}
+            className="h-12 w-12"
+          />
           <div>
             {/* 관심종목 하트를 종목명 헤더 바로 옆으로 이동(2026-07-30 요청) -
                 예전엔 헤더 최우측(스코어 카드 옆)에 독립 배치했었으나, 다시
@@ -158,7 +167,15 @@ export function StockDetailPage() {
           </div>
         </div>
 
-        {scoreQuery.data && <ScoreSummaryRow score={scoreQuery.data} />}
+        {isResolving ? (
+          <LoadingSpinner />
+        ) : isPremium ? (
+          scoreQuery.data && <ScoreSummaryRow score={scoreQuery.data} />
+        ) : (
+          <PremiumGate>
+            <ScoreSummaryRow locked />
+          </PremiumGate>
+        )}
       </section>
 
       {addTargetStockCode && (

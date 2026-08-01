@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { StockLogo } from '../common/StockLogo'
-import { buildStockLogoUrl } from '../../utils/stockLogo'
+import { currencyForMarketType } from '../../utils/priceFormat'
 import {
   useCreateWatchlistGroup,
   useDeleteWatchlistGroup,
@@ -310,7 +310,12 @@ export function WatchlistGroupEditModal({ open, onClose, watchlist, groups }: Wa
                   <span className="cursor-grab active:cursor-grabbing">
                     <GripIcon />
                   </span>
-                  <StockLogo logoUrl={buildStockLogoUrl(item.stockCode)} stockName={item.stockName} className="h-7 w-7" />
+                  <StockLogo
+                    logoUrl={item.logoUrl}
+                    stockName={item.stockName}
+                    overseas={currencyForMarketType(item.marketType) === 'USD'}
+                    className="h-7 w-7"
+                  />
                   <span className="text-sm font-medium text-gray-900">{item.stockName}</span>
                   <span className="text-xs text-gray-400">{item.stockCode}</span>
                 </div>

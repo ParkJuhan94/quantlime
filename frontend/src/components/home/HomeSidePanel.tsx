@@ -5,7 +5,6 @@ import type { PriceBroadcastMessage } from '../../types/realtime'
 import type { RecentlyViewedStock } from '../../storage/recentlyViewedStorage'
 import { StockLogo } from '../common/StockLogo'
 import { changeRateColorClass, currencyForMarketType, formatChangeRate, formatPrice } from '../../utils/priceFormat'
-import { buildStockLogoUrl } from '../../utils/stockLogo'
 import { WatchlistGroupMenu } from './WatchlistGroupMenu'
 import { GroupNameDialog } from './GroupNameDialog'
 import { WatchlistGroupEditModal } from './WatchlistGroupEditModal'
@@ -46,8 +45,8 @@ function StockRow({
   stockCode: string
   stockName: string
   logoUrl: string
-  // 관심종목(WatchlistResponse)엔 있지만 최근 본 종목(RecentlyViewedStock,
-  // 로컬 스토리지 기록)엔 없다 - 없으면 기존과 동일하게 KRW로 취급한다
+  // 오래된 최근 본 종목 로컬 스토리지 기록엔 없을 수 있다(marketType 필드
+  // 추가 전 저장분) - 없으면 기존과 동일하게 KRW로 취급한다
   // (currencyForMarketType 기본값).
   marketType?: string
   live?: PriceBroadcastMessage
@@ -56,7 +55,12 @@ function StockRow({
   return (
     <div className="flex items-center justify-between border-b border-gray-50 py-2">
       <Link to={`/stocks/${stockCode}`} className="flex min-w-0 flex-1 items-center gap-2.5">
-        <StockLogo logoUrl={logoUrl} stockName={stockName} className="h-7 w-7" />
+        <StockLogo
+          logoUrl={logoUrl}
+          stockName={stockName}
+          overseas={currencyForMarketType(marketType) === 'USD'}
+          className="h-7 w-7"
+        />
         <span className="truncate text-sm font-medium text-gray-900">{stockName}</span>
       </Link>
       <div className="flex items-center gap-2">
@@ -174,7 +178,7 @@ function GroupSection({
               key={item.id}
               stockCode={item.stockCode}
               stockName={item.stockName}
-              logoUrl={buildStockLogoUrl(item.stockCode)}
+              logoUrl={item.logoUrl}
               marketType={item.marketType}
               live={watchlistLivePrices[item.stockCode]}
               onRemove={() => onRemoveWatch(item.stockCode)}
@@ -240,7 +244,7 @@ export function HomeSidePanel({
                       key={item.id}
                       stockCode={item.stockCode}
                       stockName={item.stockName}
-                      logoUrl={buildStockLogoUrl(item.stockCode)}
+                      logoUrl={item.logoUrl}
                       marketType={item.marketType}
                       live={watchlistLivePrices[item.stockCode]}
                       onRemove={() => onRemoveWatch(item.stockCode)}
@@ -278,6 +282,7 @@ export function HomeSidePanel({
                       stockCode={stock.stockCode}
                       stockName={stock.stockName}
                       logoUrl={stock.logoUrl}
+                      marketType={stock.marketType}
                       live={recentlyViewedLivePrices[stock.stockCode]}
                     />
                   ))}

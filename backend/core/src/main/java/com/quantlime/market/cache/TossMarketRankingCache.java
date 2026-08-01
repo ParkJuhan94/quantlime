@@ -4,6 +4,7 @@ import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.toss.dto.TossRankingResponse;
 import com.quantlime.market.dto.response.MarketRankingResponse;
 import com.quantlime.stock.domain.Stock;
+import com.quantlime.stock.dto.mapper.StockMapper;
 import com.quantlime.stock.repository.StockRepository;
 import java.time.Duration;
 import java.time.Instant;
@@ -18,7 +19,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Toss `/api/v1/rankings`(2026-07-29 신규 확인) 기반 랭킹 캐시. 국내·해외
- * 공용이며, 서버가 순위를 직접 계산해 주므로 {@code MarketPriceSweepScheduler}
+ * 공용이며, 서버가 순위를 직접 계산해 주므로 {@code DomesticMarketPriceSweepScheduler}
  * 같은 전종목 스윕이 필요 없다 - (scope, sort) 조합별로 {@value #TTL_SECONDS}초
  * 온디맨드 TTL 캐시({@link MarketIndexCache}와 동일 패턴).
  *
@@ -105,6 +106,17 @@ public class TossMarketRankingCache {
             .stream()
             .collect(Collectors.toMap(Stock::getStockCode, Function.identity(), (a, b) -> a));
 
+        if (SCOPE_DOMESTIC.equals(key.scope())) {
+            // 국내는 ETF/ELW 등 로컬 stock 테이블(KIND 상장법인목록 기반,
+            // 법인 종목만 대상) 밖의 심볼이 섞여 들어오면 상세페이지가
+            // 없어 클릭 시 404가 나므로 랭킹 자체에서 제외한다. 해외는
+            // 백테스트 유니버스 밖 종목도 정상 상세페이지 대상이라 기존
+            // 폴백(심볼 원문 노출)을 그대로 유지한다.
+            rankings = rankings.stream()
+                .filter(item -> stockByCode.containsKey(item.symbol()))
+                .toList();
+        }
+
         return rankings.stream()
             .map(item -> toResponse(item, stockByCode))
             .toList();
@@ -133,12 +145,14 @@ public class TossMarketRankingCache {
     private MarketRankingResponse toResponse(TossRankingResponse.RankingItem item, Map<String, Stock> stockByCode) {
         Stock stock = stockByCode.get(item.symbol());
         // 로컬 stock 테이블에 없는 심볼(해외 상위 종목이 백테스트 유니버스
-        // 밖이거나, 국내라도 ELW/스팩 등 표준 6자리 코드가 아닌 경우)은
-        // 종목명 자리에 심볼 원문을 그대로 보여준다 - 항목을 숨기지 않고
-        // 실제 심볼을 정직하게 보여준다("없는 데이터를 꾸며내지 않는다"
-        // 원칙 - 이름을 지어내는 게 아니라 원본 값을 그대로 노출).
-        String stockName = stock != null ? stock.getStockName() : item.symbol();
+        // 밖인 경우 - 국내는 fetchAndMap()에서 이미 필터링되어 여기 도달
+        // 하지 않는다)은 종목명 자리에 심볼 원문을 그대로 보여준다 -
+        // 항목을 숨기지 않고 실제 심볼을 정직하게 보여준다("없는 데이터를
+        // 꾸며내지 않는다" 원칙 - 이름을 지어내는 게 아니라 원본 값을
+        // 그대로 노출).
+        String stockName = stock != null ? stock.getDisplayName() : item.symbol();
         String sector = stock != null ? stock.getSector() : null;
+        String logoUrl = stock != null ? StockMapper.toLogoUrl(stock) : null;
 
         TossRankingResponse.RankingPrice price = item.price();
         return new MarketRankingResponse(
@@ -149,7 +163,9 @@ public class TossMarketRankingCache {
             parseChangeRate(price.changeRate()),
             item.currency(),
             parseDecimal(item.tradingVolume()),
-            parseDecimal(item.tradingAmount()));
+            parseDecimal(item.tradingAmount()),
+            logoUrl,
+            stock != null);
     }
 
     /** Toss changeRate는 소수 비율(0.0125=1.25%) - 기존 자체 계산 등락률

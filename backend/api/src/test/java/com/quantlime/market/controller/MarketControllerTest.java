@@ -3,11 +3,11 @@ package com.quantlime.market.controller;
 import com.quantlime.auth.jwt.JwtTokenProvider;
 import com.quantlime.market.cache.BitcoinChartCache;
 import com.quantlime.market.cache.ExchangeRateChartCache;
-import com.quantlime.market.cache.IndexMinuteChartCache;
+import com.quantlime.market.cache.DomesticIndexMinuteChartCache;
 import com.quantlime.market.cache.MarketIndexCache;
-import com.quantlime.market.cache.MarketRankingCache;
+import com.quantlime.market.cache.DomesticMarketRankingCache;
 import com.quantlime.market.cache.TossMarketRankingCache;
-import com.quantlime.market.cache.WorldIndexChartCache;
+import com.quantlime.market.cache.OverseasIndexChartCache;
 import com.quantlime.market.domain.BenchmarkIndex;
 import com.quantlime.market.dto.response.IndexChartResponse;
 import com.quantlime.market.dto.response.IndexMinuteChartResponse;
@@ -35,16 +35,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * MarketIndexCache/MarketRankingCache/TossMarketRankingCache/IndexChartCache는
+ * MarketIndexCache/DomesticMarketRankingCache/TossMarketRankingCache/DomesticIndexChartCache는
  * 짧은 TTL을 가진 상태 저장 빈이라(같은 스프링 컨텍스트를 공유하는 다른
  * 테스트가 채워둔 값이 남아있을 수 있음) 직접 목으로 대체한다 -
  * PriceControllerTest가 PriceCacheStore를 목으로 대체하는 것과 동일한
  * 이유. 캐시 자체의 갱신/TTL 로직은
- * MarketIndexCacheTest/MarketRankingCacheTest/TossMarketRankingCacheTest에서
+ * MarketIndexCacheTest/DomesticMarketRankingCacheTest/TossMarketRankingCacheTest에서
  * 이미 검증한다.
  *
  * <p>랭킹 조회는 두 경로로 갈린다(MarketRankingService 참고): 관심종목만
- * 보기+등락률 정렬은 국내는 {@code marketRankingCache}, 해외는 자체 계산
+ * 보기+등락률 정렬은 국내는 {@code domesticMarketRankingCache}, 해외는 자체 계산
  * (여기선 시세 캐시 미스 처리만 검증), 그 외는 전부
  * {@code tossMarketRankingCache}.
  */
@@ -55,16 +55,16 @@ class MarketControllerTest extends ApiTestSupport {
     private MarketIndexCache marketIndexCache;
 
     @MockBean
-    private MarketRankingCache marketRankingCache;
+    private DomesticMarketRankingCache domesticMarketRankingCache;
 
     @MockBean
     private TossMarketRankingCache tossMarketRankingCache;
 
     @MockBean
-    private IndexMinuteChartCache indexMinuteChartCache;
+    private DomesticIndexMinuteChartCache domesticIndexMinuteChartCache;
 
     @MockBean
-    private WorldIndexChartCache worldIndexChartCache;
+    private OverseasIndexChartCache overseasIndexChartCache;
 
     @MockBean
     private BitcoinChartCache bitcoinChartCache;
@@ -135,7 +135,7 @@ class MarketControllerTest extends ApiTestSupport {
     @DisplayName("[나스닥 차트 조회 성공 시 해외지수 캐시를 로이터 코드로 조회한다]")
     void getIndexChart_nasdaq_usesWorldIndexCacheWithReutersCode() throws Exception {
         // given
-        given(worldIndexChartCache.get(".IXIC", false)).willReturn(
+        given(overseasIndexChartCache.get(".IXIC", false)).willReturn(
             List.of(new IndexChartResponse(LocalDate.of(2026, 7, 15), 26015.49, 26300.00, 25900.00, 26201.58)));
 
         // when & then
@@ -178,7 +178,7 @@ class MarketControllerTest extends ApiTestSupport {
     @DisplayName("[코스피 당일 분봉 차트 조회 성공 시 200을 반환한다]")
     void getIndexMinuteChart_kospi_returns200() throws Exception {
         // given
-        given(indexMinuteChartCache.get("KOSPI")).willReturn(
+        given(domesticIndexMinuteChartCache.get("KOSPI")).willReturn(
             List.of(new IndexMinuteChartResponse(LocalDateTime.of(2026, 7, 15, 9, 0, 0), 7095.79)));
 
         // when & then
@@ -226,7 +226,7 @@ class MarketControllerTest extends ApiTestSupport {
         // given: watchlistOnly=false(기본)면 국내/해외 모두 TossMarketRankingCache 경로
         given(tossMarketRankingCache.get("domestic", "gainers")).willReturn(
             List.of(new MarketRankingResponse("005930", "삼성전자", "전기전자",
-                71400.0, 2.0, "KRW", 1000000.0, 71400000000.0)));
+                71400.0, 2.0, "KRW", 1000000.0, 71400000000.0, null, true)));
 
         // when & then
         mockMvc.perform(get("/api/market/ranking").param("sort", "gainers"))
@@ -242,7 +242,7 @@ class MarketControllerTest extends ApiTestSupport {
         // given
         given(tossMarketRankingCache.get("domestic", "losers")).willReturn(
             List.of(new MarketRankingResponse("035420", "NAVER", "서비스업",
-                100000.0, -4.5, "KRW", 500000.0, 50000000000.0)));
+                100000.0, -4.5, "KRW", 500000.0, 50000000000.0, null, true)));
 
         // when & then
         mockMvc.perform(get("/api/market/ranking")
@@ -258,7 +258,7 @@ class MarketControllerTest extends ApiTestSupport {
         // given
         given(tossMarketRankingCache.get("overseas", "amount")).willReturn(
             List.of(new MarketRankingResponse("AAPL", "AAPL", null,
-                341.43, 0.4, "USD", 51859042.0, 17631000000.0)));
+                341.43, 0.4, "USD", 51859042.0, 17631000000.0, null, false)));
 
         // when & then
         mockMvc.perform(get("/api/market/ranking")
@@ -297,8 +297,8 @@ class MarketControllerTest extends ApiTestSupport {
         User user = userRepository.save(UserFixture.createUser());
         String accessToken = jwtTokenProvider.createAccessToken(user.getId(), user.getRole());
         given(watchlistService.getWatchlistStockCodes(user.getId())).willReturn(Set.of("005930"));
-        given(marketRankingCache.getGainers(10, Set.of("005930"))).willReturn(
-            List.of(new MarketRankingResponse("005930", "삼성전자", "전기전자", 71400.0, 2.0, null, null, null)));
+        given(domesticMarketRankingCache.getGainers(10, Set.of("005930"))).willReturn(
+            List.of(new MarketRankingResponse("005930", "삼성전자", "전기전자", 71400.0, 2.0, null, null, null, null, true)));
 
         // when & then
         mockMvc.perform(get("/api/market/ranking")

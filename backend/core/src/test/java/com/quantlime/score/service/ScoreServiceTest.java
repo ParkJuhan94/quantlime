@@ -9,8 +9,8 @@ import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.DailyScoreSeri
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.DivergenceApiResponse;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.StockScoreSeriesApiResponse;
 import com.quantlime.infra.python.exception.PythonEngineErrorCode;
-import com.quantlime.price.domain.DailyPrice;
-import com.quantlime.price.service.DailyPriceService;
+import com.quantlime.price.domain.DomesticDailyPrice;
+import com.quantlime.price.service.DomesticDailyPriceService;
 import com.quantlime.score.domain.Divergence;
 import com.quantlime.score.domain.Quadrant;
 import com.quantlime.score.domain.Score;
@@ -52,7 +52,7 @@ class ScoreServiceTest {
     private static final String STOCK_CODE = "005930";
 
     @Mock
-    private DailyPriceService dailyPriceService;
+    private DomesticDailyPriceService domesticDailyPriceService;
 
     @Mock
     private PythonEngineClient pythonEngineClient;
@@ -79,7 +79,7 @@ class ScoreServiceTest {
     @DisplayName("[OHLCV 이력이 없으면 퀀트 엔진을 호출하지 않는다]")
     void recalculateScore_noDailyPrices_skipsPythonCall() {
         // given
-        given(dailyPriceService.getDailyPrices(anyList(), any(), any()))
+        given(domesticDailyPriceService.getDailyPrices(anyList(), any(), any()))
             .willReturn(List.of());
 
         // when
@@ -94,8 +94,8 @@ class ScoreServiceTest {
     @DisplayName("[OHLCV 이력이 있으면 퀀트 엔진을 호출하고 결과를 저장에 위임한다]")
     void recalculateScore_hasDailyPrices_callsPythonAndDelegatesPersistence() {
         // given
-        given(dailyPriceService.getDailyPrices(anyList(), any(), any()))
-            .willReturn(List.of(dailyPrice(LocalDate.of(2026, 7, 3))));
+        given(domesticDailyPriceService.getDailyPrices(anyList(), any(), any()))
+            .willReturn(List.of(domesticDailyPrice(LocalDate.of(2026, 7, 3))));
         ScoreSeriesBatchApiResponse response =
             new ScoreSeriesBatchApiResponse(List.of(successResponse(STOCK_CODE, 82.0)));
         given(pythonEngineClient.calculateScoreSeries(any(ScoreBatchApiRequest.class)))
@@ -112,8 +112,8 @@ class ScoreServiceTest {
     @DisplayName("[퀀트 엔진 호출이 실패하면 예외가 그대로 전파되고 저장은 위임되지 않는다]")
     void recalculateScore_pythonEngineFails_propagatesAndSkipsPersistence() {
         // given
-        given(dailyPriceService.getDailyPrices(anyList(), any(), any()))
-            .willReturn(List.of(dailyPrice(LocalDate.of(2026, 7, 3))));
+        given(domesticDailyPriceService.getDailyPrices(anyList(), any(), any()))
+            .willReturn(List.of(domesticDailyPrice(LocalDate.of(2026, 7, 3))));
         given(pythonEngineClient.calculateScoreSeries(any(ScoreBatchApiRequest.class)))
             .willThrow(new ExternalApiException(PythonEngineErrorCode.SCORE_CALCULATION_FAILED));
 
@@ -143,8 +143,8 @@ class ScoreServiceTest {
         String secondCode = "000660";
         given(stockMasterService.getAllListedStocks()).willReturn(List.of(
             StockFixture.createStock(STOCK_CODE, "삼성전자"), StockFixture.createStock(secondCode, "SK하이닉스")));
-        given(dailyPriceService.getDailyPrices(anyList(), any(), any()))
-            .willReturn(List.of(dailyPrice(STOCK_CODE), dailyPrice(secondCode)));
+        given(domesticDailyPriceService.getDailyPrices(anyList(), any(), any()))
+            .willReturn(List.of(domesticDailyPrice(STOCK_CODE), domesticDailyPrice(secondCode)));
         ScoreSeriesBatchApiResponse response = new ScoreSeriesBatchApiResponse(List.of(
             successResponse(STOCK_CODE, 70.0), successResponse(secondCode, 60.0)));
         given(pythonEngineClient.calculateScoreSeries(any(ScoreBatchApiRequest.class)))
@@ -166,8 +166,8 @@ class ScoreServiceTest {
         String noHistoryCode = "000660";
         given(stockMasterService.getAllListedStocks()).willReturn(List.of(
             StockFixture.createStock(STOCK_CODE, "삼성전자"), StockFixture.createStock(noHistoryCode, "SK하이닉스")));
-        given(dailyPriceService.getDailyPrices(anyList(), any(), any()))
-            .willReturn(List.of(dailyPrice(STOCK_CODE)));
+        given(domesticDailyPriceService.getDailyPrices(anyList(), any(), any()))
+            .willReturn(List.of(domesticDailyPrice(STOCK_CODE)));
         given(pythonEngineClient.calculateScoreSeries(any(ScoreBatchApiRequest.class)))
             .willReturn(new ScoreSeriesBatchApiResponse(List.of(successResponse(STOCK_CODE, 70.0))));
 
@@ -193,8 +193,8 @@ class ScoreServiceTest {
         }
         stocks.add(StockFixture.createStock(STOCK_CODE, "삼성전자"));
         given(stockMasterService.getAllListedStocks()).willReturn(stocks);
-        given(dailyPriceService.getDailyPrices(anyList(), any(), any()))
-            .willReturn(List.of(dailyPrice(STOCK_CODE)));
+        given(domesticDailyPriceService.getDailyPrices(anyList(), any(), any()))
+            .willReturn(List.of(domesticDailyPrice(STOCK_CODE)));
         // 첫 청크(100개)는 실패, 두 번째 청크(1개)는 성공 - 첫 청크 실패가 두 번째 청크 실행을 막지 않아야 함
         given(pythonEngineClient.calculateScoreSeries(any(ScoreBatchApiRequest.class)))
             .willThrow(new ExternalApiException(PythonEngineErrorCode.SCORE_CALCULATION_FAILED))
@@ -273,12 +273,12 @@ class ScoreServiceTest {
         assertThat(result.get(0).compositeScore()).isEqualTo(90.0);
     }
 
-    private DailyPrice dailyPrice(LocalDate tradeDate) {
-        return DailyPrice.of(STOCK_CODE, tradeDate, 70000L, 71000L, 69000L, 70500L, 1000000L);
+    private DomesticDailyPrice domesticDailyPrice(LocalDate tradeDate) {
+        return DomesticDailyPrice.of(STOCK_CODE, tradeDate, 70000L, 71000L, 69000L, 70500L, 1000000L);
     }
 
-    private DailyPrice dailyPrice(String stockCode) {
-        return DailyPrice.of(stockCode, LocalDate.of(2026, 7, 3),
+    private DomesticDailyPrice domesticDailyPrice(String stockCode) {
+        return DomesticDailyPrice.of(stockCode, LocalDate.of(2026, 7, 3),
             70000L, 71000L, 69000L, 70500L, 1000000L);
     }
 

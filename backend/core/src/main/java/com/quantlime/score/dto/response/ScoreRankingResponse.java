@@ -12,6 +12,8 @@ public record ScoreRankingResponse(
     Double meanReversionScore,
     Double compositeScore,
     String grade,
-    boolean insufficientData
+    boolean insufficientData,
+    String logoUrl,
+    boolean overseas
 ) {
 }

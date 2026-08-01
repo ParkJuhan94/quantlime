@@ -1,9 +1,12 @@
 package com.quantlime.score.controller;
 
 import com.quantlime.auth.resolver.OptionalLoginUser;
+import com.quantlime.common.exception.ForbiddenException;
 import com.quantlime.score.dto.response.ScoreRankingResponse;
 import com.quantlime.score.dto.response.ScoreResponse;
 import com.quantlime.score.service.ScoreService;
+import com.quantlime.subscription.exception.SubscriptionErrorCode;
+import com.quantlime.subscription.service.SubscriptionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,23 +31,27 @@ import org.springframework.web.bind.annotation.RestController;
 public class ScoreController {
 
     private final ScoreService scoreService;
+    private final SubscriptionService subscriptionService;
 
     @GetMapping("/stocks/{stockCode}/score")
     @Operation(
-        summary = "종목 스코어 조회",
-        description = "가장 최근에 계산된 종목의 추세추종/평균회귀 스코어와 등급을 조회한다"
+        summary = "종목 스코어 조회(구독자 전용)",
+        description = "가장 최근에 계산된 종목의 추세추종/평균회귀 스코어와 등급을 조회한다. "
+            + "구독중(status=ACTIVE)이 아니면 403(SUB_006)."
     )
     @ApiResponse(useReturnTypeSchema = true)
-    public ResponseEntity<ScoreResponse> getScore(@PathVariable String stockCode) {
+    public ResponseEntity<ScoreResponse> getScore(
+        @PathVariable String stockCode, @OptionalLoginUser Long userId) {
+        requirePremium(userId);
         return ResponseEntity.ok(scoreService.getScore(stockCode));
     }
 
     @GetMapping("/dashboard/scores")
     @Operation(
-        summary = "스코어 랭킹 조회",
+        summary = "스코어 랭킹 조회(구독자 전용)",
         description = "watchlistOnly=true(기본값)면 로그인 사용자의 관심 종목만, false면 전 상장종목 상위 N개를 "
-            + "종합점수 내림차순으로 조회한다(watchlistOnly=true인데 비로그인이면 빈 배열, 실시간 랭킹 '스코어' 탭용). "
-            + "scope=domestic|overseas로 시장을 좁힐 수 있고, 기본값 all은 국내/해외를 구분 없이 섞어 정렬한다."
+            + "종합점수 내림차순으로 조회한다. scope=domestic|overseas로 시장을 좁힐 수 있고, 기본값 all은 국내/해외를 "
+            + "구분 없이 섞어 정렬한다. 구독중(status=ACTIVE)이 아니면 403(SUB_006)."
     )
     @ApiResponse(useReturnTypeSchema = true)
     public ResponseEntity<List<ScoreRankingResponse>> getDashboardScores(
@@ -55,12 +62,18 @@ public class ScoreController {
         @RequestParam(defaultValue = "all")
         @Pattern(regexp = "all|domestic|overseas", message = "scope는 all, domestic, overseas 중 하나여야 합니다.") String scope,
         @OptionalLoginUser Long userId) {
+        requirePremium(userId);
+        // requirePremium을 통과했다는 건 userId != null이 이미 보장된다는
+        // 뜻이다(hasActivePremium(null)은 항상 false라 여기 도달 전에 403).
         if (watchlistOnly) {
-            if (userId == null) {
-                return ResponseEntity.ok(List.of());
-            }
             return ResponseEntity.ok(scoreService.getDashboardScores(userId, scope));
         }
         return ResponseEntity.ok(scoreService.getAllStocksScoreRanking(limit, scope));
+    }
+
+    private void requirePremium(Long userId) {
+        if (!subscriptionService.hasActivePremium(userId)) {
+            throw new ForbiddenException(SubscriptionErrorCode.PREMIUM_REQUIRED);
+        }
     }
 }

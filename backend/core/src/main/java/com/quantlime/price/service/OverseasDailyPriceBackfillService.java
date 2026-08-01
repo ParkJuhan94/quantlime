@@ -1,10 +1,9 @@
 package com.quantlime.price.service;
 
-import com.quantlime.common.exception.ExternalApiException;
+import com.quantlime.common.util.SleepUtil;
 import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.toss.dto.TossCandleResponse;
 import com.quantlime.infra.toss.dto.TossPriceMapper;
-import com.quantlime.infra.toss.exception.TossApiErrorCode;
 import com.quantlime.price.repository.OverseasDailyPriceRepository;
 import java.time.LocalDate;
 import java.util.List;
@@ -18,7 +17,7 @@ import org.springframework.stereotype.Service;
  * Toss `/api/v1/candles`가 처음부터 해외 티커를 지원한다는 게 확인되면서
  * (2026-07-29 세션, `toss-openapi.json` 교체 계기로 라이브 재검증) KIS
  * 연동을 걷어내고 국내와 동일한 count/before 커서 페이지네이션으로
- * 통일했다 - 구조는 {@link DailyPriceService}의 백필과 완전히 동일하고,
+ * 통일했다 - 구조는 {@link DomesticDailyPriceService}의 백필과 완전히 동일하고,
  * 차이는 저장 대상이 {@link com.quantlime.price.domain.OverseasDailyPrice}
  * (Double 가격)라는 점뿐이다.
  */
@@ -29,18 +28,17 @@ public class OverseasDailyPriceBackfillService {
 
     private static final int BACKFILL_PAGE_SIZE = 200;
     private static final long API_DELAY_MS = 150;
-    private static final long RATE_LIMIT_BACKOFF_MS = 3000;
 
     private final OverseasDailyPriceRepository overseasDailyPriceRepository;
     private final TossApiClient tossApiClient;
 
     /**
      * lookbackDays는 호출측({@link PriceGapFillService})이 "마지막 저장일부터
-     * 오늘까지의 실제 갭"만큼만 지정한다(DailyPriceService.collectDailyPrice와
+     * 오늘까지의 실제 갭"만큼만 지정한다(DomesticDailyPriceService.refreshRecent와
      * 동일한 의도).
      */
-    public void collectRecentPrices(String stockCode, int lookbackDays) {
-        TossCandleResponse response = fetchCandlesWithRetry(stockCode, lookbackDays, null);
+    public void refreshRecent(String stockCode, int lookbackDays) {
+        TossCandleResponse response = tossApiClient.getDailyCandles(stockCode, lookbackDays, null);
         List<TossCandleResponse.TossCandle> candles = response.result().candles();
         if (candles == null || candles.isEmpty()) {
             log.warn("해외 시세 데이터 없음: stockCode={}", stockCode);
@@ -57,7 +55,7 @@ public class OverseasDailyPriceBackfillService {
 
     /**
      * 외부 API 왕복과 딜레이가 여러 번 발생할 수 있어 전체를 하나의 트랜잭션으로
-     * 묶지 않는다(DailyPriceService.backfillHistoryIfNeeded와 동일한 이유).
+     * 묶지 않는다(DomesticDailyPriceService.backfillHistoryIfNeeded와 동일한 이유).
      */
     public void backfillHistoryIfNeeded(String stockCode, int targetDays) {
         long existingCount = overseasDailyPriceRepository.countByStockCode(stockCode);
@@ -73,7 +71,7 @@ public class OverseasDailyPriceBackfillService {
         int savedCount = 0;
 
         while (savedCount < targetDays) {
-            TossCandleResponse response = fetchCandlesWithRetry(stockCode, BACKFILL_PAGE_SIZE, cursor);
+            TossCandleResponse response = tossApiClient.getDailyCandles(stockCode, BACKFILL_PAGE_SIZE, cursor);
             List<TossCandleResponse.TossCandle> candles = response.result().candles();
             if (candles == null || candles.isEmpty()) {
                 break;
@@ -88,7 +86,8 @@ public class OverseasDailyPriceBackfillService {
             }
             cursor = response.result().nextBefore();
 
-            if (!sleepBeforeNextPage(stockCode)) {
+            if (!SleepUtil.sleepMillis(API_DELAY_MS)) {
+                log.warn("해외 이력 백필 중단: 인터럽트 발생, stockCode={}", stockCode);
                 return;
             }
         }
@@ -111,35 +110,5 @@ public class OverseasDailyPriceBackfillService {
             }
         }
         return saved;
-    }
-
-    private boolean sleepBeforeNextPage(String stockCode) {
-        try {
-            Thread.sleep(API_DELAY_MS);
-            return true;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            log.warn("해외 이력 백필 중단: 인터럽트 발생, stockCode={}", stockCode);
-            return false;
-        }
-    }
-
-    private TossCandleResponse fetchCandlesWithRetry(String stockCode, int count, String before) {
-        try {
-            return tossApiClient.getDailyCandles(stockCode, count, before);
-        } catch (ExternalApiException e) {
-            if (!TossApiErrorCode.RATE_LIMIT_EXCEEDED.getCode().equals(e.getCode())) {
-                throw e;
-            }
-            log.warn("Rate Limit 도달, {}ms 대기 후 1회 재시도: stockCode={}",
-                RATE_LIMIT_BACKOFF_MS, stockCode);
-            try {
-                Thread.sleep(RATE_LIMIT_BACKOFF_MS);
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                throw new ExternalApiException(TossApiErrorCode.RATE_LIMIT_EXCEEDED, interrupted);
-            }
-            return tossApiClient.getDailyCandles(stockCode, count, before);
-        }
     }
 }

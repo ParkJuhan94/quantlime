@@ -15,7 +15,7 @@ import {
 const DATE_COOKIE_NAME = 'videoFeedDate'
 const DATE_COOKIE_DAYS = 30
 
-// 조회 가능 범위(오늘~10일 전) 밖에 남아있던 예전 쿠키값이면 범위 안으로
+// 조회 가능 범위(오늘~14일 전) 밖에 남아있던 예전 쿠키값이면 범위 안으로
 // 당겨온다 - 서버 쪽 VideoRetentionScheduler가 그보다 오래된 데이터를
 // 실제로 지우기 때문에, 범위 밖 날짜를 그대로 쓰면 항상 빈 목록만 보인다.
 function initialDate(): string {

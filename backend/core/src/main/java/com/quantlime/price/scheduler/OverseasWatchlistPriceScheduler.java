@@ -4,10 +4,10 @@ import com.quantlime.common.exception.ExternalApiException;
 import com.quantlime.common.util.SafeExecutor;
 import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.toss.dto.TossPriceResponse;
-import com.quantlime.price.cache.OverseasPreviousCloseCache;
-import com.quantlime.price.cache.OverseasWatchlistedStockCodeCache;
+import com.quantlime.price.cache.PreviousCloseCache;
 import com.quantlime.price.cache.PriceCacheStore;
-import com.quantlime.price.cache.UsMarketCalendarCache;
+import com.quantlime.price.cache.WatchlistedStockCodeCache;
+import com.quantlime.price.cache.OverseasMarketCalendarCache;
 import com.quantlime.price.dto.response.PriceSnapshot;
 import com.quantlime.price.util.ChangeRateCalculator;
 import java.util.List;
@@ -23,7 +23,7 @@ import org.springframework.util.StringUtils;
 /**
  * 해외(NASDAQ/NYSE) 관심종목의 실시간가를 폴링해 Redis({@link PriceCacheStore})에
  * 적재하고 즉시 STOMP로 브로드캐스트한다. 국내
- * ({@code MarketPriceSweepScheduler} + {@code WatchlistPriceRelayScheduler})와
+ * ({@code DomesticMarketPriceSweepScheduler} + {@code DomesticWatchlistPriceRelayScheduler})와
  * 달리 "스윕(전종목)"과 "릴레이(캐시 중계)"를 분리하지 않고 한 스케줄러가
  * 둘 다 한다 - 해외는 전종목 스윕 자체가 없고(랭킹은
  * {@code TossMarketRankingCache}가 전담), 관심종목만 대상이라 규모가
@@ -42,9 +42,16 @@ public class OverseasWatchlistPriceScheduler {
     private static final String PRICE_TOPIC_PREFIX = "/topic/price/";
     private static final int TOSS_BATCH_SIZE = 200;
 
-    private final UsMarketCalendarCache usMarketCalendarCache;
-    private final OverseasWatchlistedStockCodeCache overseasWatchlistedStockCodeCache;
-    private final OverseasPreviousCloseCache overseasPreviousCloseCache;
+    private final OverseasMarketCalendarCache overseasMarketCalendarCache;
+    // 필드명이 PriceCacheConfig의 @Bean 메서드명과 일치해야 Spring이 같은
+    // 타입(WatchlistedStockCodeCache)의 두 Bean 중 이걸 고른다(By-Name
+    // 디스앰비규에이션).
+    private final WatchlistedStockCodeCache overseasWatchlistedStockCodeCache;
+    // 필드명이 PriceCacheConfig의 @Bean 메서드명(overseasPreviousCloseCache)과
+    // 일치해야 Spring이 같은 타입(PreviousCloseCache)의 두 Bean 중 이걸
+    // 고른다(MarketDataRefreshTaskExecutorConfig의 TaskExecutor 2개와
+    // 동일한 By-Name 디스앰비규에이션 관례 - @Qualifier 없이도 동작).
+    private final PreviousCloseCache overseasPreviousCloseCache;
     private final TossApiClient tossApiClient;
     private final PriceCacheStore priceCacheStore;
     private final SimpMessagingTemplate messagingTemplate;
@@ -55,7 +62,7 @@ public class OverseasWatchlistPriceScheduler {
     }
 
     private void refreshOnce() {
-        if (!usMarketCalendarCache.isMarketOpenNow()) {
+        if (!overseasMarketCalendarCache.isMarketOpenNow()) {
             return;
         }
 
@@ -94,7 +101,7 @@ public class OverseasWatchlistPriceScheduler {
         }
         Double currentPrice = parseLastPrice(price.lastPrice());
         if (currentPrice == null) {
-            // 국내 스윕(MarketPriceSweepScheduler)과 동일한 설계 철학 -
+            // 국내 스윕(DomesticMarketPriceSweepScheduler)과 동일한 설계 철학 -
             // 해당 종목만 스킵하고 나머지는 계속 처리한다.
             log.warn("해외 현재가 파싱 실패로 해당 종목만 스킵: symbol={}, lastPrice={}",
                 price.symbol(), price.lastPrice());

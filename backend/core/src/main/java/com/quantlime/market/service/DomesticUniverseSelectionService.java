@@ -1,8 +1,8 @@
 package com.quantlime.market.service;
 
-import com.quantlime.price.dto.StockTradingValue;
-import com.quantlime.price.repository.DailyPriceRepository;
-import com.quantlime.price.service.DailyPriceService;
+import com.quantlime.price.dto.DomesticStockTradingValue;
+import com.quantlime.price.repository.DomesticDailyPriceRepository;
+import com.quantlime.price.service.DomesticDailyPriceService;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.StockMasterService;
 import java.time.LocalDate;
@@ -38,8 +38,8 @@ public class DomesticUniverseSelectionService {
     private static final int UNIVERSE_SIZE = 500;
 
     private final StockMasterService stockMasterService;
-    private final DailyPriceService dailyPriceService;
-    private final DailyPriceRepository dailyPriceRepository;
+    private final DomesticDailyPriceService domesticDailyPriceService;
+    private final DomesticDailyPriceRepository domesticDailyPriceRepository;
 
     /**
      * 1차: REIT 제외 전 상장종목의 최근 60거래일을 백필한다(이미 충분하면
@@ -55,8 +55,8 @@ public class DomesticUniverseSelectionService {
         backfillEach(candidates.stream().map(Stock::getStockCode).toList(), SCAN_TARGET_DAYS);
 
         LocalDate since = LocalDate.now().minusMonths(3);
-        List<StockTradingValue> ranked = dailyPriceRepository.findTopByTradingValue(since, UNIVERSE_SIZE);
-        List<String> selected = ranked.stream().map(StockTradingValue::stockCode).toList();
+        List<DomesticStockTradingValue> ranked = domesticDailyPriceRepository.findTopByTradingValue(since, UNIVERSE_SIZE);
+        List<String> selected = ranked.stream().map(DomesticStockTradingValue::stockCode).toList();
         log.info("거래대금 상위 {}종목 선정 완료(기준일 {} 이후)", selected.size(), since);
 
         backfillEach(selected, UNIVERSE_TARGET_DAYS);
@@ -67,7 +67,7 @@ public class DomesticUniverseSelectionService {
     private void backfillEach(List<String> stockCodes, int targetDays) {
         for (String stockCode : stockCodes) {
             try {
-                dailyPriceService.backfillHistoryIfNeeded(stockCode, targetDays);
+                domesticDailyPriceService.backfillHistoryIfNeeded(stockCode, targetDays);
             } catch (Exception e) {
                 log.error("유니버스 백필 실패: stockCode={}, targetDays={}, error={}",
                     stockCode, targetDays, e.getMessage(), e);

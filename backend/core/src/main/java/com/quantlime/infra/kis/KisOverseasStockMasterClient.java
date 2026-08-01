@@ -20,9 +20,10 @@ import org.springframework.web.client.RestClient;
  * KIS 해외주식 종목정보 마스터파일(예: {@code nasmst.cod.zip}) 다운로드·파싱.
  * 문서화된 JSON API가 아니라 zip 압축된 CP949 탭 구분 텍스트 파일이다
  * (실제 다운로드로 확인 - KIND 상장법인목록이 HTML 테이블이었던 것과 같은
- * 종류의 "비-JSON 정적 파일" 연동). 24개 컬럼 중 유니버스 선정에 필요한
- * 종목코드(5번째)·영문종목명(8번째)·종목구분(9번째, 1:지수/2:주식/
- * 3:ETP·ETF/4:Warrant)·업종코드(20번째, REIT/부동산 제외 판단용)만 사용한다.
+ * 종류의 "비-JSON 정적 파일" 연동). 24개 컬럼 중 유니버스 선정 및 표시에
+ * 필요한 종목코드(5번째)·한글종목명(7번째)·영문종목명(8번째)·
+ * 종목구분(9번째, 1:지수/2:주식/3:ETP·ETF/4:Warrant)·업종코드(20번째,
+ * REIT/부동산 제외 판단용)만 사용한다.
  */
 @Component
 @RequiredArgsConstructor
@@ -30,6 +31,7 @@ public class KisOverseasStockMasterClient {
 
     private static final Charset MASTER_FILE_CHARSET = Charset.forName("CP949");
     private static final int COLUMN_SYMBOL = 4;
+    private static final int COLUMN_KOREAN_NAME = 6;
     private static final int COLUMN_ENGLISH_NAME = 7;
     private static final int COLUMN_SECURITY_TYPE = 8;
     private static final int COLUMN_INDUSTRY_CODE = 19;
@@ -77,6 +79,7 @@ public class KisOverseasStockMasterClient {
         }
         return Optional.of(new KisOverseasStockMasterEntry(
             columns[COLUMN_SYMBOL].trim(),
+            columns[COLUMN_KOREAN_NAME].trim(),
             columns[COLUMN_ENGLISH_NAME].trim(),
             columns[COLUMN_SECURITY_TYPE].trim(),
             columns[COLUMN_INDUSTRY_CODE].trim()));

@@ -77,7 +77,7 @@ public class FeedCollectionAdminController {
 
     @PostMapping("/retention/cleanup")
     @Operation(summary = "보존 기간 초과 영상 데이터 수동 정리",
-        description = "발행일이 보존 기간(10일)을 초과한 영상+자막+요약+태깅종목을 즉시 삭제한다. "
+        description = "발행일이 보존 기간(14일)을 초과한 영상+자막+요약+태깅종목을 즉시 삭제한다. "
             + "정규 스케줄러(매일 새벽 3시)가 이미 실행 중이면 거절된다")
     @ApiResponse(useReturnTypeSchema = true)
     public ResponseEntity<Integer> cleanupRetention() {

@@ -1,9 +1,9 @@
 package com.quantlime.market.service;
 
-import com.quantlime.market.cache.MarketRankingCache;
+import com.quantlime.market.cache.DomesticMarketRankingCache;
 import com.quantlime.market.cache.TossMarketRankingCache;
 import com.quantlime.market.dto.response.MarketRankingResponse;
-import com.quantlime.price.cache.OverseasPreviousCloseCache;
+import com.quantlime.price.cache.PreviousCloseCache;
 import com.quantlime.price.cache.PriceCacheStore;
 import com.quantlime.price.dto.response.PriceSnapshot;
 import com.quantlime.stock.domain.ListingStatus;
@@ -35,7 +35,7 @@ import static org.mockito.Mockito.verify;
 class MarketRankingServiceTest {
 
     @Mock
-    private MarketRankingCache marketRankingCache;
+    private DomesticMarketRankingCache domesticMarketRankingCache;
 
     @Mock
     private TossMarketRankingCache tossMarketRankingCache;
@@ -47,7 +47,7 @@ class MarketRankingServiceTest {
     private PriceCacheStore priceCacheStore;
 
     @Mock
-    private OverseasPreviousCloseCache overseasPreviousCloseCache;
+    private PreviousCloseCache overseasPreviousCloseCache;
 
     @InjectMocks
     private MarketRankingService marketRankingService;
@@ -64,7 +64,7 @@ class MarketRankingServiceTest {
 
         // then
         assertThat(result).extracting(MarketRankingResponse::stockCode).containsExactly("005930");
-        verify(marketRankingCache, never()).getGainers(anyInt(), any());
+        verify(domesticMarketRankingCache, never()).getGainers(anyInt(), any());
     }
 
     @Test
@@ -72,7 +72,7 @@ class MarketRankingServiceTest {
     void getRanking_domesticWatchlistOnlyGainers_usesMarketRankingCache() {
         // given
         Set<String> watchlistCodes = Set.of("005930");
-        given(marketRankingCache.getGainers(10, watchlistCodes)).willReturn(
+        given(domesticMarketRankingCache.getGainers(10, watchlistCodes)).willReturn(
             List.of(ranking("005930", 3.0)));
 
         // when
@@ -89,7 +89,7 @@ class MarketRankingServiceTest {
     void getRanking_domesticWatchlistOnlyLosers_usesMarketRankingCacheLosers() {
         // given
         Set<String> watchlistCodes = Set.of("035420");
-        given(marketRankingCache.getLosers(10, watchlistCodes)).willReturn(
+        given(domesticMarketRankingCache.getLosers(10, watchlistCodes)).willReturn(
             List.of(ranking("035420", -3.0)));
 
         // when
@@ -160,7 +160,7 @@ class MarketRankingServiceTest {
 
     private MarketRankingResponse ranking(String stockCode, double changeRate) {
         return new MarketRankingResponse(stockCode, stockCode + "-name", "전기전자",
-            10000.0, changeRate, "KRW", null, null);
+            10000.0, changeRate, "KRW", null, null, null, true);
     }
 
     private Stock overseasStock(String stockCode, String stockName) {

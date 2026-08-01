@@ -1,5 +1,6 @@
 import type { StockDetailResponse } from '../../types/stock'
 import { StockLogo } from '../common/StockLogo'
+import { currencyForMarketType } from '../../utils/priceFormat'
 
 interface SearchResultItemProps {
   stock: StockDetailResponse
@@ -11,7 +12,12 @@ export function SearchResultItem({ stock, disabled, onAdd }: SearchResultItemPro
   return (
     <li className="flex items-center justify-between px-3 py-2 hover:bg-gray-50">
       <div className="flex items-center gap-3">
-        <StockLogo logoUrl={stock.logoUrl} stockName={stock.stockName} className="h-8 w-8" />
+        <StockLogo
+          logoUrl={stock.logoUrl}
+          stockName={stock.stockName}
+          overseas={currencyForMarketType(stock.marketType) === 'USD'}
+          className="h-8 w-8"
+        />
         <div>
           <p className="font-medium text-gray-900">{stock.stockName}</p>
           <p className="text-xs text-gray-500">

@@ -2,7 +2,7 @@ package com.quantlime.watchlist.service;
 
 import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.common.exception.ValidationException;
-import com.quantlime.price.service.DailyPriceService;
+import com.quantlime.price.service.DomesticDailyPriceService;
 import com.quantlime.score.service.ScoreService;
 import com.quantlime.stock.StockFixture;
 import com.quantlime.stock.domain.Stock;
@@ -53,7 +53,7 @@ class WatchlistServiceTest {
     private WatchlistGroupService watchlistGroupService;
 
     @Mock
-    private DailyPriceService dailyPriceService;
+    private DomesticDailyPriceService domesticDailyPriceService;
 
     @Mock
     private ScoreService scoreService;
@@ -173,7 +173,7 @@ class WatchlistServiceTest {
         watchlistService.addWatchlist(userId, stockCode, groupId);
 
         // then
-        verify(dailyPriceService).backfillHistoryIfNeeded(stockCode);
+        verify(domesticDailyPriceService).backfillHistoryIfNeeded(stockCode);
     }
 
     @Test
@@ -191,7 +191,7 @@ class WatchlistServiceTest {
         given(watchlistRepository.save(org.mockito.ArgumentMatchers.any(Watchlist.class)))
             .willAnswer(invocation -> invocation.getArgument(0));
         willThrow(new RuntimeException("토스 API 장애"))
-            .given(dailyPriceService).backfillHistoryIfNeeded(stockCode);
+            .given(domesticDailyPriceService).backfillHistoryIfNeeded(stockCode);
 
         // when
         Watchlist result = watchlistService.addWatchlist(userId, stockCode, groupId);

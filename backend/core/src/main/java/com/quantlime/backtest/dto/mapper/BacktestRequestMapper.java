@@ -3,7 +3,7 @@ package com.quantlime.backtest.dto.mapper;
 import com.quantlime.infra.python.dto.BacktestApiRequest;
 import com.quantlime.infra.python.dto.BacktestApiRequest.OhlcvApiItem;
 import com.quantlime.market.domain.BenchmarkIndex;
-import com.quantlime.price.domain.DailyPrice;
+import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
 import java.util.List;
 import lombok.NoArgsConstructor;
@@ -14,10 +14,10 @@ import static lombok.AccessLevel.PRIVATE;
 public final class BacktestRequestMapper {
 
     public static BacktestApiRequest toBacktestApiRequest(
-        String stockCode, List<DailyPrice> dailyPrices, List<BenchmarkIndex> benchmarkPrices) {
+        String stockCode, List<DomesticDailyPrice> domesticDailyPrices, List<BenchmarkIndex> benchmarkPrices) {
         return new BacktestApiRequest(
             stockCode,
-            dailyPrices.stream().map(BacktestRequestMapper::toOhlcvApiItem).toList(),
+            domesticDailyPrices.stream().map(BacktestRequestMapper::toOhlcvApiItem).toList(),
             benchmarkPrices.stream().map(BacktestRequestMapper::toOhlcvApiItem).toList()
         );
     }
@@ -44,14 +44,14 @@ public final class BacktestRequestMapper {
         );
     }
 
-    private static OhlcvApiItem toOhlcvApiItem(DailyPrice dailyPrice) {
+    private static OhlcvApiItem toOhlcvApiItem(DomesticDailyPrice domesticDailyPrice) {
         return new OhlcvApiItem(
-            dailyPrice.getTradeDate().toString(),
-            dailyPrice.getOpenPrice(),
-            dailyPrice.getHighPrice(),
-            dailyPrice.getLowPrice(),
-            dailyPrice.getClosePrice(),
-            dailyPrice.getVolume()
+            domesticDailyPrice.getTradeDate().toString(),
+            domesticDailyPrice.getOpenPrice(),
+            domesticDailyPrice.getHighPrice(),
+            domesticDailyPrice.getLowPrice(),
+            domesticDailyPrice.getClosePrice(),
+            domesticDailyPrice.getVolume()
         );
     }
 

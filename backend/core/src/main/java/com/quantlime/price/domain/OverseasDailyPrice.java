@@ -18,10 +18,10 @@ import org.springframework.util.Assert;
 import static lombok.AccessLevel.PROTECTED;
 
 /**
- * 해외주식(NASDAQ/NYSE) 일별 OHLCV. {@link DailyPrice}와 별도 엔티티로 둔
+ * 해외주식(NASDAQ/NYSE) 일별 OHLCV. {@link DomesticDailyPrice}와 별도 엔티티로 둔
  * 이유: 국내 원화는 정수 단위(Long)가 자연스럽지만 미국 달러 가격은
  * 소수점 단위(예: $317.31)라 Long 컬럼에 그대로 담으면 소수점이 잘려
- * 백테스트 수익률·거래대금 계산이 오염된다. 기존 DailyPrice의 컬럼
+ * 백테스트 수익률·거래대금 계산이 오염된다. 기존 DomesticDailyPrice의 컬럼
  * 타입을 바꾸면 국내 스코어링·차트 등 기존 호출부 전체에 영향이 커
  * (CLAUDE.md "기존 코드 변경 범위 원칙"), 대신 신규 엔티티로 분리했다.
  */
@@ -45,7 +45,7 @@ public class OverseasDailyPrice extends TimeBaseEntity {
     @Column(name = "overseas_daily_price_id")
     private Long id;
 
-    @Column(name = "stock_code", nullable = false, length = 6)
+    @Column(name = "stock_code", nullable = false, length = 10)
     private String stockCode;
 
     @Column(name = "trade_date", nullable = false)

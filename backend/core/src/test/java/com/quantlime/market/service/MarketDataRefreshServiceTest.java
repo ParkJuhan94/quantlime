@@ -8,10 +8,11 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.quantlime.common.exception.ExternalApiException;
+import com.quantlime.common.lock.RedisLockService;
 import com.quantlime.infra.toss.exception.TossApiErrorCode;
-import com.quantlime.price.domain.DailyPrice;
+import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
-import com.quantlime.price.repository.DailyPriceRepository;
+import com.quantlime.price.repository.DomesticDailyPriceRepository;
 import com.quantlime.price.repository.OverseasDailyPriceRepository;
 import com.quantlime.price.service.PriceGapFillService;
 import com.quantlime.score.domain.Score;
@@ -20,10 +21,13 @@ import com.quantlime.score.service.ScoreService;
 import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
+import com.quantlime.stock.service.OverseasStockMasterSyncService;
 import com.quantlime.stock.service.StockMasterService;
+import com.quantlime.stock.service.StockMasterSyncService;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -48,7 +52,13 @@ class MarketDataRefreshServiceTest {
     private StockMasterService stockMasterService;
 
     @Mock
-    private DailyPriceRepository dailyPriceRepository;
+    private StockMasterSyncService stockMasterSyncService;
+
+    @Mock
+    private OverseasStockMasterSyncService overseasStockMasterSyncService;
+
+    @Mock
+    private DomesticDailyPriceRepository domesticDailyPriceRepository;
 
     @Mock
     private OverseasDailyPriceRepository overseasDailyPriceRepository;
@@ -69,6 +79,9 @@ class MarketDataRefreshServiceTest {
     private InvestorTradingBackfillService investorTradingBackfillService;
 
     @Mock
+    private RedisLockService redisLockService;
+
+    @Mock
     private TaskExecutor domesticMarketDataRefreshTaskExecutor;
 
     @Mock
@@ -82,10 +95,25 @@ class MarketDataRefreshServiceTest {
     @BeforeEach
     void setUp() {
         marketDataRefreshService = new MarketDataRefreshService(
-            stockMasterService, dailyPriceRepository, overseasDailyPriceRepository,
+            stockMasterService, stockMasterSyncService, overseasStockMasterSyncService,
+            domesticDailyPriceRepository, overseasDailyPriceRepository,
             scoreRepository, priceGapFillService, scoreService,
-            benchmarkIndexBackfillService, investorTradingBackfillService,
+            benchmarkIndexBackfillService, investorTradingBackfillService, redisLockService,
             domesticMarketDataRefreshTaskExecutor, overseasMarketDataRefreshTaskExecutor);
+    }
+
+    /**
+     * redisLockService.runExclusively(key, ttl, task)가 실제로 락을 잡은
+     * 것처럼 task를 즉시 실행하도록 스텁한다 - refreshAllExclusively()가
+     * refreshAll()을 제대로 감싸 호출하는지만 검증하면 되고, 실제 Redis
+     * SETNX 동작 자체는 RedisLockService 자체 테스트의 책임이다.
+     */
+    private void stubLockToRunTask() {
+        given(redisLockService.runExclusively(any(), any(), any()))
+            .willAnswer(invocation -> {
+                Supplier<Boolean> task = invocation.getArgument(2);
+                return Optional.of(task.get());
+            });
     }
 
     /**
@@ -114,8 +142,8 @@ class MarketDataRefreshServiceTest {
         given(stockMasterService.getAllListedStocks()).willReturn(List.of(domestic, overseas));
 
         LocalDate today = LocalDate.now();
-        given(dailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(DOMESTIC_CODE))
-            .willReturn(Optional.of(dailyPrice(today)));
+        given(domesticDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(DOMESTIC_CODE))
+            .willReturn(Optional.of(domesticDailyPrice(today)));
         given(overseasDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(OVERSEAS_CODE))
             .willReturn(Optional.of(overseasDailyPrice(today)));
         // 국내는 스코어가 가격 최신일보다 뒤처져 재계산 대상, 해외는 이미 최신이라 제외
@@ -128,6 +156,8 @@ class MarketDataRefreshServiceTest {
         marketDataRefreshService.refreshAll();
 
         // then
+        verify(stockMasterSyncService).syncStockMaster();
+        verify(overseasStockMasterSyncService).syncAll();
         verify(priceGapFillService).fillDomesticGap(DOMESTIC_CODE);
         verify(priceGapFillService).fillOverseasGap(OVERSEAS_CODE);
 
@@ -184,7 +214,7 @@ class MarketDataRefreshServiceTest {
         // given
         Stock domestic = Stock.of(DOMESTIC_CODE, "삼성전자", MarketType.KOSPI, ListingStatus.LISTED, "전기전자");
         given(stockMasterService.getStockByCode(DOMESTIC_CODE)).willReturn(domestic);
-        given(dailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(DOMESTIC_CODE))
+        given(domesticDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(DOMESTIC_CODE))
             .willReturn(Optional.empty());
 
         // when
@@ -251,8 +281,41 @@ class MarketDataRefreshServiceTest {
         verify(stockMasterService, never()).markPriceUnsupported(any());
     }
 
-    private DailyPrice dailyPrice(LocalDate tradeDate) {
-        return DailyPrice.of(DOMESTIC_CODE, tradeDate, 70000L, 71000L, 69000L, 70500L, 1000000L);
+    @Test
+    @DisplayName("[refreshAllExclusively는 락을 잡은 채로 refreshAll()을 실행한다]")
+    void refreshAllExclusively_runsRefreshAllInsideLock() {
+        // given
+        stubLockToRunTask();
+        stubExecutorsToRunSynchronously();
+        given(stockMasterService.getAllListedStocks()).willReturn(List.of());
+
+        // when
+        Optional<Boolean> result = marketDataRefreshService.refreshAllExclusively();
+
+        // then
+        org.assertj.core.api.Assertions.assertThat(result).contains(Boolean.TRUE);
+        verify(stockMasterSyncService).syncStockMaster();
+        verify(overseasStockMasterSyncService).syncAll();
+    }
+
+    @Test
+    @DisplayName("[refreshAllExclusively는 이미 다른 실행이 락을 쥐고 있으면 refreshAll()을 실행하지 않는다 - "
+        + "OhlcvCollectorScheduler(16:00)와 StartupCatchUpRunner(기동 시)가 겹칠 때 동시 실행을 막는다]")
+    void refreshAllExclusively_lockHeld_doesNotRunRefreshAll() {
+        // given
+        given(redisLockService.runExclusively(any(), any(), any())).willReturn(Optional.empty());
+
+        // when
+        Optional<Boolean> result = marketDataRefreshService.refreshAllExclusively();
+
+        // then
+        org.assertj.core.api.Assertions.assertThat(result).isEmpty();
+        verify(stockMasterSyncService, never()).syncStockMaster();
+        verify(stockMasterService, never()).getAllListedStocks();
+    }
+
+    private DomesticDailyPrice domesticDailyPrice(LocalDate tradeDate) {
+        return DomesticDailyPrice.of(DOMESTIC_CODE, tradeDate, 70000L, 71000L, 69000L, 70500L, 1000000L);
     }
 
     private OverseasDailyPrice overseasDailyPrice(LocalDate tradeDate) {

@@ -79,4 +79,14 @@ export interface MarketRankingResponse {
   currency: 'KRW' | 'USD' | null
   tradingVolume: number | null
   tradingAmount: number | null
+  // 로컬 stock 테이블에 있는 종목만 채워짐(나스닥은 .O 접미사가 붙어야
+  // 해서 종목코드만으로 프론트가 직접 조립할 수 없다 - 백엔드
+  // StockMapper.toLogoUrl 참고) - null이면 buildStockLogoUrl로 폴백.
+  logoUrl: string | null
+  // 2026-08-01 추가 - 로컬 stock 테이블에 이 종목이 있는지 여부. 국내는
+  // 항상 true(백엔드가 이미 없는 심볼을 걸러냄), 해외만 false가 나올 수
+  // 있다. false면 상세페이지 진입/관심종목 등록 둘 다 404가 나므로
+  // 프론트에서 막는다(logoUrl === null과는 의미가 다름 - 로고는 종목이
+  // 있어도 없을 수 있음).
+  detailAvailable: boolean
 }

@@ -8,7 +8,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  * 09:00~15:30)/afterMarket(NXT 애프터마켓, 15:30~20:00) 3개 세션을 준다.
  * 실제 스펙엔 previousBusinessDay/nextBusinessDay,
  * singlePriceAuctionStartTime 등 더 많은 필드가 있지만, 장중 판별
- * (MarketCalendarCache)에 필요한 today.integrated의 3개 세션만
+ * (DomesticMarketCalendarCache)에 필요한 today.integrated의 3개 세션만
  * 모델링하고 나머지는 무시한다. 휴장일에는 today.integrated 자체가
  * null로 내려온다.
  */

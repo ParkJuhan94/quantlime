@@ -4,10 +4,10 @@ import com.quantlime.common.exception.ExternalApiException;
 import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.toss.dto.TossPriceResponse;
 import com.quantlime.infra.toss.exception.TossApiErrorCode;
-import com.quantlime.price.cache.OverseasPreviousCloseCache;
-import com.quantlime.price.cache.OverseasWatchlistedStockCodeCache;
+import com.quantlime.price.cache.PreviousCloseCache;
 import com.quantlime.price.cache.PriceCacheStore;
-import com.quantlime.price.cache.UsMarketCalendarCache;
+import com.quantlime.price.cache.OverseasMarketCalendarCache;
+import com.quantlime.price.cache.WatchlistedStockCodeCache;
 import com.quantlime.price.dto.response.PriceSnapshot;
 import java.util.List;
 import java.util.Map;
@@ -38,13 +38,13 @@ class OverseasWatchlistPriceSchedulerTest {
     private static final String STOCK_CODE = "AAPL";
 
     @Mock
-    private UsMarketCalendarCache usMarketCalendarCache;
+    private OverseasMarketCalendarCache overseasMarketCalendarCache;
 
     @Mock
-    private OverseasWatchlistedStockCodeCache overseasWatchlistedStockCodeCache;
+    private WatchlistedStockCodeCache overseasWatchlistedStockCodeCache;
 
     @Mock
-    private OverseasPreviousCloseCache overseasPreviousCloseCache;
+    private PreviousCloseCache overseasPreviousCloseCache;
 
     @Mock
     private TossApiClient tossApiClient;
@@ -62,7 +62,7 @@ class OverseasWatchlistPriceSchedulerTest {
     @DisplayName("[미국장이 닫혀 있으면 관심종목 조회도 하지 않고 스킵한다]")
     void refresh_marketClosed_skipsEntirely() {
         // given
-        given(usMarketCalendarCache.isMarketOpenNow()).willReturn(false);
+        given(overseasMarketCalendarCache.isMarketOpenNow()).willReturn(false);
 
         // when
         overseasWatchlistPriceScheduler.refreshAndBroadcast();
@@ -76,7 +76,7 @@ class OverseasWatchlistPriceSchedulerTest {
     @DisplayName("[해외 관심종목이 없으면 Toss를 호출하지 않는다]")
     void refresh_emptyWatchlist_skipsTossCall() {
         // given
-        given(usMarketCalendarCache.isMarketOpenNow()).willReturn(true);
+        given(overseasMarketCalendarCache.isMarketOpenNow()).willReturn(true);
         given(overseasWatchlistedStockCodeCache.get()).willReturn(List.of());
 
         // when
@@ -90,7 +90,7 @@ class OverseasWatchlistPriceSchedulerTest {
     @DisplayName("[Toss 현재가 조회 성공 시 전일종가 대비 등락률을 계산해 캐시에 저장하고 브로드캐스트한다]")
     void refresh_success_savesAndBroadcastsWithChangeRate() {
         // given: 340 -> 341.43은 약 +0.42%
-        given(usMarketCalendarCache.isMarketOpenNow()).willReturn(true);
+        given(overseasMarketCalendarCache.isMarketOpenNow()).willReturn(true);
         given(overseasWatchlistedStockCodeCache.get()).willReturn(List.of(STOCK_CODE));
         given(overseasPreviousCloseCache.get(List.of(STOCK_CODE))).willReturn(Map.of(STOCK_CODE, 340.0));
         given(tossApiClient.getCurrentPrices(STOCK_CODE)).willReturn(
@@ -114,7 +114,7 @@ class OverseasWatchlistPriceSchedulerTest {
     @DisplayName("[전일종가가 없으면 등락률 null로 저장하되 현재가는 그대로 캐시한다]")
     void refresh_noPreviousClose_savesWithNullChangeRate() {
         // given
-        given(usMarketCalendarCache.isMarketOpenNow()).willReturn(true);
+        given(overseasMarketCalendarCache.isMarketOpenNow()).willReturn(true);
         given(overseasWatchlistedStockCodeCache.get()).willReturn(List.of(STOCK_CODE));
         given(overseasPreviousCloseCache.get(List.of(STOCK_CODE))).willReturn(Map.of());
         given(tossApiClient.getCurrentPrices(STOCK_CODE)).willReturn(
@@ -134,7 +134,7 @@ class OverseasWatchlistPriceSchedulerTest {
     @DisplayName("[Toss 조회가 실패해도 예외가 전파되지 않는다(다음 틱에 재시도)]")
     void refresh_tossCallFails_doesNotPropagate() {
         // given
-        given(usMarketCalendarCache.isMarketOpenNow()).willReturn(true);
+        given(overseasMarketCalendarCache.isMarketOpenNow()).willReturn(true);
         given(overseasWatchlistedStockCodeCache.get()).willReturn(List.of(STOCK_CODE));
         given(overseasPreviousCloseCache.get(List.of(STOCK_CODE))).willReturn(Map.of(STOCK_CODE, 340.0));
         given(tossApiClient.getCurrentPrices(STOCK_CODE))

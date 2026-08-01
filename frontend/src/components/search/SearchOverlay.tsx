@@ -4,6 +4,7 @@ import { useStockSearch } from '../../hooks/queries/useStockSearch'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { searchHistoryStorage } from '../../storage/searchHistoryStorage'
 import { StockLogo } from '../common/StockLogo'
+import { currencyForMarketType } from '../../utils/priceFormat'
 import { usePopularStocksQuery } from '../../hooks/queries/usePopularStocks'
 import type { StockDetailResponse } from '../../types/stock'
 import { useAuth } from '../../auth/useAuth'
@@ -207,7 +208,12 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                     onClick={() => goToStock(stock.stockCode, stock.stockName)}
                     className="flex flex-1 items-center gap-3 px-2 py-2 text-left"
                   >
-                    <StockLogo logoUrl={stock.logoUrl} stockName={stock.stockName} className="h-7 w-7" />
+                    <StockLogo
+                      logoUrl={stock.logoUrl}
+                      stockName={stock.stockName}
+                      overseas={currencyForMarketType(stock.marketType) === 'USD'}
+                      className="h-7 w-7"
+                    />
                     <span className="text-sm font-medium text-gray-900">{stock.stockName}</span>
                     <span className="text-xs text-gray-400">{stock.stockCode}</span>
                   </button>
@@ -279,7 +285,12 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                         className="flex flex-1 items-center gap-3 px-2 py-1.5 text-left"
                       >
                         <span className="w-3.5 text-xs font-semibold text-gray-300">{index + 1}</span>
-                        <StockLogo logoUrl={stock.logoUrl} stockName={stock.stockName} className="h-6 w-6" />
+                        <StockLogo
+                          logoUrl={stock.logoUrl}
+                          stockName={stock.stockName}
+                          overseas={currencyForMarketType(stock.marketType) === 'USD'}
+                          className="h-6 w-6"
+                        />
                         <span className="text-sm font-medium text-gray-900">{stock.stockName}</span>
                       </button>
                       {isAuthenticated && (

@@ -15,10 +15,10 @@ import com.quantlime.infra.python.dto.BacktestApiRequest;
 import com.quantlime.infra.python.dto.BacktestApiResponse;
 import com.quantlime.market.domain.BenchmarkIndex;
 import com.quantlime.market.repository.BenchmarkIndexRepository;
-import com.quantlime.price.domain.DailyPrice;
+import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.price.repository.OverseasDailyPriceRepository;
-import com.quantlime.price.service.DailyPriceService;
+import com.quantlime.price.service.DomesticDailyPriceService;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.StockMasterService;
@@ -60,7 +60,7 @@ public class BacktestService {
     );
 
     private final StockMasterService stockMasterService;
-    private final DailyPriceService dailyPriceService;
+    private final DomesticDailyPriceService domesticDailyPriceService;
     private final OverseasDailyPriceRepository overseasDailyPriceRepository;
     private final BenchmarkIndexRepository benchmarkIndexRepository;
     private final PythonEngineClient pythonEngineClient;
@@ -97,11 +97,11 @@ public class BacktestService {
 
     private BacktestApiRequest toDomesticRequest(
         String stockCode, LocalDate start, LocalDate end, List<BenchmarkIndex> benchmarkPrices) {
-        List<DailyPrice> dailyPrices = dailyPriceService.getDailyPrices(stockCode, start, end);
-        if (dailyPrices.isEmpty() || benchmarkPrices.isEmpty()) {
+        List<DomesticDailyPrice> domesticDailyPrices = domesticDailyPriceService.getDailyPrices(stockCode, start, end);
+        if (domesticDailyPrices.isEmpty() || benchmarkPrices.isEmpty()) {
             throw new ValidationException(BacktestErrorCode.INSUFFICIENT_HISTORY);
         }
-        return BacktestRequestMapper.toBacktestApiRequest(stockCode, dailyPrices, benchmarkPrices);
+        return BacktestRequestMapper.toBacktestApiRequest(stockCode, domesticDailyPrices, benchmarkPrices);
     }
 
     private BacktestApiRequest toOverseasRequest(

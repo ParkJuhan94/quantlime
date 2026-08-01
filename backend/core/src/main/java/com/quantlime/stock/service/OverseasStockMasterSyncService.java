@@ -12,11 +12,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
- * KIS 해외주식 종목정보 마스터파일로 해외 종목 마스터(현재는 NASDAQ/NYSE만,
- * CLAUDE.md 백테스트 계획 Phase A/C 참고)를 등록한다. 국내 KIND 동기화
- * (StockMasterSyncService)와 달리 상장폐지 감지는 하지 않는다(v1 스코프 -
- * 해외 유니버스는 거래대금 랭킹으로 매번 다시 뽑으므로, 사라진 종목은
- * 자연스럽게 다음 랭킹에서 제외될 뿐 별도 삭제 처리가 필요 없음).
+ * KIS 해외주식 종목정보 마스터파일로 해외 종목 마스터(NASDAQ/NYSE/AMEX,
+ * CLAUDE.md 백테스트 계획 Phase A/C 참고 - AMEX는 2026-08-01 추가)를
+ * 등록한다. 국내 KIND 동기화(StockMasterSyncService)와 달리 상장폐지
+ * 감지는 하지 않는다(v1 스코프 - 해외 유니버스는 거래대금 랭킹으로 매번
+ * 다시 뽑으므로, 사라진 종목은 자연스럽게 다음 랭킹에서 제외될 뿐 별도
+ * 삭제 처리가 필요 없음).
  */
 @Slf4j
 @Service
@@ -25,13 +26,18 @@ public class OverseasStockMasterSyncService {
 
     private static final Map<MarketType, String> EXCHANGE_CODE = Map.of(
         MarketType.NASDAQ, "nas",
-        MarketType.NYSE, "nys"
+        MarketType.NYSE, "nys",
+        MarketType.AMEX, "ams"
     );
-    // Stock.stockCode 컬럼이 국내 6자리 코드 기준 length=6이라, 이를 넘는
-    // 해외 심볼(예: SPAC 유닛 표기 "XFLH/UN")은 등록 대상에서 제외한다
-    // (실제 마스터파일 확인 결과 NYSE 기준 전체의 약 1.4%, 유동성 낮은
-    // 예외적 종목이라 국내 컬럼을 넓히는 것보다 스킵이 최소 침습적).
-    private static final int MAX_STOCK_CODE_LENGTH = 6;
+    // Stock.stockCode 컬럼이 length=10(2026-08-01 6→10 완화 - Score/
+    // DomesticDailyPrice/OverseasDailyPrice/BacktestDailyScore/BacktestResult도
+    // 동일하게 맞춤)이라, 이를 넘는 해외 심볼은 등록 대상에서 제외한다.
+    // 다만 "/"가 섞인 SPAC 유닛 표기(예: "XFLH/UN")는 길이를 늘려도 여전히
+    // 아래 TOSS_SYMBOL_PATTERN에 걸려 제외된다 - Toss API 자체가 "/"를
+    // 400으로 거부하는 실제 제약이라 로컬 컬럼 폭과 무관하다. 이번 완화의
+    // 실질 효과는 "/" 없이 순수하게 6자를 넘는 심볼이 새로 저장 가능해지는
+    // 것뿐이다.
+    private static final int MAX_STOCK_CODE_LENGTH = 10;
     // Toss 심볼 파라미터가 허용하는 문자 집합(toss-openapi.json의 symbols
     // 패턴과 동일) - "AAC/UN"·"ABR/F"처럼 "/"가 섞인 SPAC 유닛/우선주
     // 표기는 길이 제한(6자)만으로는 안 걸러지는데(둘 다 6자 이하), Toss가
@@ -72,7 +78,7 @@ public class OverseasStockMasterSyncService {
                 continue;
             }
             stockMasterService.registerStock(
-                entry.symbol(), entry.englishName(), marketType, entry.industryCode());
+                entry.symbol(), entry.englishName(), marketType, entry.industryCode(), entry.koreanName());
             registered++;
         }
         int markedUnsupported = markExistingInvalidFormatStocksUnsupported(marketType);

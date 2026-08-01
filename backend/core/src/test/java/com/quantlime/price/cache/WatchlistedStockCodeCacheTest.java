@@ -4,11 +4,11 @@ import com.quantlime.stock.domain.MarketType;
 import com.quantlime.watchlist.repository.WatchlistRepository;
 import java.time.Instant;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -18,6 +18,13 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+/**
+ * 생성자가 시장 범위(List&lt;MarketType&gt;)를 받는 구조라(2026-08-01
+ * 국내/해외 통합) @InjectMocks로 자동 주입할 수 없어 {@link #setUp}에서
+ * 직접 생성한다 - 국내(domesticValues())로 고정해도 캐싱 제어 흐름
+ * 검증에는 문제없다(해외 쪽 동작은 PriceCacheConfig의 Bean 등록만 다르고
+ * 이 클래스 자체 로직은 시장 무관).
+ */
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
 class WatchlistedStockCodeCacheTest {
@@ -25,8 +32,12 @@ class WatchlistedStockCodeCacheTest {
     @Mock
     private WatchlistRepository watchlistRepository;
 
-    @InjectMocks
     private WatchlistedStockCodeCache watchlistedStockCodeCache;
+
+    @BeforeEach
+    void setUp() {
+        watchlistedStockCodeCache = new WatchlistedStockCodeCache(watchlistRepository, MarketType.domesticValues());
+    }
 
     @Test
     @DisplayName("[첫 조회 시 DB를 조회해 캐싱한다]")

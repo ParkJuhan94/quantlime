@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { useStockSearch } from '../../hooks/queries/useStockSearch'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { StockLogo } from '../common/StockLogo'
+import { currencyForMarketType } from '../../utils/priceFormat'
 import { useAddWatchlist, useMoveWatchlistGroup } from '../../hooks/queries/useWatchlist'
 import type { WatchlistResponse } from '../../types/watchlist'
 
@@ -61,7 +62,12 @@ export function AddStockToGroupPopover({ groupId, watchlist, onClose }: AddStock
                   onClick={() => void handleSelect(stock.stockCode)}
                   className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left hover:bg-gray-50"
                 >
-                  <StockLogo logoUrl={stock.logoUrl} stockName={stock.stockName} className="h-7 w-7" />
+                  <StockLogo
+                    logoUrl={stock.logoUrl}
+                    stockName={stock.stockName}
+                    overseas={currencyForMarketType(stock.marketType) === 'USD'}
+                    className="h-7 w-7"
+                  />
                   <span className="text-sm font-medium text-gray-900">{stock.stockName}</span>
                   <span className="text-xs text-gray-400">{stock.stockCode}</span>
                   {watchlistedCodes.has(stock.stockCode) && (

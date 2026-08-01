@@ -20,6 +20,7 @@ import com.quantlime.subscription.service.SubscriptionPlanService;
 import com.quantlime.subscription.service.SubscriptionService;
 import com.quantlime.user.UserFixture;
 import com.quantlime.user.domain.User;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -29,6 +30,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -65,17 +68,34 @@ class PaymentServiceTest {
     @Mock
     private TossPaymentsProperties tossPaymentsProperties;
 
+    @Mock
+    private StringRedisTemplate redisTemplate;
+
+    @Mock
+    private ValueOperations<String, String> valueOperations;
+
     @InjectMocks
     private PaymentService paymentService;
 
     private final User user = UserFixture.createUser();
     private final SubscriptionPlan plan = SubscriptionPlanFixture.createPlan();
     private final Long userId = 1L;
+    private final String lockKey = "subscription:subscribe-lock:" + userId;
+
+    // 최초 구독 흐름은 결제 전에 userId별 Redis 락을 잡는다 - 락 흐름까지
+    // 도달하는 테스트에서만 호출한다(할부 유효성 실패처럼 락 전에 던지는
+    // 테스트에서 호출하면 strict stubbing이 unnecessary stubbing으로 걸린다).
+    private void givenSubscribeLockAcquired() {
+        given(redisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.setIfAbsent(eq(lockKey), anyString(), any(Duration.class)))
+            .willReturn(true);
+    }
 
     @Test
     @DisplayName("[빌링키 발급과 첫 결제가 모두 성공하면 구독을 시작하고 결제 이력을 남긴다]")
     void issueBillingKeyAndSubscribe_success_activatesSubscription() {
         // given
+        givenSubscribeLockAcquired();
         given(subscriptionPlanService.getByCode("PLAN_3M")).willReturn(plan);
         given(subscriptionRepository.findByUser_Id(userId)).willReturn(Optional.empty());
         given(tossPaymentsApiClient.issueBillingKey(anyString(), eq("auth-key")))
@@ -92,12 +112,14 @@ class PaymentServiceTest {
         // then
         assertThat(result).isEqualTo(activated);
         verify(paymentRepository).save(any(Payment.class));
+        verify(redisTemplate).delete(lockKey);
     }
 
     @Test
     @DisplayName("[이미 구독중인 사용자가 다시 결제를 시도하면 카드사 호출 없이 400을 던진다]")
     void issueBillingKeyAndSubscribe_alreadyActive_throwsBeforeCallingToss() {
         // given
+        givenSubscribeLockAcquired();
         Subscription activeSubscription = SubscriptionFixture.createSubscription(user, plan);
         given(subscriptionPlanService.getByCode("PLAN_3M")).willReturn(plan);
         given(subscriptionRepository.findByUser_Id(userId)).willReturn(Optional.of(activeSubscription));
@@ -107,6 +129,26 @@ class PaymentServiceTest {
             paymentService.issueBillingKeyAndSubscribe(userId, "auth-key", "PLAN_3M", 0))
             .isInstanceOf(ValidationException.class);
         verify(tossPaymentsApiClient, never()).issueBillingKey(anyString(), anyString());
+        // 락을 획득한 요청이므로(ACTIVE로 거절돼도) 락은 반드시 풀려야 한다.
+        verify(redisTemplate).delete(lockKey);
+    }
+
+    @Test
+    @DisplayName("[같은 사용자의 구독 요청이 이미 진행 중이면(락 미획득) 결제 전에 즉시 거절한다]")
+    void issueBillingKeyAndSubscribe_lockNotAcquired_throwsWithoutCallingToss() {
+        // given: 다른 요청이 이미 락을 선점(setIfAbsent가 false 반환)
+        given(redisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.setIfAbsent(eq(lockKey), anyString(), any(Duration.class)))
+            .willReturn(false);
+
+        // when & then
+        assertThatThrownBy(() ->
+            paymentService.issueBillingKeyAndSubscribe(userId, "auth-key", "PLAN_3M", 0))
+            .isInstanceOf(ValidationException.class);
+        // 외부 결제는 물론 계획/조회조차 하지 않고, 남의 락을 지우지도 않는다.
+        verify(subscriptionPlanService, never()).getByCode(anyString());
+        verify(tossPaymentsApiClient, never()).issueBillingKey(anyString(), anyString());
+        verify(redisTemplate, never()).delete(anyString());
     }
 
     @Test
@@ -123,6 +165,7 @@ class PaymentServiceTest {
     @DisplayName("[빌링키 발급 후 첫 결제가 거절되면 구독을 만들지 않고 예외를 전파한다]")
     void issueBillingKeyAndSubscribe_chargeFails_doesNotPersistAnything() {
         // given
+        givenSubscribeLockAcquired();
         given(subscriptionPlanService.getByCode("PLAN_3M")).willReturn(plan);
         given(subscriptionRepository.findByUser_Id(userId)).willReturn(Optional.empty());
         given(tossPaymentsApiClient.issueBillingKey(anyString(), anyString()))
@@ -137,6 +180,8 @@ class PaymentServiceTest {
             .isInstanceOf(ExternalApiException.class);
         verify(subscriptionService, never()).activateOrResubscribe(any(), any(), any(), anyInt());
         verify(paymentRepository, never()).save(any());
+        // 결제 실패로 예외가 나도 finally에서 락은 반드시 풀린다.
+        verify(redisTemplate).delete(lockKey);
     }
 
     @Test

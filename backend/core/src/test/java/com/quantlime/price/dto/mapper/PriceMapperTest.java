@@ -1,7 +1,7 @@
 package com.quantlime.price.dto.mapper;
 
-import com.quantlime.price.DailyPriceFixture;
-import com.quantlime.price.domain.DailyPrice;
+import com.quantlime.price.DomesticDailyPriceFixture;
+import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.dto.response.CurrentPriceResponse;
 import com.quantlime.price.dto.response.DailyChartResponse;
 import java.time.LocalDate;
@@ -17,11 +17,11 @@ class PriceMapperTest {
     @Test
     @DisplayName("[DB의 마지막 종가를 그대로 가격으로 매핑한다]")
     void toCurrentPriceResponse_mapsLastCloseAsPrice() {
-        // given: DailyPriceFixture의 종가는 105L 고정값
-        DailyPrice latestClose = DailyPriceFixture.createDailyPrice("005930", LocalDate.of(2026, 7, 16));
+        // given: DomesticDailyPriceFixture의 종가는 105L 고정값
+        DomesticDailyPrice latestClose = DomesticDailyPriceFixture.createDailyPrice("005930", LocalDate.of(2026, 7, 16));
 
         // when
-        CurrentPriceResponse response = PriceMapper.toCurrentPriceResponse(latestClose, 100L);
+        CurrentPriceResponse response = PriceMapper.toCurrentPriceResponse(latestClose, 100.0);
 
         // then
         assertThat(response.stockCode()).isEqualTo("005930");
@@ -33,11 +33,11 @@ class PriceMapperTest {
     @Test
     @DisplayName("[전일종가가 있으면 등락률을 계산한다]")
     void toCurrentPriceResponse_withPreviousClose_calculatesChangeRate() {
-        // given: DailyPriceFixture의 종가는 105L 고정값
-        DailyPrice latestClose = DailyPriceFixture.createDailyPrice("005930", LocalDate.of(2026, 7, 16));
+        // given: DomesticDailyPriceFixture의 종가는 105L 고정값
+        DomesticDailyPrice latestClose = DomesticDailyPriceFixture.createDailyPrice("005930", LocalDate.of(2026, 7, 16));
 
         // when
-        CurrentPriceResponse response = PriceMapper.toCurrentPriceResponse(latestClose, 100L);
+        CurrentPriceResponse response = PriceMapper.toCurrentPriceResponse(latestClose, 100.0);
 
         // then
         assertThat(response.changeRate()).isEqualTo(5.0);
@@ -47,7 +47,7 @@ class PriceMapperTest {
     @DisplayName("[전일종가가 없으면(관심종목이 아니어서 캐시에 없는 경우 등) 등락률은 null이다]")
     void toCurrentPriceResponse_withoutPreviousClose_returnsNullChangeRate() {
         // given
-        DailyPrice latestClose = DailyPriceFixture.createDailyPrice("005930", LocalDate.of(2026, 7, 16));
+        DomesticDailyPrice latestClose = DomesticDailyPriceFixture.createDailyPrice("005930", LocalDate.of(2026, 7, 16));
 
         // when
         CurrentPriceResponse response = PriceMapper.toCurrentPriceResponse(latestClose, null);
@@ -57,21 +57,21 @@ class PriceMapperTest {
     }
 
     @Test
-    @DisplayName("[DailyPrice를 DailyChartResponse로 매핑한다]")
+    @DisplayName("[DomesticDailyPrice를 DailyChartResponse로 매핑한다]")
     void toDailyChartResponse_mapsAllFields() {
         // given
         LocalDate tradeDate = LocalDate.of(2026, 7, 3);
-        DailyPrice dailyPrice = DailyPriceFixture.createDailyPrice("005930", tradeDate);
+        DomesticDailyPrice domesticDailyPrice = DomesticDailyPriceFixture.createDailyPrice("005930", tradeDate);
 
         // when
-        DailyChartResponse response = PriceMapper.toDailyChartResponse(dailyPrice);
+        DailyChartResponse response = PriceMapper.toDailyChartResponse(domesticDailyPrice);
 
         // then
         assertThat(response.tradeDate()).isEqualTo(tradeDate);
-        assertThat(response.open()).isEqualTo(dailyPrice.getOpenPrice());
-        assertThat(response.high()).isEqualTo(dailyPrice.getHighPrice());
-        assertThat(response.low()).isEqualTo(dailyPrice.getLowPrice());
-        assertThat(response.close()).isEqualTo(dailyPrice.getClosePrice());
-        assertThat(response.volume()).isEqualTo(dailyPrice.getVolume());
+        assertThat(response.open()).isEqualTo(domesticDailyPrice.getOpenPrice());
+        assertThat(response.high()).isEqualTo(domesticDailyPrice.getHighPrice());
+        assertThat(response.low()).isEqualTo(domesticDailyPrice.getLowPrice());
+        assertThat(response.close()).isEqualTo(domesticDailyPrice.getClosePrice());
+        assertThat(response.volume()).isEqualTo(domesticDailyPrice.getVolume());
     }
 }

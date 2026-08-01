@@ -9,9 +9,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import com.quantlime.price.dto.StockTradingValue;
-import com.quantlime.price.repository.DailyPriceRepository;
-import com.quantlime.price.service.DailyPriceService;
+import com.quantlime.price.dto.DomesticStockTradingValue;
+import com.quantlime.price.repository.DomesticDailyPriceRepository;
+import com.quantlime.price.service.DomesticDailyPriceService;
 import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
@@ -33,10 +33,10 @@ class DomesticUniverseSelectionServiceTest {
     private StockMasterService stockMasterService;
 
     @Mock
-    private DailyPriceService dailyPriceService;
+    private DomesticDailyPriceService domesticDailyPriceService;
 
     @Mock
-    private DailyPriceRepository dailyPriceRepository;
+    private DomesticDailyPriceRepository domesticDailyPriceRepository;
 
     @InjectMocks
     private DomesticUniverseSelectionService domesticUniverseSelectionService;
@@ -50,16 +50,16 @@ class DomesticUniverseSelectionServiceTest {
         Stock normalStock = stock("005930", "삼성전자");
         given(stockMasterService.getAllListedStocks())
             .willReturn(List.of(reit, notReitButContainsName, normalStock));
-        given(dailyPriceRepository.findTopByTradingValue(any(), eq(500)))
-            .willReturn(List.of(new StockTradingValue("005930", 1_000_000L)));
+        given(domesticDailyPriceRepository.findTopByTradingValue(any(), eq(500)))
+            .willReturn(List.of(new DomesticStockTradingValue("005930", 1_000_000L)));
 
         // when
         List<String> selected = domesticUniverseSelectionService.selectAndBackfillUniverse();
 
         // then: 1차 스캔은 REIT(삼성FN리츠)만 제외한 2종목에 대해서만 호출
-        verify(dailyPriceService, times(1)).backfillHistoryIfNeeded("138040", 60);
-        verify(dailyPriceService, times(1)).backfillHistoryIfNeeded("005930", 60);
-        verify(dailyPriceService, never()).backfillHistoryIfNeeded(eq("450140"), anyInt());
+        verify(domesticDailyPriceService, times(1)).backfillHistoryIfNeeded("138040", 60);
+        verify(domesticDailyPriceService, times(1)).backfillHistoryIfNeeded("005930", 60);
+        verify(domesticDailyPriceService, never()).backfillHistoryIfNeeded(eq("450140"), anyInt());
         assertThat(selected).containsExactly("005930");
     }
 
@@ -69,15 +69,15 @@ class DomesticUniverseSelectionServiceTest {
         // given
         given(stockMasterService.getAllListedStocks())
             .willReturn(List.of(stock("005930", "삼성전자"), stock("000660", "SK하이닉스")));
-        given(dailyPriceRepository.findTopByTradingValue(any(), eq(500)))
-            .willReturn(List.of(new StockTradingValue("005930", 1_000_000L)));
+        given(domesticDailyPriceRepository.findTopByTradingValue(any(), eq(500)))
+            .willReturn(List.of(new DomesticStockTradingValue("005930", 1_000_000L)));
 
         // when
         domesticUniverseSelectionService.selectAndBackfillUniverse();
 
         // then
-        verify(dailyPriceService, times(1)).backfillHistoryIfNeeded("005930", 400);
-        verify(dailyPriceService, never()).backfillHistoryIfNeeded(eq("000660"), eq(400));
+        verify(domesticDailyPriceService, times(1)).backfillHistoryIfNeeded("005930", 400);
+        verify(domesticDailyPriceService, never()).backfillHistoryIfNeeded(eq("000660"), eq(400));
     }
 
     @Test
@@ -87,16 +87,16 @@ class DomesticUniverseSelectionServiceTest {
         given(stockMasterService.getAllListedStocks())
             .willReturn(List.of(stock("005930", "삼성전자"), stock("000660", "SK하이닉스")));
         doThrowOnBackfill("005930", 60);
-        given(dailyPriceRepository.findTopByTradingValue(any(), eq(500))).willReturn(List.of());
+        given(domesticDailyPriceRepository.findTopByTradingValue(any(), eq(500))).willReturn(List.of());
 
         // when & then: 예외가 전파되지 않고 나머지 종목까지 처리됨
         domesticUniverseSelectionService.selectAndBackfillUniverse();
-        verify(dailyPriceService, times(1)).backfillHistoryIfNeeded("000660", 60);
+        verify(domesticDailyPriceService, times(1)).backfillHistoryIfNeeded("000660", 60);
     }
 
     private void doThrowOnBackfill(String stockCode, int targetDays) {
         org.mockito.Mockito.doThrow(new RuntimeException("백필 실패"))
-            .when(dailyPriceService).backfillHistoryIfNeeded(stockCode, targetDays);
+            .when(domesticDailyPriceService).backfillHistoryIfNeeded(stockCode, targetDays);
     }
 
     private Stock stock(String code, String name) {

@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { StockLogo } from '../common/StockLogo'
 import { GRADE_STYLES } from '../score/GradeBadge'
-import { changeRateColorClass, formatChangeRate, formatPrice } from '../../utils/priceFormat'
+import { changeRateColorClass, formatChangeRate, formatPrice, formatTradingAmount } from '../../utils/priceFormat'
 import { formatScore } from '../../utils/scoreFormat'
 import { buildStockLogoUrl } from '../../utils/stockLogo'
 import { useMarketRankingQuery } from '../../hooks/queries/useMarketRanking'
@@ -12,6 +12,8 @@ import { useStockPricesQuery } from '../../hooks/queries/useStockPrices'
 import { useFlashOnChange } from '../../hooks/useFlashOnChange'
 import { rankingFilterStorage } from '../../storage/rankingFilterStorage'
 import { useAuth } from '../../auth/useAuth'
+import { useIsPremium } from '../../hooks/queries/useSubscription'
+import { PremiumGate } from '../common/PremiumGate'
 
 interface RankingTableProps {
   watchlistCodes: Set<string>
@@ -47,12 +49,18 @@ interface DisplayRow {
   stockName: string
   sector: string | null
   logoUrl: string
+  overseas: boolean
   price: number | null
   changeRate: number | null
   currency: 'KRW' | 'USD' | null
   tradingAmount: number | null
   compositeScore?: number | null
   grade?: string | null
+  // 2026-08-01 추가 - 로컬 stock 테이블에 없는 종목(해외 랭킹 상위권이
+  // 백테스트 유니버스 밖인 경우)은 상세페이지/관심종목 등록이 둘 다
+  // 404가 나므로 클릭·하트를 막는다. 스코어 탭은 로컬 스코어 계산
+  // 결과라 항상 로컬에 존재하므로 언제나 true.
+  detailAvailable: boolean
 }
 
 function RankingRow({ row, index, isWatched, onToggleWatch }: {
@@ -72,7 +80,15 @@ function RankingRow({ row, index, isWatched, onToggleWatch }: {
   // cmd(맥)/ctrl(윈도) 클릭 시 새 탭으로 열게 한다 - 링크가 아니라 tr에
   // onClick으로 navigate를 붙인 구조라 브라우저가 기본으로 지원하는
   // cmd+클릭 새 탭 열기가 안 먹혀서 직접 분기했다(2026-07-17 피드백).
+  //
+  // detailAvailable=false(로컬 stock 테이블에 없는 해외 랭킹 종목)면
+  // 진입을 막는다 - 상세페이지의 종목상세/현재가/차트 API가 전부
+  // getStockByCode를 거쳐 항상 404가 나므로(2026-08-01, ST_000 반복
+  // 발생을 계기로 발견).
   function handleRowClick(event: React.MouseEvent) {
+    if (!row.detailAvailable) {
+      return
+    }
     const url = `/stocks/${row.stockCode}`
     if (event.metaKey || event.ctrlKey) {
       window.open(url, '_blank')
@@ -82,20 +98,29 @@ function RankingRow({ row, index, isWatched, onToggleWatch }: {
   }
 
   return (
-    <tr onClick={handleRowClick} className="cursor-pointer border-b border-gray-50 hover:bg-gray-50">
+    <tr
+      onClick={handleRowClick}
+      title={row.detailAvailable ? undefined : '상세 페이지 미지원 종목'}
+      className={`border-b border-gray-50 ${
+        row.detailAvailable ? 'cursor-pointer hover:bg-gray-50' : 'opacity-60'
+      }`}
+    >
       <td className="py-2.5">
         <div className="flex items-center gap-2">
           {/* 종목상세 하트 버튼과 동일하게 border+배경 박스 스타일로
               통일한다(2026-07-17 피드백 - 예전엔 아이콘만 덩그러니 있어
-              화면마다 하트가 다르게 보였음). */}
+              화면마다 하트가 다르게 보였음). detailAvailable=false면
+              관심종목 등록도 내부적으로 getStockByCode를 거쳐 똑같이
+              404가 나므로 함께 비활성화한다. */}
           <button
             type="button"
+            disabled={!row.detailAvailable}
             aria-label={isWatched ? '관심종목에서 삭제' : '관심종목에 추가'}
             onClick={(event) => {
               event.stopPropagation()
               onToggleWatch(row.stockCode)
             }}
-            className={`shrink-0 rounded-lg border p-1 transition ${
+            className={`shrink-0 rounded-lg border p-1 transition disabled:cursor-not-allowed disabled:opacity-50 ${
               isWatched ? 'border-red-200 bg-red-50 hover:bg-red-100' : 'border-gray-200 hover:bg-gray-50'
             }`}
           >
@@ -115,7 +140,7 @@ function RankingRow({ row, index, isWatched, onToggleWatch }: {
       </td>
       <td className="py-2.5">
         <div className="flex items-center gap-2.5">
-          <StockLogo logoUrl={row.logoUrl} stockName={row.stockName} className="h-7 w-7" />
+          <StockLogo logoUrl={row.logoUrl} stockName={row.stockName} overseas={row.overseas} className="h-7 w-7" />
           <div>
             <p className="text-sm font-semibold text-gray-900">{row.stockName}</p>
             <p className="text-xs text-gray-400">{row.stockCode}</p>
@@ -152,7 +177,7 @@ function RankingRow({ row, index, isWatched, onToggleWatch }: {
       </td>
       <td className="py-2.5 text-right text-sm text-gray-900">
         {row.tradingAmount != null ? (
-          formatPrice(row.tradingAmount, row.currency ?? 'KRW')
+          formatTradingAmount(row.tradingAmount, row.currency ?? 'KRW')
         ) : (
           <span className="text-gray-300">-</span>
         )}
@@ -175,6 +200,56 @@ function RankingRow({ row, index, isWatched, onToggleWatch }: {
   )
 }
 
+// 스코어 탭 비구독 상태에서 PremiumGate 안에 넣는 스켈레톤 - 실제 종목/
+// 스코어를 전혀 안 받아온 상태(useDashboardScoresQuery가 enabled=false)라
+// 종목명·로고까지 회색 막대로 채운다. 실제 테이블과 헤더/컬럼 폭을
+// 맞춰야 블러 오버레이가 자연스러워 <table> 구조 자체는 그대로 재사용한다.
+function ScoreRankingSkeletonTable() {
+  return (
+    <table className="w-full min-w-[640px] text-left">
+      <thead>
+        <tr className="border-b border-gray-100 text-xs font-medium text-gray-400">
+          <th className="w-14 pb-2">순위</th>
+          <th className="pb-2">종목</th>
+          <th className="pb-2 text-right">현재가</th>
+          <th className="pb-2 text-right">등락률</th>
+          <th className="pb-2 text-right">스코어</th>
+          <th className="pb-2 text-right">거래대금</th>
+          <th className="pb-2 pl-4 text-left">산업</th>
+        </tr>
+      </thead>
+      <tbody>
+        {Array.from({ length: 10 }).map((_, i) => (
+          <tr key={i} className="border-b border-gray-50">
+            <td className="py-2.5 text-xs font-semibold text-gray-300">{i + 1}</td>
+            <td className="py-2.5">
+              <div className="flex items-center gap-2.5">
+                <span className="h-7 w-7 shrink-0 rounded-full bg-gray-100" />
+                <span className="inline-block h-3 w-20 rounded bg-gray-100" />
+              </div>
+            </td>
+            <td className="py-2.5 text-right">
+              <span className="ml-auto inline-block h-3 w-12 rounded bg-gray-100" />
+            </td>
+            <td className="py-2.5 text-right">
+              <span className="ml-auto inline-block h-3 w-10 rounded bg-gray-100" />
+            </td>
+            <td className="py-2.5 text-right">
+              <span className="ml-auto inline-block h-5 w-14 rounded-lg bg-gray-100" />
+            </td>
+            <td className="py-2.5 text-right">
+              <span className="ml-auto inline-block h-3 w-14 rounded bg-gray-100" />
+            </td>
+            <td className="py-2.5 pl-4">
+              <span className="inline-block h-5 w-16 rounded-lg bg-gray-100" />
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
 export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProps) {
   // 마지막으로 고른 필터를 기억해뒀다가 다음 방문에도 그대로 유지한다
   // (2026-07-16, 새로고침마다 초기화되는 게 불편하다는 피드백).
@@ -183,6 +258,7 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
   const [period, setPeriodState] = useState<Period>(() => rankingFilterStorage.read().period)
   const [watchlistOnly, setWatchlistOnlyState] = useState<boolean>(() => rankingFilterStorage.read().watchlistOnly)
   const { isAuthenticated } = useAuth()
+  const { isPremium, isResolving } = useIsPremium()
 
   function setScope(next: Scope) {
     setScopeState(next)
@@ -224,8 +300,10 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
     isRealMode,
     effectiveWatchlistOnly,
   )
-  const scoreQuery = useDashboardScoresQuery(effectiveWatchlistOnly, 10, scope)
-  const scoreStockCodes = isScoreMode ? (scoreQuery.data ?? []).map((item) => item.stockCode) : []
+  // 스코어 탭이 아니거나 구독자가 아니면 요청 자체를 보내지 않는다
+  // (PremiumGate 참고 - 잠겨 있을 때 network 탭에 값이 안 남아야 한다).
+  const scoreQuery = useDashboardScoresQuery(effectiveWatchlistOnly, 10, scope, isScoreMode && isPremium)
+  const scoreStockCodes = isScoreMode && isPremium ? (scoreQuery.data ?? []).map((item) => item.stockCode) : []
   // WebSocket 실시간 브로드캐스트는 장중에만 오므로 소켓만 쓰면 장마감엔
   // 현재가/등락률이 전부 "-"로 보인다(AppSidePanel에서 이미 한 번 겪은
   // 문제와 동일 - 2026-07-16). REST 폴링을 베이스라인으로 깔고 실시간
@@ -242,13 +320,15 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
             stockCode: item.stockCode,
             stockName: item.stockName,
             sector: item.sector,
-            logoUrl: buildStockLogoUrl(item.stockCode),
+            logoUrl: item.logoUrl ?? buildStockLogoUrl(item.stockCode),
+            overseas: item.overseas,
             price: livePrice?.currentPrice ?? null,
             changeRate: livePrice?.changeRate ?? null,
             currency: null,
             tradingAmount: null,
             compositeScore: item.compositeScore,
             grade: item.grade,
+            detailAvailable: true,
           }
         })
     : isRealMode
@@ -256,15 +336,22 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
           stockCode: row.stockCode,
           stockName: row.stockName,
           sector: row.sector,
-          logoUrl: buildStockLogoUrl(row.stockCode),
+          logoUrl: row.logoUrl ?? buildStockLogoUrl(row.stockCode),
+          overseas: row.currency === 'USD',
           currency: row.currency,
           tradingAmount: row.tradingAmount,
           price: row.currentPrice,
           changeRate: row.changeRate,
+          detailAvailable: row.detailAvailable,
         }))
       : []
 
-  const isLoading = (isRealMode && rankingQuery.isLoading) || (isScoreMode && scoreQuery.isLoading)
+  const isLoading =
+    (isRealMode && rankingQuery.isLoading) || (isScoreMode && (isResolving || (isPremium && scoreQuery.isLoading)))
+  // 스코어 탭이면서 구독 여부 확인이 끝났는데 구독자가 아닌 경우에만
+  // 잠금 스켈레톤을 보여준다 - isResolving 동안은 위 isLoading이 이미
+  // "불러오는 중..." 행을 보여주므로 잠금 UI가 번쩍이지 않는다.
+  const showScoreGate = isScoreMode && !isResolving && !isPremium
 
   return (
     <section className="rounded-2xl border border-gray-100 bg-white p-4">
@@ -376,57 +463,65 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
             : '실제 거래대금으로 정렬한 랭킹입니다(상위 100위) · 장중에만 갱신됩니다')}
       </p>
 
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] text-left">
-          <thead>
-            <tr className="border-b border-gray-100 text-xs font-medium text-gray-400">
-              <th className="w-14 pb-2">순위</th>
-              <th className="pb-2">종목</th>
-              <th className="pb-2 text-right">현재가</th>
-              <th className="pb-2 text-right">등락률</th>
-              <th className="pb-2 text-right">스코어</th>
-              <th className="pb-2 text-right">거래대금</th>
-              <th className="pb-2 pl-4 text-left">산업</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading && (
-              <tr>
-                <td colSpan={7} className="py-6 text-center text-sm text-gray-400">
-                  불러오는 중...
-                </td>
+      {showScoreGate ? (
+        <PremiumGate>
+          <div className="overflow-x-auto">
+            <ScoreRankingSkeletonTable />
+          </div>
+        </PremiumGate>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-left">
+            <thead>
+              <tr className="border-b border-gray-100 text-xs font-medium text-gray-400">
+                <th className="w-14 pb-2">순위</th>
+                <th className="pb-2">종목</th>
+                <th className="pb-2 text-right">현재가</th>
+                <th className="pb-2 text-right">등락률</th>
+                <th className="pb-2 text-right">스코어</th>
+                <th className="pb-2 text-right">거래대금</th>
+                <th className="pb-2 pl-4 text-left">산업</th>
               </tr>
-            )}
-            {!isLoading && displayRows.length === 0 && (
-              <tr>
-                <td colSpan={7} className="py-6 text-center text-sm text-gray-400">
-                  {isScoreMode &&
-                    effectiveWatchlistOnly &&
-                    '관심 종목이 없거나 아직 계산된 스코어가 없습니다.'}
-                  {isScoreMode && !effectiveWatchlistOnly && '아직 계산된 스코어가 없습니다.'}
-                  {isRealMode &&
-                    effectiveWatchlistOnly &&
-                    '관심 종목이 없거나, 관심종목 중 지금 데이터가 있는 종목이 없습니다.'}
-                  {isRealMode &&
-                    !effectiveWatchlistOnly &&
-                    (rankingScope === 'overseas'
-                      ? '미국장이 열려 있지 않거나 아직 데이터가 준비되지 않았습니다.'
-                      : '장이 열려 있지 않거나 아직 데이터가 준비되지 않았습니다.')}
-                </td>
-              </tr>
-            )}
-            {displayRows.map((row, index) => (
-              <RankingRow
-                key={row.stockCode}
-                row={row}
-                index={index}
-                isWatched={watchlistCodes.has(row.stockCode)}
-                onToggleWatch={onToggleWatch}
-              />
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {isLoading && (
+                <tr>
+                  <td colSpan={7} className="py-6 text-center text-sm text-gray-400">
+                    불러오는 중...
+                  </td>
+                </tr>
+              )}
+              {!isLoading && displayRows.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="py-6 text-center text-sm text-gray-400">
+                    {isScoreMode &&
+                      effectiveWatchlistOnly &&
+                      '관심 종목이 없거나 아직 계산된 스코어가 없습니다.'}
+                    {isScoreMode && !effectiveWatchlistOnly && '아직 계산된 스코어가 없습니다.'}
+                    {isRealMode &&
+                      effectiveWatchlistOnly &&
+                      '관심 종목이 없거나, 관심종목 중 지금 데이터가 있는 종목이 없습니다.'}
+                    {isRealMode &&
+                      !effectiveWatchlistOnly &&
+                      (rankingScope === 'overseas'
+                        ? '미국장이 열려 있지 않거나 아직 데이터가 준비되지 않았습니다.'
+                        : '장이 열려 있지 않거나 아직 데이터가 준비되지 않았습니다.')}
+                  </td>
+                </tr>
+              )}
+              {displayRows.map((row, index) => (
+                <RankingRow
+                  key={row.stockCode}
+                  row={row}
+                  index={index}
+                  isWatched={watchlistCodes.has(row.stockCode)}
+                  onToggleWatch={onToggleWatch}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   )
 }

@@ -36,7 +36,7 @@ public interface WatchlistRepository extends JpaRepository<Watchlist, Long> {
 
     // 해외 관심종목 실시간가 스케줄러(OverseasWatchlistPriceScheduler)용 -
     // findDistinctStockCodes()는 시장 구분 없이 전체를 반환하므로, 국내
-    // WatchlistPriceRelayScheduler와 겹치지 않게 해외(marketTypes)만 걸러
+    // DomesticWatchlistPriceRelayScheduler와 겹치지 않게 해외(marketTypes)만 걸러
     // 별도로 조회한다.
     @Query("select distinct w.stock.stockCode from Watchlist w where w.stock.marketType in :marketTypes")
     List<String> findDistinctStockCodesByMarketTypeIn(@Param("marketTypes") List<MarketType> marketTypes);
@@ -50,7 +50,7 @@ public interface WatchlistRepository extends JpaRepository<Watchlist, Long> {
     List<String> findStockCodesOrderByWatcherCountDesc(Pageable pageable);
 
     // 실시간 랭킹의 "관심종목만 보기" 토글용 - 한 사용자의 관심종목
-    // 코드만 뽑아 MarketRankingCache 필터링에 쓴다.
+    // 코드만 뽑아 DomesticMarketRankingCache 필터링에 쓴다.
     @Query("select w.stock.stockCode from Watchlist w where w.user.id = :userId")
     List<String> findStockCodesByUserId(@Param("userId") Long userId);
 }

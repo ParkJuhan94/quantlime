@@ -82,10 +82,10 @@ class VideoRetentionServiceTest extends DataJpaTestSupport {
     }
 
     @Test
-    @DisplayName("[보존 기간(10일)보다 오래된 영상과 그 자식 데이터(자막/요약/태깅종목)를 전부 삭제하고, 최근 영상은 남긴다]")
+    @DisplayName("[보존 기간(14일)보다 오래된 영상과 그 자식 데이터(자막/요약/태깅종목)를 전부 삭제하고, 최근 영상은 남긴다]")
     void deleteVideosOlderThanRetention_deletesOldVideoAndChildRows_keepsRecentVideo() {
         // given
-        Video oldVideo = seedVideo("vid-old", LocalDateTime.now().minusDays(11));
+        Video oldVideo = seedVideo("vid-old", LocalDateTime.now().minusDays(15));
         Video recentVideo = seedVideo("vid-recent", LocalDateTime.now().minusDays(3));
 
         // when
@@ -129,7 +129,7 @@ class VideoRetentionServiceTest extends DataJpaTestSupport {
         RedisLockService redisLockService = mock(RedisLockService.class);
         VideoRetentionService serviceWithLock = new VideoRetentionService(
             redisLockService, videoRepository, transcriptRepository, summaryRepository, videoTickerRepository);
-        seedVideo("vid-old", LocalDateTime.now().minusDays(11));
+        seedVideo("vid-old", LocalDateTime.now().minusDays(15));
         given(redisLockService.runExclusively(any(), any(), any())).willAnswer(invocation -> {
             Supplier<Integer> task = invocation.getArgument(2);
             return Optional.of(task.get());
@@ -149,7 +149,7 @@ class VideoRetentionServiceTest extends DataJpaTestSupport {
         RedisLockService redisLockService = mock(RedisLockService.class);
         VideoRetentionService serviceWithLock = new VideoRetentionService(
             redisLockService, videoRepository, transcriptRepository, summaryRepository, videoTickerRepository);
-        seedVideo("vid-old", LocalDateTime.now().minusDays(11));
+        seedVideo("vid-old", LocalDateTime.now().minusDays(15));
         given(redisLockService.runExclusively(any(), any(), any())).willReturn(Optional.empty());
 
         // when

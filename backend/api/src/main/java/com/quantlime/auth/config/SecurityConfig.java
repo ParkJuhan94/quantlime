@@ -34,9 +34,11 @@ public class SecurityConfig {
         "/api/health",
         "/api/stocks/**",
         "/api/market/**",
-        // 백테스트 결과(Rank IC/버킷/안정성)는 사용자별 데이터가 아니라
-        // /api/stocks/**의 스코어 조회와 동일하게 누구나 볼 수 있는 공개
-        // 분석 데이터다.
+        // 경로 자체는 열어두되(비로그인도 요청은 도달), 실제 구독 여부
+        // 판정은 BacktestController가 401이 아니라 403(SUB_006)으로
+        // 응답한다 - 여기서 authenticated()로 올리면 비로그인 요청이
+        // 401을 받아 프론트 인터셉터의 전체 페이지 리다이렉트가 트리거돼
+        // 버린다(스코어와 동일한 이유, 아래 GET /api/dashboard/scores 참고).
         "/api/backtest/**",
         "/api/feedback",
         // 토스페이먼츠가 서버 대 서버로 호출하는 웹훅 - 사용자 인증(JWT)이
@@ -79,11 +81,13 @@ public class SecurityConfig {
                 // 전체를 열면 글쓰기까지 비로그인으로 뚫림).
                 .requestMatchers(HttpMethod.GET, "/api/feed/posts").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/feed/posts/*/comments").permitAll()
-                // 실시간 랭킹 "스코어" 탭의 "전체" 토글(watchlistOnly=false)은
-                // 관심종목과 무관한 공개 데이터라 로그인 없이도 조회 가능해야
-                // 한다 - watchlistOnly=true(관심종목만)는 컨트롤러에서
-                // @OptionalLoginUser로 비로그인 시 빈 배열을 반환해 처리
-                // (2026-07-18, /api/market/ranking의 watchlistOnly와 동일한 패턴).
+                // 스코어(대시보드 랭킹 포함)는 구독자 전용 기능으로 전환됐다
+                // (2026-07-31) - 경로는 permitAll로 열어두고 ScoreController가
+                // @OptionalLoginUser로 userId를 받아 구독 여부를 직접 403으로
+                // 판정한다. authenticated()로 막으면 비로그인이 401을 받아
+                // 프론트 인터셉터가 전체 페이지를 리다이렉트시켜버려(로그인
+                // 안 한 사람이 홈에서 스코어 탭만 눌러도 튕기는 문제),
+                // "누구나 요청은 가능하되 응답에서 걸러낸다"는 패턴을 유지한다.
                 .requestMatchers(HttpMethod.GET, "/api/dashboard/scores").permitAll()
                 // 판매중인 구독 플랜 목록은 로그인 전에도(가입 유도 목적) 볼 수
                 // 있어야 한다 - 구독 상태/결제/해지 등 나머지 /api/subscription/**

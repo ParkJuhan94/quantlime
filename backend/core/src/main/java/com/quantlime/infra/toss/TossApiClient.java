@@ -2,6 +2,7 @@ package com.quantlime.infra.toss;
 
 import com.quantlime.common.exception.ExternalApiException;
 import com.quantlime.common.util.ExternalApiInvoker;
+import com.quantlime.common.util.SleepUtil;
 import com.quantlime.infra.toss.dto.TossCandleResponse;
 import com.quantlime.infra.toss.dto.TossExchangeRateResponse;
 import com.quantlime.infra.toss.dto.TossInvestorTradingResponse;
@@ -45,6 +46,16 @@ public class TossApiClient {
     // 간격으로 번갈아 찍힘). 이 클라이언트 레벨에서 전역으로 최소 간격을
     // 강제해 몇 개 스레드가 동시에 부르든 결합 호출률이 이 값을 넘지 않게 한다.
     private static final long MIN_CANDLE_CALL_INTERVAL_MS = 150;
+    // 전역 페이싱(위 MIN_CANDLE_CALL_INTERVAL_MS)을 거쳐도 순간적으로
+    // 429가 날 수 있어 1회 재시도한다(2026-08-01 - 이전엔
+    // DomesticDailyPriceService/OverseasDailyPriceBackfillService가 각자
+    // fetchCandlesWithRetry로 동일한 18줄을 복붙해 재구현했는데, 정작
+    // PriceGapFillService.fillDomesticGap이 부르는 일별 갭필 경로
+    // (refreshRecent)는 이 재시도를 안 타 국내만 429 후 재시도 없이
+    // 즉시 실패가 반복되는 실제 버그가 있었다 - "이 엔드포인트를 안전하게
+    // 부르는 방법"이라는 같은 책임이므로 클라이언트 레벨로 옮겨 모든
+    // 호출부가 예외 없이 혜택을 받게 한다).
+    private static final long RATE_LIMIT_BACKOFF_MS = 3000;
 
     private final RestClient tossRestClient;
     private final TossTokenManager tokenManager;
@@ -54,6 +65,22 @@ public class TossApiClient {
     private volatile long lastCandleCallAtMillis = 0;
 
     public TossCandleResponse getDailyCandles(String symbol, int count, String before) {
+        try {
+            return fetchDailyCandles(symbol, count, before);
+        } catch (ExternalApiException e) {
+            if (!TossApiErrorCode.RATE_LIMIT_EXCEEDED.getCode().equals(e.getCode())) {
+                throw e;
+            }
+            log.warn("캔들 조회 Rate Limit 도달, {}ms 대기 후 1회 재시도: symbol={}",
+                RATE_LIMIT_BACKOFF_MS, symbol);
+            if (!SleepUtil.sleepMillis(RATE_LIMIT_BACKOFF_MS)) {
+                throw new ExternalApiException(TossApiErrorCode.RATE_LIMIT_EXCEEDED, e);
+            }
+            return fetchDailyCandles(symbol, count, before);
+        }
+    }
+
+    private TossCandleResponse fetchDailyCandles(String symbol, int count, String before) {
         awaitCandleRateLimit();
         return withTokenRetry("candles", token -> ExternalApiInvoker.call(
             TossApiErrorCode.CANDLE_INQUIRY_FAILED,
@@ -114,7 +141,7 @@ public class TossApiClient {
     /**
      * 국내 장 운영 캘린더 조회(휴장일 포함). Rate Limits Group이 시세
      * 조회(MARKET_DATA)와 분리된 MARKET_INFO라 별도 예산을 쓴다 - 호출
-     * 측(MarketCalendarCache)이 하루 1회만 호출하도록 캐싱한다.
+     * 측(DomesticMarketCalendarCache)이 하루 1회만 호출하도록 캐싱한다.
      */
     public TossMarketCalendarResponse getMarketCalendar() {
         return withTokenRetry("market-calendar", token -> ExternalApiInvoker.call(
@@ -159,7 +186,7 @@ public class TossApiClient {
     /**
      * 해외(미국) 장 운영 캘린더 조회. Rate Limits Group이 시세 조회
      * (MARKET_DATA)와 분리된 MARKET_INFO라 별도 예산을 쓴다 - 호출 측
-     * (UsMarketCalendarCache)이 하루 1회만 호출하도록 캐싱한다. 국내
+     * (OverseasMarketCalendarCache)이 하루 1회만 호출하도록 캐싱한다. 국내
      * 캘린더와 응답 형태가 다르다(TossUsMarketCalendarResponse 주석 참고).
      */
     public TossUsMarketCalendarResponse getUsMarketCalendar() {

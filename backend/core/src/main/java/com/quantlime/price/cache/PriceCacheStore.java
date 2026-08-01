@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * 종목별 최신 시세 스냅샷({@link PriceSnapshot})을 Redis에 저장한다.
- * {@code MarketPriceSweepScheduler}가 매 틱 적재하고, StockPriceService.getCurrentPrice가 이를 먼저 조회해
+ * {@code DomesticMarketPriceSweepScheduler}가 매 틱 적재하고, StockPriceService.getCurrentPrice가 이를 먼저 조회해
  * 미스일 때만 Toss를 직접 호출하는 read-through 캐시로도 재사용한다.
  *
  * <p>기존 TossTokenManager/RefreshTokenStore와 동일하게 {@link StringRedisTemplate}

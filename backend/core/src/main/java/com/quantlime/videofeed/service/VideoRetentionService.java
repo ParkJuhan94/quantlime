@@ -26,7 +26,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class VideoRetentionService {
 
-    private static final int RETENTION_DAYS = 10;
+    private static final int RETENTION_DAYS = 14;
     private static final String LOCK_KEY = "lock:video-retention-cleanup";
     private static final Duration LOCK_TTL = Duration.ofMinutes(10);
 

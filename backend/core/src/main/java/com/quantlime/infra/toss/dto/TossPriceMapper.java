@@ -1,6 +1,6 @@
 package com.quantlime.infra.toss.dto;
 
-import com.quantlime.price.domain.DailyPrice;
+import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -15,10 +15,10 @@ public final class TossPriceMapper {
         return OffsetDateTime.parse(isoTimestamp).toLocalDate();
     }
 
-    public static DailyPrice toDailyPrice(
+    public static DomesticDailyPrice toDailyPrice(
         String stockCode,
         TossCandleResponse.TossCandle candle) {
-        return DailyPrice.of(
+        return DomesticDailyPrice.of(
             stockCode,
             toLocalDate(candle.timestamp()),
             Long.parseLong(candle.openPrice()),

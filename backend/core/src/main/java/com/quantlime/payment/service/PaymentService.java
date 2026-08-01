@@ -19,11 +19,13 @@ import com.quantlime.subscription.repository.SubscriptionRepository;
 import com.quantlime.subscription.service.SubscriptionPlanService;
 import com.quantlime.subscription.service.SubscriptionService;
 import com.quantlime.user.domain.User;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +38,16 @@ public class PaymentService {
     private static final String ORDER_NAME = "QuantLime 프리미엄 구독";
     private static final int MAX_RENEWAL_RETRY = 3;
 
+    // 최초 구독(카드 등록+첫 결제)은 트랜잭션 밖에서 외부 결제를 부르므로
+    // DB 유니크 제약만으로는 동시 요청의 이중 결제를 막지 못한다(둘 다
+    // ACTIVE 체크를 통과하고 둘 다 결제에 성공한 뒤 두 번째 save만 제약
+    // 위반으로 실패 → 결제는 됐는데 구독 row는 없는 불일치). userId별
+    // Redis 락으로 결제 흐름 자체를 직렬화해, 결제가 최대 1회만 일어나게
+    // 한다. TTL은 결제 왕복이 끝나기 전에 풀리지 않도록 넉넉히 잡되(30초),
+    // 프로세스가 죽어 finally가 못 돌아도 자동 만료되게 한다.
+    private static final String SUBSCRIBE_LOCK_KEY_PREFIX = "subscription:subscribe-lock:";
+    private static final Duration SUBSCRIBE_LOCK_TTL = Duration.ofSeconds(30);
+
     private final SubscriptionPlanService subscriptionPlanService;
     private final SubscriptionService subscriptionService;
     private final SubscriptionRepository subscriptionRepository;
@@ -43,6 +55,7 @@ public class PaymentService {
     private final TossPaymentsApiClient tossPaymentsApiClient;
     private final TossWebhookVerifier tossWebhookVerifier;
     private final TossPaymentsProperties tossPaymentsProperties;
+    private final StringRedisTemplate redisTemplate;
 
     // 카드 등록(빌링키 발급) 위젯 성공 콜백에서 호출한다 - 빌링키 발급과
     // 즉시 첫 결제를 한 번에 처리한다. Toss API 호출 자체는 트랜잭션
@@ -55,43 +68,59 @@ public class PaymentService {
         Long userId, String authKey, String planCode, int installmentMonths) {
         validateInstallmentMonths(installmentMonths);
 
-        SubscriptionPlan plan = subscriptionPlanService.getByCode(planCode);
-        SubscriptionStatus existingStatus = subscriptionRepository.findByUser_Id(userId)
-            .map(Subscription::getStatus)
-            .orElse(null);
-        if (existingStatus == SubscriptionStatus.ACTIVE) {
-            throw new ValidationException(SubscriptionErrorCode.ALREADY_SUBSCRIBED);
+        // 락 획득 실패 = 같은 사용자의 다른 구독 요청이 이미 결제 중이라는
+        // 뜻 - 외부 결제를 부르기 전에 즉시 거절해 이중 결제를 원천 차단한다.
+        String lockKey = SUBSCRIBE_LOCK_KEY_PREFIX + userId;
+        Boolean acquired = redisTemplate.opsForValue()
+            .setIfAbsent(lockKey, "1", SUBSCRIBE_LOCK_TTL);
+        if (!Boolean.TRUE.equals(acquired)) {
+            log.warn("구독 처리 중복 요청 차단(락 미획득): userId={}, planCode={}", userId, planCode);
+            throw new ValidationException(SubscriptionErrorCode.SUBSCRIPTION_IN_PROGRESS);
         }
 
-        String customerKey = toCustomerKey(userId);
-        TossBillingKeyResponse billingKeyResponse =
-            tossPaymentsApiClient.issueBillingKey(customerKey, authKey);
-
-        String orderId = generateOrderId();
-        TossPaymentApprovalResponse approval;
+        // 락을 획득한 뒤에만 finally에서 삭제한다 - 획득 실패 시(위에서 이미
+        // return) 여기에 오지 않으므로, 남의 락을 지우는 일은 없다.
         try {
-            approval = tossPaymentsApiClient.chargeWithBillingKey(
-                billingKeyResponse.billingKey(), customerKey, orderId, ORDER_NAME,
-                plan.getPriceWon(), installmentMonths);
-        } catch (ExternalApiException e) {
-            // 카드 등록은 됐지만 첫 결제가 거절된 경우 - 아직 구독이
-            // 만들어지지 않아(또는 갱신되지 않아) 남길 이력이 없다. 실패
-            // 사실만 로그로 남기고 그대로 전파해 컨트롤러가 사용자에게
-            // "다시 시도해주세요"를 보여줄 수 있게 한다.
-            log.warn("구독 최초 결제 실패: userId={}, planCode={}, orderId={}, error={}",
-                userId, planCode, orderId, e.getMessage());
-            throw e;
+            SubscriptionPlan plan = subscriptionPlanService.getByCode(planCode);
+            SubscriptionStatus existingStatus = subscriptionRepository.findByUser_Id(userId)
+                .map(Subscription::getStatus)
+                .orElse(null);
+            if (existingStatus == SubscriptionStatus.ACTIVE) {
+                throw new ValidationException(SubscriptionErrorCode.ALREADY_SUBSCRIBED);
+            }
+
+            String customerKey = toCustomerKey(userId);
+            TossBillingKeyResponse billingKeyResponse =
+                tossPaymentsApiClient.issueBillingKey(customerKey, authKey);
+
+            String orderId = generateOrderId();
+            TossPaymentApprovalResponse approval;
+            try {
+                approval = tossPaymentsApiClient.chargeWithBillingKey(
+                    billingKeyResponse.billingKey(), customerKey, orderId, ORDER_NAME,
+                    plan.getPriceWon(), installmentMonths);
+            } catch (ExternalApiException e) {
+                // 카드 등록은 됐지만 첫 결제가 거절된 경우 - 아직 구독이
+                // 만들어지지 않아(또는 갱신되지 않아) 남길 이력이 없다. 실패
+                // 사실만 로그로 남기고 그대로 전파해 컨트롤러가 사용자에게
+                // "다시 시도해주세요"를 보여줄 수 있게 한다.
+                log.warn("구독 최초 결제 실패: userId={}, planCode={}, orderId={}, error={}",
+                    userId, planCode, orderId, e.getMessage());
+                throw e;
+            }
+
+            Subscription subscription = subscriptionService.activateOrResubscribe(
+                userId, plan, billingKeyResponse.billingKey(), installmentMonths);
+
+            paymentRepository.save(Payment.success(
+                subscription.getUser(), subscription, orderId, plan.getPriceWon(), installmentMonths,
+                approval.paymentKey(), false));
+
+            log.info("구독 시작 완료: userId={}, planCode={}, orderId={}", userId, planCode, orderId);
+            return subscription;
+        } finally {
+            redisTemplate.delete(lockKey);
         }
-
-        Subscription subscription = subscriptionService.activateOrResubscribe(
-            userId, plan, billingKeyResponse.billingKey(), installmentMonths);
-
-        paymentRepository.save(Payment.success(
-            subscription.getUser(), subscription, orderId, plan.getPriceWon(), installmentMonths,
-            approval.paymentKey(), false));
-
-        log.info("구독 시작 완료: userId={}, planCode={}, orderId={}", userId, planCode, orderId);
-        return subscription;
     }
 
     // 자동 갱신 스케줄러가 건별로 호출한다. 실패해도 예외를 던지지 않고

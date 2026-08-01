@@ -50,7 +50,7 @@ public class BacktestDailyScore extends TimeBaseEntity {
     @Column(name = "backtest_daily_score_id")
     private Long id;
 
-    @Column(name = "stock_code", nullable = false, length = 6)
+    @Column(name = "stock_code", nullable = false, length = 10)
     private String stockCode;
 
     @Column(name = "score_version", nullable = false, length = 20)

@@ -3,7 +3,7 @@ package com.quantlime.watchlist.service;
 import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.common.exception.ValidationException;
 import com.quantlime.common.util.SafeExecutor;
-import com.quantlime.price.service.DailyPriceService;
+import com.quantlime.price.service.DomesticDailyPriceService;
 import com.quantlime.score.service.ScoreService;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.StockMasterService;
@@ -34,7 +34,7 @@ public class WatchlistService {
     private final StockMasterService stockMasterService;
     private final WatchlistRepository watchlistRepository;
     private final WatchlistGroupService watchlistGroupService;
-    private final DailyPriceService dailyPriceService;
+    private final DomesticDailyPriceService domesticDailyPriceService;
     private final ScoreService scoreService;
     private final TaskExecutor watchlistTaskExecutor;
 
@@ -75,7 +75,7 @@ public class WatchlistService {
     private void runPostRegistrationTasksSafely(String stockCode) {
         SafeExecutor.runSafely(
             "관심종목 등록 시 이력 백필(stockCode=" + stockCode + ")",
-            () -> dailyPriceService.backfillHistoryIfNeeded(stockCode));
+            () -> domesticDailyPriceService.backfillHistoryIfNeeded(stockCode));
         SafeExecutor.runSafely(
             "관심종목 등록 시 스코어 계산(stockCode=" + stockCode + ")",
             () -> scoreService.recalculateScore(stockCode));

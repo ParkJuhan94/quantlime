@@ -1,6 +1,6 @@
 package com.quantlime.price.dto.mapper;
 
-import com.quantlime.price.domain.DailyPrice;
+import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.price.dto.response.CurrentPriceResponse;
 import com.quantlime.price.dto.response.DailyChartResponse;
@@ -18,17 +18,16 @@ public final class PriceMapper {
 
     // 캐시 미스(관심종목이 아니거나 스윕 스케줄러가 아직 한 틱도 안 돈
     // 경우) 경로는 Toss를 직접 호출하지 않고 DB에 이미 있는 마지막 종가로
-    // 응답한다(StockPriceService 참고) - MarketPriceSweepScheduler의
+    // 응답한다(StockPriceService 참고) - DomesticMarketPriceSweepScheduler의
     // 청크 페이싱과 무관하게 동작하던 무페이싱 직접 호출이 429 반복
     // 발생의 원인이었다(2026-07-17). 등락률은 호출 측이 PreviousCloseCache로
     // 조회해 넘겨준 전일종가와 비교해 계산한다.
-    public static CurrentPriceResponse toCurrentPriceResponse(DailyPrice latestClose, Long previousClose) {
+    public static CurrentPriceResponse toCurrentPriceResponse(DomesticDailyPrice latestClose, Double previousClose) {
         Long price = latestClose.getClosePrice();
-        Double changeRate = ChangeRateCalculator.calculate(
-            price == null ? null : price.doubleValue(),
-            previousClose == null ? null : previousClose.doubleValue());
+        Double priceAsDouble = price == null ? null : price.doubleValue();
+        Double changeRate = ChangeRateCalculator.calculate(priceAsDouble, previousClose);
         return new CurrentPriceResponse(
-            latestClose.getStockCode(), price == null ? null : price.doubleValue(), changeRate,
+            latestClose.getStockCode(), priceAsDouble, changeRate,
             KRW, latestClose.getTradeDate().toString());
     }
 
@@ -52,14 +51,14 @@ public final class PriceMapper {
             currency, snapshot.timestamp());
     }
 
-    public static DailyChartResponse toDailyChartResponse(DailyPrice dailyPrice) {
+    public static DailyChartResponse toDailyChartResponse(DomesticDailyPrice domesticDailyPrice) {
         return new DailyChartResponse(
-            dailyPrice.getTradeDate(),
-            dailyPrice.getOpenPrice(),
-            dailyPrice.getHighPrice(),
-            dailyPrice.getLowPrice(),
-            dailyPrice.getClosePrice(),
-            dailyPrice.getVolume()
+            domesticDailyPrice.getTradeDate(),
+            domesticDailyPrice.getOpenPrice(),
+            domesticDailyPrice.getHighPrice(),
+            domesticDailyPrice.getLowPrice(),
+            domesticDailyPrice.getClosePrice(),
+            domesticDailyPrice.getVolume()
         );
     }
 }
