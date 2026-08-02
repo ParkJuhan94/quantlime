@@ -1,9 +1,9 @@
-### 개발용 수동 트리거 모음 (DevController, dev 프로파일 전용)
+### 개발용 수동 트리거 모음 (DevController + 피드 관리자 API, dev 프로파일 전용)
 #
-# 사용법: 각 요청 왼쪽에 뜨는 초록색 실행 화살표(▷)를 클릭하면 바로
-# 호출된다 - 타이핑도, 별도 Postman 실행도 필요 없다. IntelliJ가 이
-# 파일을 열면 자동으로 인식한다(Ultimate/Community 모두 HTTP Client
-# 내장). 아래 baseUrl만 필요에 따라 바꿔서 쓰면 된다.
+# 사용법: 각 요청 위/왼쪽에 뜨는 실행 버튼(IntelliJ는 초록 화살표▷,
+# VS Code는 "Send Request" 텍스트 링크)을 클릭하면 바로 호출된다 -
+# 타이핑도, 별도 Postman 실행도 필요 없다. 실행 버튼이 안 보이면
+# 파일 끝의 "문법 강조/실행 버튼이 안 보일 때" 참고.
 #
 # 8080 = 평소 띄워두는 실제 개발 서버, 8081 = Claude Code 등이 검증용으로
 # 띄우는 별도 포트(CLAUDE.md 로컬 개발 서버 종료 원칙 참고) - 상황에 맞는
@@ -36,14 +36,52 @@ POST {{baseUrl}}/dev/backtest/run?stockCode=005930
 POST {{baseUrl}}/dev/backtest/run-universe
 
 ### 개발용 로그인(실제 소셜 로그인 없이 테스트 유저 JWT 발급)
-# 응답의 accessToken을 client.global 변수(accessToken)로 캡처해둔다 -
-# 아래처럼 인증이 필요한 /api 요청에서 {{accessToken}}으로 바로 재사용 가능.
+# @name devLogin
+# 응답의 accessToken을 devLogin 이름으로 캡처해둔다 - 아래 요청들에서
+# {{devLogin.response.body.$.accessToken}}으로 바로 재사용한다(이 문법은
+# IntelliJ HTTP Client/VS Code REST Client 둘 다 지원).
 POST {{baseUrl}}/dev/auth/token
-
-> {%
-    client.global.set("accessToken", response.body.accessToken);
-%}
 
 ### (예시) 위에서 발급받은 토큰으로 인증 필요한 API 호출해보기 - 내 구독 상태 조회
 GET {{baseUrl}}/api/subscription/me
-Authorization: Bearer {{accessToken}}
+Authorization: Bearer {{devLogin.response.body.$.accessToken}}
+
+###
+# ── 투자 콘텐츠 요약 피드 관리자 트리거 (FeedCollectionAdminController) ──
+# 전부 ROLE_ADMIN 필요 - devLogin으로 받은 토큰은 기본 일반 유저라 그대로는
+# 401/403이 난다. 로컬 DB에서 그 유저의 role 컬럼을 'ADMIN'으로 한 번
+# 수동 변경한 뒤 devLogin을 다시 실행해서 새 토큰을 받아야 한다
+# (CLAUDE.md "로컬 이어작업 실행 가이드" 참고 - 정규 실행은 하루 3회
+# 도는 FeedCollectionScheduler이고, 아래는 그 사이 즉시 실행용).
+
+### 전체 채널 영상 수집 수동 트리거(수집→적재→필터링)
+POST {{baseUrl}}/api/admin/feed/collect
+Authorization: Bearer {{devLogin.response.body.$.accessToken}}
+
+### 자막 수집 수동 트리거(SELECTED + 재시도 상한 이내 FAILED 배치)
+POST {{baseUrl}}/api/admin/feed/transcribe
+Authorization: Bearer {{devLogin.response.body.$.accessToken}}
+
+### AI 요약 생성 수동 트리거(TRANSCRIBED + 재시도 상한 이내 FAILED 배치)
+POST {{baseUrl}}/api/admin/feed/summarize
+Authorization: Bearer {{devLogin.response.body.$.accessToken}}
+
+### 채널 중앙값 업로드 속도(views/hours) 초기 산정 - channelId 바꿔서 사용
+POST {{baseUrl}}/api/admin/feed/channels/1/velocity/initialize
+Authorization: Bearer {{devLogin.response.body.$.accessToken}}
+
+### 보존 기간(14일) 초과 영상 데이터 수동 정리
+POST {{baseUrl}}/api/admin/feed/retention/cleanup
+Authorization: Bearer {{devLogin.response.body.$.accessToken}}
+
+###
+# ── 문법 강조/실행 버튼이 안 보일 때 ──
+# 에디터 자체가 .http 파일을 텍스트로만 열고 있을 뿐, 실행 기능을 켜는
+# 확장/플러그인이 없어서인 경우가 대부분이다.
+#
+# VS Code: 확장 마켓플레이스에서 "REST Client"(게시자 Huachao Mao,
+#   ID humao.rest-client) 설치 → 재로드하면 문법 강조 + 각 요청 위에
+#   "Send Request" 링크가 뜬다.
+# IntelliJ: Settings/Preferences → Plugins → Marketplace에서
+#   "HTTP Client" 검색해 설치(Ultimate는 기본 내장, Community는 설치
+#   필요할 수 있음) → 파일 다시 열면 초록 실행 화살표가 뜬다.
