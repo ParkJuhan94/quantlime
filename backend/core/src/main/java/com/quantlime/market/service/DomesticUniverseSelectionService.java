@@ -48,6 +48,7 @@ public class DomesticUniverseSelectionService {
      */
     public List<String> selectAndBackfillUniverse() {
         List<Stock> candidates = stockMasterService.getAllListedStocks().stream()
+            .filter(stock -> stock.getMarketType().isDomestic())
             .filter(stock -> !isReit(stock.getStockName()))
             .toList();
         log.info("유니버스 후보 종목(REIT 제외): {}건", candidates.size());

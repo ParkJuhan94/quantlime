@@ -64,6 +64,26 @@ class DomesticUniverseSelectionServiceTest {
     }
 
     @Test
+    @DisplayName("[해외 종목(나스닥/뉴욕)은 후보에서 제외한다]")
+    void selectAndBackfillUniverse_excludesOverseasStock() {
+        // given
+        Stock overseasStock = Stock.of("APO", "Apollo Global Management",
+            MarketType.NYSE, ListingStatus.LISTED, "기타");
+        Stock domesticStock = stock("005930", "삼성전자");
+        given(stockMasterService.getAllListedStocks())
+            .willReturn(List.of(overseasStock, domesticStock));
+        given(domesticDailyPriceRepository.findTopByTradingValue(any(), eq(500)))
+            .willReturn(List.of(new DomesticStockTradingValue("005930", 1_000_000L)));
+
+        // when
+        domesticUniverseSelectionService.selectAndBackfillUniverse();
+
+        // then: 국내 종목마스터가 반환한 해외 종목은 국내 전용(Long 파싱) 백필로 넘어가지 않는다
+        verify(domesticDailyPriceService, times(1)).backfillHistoryIfNeeded("005930", 60);
+        verify(domesticDailyPriceService, never()).backfillHistoryIfNeeded(eq("APO"), anyInt());
+    }
+
+    @Test
     @DisplayName("[선정된 종목만 400일 목표로 2차 백필한다]")
     void selectAndBackfillUniverse_deepensOnlySelected() {
         // given
