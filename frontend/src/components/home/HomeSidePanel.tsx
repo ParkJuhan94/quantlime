@@ -171,21 +171,30 @@ function GroupSection({
           </svg>
         </button>
       </div>
-      {expanded && (
-        <div className="flex flex-col pl-1">
-          {items.map((item) => (
-            <StockRow
-              key={item.id}
-              stockCode={item.stockCode}
-              stockName={item.stockName}
-              logoUrl={item.logoUrl}
-              marketType={item.marketType}
-              live={watchlistLivePrices[item.stockCode]}
-              onRemove={() => onRemoveWatch(item.stockCode)}
-            />
-          ))}
+      {/* grid-template-rows를 0fr<->1fr로 트랜지션시키는 방식 - 그룹마다
+          종목 수가 달라 height:auto는 애니메이션이 안 되는데, 이 방식은 JS로
+          높이를 측정하지 않고도 auto 높이까지 부드럽게 확장/축소된다. */}
+      <div
+        className={`grid transition-[grid-template-rows] duration-300 ease-in-out motion-reduce:transition-none ${
+          expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+        }`}
+      >
+        <div className="overflow-hidden">
+          <div className="flex flex-col pl-1">
+            {items.map((item) => (
+              <StockRow
+                key={item.id}
+                stockCode={item.stockCode}
+                stockName={item.stockName}
+                logoUrl={item.logoUrl}
+                marketType={item.marketType}
+                live={watchlistLivePrices[item.stockCode]}
+                onRemove={() => onRemoveWatch(item.stockCode)}
+              />
+            ))}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }
