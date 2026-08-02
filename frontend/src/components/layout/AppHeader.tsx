@@ -8,7 +8,7 @@ import { LoginModal } from '../auth/LoginModal'
 
 const navLinkClassName = ({ isActive }: { isActive: boolean }) =>
   `rounded-lg px-2.5 py-1.5 text-sm transition hover:bg-gray-100 ${
-    isActive ? 'font-semibold text-gray-900' : 'font-medium text-gray-600'
+    isActive ? 'bg-gray-100 font-semibold text-gray-900' : 'font-medium text-gray-600'
   }`
 
 interface AppHeaderProps {
