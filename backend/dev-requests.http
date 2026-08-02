@@ -5,6 +5,16 @@
 # 타이핑도, 별도 Postman 실행도 필요 없다. 실행 버튼이 안 보이면
 # 파일 끝의 "문법 강조/실행 버튼이 안 보일 때" 참고.
 #
+# ⚠️ ijhttp CLI로 실행할 땐(`ijhttp dev-requests.http`) IDE의 초록 화살표와
+# 달리 "요청 하나만 골라서" 실행하는 옵션이 없다 - 파일에 있는 요청을
+# 위에서부터 전부 순서대로 실행한다(2026-08-02 실제로 겪음 - 이 파일 전체를
+# ijhttp로 돌렸다가 무거운 전종목 갱신/백테스트 트리거까지 한꺼번에 실행돼
+# 레이트리밋 폭주+타임아웃이 발생). 그래서 이 파일에는 **가볍고 반복 실행해도
+# 안전한 요청만** 남겨뒀다 - 전종목 갱신/백테스트처럼 수 분~수십 분 걸리는
+# 무거운 트리거는 `dev-requests-heavy.http`로 분리했으니 그쪽은 반드시
+# 파일 상단 경고를 먼저 읽고 필요한 요청 하나만 남긴 채(나머지는 주석 처리)
+# 실행할 것.
+#
 # 8080 = 평소 띄워두는 실제 개발 서버, 8081 = Claude Code 등이 검증용으로
 # 띄우는 별도 포트(CLAUDE.md 로컬 개발 서버 종료 원칙 참고) - 상황에 맞는
 # 쪽 주석을 풀어 쓴다.
@@ -17,23 +27,8 @@ POST {{baseUrl}}/dev/stock-master/sync
 ### 해외 종목마스터 동기화(NASDAQ/NYSE 신규상장 반영 + 한글명 백필)
 POST {{baseUrl}}/dev/stock-master/overseas/sync
 
-### 전종목(국내+해외) 가격/스코어 갱신
-# 2026-08-01부로 국내/해외 종목마스터 동기화가 이 안에 편입돼 있어(맨
-# 처음 실행됨) 위 두 요청을 따로 안 불러도 된다. 수 분~수십 분 걸릴 수
-# 있고, 이미 다른 실행(스케줄러/기동 캐치업) 중이면 스킵된다.
-POST {{baseUrl}}/dev/refresh
-
 ### 단일 종목만 가격/스코어 갱신(디버깅용 - stockCode 바꿔서 사용)
 POST {{baseUrl}}/dev/refresh?stockCode=005930
-
-### 백테스트용 데이터셋 준비(국내/해외 유니버스 선정+백필 + 벤치마크 지수 백필)
-POST {{baseUrl}}/dev/backtest/prepare-dataset
-
-### 단일 종목 백테스트(stockCode 바꿔서 사용)
-POST {{baseUrl}}/dev/backtest/run?stockCode=005930
-
-### 유니버스 전체 백테스트(무거운 연산 - 수십 분 이상 소요될 수 있음)
-POST {{baseUrl}}/dev/backtest/run-universe
 
 ### 개발용 로그인(실제 소셜 로그인 없이 테스트 유저 JWT 발급)
 # @name devLogin
@@ -50,9 +45,9 @@ Authorization: Bearer {{devLogin.response.body.$.accessToken}}
 # ── 투자 콘텐츠 요약 피드 관리자 트리거 (FeedCollectionAdminController) ──
 # 전부 ROLE_ADMIN 필요 - devLogin으로 받은 토큰은 기본 일반 유저라 그대로는
 # 401/403이 난다. 로컬 DB에서 그 유저의 role 컬럼을 'ADMIN'으로 한 번
-# 수동 변경한 뒤 devLogin을 다시 실행해서 새 토큰을 받아야 한다
-# (CLAUDE.md "로컬 이어작업 실행 가이드" 참고 - 정규 실행은 하루 3회
-# 도는 FeedCollectionScheduler이고, 아래는 그 사이 즉시 실행용).
+# 수동 변경한 뒤 devLogin을 다시 실행해서 새 토큰을 받아야 한다.
+# 정규 실행은 하루 3회 도는 FeedCollectionScheduler이고, 아래는 그 사이
+# 즉시 실행용.
 
 ### 전체 채널 영상 수집 수동 트리거(수집→적재→필터링)
 POST {{baseUrl}}/api/admin/feed/collect
@@ -75,6 +70,12 @@ POST {{baseUrl}}/api/admin/feed/retention/cleanup
 Authorization: Bearer {{devLogin.response.body.$.accessToken}}
 
 ###
+# ── 무거운(수 분~수십 분) 트리거는 여기 없음 ──
+# 전종목 갱신(`/dev/refresh`, stockCode 없이)·백테스트 데이터셋 준비·유니버스
+# 백테스트는 `dev-requests-heavy.http` 참고. 실수로 한꺼번에 실행되는 걸
+# 막기 위해 의도적으로 이 파일에서 뺐다.
+
+###
 # ── 문법 강조/실행 버튼이 안 보일 때 ──
 # 에디터 자체가 .http 파일을 텍스트로만 열고 있을 뿐, 실행 기능을 켜는
 # 확장/플러그인이 없어서인 경우가 대부분이다.
@@ -82,6 +83,8 @@ Authorization: Bearer {{devLogin.response.body.$.accessToken}}
 # VS Code: 확장 마켓플레이스에서 "REST Client"(게시자 Huachao Mao,
 #   ID humao.rest-client) 설치 → 재로드하면 문법 강조 + 각 요청 위에
 #   "Send Request" 링크가 뜬다.
-# IntelliJ: Settings/Preferences → Plugins → Marketplace에서
-#   "HTTP Client" 검색해 설치(Ultimate는 기본 내장, Community는 설치
-#   필요할 수 있음) → 파일 다시 열면 초록 실행 화살표가 뜬다.
+# IntelliJ: HTTP Client 플러그인은 Ultimate 전용(Community에는 없음,
+#   2026-08-02 확인) - Community에서는 JetBrains가 무료로 배포하는 CLI
+#   `ijhttp`(brew install ijhttp, Java 21+ 필요)로 같은 .http 파일을 그대로
+#   실행할 수 있다. 단, 위 경고대로 CLI는 파일 전체를 한 번에 실행하니
+#   무거운 트리거가 섞인 파일은 절대 통째로 돌리지 말 것.
