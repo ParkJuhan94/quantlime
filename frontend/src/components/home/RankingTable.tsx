@@ -219,7 +219,7 @@ function ScoreRankingSkeletonTable() {
         </tr>
       </thead>
       <tbody>
-        {Array.from({ length: 10 }).map((_, i) => (
+        {Array.from({ length: 30 }).map((_, i) => (
           <tr key={i} className="border-b border-gray-50">
             <td className="py-2.5 text-xs font-semibold text-gray-300">{i + 1}</td>
             <td className="py-2.5">
@@ -296,13 +296,13 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
   const rankingQuery = useMarketRankingQuery(
     rankingScope,
     sortKey === 'gainers' || sortKey === 'losers' || sortKey === 'amount' ? sortKey : 'gainers',
-    10,
+    30,
     isRealMode,
     effectiveWatchlistOnly,
   )
   // 스코어 탭이 아니거나 구독자가 아니면 요청 자체를 보내지 않는다
   // (PremiumGate 참고 - 잠겨 있을 때 network 탭에 값이 안 남아야 한다).
-  const scoreQuery = useDashboardScoresQuery(effectiveWatchlistOnly, 10, scope, isScoreMode && isPremium)
+  const scoreQuery = useDashboardScoresQuery(effectiveWatchlistOnly, 30, scope, isScoreMode && isPremium)
   const scoreStockCodes = isScoreMode && isPremium ? (scoreQuery.data ?? []).map((item) => item.stockCode) : []
   // WebSocket 실시간 브로드캐스트는 장중에만 오므로 소켓만 쓰면 장마감엔
   // 현재가/등락률이 전부 "-"로 보인다(AppSidePanel에서 이미 한 번 겪은
