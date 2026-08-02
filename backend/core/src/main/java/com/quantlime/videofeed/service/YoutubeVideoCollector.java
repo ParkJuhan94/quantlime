@@ -46,6 +46,28 @@ public class YoutubeVideoCollector {
             .toList();
     }
 
+    /**
+     * PENDING_REVIEW 재평가 직전에 최신 조회수를 다시 받아오는 용도(2026-08-02
+     * 신규) - DB에 저장된 view_count는 최초 발견 시점(대부분 발행 직후,
+     * 조회수가 거의 0일 때) 스냅샷이라 그대로 재평가에 쓰면 6시간 유예를
+     * 두는 의미가 없어지는 버그가 있었다. API가 값을 못 준 videoId(삭제/
+     * 비공개 등)는 결과 맵에서 그냥 빠진다 - 호출측이 기존 view_count로
+     * 폴백한다.
+     */
+    public Map<String, Long> fetchViewCounts(List<String> externalVideoIds) {
+        Map<String, Long> viewCountsById = new HashMap<>();
+        for (int i = 0; i < externalVideoIds.size(); i += BATCH_SIZE) {
+            List<String> batch = externalVideoIds.subList(i, Math.min(i + BATCH_SIZE, externalVideoIds.size()));
+            YoutubeVideosResponse response = youtubeApiClient.getVideos(batch);
+            for (YoutubeVideosResponse.Item item : response.items()) {
+                if (item.statistics() != null && item.statistics().viewCount() != null) {
+                    viewCountsById.put(item.id(), Long.parseLong(item.statistics().viewCount()));
+                }
+            }
+        }
+        return viewCountsById;
+    }
+
     private List<PlaylistItemRef> fetchNewPlaylistItems(String uploadsPlaylistId, LocalDateTime since) {
         List<PlaylistItemRef> refs = new ArrayList<>();
         String pageToken = null;

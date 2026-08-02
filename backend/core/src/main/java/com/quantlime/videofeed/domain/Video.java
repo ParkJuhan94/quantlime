@@ -101,6 +101,11 @@ public class Video extends TimeBaseEntity {
             .build();
     }
 
+    public void updateViewCount(Long viewCount, LocalDateTime checkedAt) {
+        this.viewCount = viewCount;
+        this.viewCountCheckedAt = checkedAt;
+    }
+
     public void markFilteredOut() {
         this.status = VideoStatus.FILTERED_OUT;
     }

@@ -9,6 +9,7 @@ import com.quantlime.videofeed.repository.VideoRepository;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -16,9 +17,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
@@ -138,6 +143,79 @@ class VideoFilterServiceTest {
         // then
         assertThat(popular.getStatus()).isEqualTo(VideoStatus.SELECTED);
         assertThat(lessPopular.getStatus()).isEqualTo(VideoStatus.FILTERED_OUT);
+    }
+
+    @Test
+    @DisplayName("[재평가 대상 조회는 같은 채널의 PENDING_REVIEW 영상만 골라낸다]")
+    void findReevaluationCandidates_filtersByChannel() {
+        // given
+        Channel channel = channelOf(new ChannelFilterConfig(300, 1.5, 5, List.of(), List.of()));
+        ReflectionTestUtils.setField(channel, "id", 1L);
+        Channel otherChannel = channelOf(new ChannelFilterConfig(300, 1.5, 5, List.of(), List.of()));
+        ReflectionTestUtils.setField(otherChannel, "id", 2L);
+
+        Video ownVideo = videoOf(channel, "이 채널 영상", 400, 10L, LocalDateTime.now().minusHours(10));
+        Video otherChannelVideo = videoOf(otherChannel, "다른 채널 영상", 400, 10L, LocalDateTime.now().minusHours(10));
+        given(videoRepository.findByStatusAndPublishedAtBefore(eq(VideoStatus.PENDING_REVIEW), any()))
+            .willReturn(List.of(ownVideo, otherChannelVideo));
+
+        // when
+        List<Video> candidates = videoFilterService.findReevaluationCandidates(channel);
+
+        // then
+        assertThat(candidates).containsExactly(ownVideo);
+    }
+
+    @Test
+    @DisplayName("[재평가 시 fresh view count가 있으면 그 값으로 갱신 후 재분류한다(2026-08-02 버그 수정)]")
+    void reevaluatePendingReview_withFreshViewCount_updatesAndReclassifies() {
+        // given: DB에 남은 view_count(10)로는 velocity 미달이지만, 새로 받아온
+        // view_count(2000)로는 통과하는 상황 - 최초 발견 시점의 낡은
+        // view_count를 그대로 쓰면 영구히 FILTERED_OUT됐어야 할 케이스
+        Channel channel = channelOf(new ChannelFilterConfig(300, 1.5, 5, List.of(), List.of()));
+        channel.updateMedianVelocity(BigDecimal.valueOf(100));
+        Video video = videoOf(channel, "재평가 대상 영상", 400, 10L, LocalDateTime.now().minusHours(10));
+        ReflectionTestUtils.setField(video, "id", 1L);
+        given(videoRepository.findAllById(List.of(1L))).willReturn(List.of(video));
+
+        // when
+        videoFilterService.reevaluatePendingReview(
+            channel, List.of(1L), Map.of(video.getExternalVideoId(), 2000L));
+
+        // then
+        assertThat(video.getViewCount()).isEqualTo(2000L);
+        assertThat(video.getStatus()).isEqualTo(VideoStatus.SELECTED);
+    }
+
+    @Test
+    @DisplayName("[재평가 대상인데 fresh view count가 없으면(삭제/비공개 등) 기존 view_count로 재분류한다]")
+    void reevaluatePendingReview_withoutFreshViewCount_fallsBackToExistingViewCount() {
+        // given: API가 값을 못 준 영상 - 기존 view_count(500)만으로도 통과되는 상황
+        Channel channel = channelOf(new ChannelFilterConfig(300, 1.5, 5, List.of(), List.of()));
+        channel.updateMedianVelocity(BigDecimal.valueOf(10));
+        Video video = videoOf(channel, "삭제된 영상", 400, 500L, LocalDateTime.now().minusHours(10));
+        ReflectionTestUtils.setField(video, "id", 1L);
+        given(videoRepository.findAllById(List.of(1L))).willReturn(List.of(video));
+
+        // when
+        videoFilterService.reevaluatePendingReview(channel, List.of(1L), Map.of());
+
+        // then
+        assertThat(video.getViewCount()).isEqualTo(500L);
+        assertThat(video.getStatus()).isEqualTo(VideoStatus.SELECTED);
+    }
+
+    @Test
+    @DisplayName("[재평가 대상 ID가 없으면 조회/재분류 자체를 하지 않는다]")
+    void reevaluatePendingReview_noCandidates_doesNothing() {
+        // given
+        Channel channel = channelOf(new ChannelFilterConfig(300, 1.5, 5, List.of(), List.of()));
+
+        // when
+        videoFilterService.reevaluatePendingReview(channel, List.of(), Map.of());
+
+        // then
+        verifyNoInteractions(videoRepository);
     }
 
     private Channel channelOf(ChannelFilterConfig filterConfig) {
