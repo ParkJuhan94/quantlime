@@ -32,6 +32,7 @@ quant-engine/docs/BACKTEST_METHODOLOGY_REVIEW.md
 
 # 포트폴리오 어필 포인트 초안 (공개 저장소 노출 방지, 로컬 전용)
 docs/PORTFOLIO_HIGHLIGHTS.md
+docs/PORTFOLIO_HIGHLIGHTS_NOTES.md
 
 # 세션 작업 문서(내부 컨벤션·변경 이력·로드맵·운영 런북) - public 저장소
 # 노출 방지 목적으로 로컬 전용 전환(2026-08-03, git-filter-repo로 과거
