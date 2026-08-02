@@ -37,10 +37,3 @@ cd quant-engine && uvicorn main:app --reload --port 8000
 cd frontend && npm run dev
 ```
 
-## 문서
-
-- [`CLAUDE.md`](CLAUDE.md) — 프로젝트 구조·API 명세·코드 컨벤션·개발 Phase 현황 (핵심 참조 문서)
-- [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — 로컬 개발 환경 실행법, 검증 방법론
-- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — EC2 배포 런북
-- [`docs/ROADMAP.md`](docs/ROADMAP.md) — 기능 확장 계획
-- [`docs/CHANGELOG.md`](docs/CHANGELOG.md) — 세션별 작업 기록

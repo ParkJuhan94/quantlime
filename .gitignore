@@ -33,6 +33,17 @@ quant-engine/docs/BACKTEST_METHODOLOGY_REVIEW.md
 # 포트폴리오 어필 포인트 초안 (공개 저장소 노출 방지, 로컬 전용)
 docs/PORTFOLIO_HIGHLIGHTS.md
 
+# 세션 작업 문서(내부 컨벤션·변경 이력·로드맵·운영 런북) - public 저장소
+# 노출 방지 목적으로 로컬 전용 전환(2026-08-03, git-filter-repo로 과거
+# 히스토리에서도 제거). 파일 자체는 로컬에 계속 유지하고 git 추적만 제외
+CLAUDE.md
+backend/CLAUDE.md
+frontend/CLAUDE.md
+docs/CHANGELOG.md
+docs/ROADMAP.md
+docs/DEVELOPMENT.md
+docs/DEPLOYMENT.md
+
 # 사용자 업로드 이미지(로컬 디스크 저장, FileStorageService 참고) - 실행 시
 # 자동 생성되는 런타임 데이터라 저장소에 커밋하지 않는다. 실행 위치(루트
 # vs backend/api)에 따라 상대경로 UPLOAD_DIR이 둘 중 한 곳에 생길 수 있음.
