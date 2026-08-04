@@ -33,3 +33,30 @@ POST {{baseUrl}}/dev/backtest/run?stockCode=005930
 
 ### 유니버스 전체 백테스트(국내+해외 거래대금 상위 500씩 - 수십 분 이상 소요될 수 있음)
 POST {{baseUrl}}/dev/backtest/run-universe
+
+### 유니버스 전체 백테스트(force=true - 오늘 이미 실행된 종목도 스킵 없이 재실행.
+# 가격 소급 복구 직후처럼 반드시 다시 돌려야 하는 경우에만 사용)
+POST {{baseUrl}}/dev/backtest/run-universe?force=true
+
+### 국내/해외 일봉 무결성 복구 런북(순서 중요 - 2026-08-03 세션, 장중 스냅샷
+# 영구 고정 + 수정주가 소급 재조정 버그 복구용). 아래 요청들을 위에서부터
+# 순서대로 하나씩(!) 실행할 것 - 이 파일을 통째로 실행하면 안 된다는
+# 상단 경고가 특히 이 구간에 해당한다.
+
+### 1. [dry-run] 수정주가 재조정 의심 종목 스캔만(API 호출 0건) - 실제 복구 전 영향 범위 확인
+POST {{baseUrl}}/dev/prices/repair-adjusted?from=2025-06-01&dryRun=true
+
+### 2. 수정주가 재조정 복구(걸린 종목만 전 구간 재백필, ~40초)
+POST {{baseUrl}}/dev/prices/repair-adjusted?from=2025-06-01&dryRun=false
+
+### 3. 장중 스냅샷 영구 고정 복구(전 상장종목 from~오늘 무조건 재조회, 국내 ~7분)
+POST {{baseUrl}}/dev/prices/resettle?market=domestic&from=2026-07-01
+
+### 4. [재검증] 1번 재실행 - 잔여 0건 확인(3번이 새 점프를 만들지 않았는지 검증)
+POST {{baseUrl}}/dev/prices/repair-adjusted?from=2025-06-01&dryRun=true
+
+### 5. 가격 복구를 스코어에 전파(외부 API 0건, 퀀트 엔진 호출만 발생)
+POST {{baseUrl}}/dev/scores/rebuild?from=2025-06-01
+
+### 6. 백테스트 재실행(force=true - 오늘 이미 돌았어도 새 가격/스코어로 다시 계산)
+POST {{baseUrl}}/dev/backtest/run-universe?force=true

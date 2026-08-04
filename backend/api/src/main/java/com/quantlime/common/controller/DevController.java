@@ -10,6 +10,10 @@ import com.quantlime.backtest.service.BacktestService;
 import com.quantlime.backtest.service.BacktestUniverseService;
 import com.quantlime.infra.oauth.dto.OAuthUserInfo;
 import com.quantlime.market.service.MarketDataRefreshService;
+import com.quantlime.price.dto.PriceJumpReport;
+import com.quantlime.price.service.DailyPriceIntegrityService;
+import com.quantlime.price.service.DailyPriceResettlementService;
+import com.quantlime.score.service.ScoreService;
 import com.quantlime.stock.dto.StockMasterSyncResult;
 import com.quantlime.stock.service.OverseasStockMasterSyncService;
 import com.quantlime.stock.service.DomesticStockMasterSyncService;
@@ -18,6 +22,8 @@ import com.quantlime.user.domain.User;
 import com.quantlime.user.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.time.LocalDate;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Profile;
@@ -45,6 +51,9 @@ public class DevController {
     private final BacktestDatasetPreparationService backtestDatasetPreparationService;
     private final BacktestService backtestService;
     private final BacktestUniverseService backtestUniverseService;
+    private final DailyPriceResettlementService dailyPriceResettlementService;
+    private final DailyPriceIntegrityService dailyPriceIntegrityService;
+    private final ScoreService scoreService;
     private final UserService userService;
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenStore refreshTokenStore;
@@ -100,6 +109,49 @@ public class DevController {
             });
     }
 
+    @PostMapping("/prices/resettle")
+    @Operation(summary = "[개발용/복구] 장중 스냅샷 영구 고정 버그 복구 - 전 상장종목의 from~오늘 구간을 "
+        + "무조건 재조회해 덮어쓴다. 재확정 윈도우 도입 이후의 신규 오염은 정기 스윕이 자동으로 막지만, "
+        + "이미 그 윈도우 밖으로 밀려난 기존 오염은 이 트리거로만 복구된다.")
+    public ResponseEntity<String> triggerPriceResettlement(
+            @RequestParam String market, @RequestParam String from) {
+        LocalDate fromDate = LocalDate.parse(from);
+        log.info("[dev] 가격 재확정 일괄 복구 수동 트리거 시작: market={}, from={}", market, fromDate);
+        int processed = switch (market) {
+            case "domestic" -> dailyPriceResettlementService.resettleDomestic(fromDate);
+            case "overseas" -> dailyPriceResettlementService.resettleOverseas(fromDate);
+            default -> dailyPriceResettlementService.resettleDomestic(fromDate)
+                + dailyPriceResettlementService.resettleOverseas(fromDate);
+        };
+        log.info("[dev] 가격 재확정 일괄 복구 수동 트리거 완료: 처리종목수={}", processed);
+        return ResponseEntity.ok("가격 재확정 복구 완료: 처리종목수=" + processed);
+    }
+
+    @PostMapping("/prices/repair-adjusted")
+    @Operation(summary = "[개발용/복구] 수정주가 소급 재조정(액면분할/병합) 버그 복구 - from~오늘 구간에서 "
+        + "가격제한폭을 넘는 종가 점프를 스캔하고, dryRun=false면 걸린 종목만 전 구간 재백필한다. "
+        + "dryRun=true(기본값)면 API 호출 없이 스캔 결과만 반환한다.")
+    public ResponseEntity<List<PriceJumpReport>> triggerAdjustedPriceRepair(
+            @RequestParam String from,
+            @RequestParam(defaultValue = "true") boolean dryRun) {
+        LocalDate fromDate = LocalDate.parse(from);
+        log.info("[dev] 수정주가 재조정 복구 수동 트리거 시작: from={}, dryRun={}", fromDate, dryRun);
+        List<PriceJumpReport> jumps = dailyPriceIntegrityService.repairDomesticAdjusted(fromDate, dryRun);
+        log.info("[dev] 수정주가 재조정 복구 수동 트리거 완료: 발견={}건, dryRun={}", jumps.size(), dryRun);
+        return ResponseEntity.ok(jumps);
+    }
+
+    @PostMapping("/scores/rebuild")
+    @Operation(summary = "[개발용/복구] 가격 소급 복구 후 오염된 과거 스코어 재구성 - from 이후 스코어를 "
+        + "전부 지우고 전 상장종목을 다시 계산한다. 외부 API(Toss) 호출은 없고 퀀트 엔진 호출만 발생한다.")
+    public ResponseEntity<String> triggerScoreRebuild(@RequestParam String from) {
+        LocalDate fromDate = LocalDate.parse(from);
+        log.info("[dev] 스코어 재구성 수동 트리거 시작: from={}", fromDate);
+        scoreService.rebuildScoresFrom(fromDate);
+        log.info("[dev] 스코어 재구성 수동 트리거 완료: from={}", fromDate);
+        return ResponseEntity.ok("스코어 재구성 완료: from=" + fromDate);
+    }
+
     @PostMapping("/backtest/prepare-dataset")
     @Operation(summary = "[개발용/트리거2] 백테스트용 데이터 일괄 준비 - 국내/해외 유니버스"
         + "(거래대금 상위 500) 선정+백필과 벤치마크 지수(KOSPI/KOSDAQ/NASDAQ/SP500) 백필을 한 번에 실행")
@@ -121,14 +173,17 @@ public class DevController {
 
     @PostMapping("/backtest/run-universe")
     @Operation(summary = "[개발용] 백테스트용 유니버스(국내+해외 거래대금 상위 500씩) 전체에 대해 "
-        + "백테스트를 순회 실행. 오늘 이미 실행된 종목은 스킵. 트리거1과 달리 자동(기동 시/16:00) "
-        + "트리거에는 연결돼 있지 않음(축×horizon마다 block bootstrap 500회라 무거운 연산 - 수동으로만 실행)")
-    public ResponseEntity<String> triggerBacktestUniverse() {
+        + "백테스트를 순회 실행. 오늘 이미 실행된 종목은 스킵(force=true면 스킵 없이 전부 재실행 - "
+        + "가격 소급 복구 직후처럼 오늘 이미 돌았어도 반드시 다시 돌려야 하는 경우용). 트리거1과 달리 "
+        + "자동(기동 시/16:00) 트리거에는 연결돼 있지 않음(축×horizon마다 block bootstrap 500회라 "
+        + "무거운 연산 - 수동으로만 실행)")
+    public ResponseEntity<String> triggerBacktestUniverse(
+            @RequestParam(defaultValue = "false") boolean force) {
         // 축×horizon마다 block bootstrap 500회 x 최대 1000종목이라 수십 분
         // 이상 걸릴 수 있는 무거운 연산 - 시작 로그가 없으면 그 시간 동안
         // 서버가 멈춘 건지 정상 진행 중인지 로그만으로 알 수 없다.
-        log.info("[dev] 유니버스 백테스트 수동 트리거 시작(무거운 연산, 수십 분 이상 소요될 수 있음)");
-        backtestUniverseService.runUniverse();
+        log.info("[dev] 유니버스 백테스트 수동 트리거 시작(무거운 연산, 수십 분 이상 소요될 수 있음): force={}", force);
+        backtestUniverseService.runUniverse(force);
         log.info("[dev] 유니버스 백테스트 수동 트리거 완료");
         return ResponseEntity.ok("유니버스 백테스트 완료");
     }
