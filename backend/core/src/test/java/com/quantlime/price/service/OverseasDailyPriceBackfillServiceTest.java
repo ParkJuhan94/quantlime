@@ -126,11 +126,13 @@ class OverseasDailyPriceBackfillServiceTest {
     }
 
     @Test
-    @DisplayName("[refreshRecent는 지정한 lookbackDays만큼 조회한다]")
+    @DisplayName("[refreshRecent는 최소 재확정 캔들 수(20) 미만이면 20으로 올려 조회한다]")
     void refreshRecent_fetchesWithGivenLookbackDays() {
-        // given
-        TossCandleResponse page = candlePage(8, "2026-07-09", null);
-        given(tossApiClient.getDailyCandles(eq(STOCK_CODE), eq(8), any())).willReturn(page);
+        // given: lookbackDays(8)가 DailyPriceSettlementPolicy.MIN_LOOKBACK_CANDLES(20)보다
+        // 작아 20으로 상향된다 - 갭이 작아도 재확정 윈도우 전체를 훑어야 미확정
+        // 스냅샷/수정주가 재조정을 놓치지 않는다(국내 DomesticDailyPriceService와 동일 정책)
+        TossCandleResponse page = candlePage(20, "2026-06-01", null);
+        given(tossApiClient.getDailyCandles(eq(STOCK_CODE), eq(20), any())).willReturn(page);
         given(overseasDailyPriceRepository.existsByStockCodeAndTradeDate(eq(STOCK_CODE), any()))
             .willReturn(false);
 
@@ -138,8 +140,8 @@ class OverseasDailyPriceBackfillServiceTest {
         overseasDailyPriceBackfillService.refreshRecent(STOCK_CODE, 8);
 
         // then
-        verify(tossApiClient, times(1)).getDailyCandles(eq(STOCK_CODE), eq(8), any());
-        verify(overseasDailyPriceRepository, times(8)).save(any(OverseasDailyPrice.class));
+        verify(tossApiClient, times(1)).getDailyCandles(eq(STOCK_CODE), eq(20), any());
+        verify(overseasDailyPriceRepository, times(20)).save(any(OverseasDailyPrice.class));
     }
 
     // Rate Limit(429) 재시도는 2026-08-01부터 TossApiClient.getDailyCandles

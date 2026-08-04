@@ -13,6 +13,8 @@ import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.price.repository.DomesticDailyPriceRepository;
 import com.quantlime.price.repository.OverseasDailyPriceRepository;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -22,6 +24,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
@@ -60,12 +63,37 @@ class PriceGapFillServiceTest {
         verify(domesticDailyPriceService, never()).refreshRecent(any(), anyInt());
     }
 
+    // 구 테스트명 [이미 오늘까지 저장돼 있으면 국내 API를 호출하지 않는다]를
+    // 의미 반전시켰다 - "오늘 행이 있다(갭 없음)"와 "확정됐다(20:00 이후
+    // 저장됐다)"를 같은 것으로 취급한 게 장중 스냅샷이 그날의 확정 종가로
+    // 영구 고정되는 버그의 원인이었다(2026-08-03 실측: 삼성전자 08:23
+    // 프리마켓 조각이 그렇게 고정됨). 이 테스트가 그 버그의 회귀 방지
+    // 앵커다.
     @Test
-    @DisplayName("[이미 오늘까지 저장돼 있으면 국내 API를 호출하지 않는다]")
-    void fillDomesticGap_alreadyFresh_skipsApiCall() {
-        // given
+    @DisplayName("[오늘 행이 있어도 확정 시각(20:00) 전이면 다시 조회한다]")
+    void fillDomesticGap_todayUnsettled_refetchesEvenWithNoGap() {
+        // given: updatedAt이 null(미영속 픽스처) - 미확정으로 취급된다
         given(domesticDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(STOCK_CODE))
             .willReturn(Optional.of(domesticDailyPrice(LocalDate.now())));
+
+        // when
+        boolean calledApi = priceGapFillService.fillDomesticGap(STOCK_CODE);
+
+        // then: 갭 0일 + 버퍼 5일 = 5일치를 재조회한다
+        assertThat(calledApi).isTrue();
+        verify(domesticDailyPriceService).refreshRecent(STOCK_CODE, 5);
+        verify(domesticDailyPriceService, never()).backfillHistoryIfNeeded(any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("[오늘 행이 20:00 이후에 저장됐으면 재조회하지 않는다]")
+    void fillDomesticGap_todaySettled_skipsApiCall() {
+        // given
+        DomesticDailyPrice settled = domesticDailyPrice(LocalDate.now());
+        ReflectionTestUtils.setField(settled, "updatedAt",
+            LocalDateTime.of(LocalDate.now(), LocalTime.of(20, 5)));
+        given(domesticDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(STOCK_CODE))
+            .willReturn(Optional.of(settled));
 
         // when
         boolean calledApi = priceGapFillService.fillDomesticGap(STOCK_CODE);
@@ -75,6 +103,24 @@ class PriceGapFillServiceTest {
         assertThat(calledApi).isFalse();
         verify(domesticDailyPriceService, never()).refreshRecent(any(), anyInt());
         verify(domesticDailyPriceService, never()).backfillHistoryIfNeeded(any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("[미확정이라도 최근에 이미 재조회했으면 이번 실행은 건너뛴다]")
+    void fillDomesticGap_recentlyRefreshed_skipsApiCall() {
+        // given: 5분 전에 갱신됨(60분 가드 이내) - 아직 미확정이지만 재기동
+        // 가드가 재조회를 막는다
+        DomesticDailyPrice recentlyRefreshed = domesticDailyPrice(LocalDate.now());
+        ReflectionTestUtils.setField(recentlyRefreshed, "updatedAt", LocalDateTime.now().minusMinutes(5));
+        given(domesticDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(STOCK_CODE))
+            .willReturn(Optional.of(recentlyRefreshed));
+
+        // when
+        boolean calledApi = priceGapFillService.fillDomesticGap(STOCK_CODE);
+
+        // then
+        assertThat(calledApi).isFalse();
+        verify(domesticDailyPriceService, never()).refreshRecent(any(), anyInt());
     }
 
     @Test

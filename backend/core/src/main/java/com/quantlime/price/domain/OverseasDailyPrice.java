@@ -95,6 +95,26 @@ public class OverseasDailyPrice extends TimeBaseEntity {
             .build();
     }
 
+    /**
+     * setter를 두지 않는 컨벤션을 지키기 위한 비즈니스 메서드 -
+     * {@link DomesticDailyPrice#updateOhlcv}와 대칭. 재확정 윈도우 안의
+     * 거래일을 최신 응답으로 덮어쓰거나, 수정주가 소급 재조정 재백필 시
+     * 기존 행을 갱신하는 데 쓰인다.
+     */
+    public void updateOhlcv(Double openPrice, Double highPrice, Double lowPrice,
+                            Double closePrice, Long volume) {
+        Assert.notNull(openPrice, "시가는 필수입니다.");
+        Assert.notNull(highPrice, "고가는 필수입니다.");
+        Assert.notNull(lowPrice, "저가는 필수입니다.");
+        Assert.notNull(closePrice, "종가는 필수입니다.");
+        Assert.notNull(volume, "거래량은 필수입니다.");
+        this.openPrice = openPrice;
+        this.highPrice = highPrice;
+        this.lowPrice = lowPrice;
+        this.closePrice = closePrice;
+        this.volume = volume;
+    }
+
     private void validateOverseasDailyPrice(String stockCode, LocalDate tradeDate,
                                             Double openPrice, Double highPrice,
                                             Double lowPrice, Double closePrice, Long volume) {

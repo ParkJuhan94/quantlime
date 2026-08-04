@@ -4,7 +4,9 @@ import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.price.repository.DomesticDailyPriceRepository;
 import com.quantlime.price.repository.OverseasDailyPriceRepository;
+import com.quantlime.price.util.DailyPriceSettlementPolicy;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -50,19 +52,29 @@ public class PriceGapFillService {
      * (이미 최신이라 스킵된 종목까지 매번 딜레이를 걸면 전종목 스윕이 불필요하게 느려진다).
      */
     public boolean fillDomesticGap(String stockCode) {
-        Optional<LocalDate> latestTradeDate = domesticDailyPriceRepository
-            .findTopByStockCodeOrderByTradeDateDesc(stockCode)
-            .map(DomesticDailyPrice::getTradeDate);
-        if (latestTradeDate.isEmpty()) {
+        Optional<DomesticDailyPrice> latest = domesticDailyPriceRepository
+            .findTopByStockCodeOrderByTradeDateDesc(stockCode);
+        if (latest.isEmpty()) {
             domesticDailyPriceService.backfillHistoryIfNeeded(stockCode, DEEP_BACKFILL_TARGET_DAYS);
             return true;
         }
 
-        long rawGapDays = ChronoUnit.DAYS.between(latestTradeDate.get(), LocalDate.now());
-        if (rawGapDays <= 0) {
-            log.debug("가격 갭 없음(이미 최신): stockCode={}, 최신저장일={}", stockCode, latestTradeDate.get());
+        // "갭이 없다(오늘 행이 있다)"와 "확정됐다(NXT 애프터마켓 종료인 20:00
+        // 이후에 저장됐다)"는 전혀 다른 조건이다 - 이 둘을 같은 것으로 취급한
+        // 게(구 rawGapDays<=0 조기 반환) 장중 스냅샷이 그날의 확정 종가로
+        // 영구 고정되는 버그의 원인이었다(DailyPriceSettlementPolicy 참고,
+        // 실측: 삼성전자 2026-07-30 08:23 프리마켓 조각이 그렇게 고정됨).
+        // tradeDate==today 조건은 유지해야 한다 - "확정이면 무조건 스킵"으로
+        // 만들면 예를 들어 금요일 확정분을 들고 있는 채로 월요일을 맞았을 때
+        // 다음 거래일 데이터를 영영 못 받는다.
+        DomesticDailyPrice latestPrice = latest.get();
+        if (isSettledToday(latestPrice) || isRecentlyRefreshedToday(latestPrice)) {
+            log.debug("가격 재확정 불필요(오늘 확정분 보유 또는 최근 갱신됨): stockCode={}, 최신저장일={}",
+                stockCode, latestPrice.getTradeDate());
             return false;
         }
+
+        long rawGapDays = ChronoUnit.DAYS.between(latestPrice.getTradeDate(), LocalDate.now());
         int lookbackDays = (int) rawGapDays + GAP_BUFFER_DAYS;
         if (lookbackDays > SINGLE_CALL_CAP_DAYS) {
             log.info("가격 갭이 단일 호출 한도 초과, 깊은 백필로 대체: stockCode={}, 갭={}일",
@@ -72,6 +84,18 @@ public class PriceGapFillService {
         }
         domesticDailyPriceService.refreshRecent(stockCode, lookbackDays);
         return true;
+    }
+
+    private boolean isSettledToday(DomesticDailyPrice latest) {
+        LocalDate today = LocalDate.now();
+        return latest.getTradeDate().isEqual(today)
+            && DailyPriceSettlementPolicy.isSettled(today, latest.getUpdatedAt());
+    }
+
+    /** 미확정이더라도 최근에 이미 재조회했다면 이번 실행에서는 다시 부르지 않는다(재기동 가드). */
+    private boolean isRecentlyRefreshedToday(DomesticDailyPrice latest) {
+        return latest.getTradeDate().isEqual(LocalDate.now())
+            && DailyPriceSettlementPolicy.isRecentlyRefreshed(latest.getUpdatedAt(), LocalDateTime.now());
     }
 
     public boolean fillOverseasGap(String stockCode) {

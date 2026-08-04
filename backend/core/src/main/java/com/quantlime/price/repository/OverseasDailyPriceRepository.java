@@ -11,6 +11,8 @@ public interface OverseasDailyPriceRepository
 
     boolean existsByStockCodeAndTradeDate(String stockCode, LocalDate tradeDate);
 
+    Optional<OverseasDailyPrice> findByStockCodeAndTradeDate(String stockCode, LocalDate tradeDate);
+
     long countByStockCode(String stockCode);
 
     Optional<OverseasDailyPrice> findTopByStockCodeOrderByTradeDateDesc(String stockCode);
