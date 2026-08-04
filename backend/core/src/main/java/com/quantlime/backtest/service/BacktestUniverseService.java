@@ -36,6 +36,16 @@ public class BacktestUniverseService {
     private final BacktestResultRepository backtestResultRepository;
 
     public void runUniverse() {
+        runUniverse(false);
+    }
+
+    /**
+     * @param force true면 오늘 이미 백테스트가 돈 종목도 다시 실행한다 -
+     *     가격이 소급 복구된 직후처럼 "오늘 이미 돌았어도 반드시 다시
+     *     돌려야" 하는 경우를 위한 강제 실행(DailyPriceIntegrityService
+     *     복구 런북 참고).
+     */
+    public void runUniverse(boolean force) {
         List<String> domesticUniverse = domesticUniverseSelectionService.selectAndBackfillUniverse();
         List<String> overseasUniverse = overseasUniverseSelectionService.selectAndBackfillUniverse();
 
@@ -43,13 +53,14 @@ public class BacktestUniverseService {
         universe.addAll(domesticUniverse);
         universe.addAll(overseasUniverse);
 
-        log.info("유니버스 백테스트 시작: 국내={}종목, 해외={}종목", domesticUniverse.size(), overseasUniverse.size());
+        log.info("유니버스 백테스트 시작: 국내={}종목, 해외={}종목, force={}",
+            domesticUniverse.size(), overseasUniverse.size(), force);
 
         int ranCount = 0;
         int skippedFreshCount = 0;
         int failedCount = 0;
         for (String stockCode : universe) {
-            if (isAlreadyBacktestedToday(stockCode)) {
+            if (!force && isAlreadyBacktestedToday(stockCode)) {
                 skippedFreshCount++;
                 continue;
             }
