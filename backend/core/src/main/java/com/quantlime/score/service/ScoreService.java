@@ -136,6 +136,42 @@ public class ScoreService {
         log.info("해외 스코어 재계산 완료: 총 {}개 청크", chunks.size());
     }
 
+    /**
+     * 가격이 소급 복구된 뒤 오염된 과거 스코어를 정리하는 일회성 트리거 -
+     * from 이후 스코어를 전부 지우고 전 상장종목을 다시 계산한다.
+     * {@code Score}엔 score_version이 없고 {@link ScorePersistenceService#saveSeries}가
+     * "재확정 윈도우 밖 과거는 존재하면 스킵"이라, 가격만 고쳐서는 그
+     * 윈도우보다 오래된 오염 스코어가 영원히 그대로 남는다.
+     *
+     * <p>국내/해외 분리는 {@link com.quantlime.market.service.MarketDataRefreshService#refreshAll}
+     * 과 동일한 필터를 쓴다 - 레거시 {@link #recalculateAllListedScores}는
+     * 시장 구분 없이 전부 {@link #recalculateDomesticScores}로 보내 해외
+     * 종목엔 애초에 맞지 않으므로 여기서는 쓰지 않는다.
+     *
+     * <p>OHLCV 조회 + 퀀트 엔진 HTTP 호출을 트랜잭션 밖에서 수행하는 이
+     * 클래스의 원칙(클래스 주석 참고)을 그대로 따르기 위해 이 메서드 자체는
+     * 트랜잭션으로 묶지 않는다 - 삭제만 {@link ScorePersistenceService#deleteFrom}의
+     * 별도 트랜잭션으로 처리된다.
+     */
+    public void rebuildScoresFrom(LocalDate from) {
+        scorePersistenceService.deleteFrom(from);
+
+        List<Stock> stocks = stockMasterService.getAllListedStocks();
+        List<String> domesticCodes = stocks.stream()
+            .filter(stock -> stock.getMarketType().isDomestic())
+            .map(Stock::getStockCode)
+            .toList();
+        List<String> overseasCodes = stocks.stream()
+            .filter(stock -> !stock.getMarketType().isDomestic())
+            .map(Stock::getStockCode)
+            .toList();
+
+        recalculateDomesticScores(domesticCodes);
+        recalculateOverseasScores(overseasCodes);
+        log.info("스코어 재구성 완료: from={}, 국내={}종목, 해외={}종목",
+            from, domesticCodes.size(), overseasCodes.size());
+    }
+
     private static List<List<String>> partition(List<String> list, int size) {
         List<List<String>> chunks = new ArrayList<>();
         for (int i = 0; i < list.size(); i += size) {

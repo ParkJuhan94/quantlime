@@ -7,6 +7,7 @@ import com.quantlime.score.domain.Divergence;
 import com.quantlime.score.domain.Quadrant;
 import com.quantlime.score.domain.Score;
 import com.quantlime.score.repository.ScoreRepository;
+import jakarta.persistence.EntityManager;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -37,6 +38,9 @@ class ScorePersistenceServiceTest {
 
     @Mock
     private ScoreRepository scoreRepository;
+
+    @Mock
+    private EntityManager entityManager;
 
     @InjectMocks
     private ScorePersistenceService scorePersistenceService;
