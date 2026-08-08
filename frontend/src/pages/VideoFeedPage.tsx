@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { VideoFeedCard } from '../components/videofeed/VideoFeedCard'
 import { LoadingSpinner } from '../components/common/LoadingSpinner'
 import { EmptyState } from '../components/common/EmptyState'
-import { useVideoFeedQuery } from '../hooks/queries/useVideoFeed'
+import { useVideoFeedChannelsQuery, useVideoFeedQuery } from '../hooks/queries/useVideoFeed'
 import { getCookie, setCookie } from '../utils/cookie'
 import {
   VIDEO_FEED_RETENTION_DAYS,
@@ -23,13 +23,18 @@ function initialDate(): string {
   return saved ? clampToRetentionWindow(saved) : todayDateString()
 }
 
-// 유튜브 투자 채널(한국경제TV/런던고라니/주덕) 신규 영상을 AI가 요약+종목
-// 태깅한 결과를 최신순으로 보여준다(Phase 8 P6, 2026-07-31). 글쓰기/좋아요
-// 같은 사용자 상호작용이 없는 읽기 전용 피드라 커뮤니티 피드(FeedPage)와
-// 달리 사이드바/작성 카드 없이 목록만 노출한다.
+// 유튜브 투자 채널 신규 영상을 AI가 요약+종목 태깅한 결과를 최신순으로
+// 보여준다(Phase 8 P6, 2026-07-31). 글쓰기/좋아요 같은 사용자 상호작용이
+// 없는 읽기 전용 피드라 커뮤니티 피드(FeedPage)와 달리 사이드바/작성 카드
+// 없이 목록만 노출한다. 채널 목록은 하드코딩하지 않고 /api/video-feed/channels
+// 로 동적으로 받아온다(2026-08-09, 채널 필터 추가) - 채널이 늘어날 때마다
+// 이 파일을 고칠 필요가 없게 하기 위함.
 export function VideoFeedPage() {
   const [selectedDate, setSelectedDate] = useState(initialDate)
-  const videoFeedQuery = useVideoFeedQuery(undefined, selectedDate)
+  const [selectedChannelId, setSelectedChannelId] = useState<number | undefined>(undefined)
+  const channelsQuery = useVideoFeedChannelsQuery()
+  const channels = channelsQuery.data ?? []
+  const videoFeedQuery = useVideoFeedQuery(undefined, selectedChannelId, selectedDate)
   const videos = videoFeedQuery.data?.content ?? []
 
   useEffect(() => {
@@ -86,6 +91,36 @@ export function VideoFeedPage() {
           </div>
         </div>
       </div>
+
+      {/* 채널이 늘어나도 프론트 코드 변경 없이 반영되도록 서버에서 동적으로
+          받아온 채널 목록으로 칩을 구성한다(홈 실시간 랭킹의 전체/국내/해외
+          필터와 동일한 칩 스타일 - rounded-xl 래퍼 + rounded-lg 버튼,
+          선택은 배경색으로 표시). 채널 수가 늘어도 줄바꿈 없이 가로 스크롤. */}
+      {channels.length > 0 && (
+        <div className="flex gap-1 overflow-x-auto rounded-xl bg-gray-100 p-1">
+          <button
+            type="button"
+            onClick={() => setSelectedChannelId(undefined)}
+            className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+              selectedChannelId === undefined ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+            }`}
+          >
+            전체
+          </button>
+          {channels.map((channel) => (
+            <button
+              key={channel.channelId}
+              type="button"
+              onClick={() => setSelectedChannelId(channel.channelId)}
+              className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                selectedChannelId === channel.channelId ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+              }`}
+            >
+              {channel.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {videoFeedQuery.isLoading && <LoadingSpinner />}
       {!videoFeedQuery.isLoading && videos.length === 0 && (

@@ -1,12 +1,22 @@
 import { useQuery } from '@tanstack/react-query'
-import { getVideoFeed, getVideoFeedDetail } from '../../api/videoFeed'
+import { getVideoFeed, getVideoFeedChannels, getVideoFeedDetail } from '../../api/videoFeed'
 import { queryKeys } from '../queryKeys'
 
-export function useVideoFeedQuery(tickerCode?: string, date?: string) {
+export function useVideoFeedQuery(tickerCode?: string, channelId?: number, date?: string) {
   return useQuery({
-    queryKey: queryKeys.videoFeed(tickerCode, date),
-    queryFn: () => getVideoFeed(tickerCode, date),
+    queryKey: queryKeys.videoFeed(tickerCode, channelId, date),
+    queryFn: () => getVideoFeed(tickerCode, channelId, date),
     staleTime: 60_000,
+  })
+}
+
+// 채널 필터 칩 옵션용 - 새 채널이 추가돼도 프론트 코드 변경 없이 목록에
+// 반영되도록 하드코딩하지 않고 서버에서 동적으로 받아온다.
+export function useVideoFeedChannelsQuery() {
+  return useQuery({
+    queryKey: queryKeys.videoFeedChannels(),
+    queryFn: getVideoFeedChannels,
+    staleTime: 5 * 60_000,
   })
 }
 

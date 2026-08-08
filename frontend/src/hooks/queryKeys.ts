@@ -28,8 +28,10 @@ export const queryKeys = {
   feedPostsAll: ['feed', 'posts'] as const,
   feedPosts: (category?: string) => ['feed', 'posts', category ?? 'all'] as const,
   feedComments: (postId: number) => ['feed', 'posts', postId, 'comments'] as const,
-  videoFeed: (tickerCode?: string, date?: string) => ['videoFeed', tickerCode ?? 'all', date ?? 'all'] as const,
+  videoFeed: (tickerCode?: string, channelId?: number, date?: string) =>
+    ['videoFeed', tickerCode ?? 'all', channelId ?? 'all', date ?? 'all'] as const,
   videoFeedDetail: (videoId: number) => ['videoFeed', 'detail', videoId] as const,
+  videoFeedChannels: () => ['videoFeed', 'channels'] as const,
   subscriptionPlans: ['subscription', 'plans'] as const,
   subscriptionMe: ['subscription', 'me'] as const,
   subscriptionPayments: ['subscription', 'payments'] as const,

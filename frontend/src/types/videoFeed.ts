@@ -1,3 +1,8 @@
+export interface VideoFeedChannel {
+  channelId: number
+  name: string
+}
+
 export interface VideoFeedTicker {
   tickerCode: string
   tickerName: string | null
@@ -29,6 +34,7 @@ export interface VideoFeedDetail {
   durationSec: number | null
   summary: string
   keyPoints: string[]
+  macroPoints: string[]
   caveat: string
   tickers: VideoFeedTicker[]
 }

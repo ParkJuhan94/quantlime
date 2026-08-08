@@ -90,7 +90,16 @@ export function VideoFeedCard({ video }: { video: VideoFeedItem }) {
                     <li key={index}>{point}</li>
                   ))}
                 </ul>
-                <p className="mt-2 text-xs text-gray-400">{detailQuery.data.caveat}</p>
+                {detailQuery.data.macroPoints.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-xs font-medium text-gray-500">시장 전반</p>
+                    <ul className="mt-1 list-disc space-y-1 pl-4 text-sm text-gray-700">
+                      {detailQuery.data.macroPoints.map((point, index) => (
+                        <li key={index}>{point}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </>
             )}
           </div>
