@@ -15,4 +15,6 @@ public interface ChannelRepository extends JpaRepository<Channel, Long> {
     List<Channel> findByEnabledTrueOrderByPriorityAsc();
 
     List<Channel> findByProfileImageUrlIsNull();
+
+    List<Channel> findAllByOrderByPriorityAsc();
 }

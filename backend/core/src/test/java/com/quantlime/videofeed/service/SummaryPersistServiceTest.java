@@ -70,7 +70,7 @@ class SummaryPersistServiceTest {
         given(videoRepository.findById(1L)).willReturn(Optional.of(video));
         given(stockRepository.existsByStockCode("005930")).willReturn(true);
         SummarizeApiResponse response = new SummarizeApiResponse(
-            "요약", List.of("포인트1"),
+            "요약", List.of("포인트1"), List.of("연준 9월 추가 인하 시사"),
             List.of(new SummarizeApiResponse.TickerMentionApiResponse("005930", "삼성전자", "BULLISH", 0.8)),
             "고지", "gemini-2.5-flash", 100, 50);
 
@@ -98,7 +98,7 @@ class SummaryPersistServiceTest {
         given(videoRepository.findById(1L)).willReturn(Optional.of(video));
         given(stockRepository.existsByStockCode("999999")).willReturn(false);
         SummarizeApiResponse response = new SummarizeApiResponse(
-            "요약", List.of(),
+            "요약", List.of(), List.of(),
             List.of(new SummarizeApiResponse.TickerMentionApiResponse("999999", "없는종목", "NEUTRAL", 0.5)),
             "고지", "gemini-2.5-flash", 100, 50);
 

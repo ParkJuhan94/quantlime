@@ -1,10 +1,7 @@
 package com.quantlime.videofeed.service;
 
 import com.quantlime.common.lock.RedisLockService;
-import com.quantlime.videofeed.repository.SummaryRepository;
-import com.quantlime.videofeed.repository.TranscriptRepository;
 import com.quantlime.videofeed.repository.VideoRepository;
-import com.quantlime.videofeed.repository.VideoTickerRepository;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -32,9 +29,7 @@ public class VideoRetentionService {
 
     private final RedisLockService redisLockService;
     private final VideoRepository videoRepository;
-    private final TranscriptRepository transcriptRepository;
-    private final SummaryRepository summaryRepository;
-    private final VideoTickerRepository videoTickerRepository;
+    private final VideoRetentionDeleteService videoRetentionDeleteService;
 
     /**
      * 락을 잡은 채로 deleteVideosOlderThanRetention()을 실행한다.
@@ -48,10 +43,8 @@ public class VideoRetentionService {
 
     // this::deleteVideosOlderThanRetention로 self-invocation되는 경로(위
     // runExclusively)가 있어 여기에 @Transactional을 붙이면 프록시를 안 타
-    // 조용히 무시된다 - 대신 아래 4개 delete 호출은 각자 Spring Data
-    // 리포지토리 프록시를 통해 독립적으로 트랜잭셔널하므로, 중간에 실패해도
-    // 다음 실행 때 남은 대상만 다시 잡혀 자연히 복구된다(전량 원자성은
-    // 포기하되 고아 행이 영구히 남지는 않음).
+    // 조용히 무시된다 - 실제 삭제 실행은 별도 빈(VideoRetentionDeleteService)에
+    // 위임해 정상적으로 트랜잭션 프록시를 타게 한다(그 클래스 javadoc 참고).
     public int deleteVideosOlderThanRetention() {
         LocalDateTime cutoff = LocalDate.now().minusDays(RETENTION_DAYS).atStartOfDay();
         List<Long> videoIds = videoRepository.findIdsByPublishedAtBefore(cutoff);
@@ -63,10 +56,7 @@ public class VideoRetentionService {
         // video_id를 NO_CONSTRAINT FK로만 참조해(§9.2 관례) DB 캐스케이드가
         // 없다 - 자식 테이블부터 먼저 지워야 고아 행이 안 남는다
         // (FeedService.deletePost와 동일한 패턴).
-        videoTickerRepository.deleteByVideo_IdIn(videoIds);
-        summaryRepository.deleteByVideo_IdIn(videoIds);
-        transcriptRepository.deleteByVideo_IdIn(videoIds);
-        videoRepository.deleteAllByIdInBatch(videoIds);
+        videoRetentionDeleteService.deleteBatch(videoIds);
 
         log.info("보존 기간({}일) 초과 영상 삭제 완료: 삭제건수={}, cutoff={}", RETENTION_DAYS, videoIds.size(), cutoff);
         return videoIds.size();

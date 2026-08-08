@@ -4,7 +4,10 @@ import com.quantlime.common.exception.ValidationException;
 import com.quantlime.videofeed.dto.CollectResult;
 import com.quantlime.videofeed.dto.SummarizeResult;
 import com.quantlime.videofeed.dto.TranscribeResult;
+import com.quantlime.videofeed.dto.mapper.VideoFeedMapper;
+import com.quantlime.videofeed.dto.response.ChannelResponse;
 import com.quantlime.videofeed.exception.VideoFeedErrorCode;
+import com.quantlime.videofeed.service.ChannelQueryService;
 import com.quantlime.videofeed.service.ChannelVelocityInitializationService;
 import com.quantlime.videofeed.service.FeedCollectionFacade;
 import com.quantlime.videofeed.service.SummaryCollectionFacade;
@@ -17,6 +20,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -38,6 +42,18 @@ public class FeedCollectionAdminController {
     private final TranscriptCollectionFacade transcriptCollectionFacade;
     private final SummaryCollectionFacade summaryCollectionFacade;
     private final VideoRetentionService videoRetentionService;
+    private final ChannelQueryService channelQueryService;
+
+    @GetMapping("/channels")
+    @Operation(summary = "채널 목록 조회",
+        description = "시딩된 채널 전체(비활성 포함)를 우선순위 오름차순으로 조회한다. "
+            + "channelId(velocity 초기화 트리거용 경로변수)를 DB 직접 조회 없이 확인하기 위한 용도")
+    @ApiResponse(useReturnTypeSchema = true)
+    public ResponseEntity<List<ChannelResponse>> channels() {
+        return ResponseEntity.ok(channelQueryService.findAllOrderByPriority().stream()
+            .map(VideoFeedMapper::toChannelResponse)
+            .toList());
+    }
 
     @PostMapping("/collect")
     @Operation(summary = "전체 채널 영상 수집 수동 트리거",

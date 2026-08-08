@@ -46,6 +46,11 @@ class VideoFeedControllerTest extends ApiTestSupport {
         String externalVideoId, String title, String tickerCode, LocalDateTime publishedAt) {
         Channel channel = Channel.of(Platform.YOUTUBE, "UC" + externalVideoId, "UU" + externalVideoId,
             "테스트 채널", 10, new ChannelFilterConfig(180, 1.5, 5, List.of(), List.of()));
+        return seedSummarizedVideo(externalVideoId, title, tickerCode, publishedAt, channel);
+    }
+
+    private Video seedSummarizedVideo(
+        String externalVideoId, String title, String tickerCode, LocalDateTime publishedAt, Channel channel) {
         channel.updateProfileImageUrl("https://yt3.example.com/UC" + externalVideoId + ".jpg");
         channel = channelRepository.save(channel);
         Video video = videoRepository.save(Video.of(
@@ -108,6 +113,44 @@ class VideoFeedControllerTest extends ApiTestSupport {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.content.length()").value(1))
             .andExpect(jsonPath("$.content[0].title").value("당일 영상"));
+    }
+
+    @Test
+    @DisplayName("[channelId로 필터링하면 해당 채널 영상만 반환한다]")
+    void getVideos_withChannelId_returnsOnlyThatChannelVideos() throws Exception {
+        // given
+        Channel channelA = Channel.of(Platform.YOUTUBE, "UCa", "UUa", "채널A", 10,
+            new ChannelFilterConfig(180, 1.5, 5, List.of(), List.of()));
+        Channel channelB = Channel.of(Platform.YOUTUBE, "UCb", "UUb", "채널B", 20,
+            new ChannelFilterConfig(180, 1.5, 5, List.of(), List.of()));
+        seedSummarizedVideo("vid-a", "채널A 영상", null, LocalDateTime.now(), channelA);
+        Video videoB = seedSummarizedVideo("vid-b", "채널B 영상", null, LocalDateTime.now(), channelB);
+
+        // when & then
+        mockMvc.perform(get("/api/video-feed/videos").param("channelId", videoB.getChannel().getId().toString()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content.length()").value(1))
+            .andExpect(jsonPath("$.content[0].title").value("채널B 영상"));
+    }
+
+    @Test
+    @DisplayName("[채널 필터 목록은 로그인 없이도 조회 가능하고 활성 채널을 우선순위순으로 반환한다]")
+    void getChannels_withoutAuth_returnsEnabledChannelsOrderedByPriority() throws Exception {
+        // given
+        Channel highPriority = channelRepository.save(Channel.of(
+            Platform.YOUTUBE, "UChigh", "UUhigh", "우선순위높음", 10,
+            new ChannelFilterConfig(180, 1.5, 5, List.of(), List.of())));
+        Channel lowPriority = channelRepository.save(Channel.of(
+            Platform.YOUTUBE, "UClow", "UUlow", "우선순위낮음", 20,
+            new ChannelFilterConfig(180, 1.5, 5, List.of(), List.of())));
+
+        // when & then
+        mockMvc.perform(get("/api/video-feed/channels"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].channelId").value(highPriority.getId()))
+            .andExpect(jsonPath("$[0].name").value("우선순위높음"))
+            .andExpect(jsonPath("$[1].channelId").value(lowPriority.getId()))
+            .andExpect(jsonPath("$[1].name").value("우선순위낮음"));
     }
 
     @Test

@@ -8,6 +8,7 @@ import com.quantlime.videofeed.repository.VideoRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
@@ -155,17 +156,37 @@ public class VideoFilterService {
         return false;
     }
 
+    // max_per_run은 "이번 수집 사이클에서 몇 개를 볼지"가 아니라 "영상 발행일
+    // 기준 하루에 몇 개까지 선택할지"다 - 사이클 단위로 적용하면 수집이 며칠
+    // 걸러 뛴 뒤 한 번에 몰아서 돌 때(로컬 개발 환경에서 흔함) 그 며칠치
+    // 백로그 전체가 단 한 번의 상한만 적용받아 대부분 영구 탈락해버린다.
+    // 발행일별로 후보를 나눠 각 날짜마다 독립적으로 상한을 적용한다.
     private void selectUpToMaxPerRun(Channel channel, List<Video> eligible, int maxPerRun) {
-        List<Video> ranked = eligible.stream()
+        Map<LocalDate, List<Video>> byPublishedDate = eligible.stream()
+            .collect(Collectors.groupingBy(video -> video.getPublishedAt().toLocalDate()));
+        byPublishedDate.forEach((publishedDate, videosOnDate) ->
+            selectUpToDailyQuota(channel, videosOnDate, maxPerRun, publishedDate));
+    }
+
+    // 같은 날짜의 후보가 여러 수집 사이클에 걸쳐 나뉘어 들어올 수 있어(예:
+    // 오전 사이클에서 일부, 오후 사이클에서 나머지 신규 발견), 이번 배치의
+    // 후보 개수만 보지 않고 그 날짜에 이미 SELECTED된 개수를 DB에서 다시 세어
+    // 남은 쿼터만 적용한다 - 그래야 하루 상한이 사이클 횟수와 무관하게 지켜진다.
+    private void selectUpToDailyQuota(Channel channel, List<Video> videosOnDate, int maxPerRun, LocalDate publishedDate) {
+        int alreadySelected = videoRepository.countByChannelAndStatusAndPublishedAtBetween(
+            channel, VideoStatus.SELECTED, publishedDate.atStartOfDay(), publishedDate.plusDays(1).atStartOfDay());
+        int remainingQuota = Math.max(maxPerRun - alreadySelected, 0);
+
+        List<Video> ranked = videosOnDate.stream()
             .sorted(Comparator.comparing((Video v) -> v.getViewCount() != null ? v.getViewCount() : 0L).reversed())
-            .collect(Collectors.toList());
+            .toList();
         for (int i = 0; i < ranked.size(); i++) {
-            if (i < maxPerRun) {
+            if (i < remainingQuota) {
                 ranked.get(i).markSelected();
             } else {
                 ranked.get(i).markFilteredOut();
-                log.info("영상 탈락(max_per_run 컷): videoId={}, channel={}, title={}",
-                    ranked.get(i).getId(), channel.getName(), ranked.get(i).getTitle());
+                log.info("영상 탈락(하루 max_per_run 컷): videoId={}, channel={}, publishedDate={}, title={}",
+                    ranked.get(i).getId(), channel.getName(), publishedDate, ranked.get(i).getTitle());
             }
         }
     }

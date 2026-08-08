@@ -2,6 +2,7 @@ package com.quantlime.infra.python;
 
 import com.quantlime.common.exception.ExternalApiException;
 import com.quantlime.common.util.ExternalApiInvoker;
+import com.quantlime.common.util.SleepUtil;
 import com.quantlime.infra.python.dto.BacktestApiRequest;
 import com.quantlime.infra.python.dto.BacktestApiResponse;
 import com.quantlime.infra.python.dto.ScoreBatchApiRequest;
@@ -16,6 +17,7 @@ import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 @Slf4j
@@ -30,6 +32,14 @@ public class PythonEngineClient {
     private static final String METRIC_DURATION = "python-engine.duration";
     private static final String OUTCOME_SUCCESS = "success";
     private static final String OUTCOME_FAILURE = "failure";
+
+    // Gemini 무료 티어(gemini-3.5-flash-lite)의 분당 요청 한도(RPM=15)에 걸리면
+    // Gemini가 응답에 담아주는 재시도 대기시간이 대략 50~60초였다(2026-08-09,
+    // 신규 채널 백로그 재처리 중 실측) - Toss처럼 3초 정도의 짧은 백오프로는
+    // 분당 쿼터가 회복되지 않아 1분 정도 대기 후 1회만 재시도한다. 그래도
+    // 실패하면 SummaryCollectionFacade가 FAILED로 기록해 다음 배치(최대
+    // 3회 재시도)에서 자연히 다시 시도된다.
+    private static final long SUMMARY_RATE_LIMIT_BACKOFF_MS = 60_000;
 
     private final RestClient pythonEngineRestClient;
     private final MeterRegistry meterRegistry;
@@ -91,19 +101,44 @@ public class PythonEngineClient {
     public SummarizeApiResponse summarize(SummarizeApiRequest request) {
         Timer.Sample sample = Timer.start(meterRegistry);
         try {
-            SummarizeApiResponse response = ExternalApiInvoker.call(
-                PythonEngineErrorCode.SUMMARY_GENERATION_FAILED, () ->
-                    pythonEngineRestClient.post()
-                        .uri("/summarize")
-                        .body(request)
-                        .retrieve()
-                        .body(SummarizeApiResponse.class));
+            SummarizeApiResponse response = summarizeWithRateLimitRetry(request);
             recordOutcome(OUTCOME_SUCCESS, sample);
             return response;
         } catch (ExternalApiException e) {
             recordOutcome(OUTCOME_FAILURE, sample);
             throw e;
         }
+    }
+
+    // TossApiClient.getDailyCandles와 동일한 "1회 재시도" 패턴 - fetchSummarize가
+    // HttpClientErrorException.TooManyRequests(429)만 SUMMARY_RATE_LIMIT_EXCEEDED로
+    // 구분해서 던지므로, 그 외 실패(SUMMARY_GENERATION_FAILED)는 그대로 올려보낸다.
+    private SummarizeApiResponse summarizeWithRateLimitRetry(SummarizeApiRequest request) {
+        try {
+            return fetchSummarize(request);
+        } catch (ExternalApiException e) {
+            if (!PythonEngineErrorCode.SUMMARY_RATE_LIMIT_EXCEEDED.getCode().equals(e.getCode())) {
+                throw e;
+            }
+            log.warn("AI 요약 생성 Rate Limit 도달, {}ms 대기 후 1회 재시도: videoTitle={}",
+                SUMMARY_RATE_LIMIT_BACKOFF_MS, request.videoTitle());
+            if (!SleepUtil.sleepMillis(SUMMARY_RATE_LIMIT_BACKOFF_MS)) {
+                throw e;
+            }
+            return fetchSummarize(request);
+        }
+    }
+
+    private SummarizeApiResponse fetchSummarize(SummarizeApiRequest request) {
+        return ExternalApiInvoker.call(
+            PythonEngineErrorCode.SUMMARY_GENERATION_FAILED,
+            () -> pythonEngineRestClient.post()
+                .uri("/summarize")
+                .body(request)
+                .retrieve()
+                .body(SummarizeApiResponse.class),
+            HttpClientErrorException.TooManyRequests.class,
+            PythonEngineErrorCode.SUMMARY_RATE_LIMIT_EXCEEDED);
     }
 
     private void recordOutcome(String outcome, Timer.Sample sample) {

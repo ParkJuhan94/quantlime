@@ -74,6 +74,7 @@ public class SummaryPersistService {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("summary", response.summary());
         payload.put("key_points", response.keyPoints());
+        payload.put("macro_points", response.macroPoints());
         payload.put("mentioned_tickers", response.mentionedTickers());
         payload.put("caveat", response.caveat());
         try {

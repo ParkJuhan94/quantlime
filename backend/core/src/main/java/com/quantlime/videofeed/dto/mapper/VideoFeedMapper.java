@@ -4,6 +4,8 @@ import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.Video;
 import com.quantlime.videofeed.domain.VideoTicker;
 import com.quantlime.videofeed.dto.SummaryPayload;
+import com.quantlime.videofeed.dto.response.ChannelResponse;
+import com.quantlime.videofeed.dto.response.VideoFeedChannelResponse;
 import com.quantlime.videofeed.dto.response.VideoFeedDetailResponse;
 import com.quantlime.videofeed.dto.response.VideoFeedItemResponse;
 import com.quantlime.videofeed.dto.response.VideoFeedTickerResponse;
@@ -45,8 +47,32 @@ public final class VideoFeedMapper {
             video.getDurationSec(),
             payload.summary(),
             payload.keyPoints(),
+            // macro_points는 2026-08-08 신규 필드라, 그 이전에 생성된 Summary
+            // payload에는 키 자체가 없어 역직렬화 시 null이 된다 - 프론트가 항상
+            // 리스트로 다룰 수 있도록 빈 리스트로 방어한다(재요약 전까지는 과거
+            // 영상에 매크로 코멘트가 비어 보이는 게 정상 - 지어내지 않음).
+            payload.macroPoints() != null ? payload.macroPoints() : List.of(),
             payload.caveat(),
             tickers.stream().map(VideoFeedMapper::toTickerResponse).toList());
+    }
+
+    public static VideoFeedChannelResponse toVideoFeedChannelResponse(Channel channel) {
+        return new VideoFeedChannelResponse(channel.getId(), channel.getName());
+    }
+
+    public static ChannelResponse toChannelResponse(Channel channel) {
+        return new ChannelResponse(
+            channel.getId(),
+            channel.getPlatform(),
+            channel.getExternalChannelId(),
+            toChannelUrl(channel),
+            channel.getName(),
+            channel.isEnabled(),
+            channel.getPriority(),
+            channel.getFilterConfig(),
+            channel.getMedianVelocity(),
+            channel.getLastCollectedAt(),
+            channel.getProfileImageUrl());
     }
 
     private static VideoFeedTickerResponse toTickerResponse(VideoTicker ticker) {

@@ -17,9 +17,10 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 /**
- * v1 대상 채널 3개(한국경제TV/런던고라니/주덕) 시딩. Flyway/Liquibase 없이
- * ddl-auto=update만 쓰는 프로젝트라 StockMasterInitializer와 동일한
- * ApplicationRunner 방식을 그대로 따른다(이미 있는 채널은 skip).
+ * v1 대상 채널 3개(한국경제TV/런던고라니/주덕) + 2026-08-06 추가 채널
+ * 시딩. Flyway/Liquibase 없이 ddl-auto=update만 쓰는 프로젝트라
+ * StockMasterInitializer와 동일한 ApplicationRunner 방식을 그대로
+ * 따른다(이미 있는 채널은 skip).
  *
  * <p><b>channelId 검증 완료(2026-07-27)</b>: 아래 3개는
  * `channels.list?part=snippet&id=...`(제목/customUrl 일치)와
@@ -28,6 +29,13 @@ import org.springframework.stereotype.Component;
  * - 한국경제TV: UCF8AeLlUbEpKju6v1H6p8Eg (customUrl=@hkwowtv, 구독자 139만)
  * - 런던고라니=김희욱: UC4-Y6u1a0j2et5k35EQHU0w (customUrl=@gorany, 구독자 12만)
  * - 주덕: UChZFFQS6ThJ_VmuE-Yzao8Q (customUrl=@joodeok, 구독자 18.8만)
+ *
+ * <p><b>알상무/미과장(2026-08-06 추가)</b>: 사용자가 직접 전달한
+ * channelId(각각 UCiDmfbYvuMEVbRxPmFP4sng, UC7JriZyW6E5phUSKfjoaEPA) -
+ * 위 3개와 달리 이번 세션에서는 forHandle 역조회 재검증을 하지 않았다(이
+ * 세션의 웹 접근 환경에서 YouTube Data API 직접 호출이 불가능했음).
+ * 런던고라니/주덕과 동일하게 개인 채널로 판단해 velocity_multiplier=0
+ * (중앙값 업로드 속도 필터 없이 길이/제목 필터만 적용)으로 시딩했다.
  */
 @Slf4j
 @Component
@@ -56,6 +64,12 @@ public class ChannelSeedInitializer implements ApplicationRunner {
             new ChannelFilterConfig(180, 0.0, 3, List.of(), List.of()));
         seedIfAbsent(
             "UChZFFQS6ThJ_VmuE-Yzao8Q", "주덕", 20,
+            new ChannelFilterConfig(180, 0.0, 3, List.of(), List.of()));
+        seedIfAbsent(
+            "UCiDmfbYvuMEVbRxPmFP4sng", "알상무", 20,
+            new ChannelFilterConfig(180, 0.0, 3, List.of(), List.of()));
+        seedIfAbsent(
+            "UC7JriZyW6E5phUSKfjoaEPA", "미과장", 20,
             new ChannelFilterConfig(180, 0.0, 3, List.of(), List.of()));
 
         backfillProfileImagesIfMissing();

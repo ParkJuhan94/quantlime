@@ -6,6 +6,7 @@ import java.util.List;
 public record SummarizeApiResponse(
     String summary,
     @JsonProperty("key_points") List<String> keyPoints,
+    @JsonProperty("macro_points") List<String> macroPoints,
     @JsonProperty("mentioned_tickers") List<TickerMentionApiResponse> mentionedTickers,
     String caveat,
     String model,

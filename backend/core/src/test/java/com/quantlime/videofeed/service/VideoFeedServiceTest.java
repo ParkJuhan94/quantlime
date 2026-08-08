@@ -8,8 +8,10 @@ import com.quantlime.videofeed.domain.Platform;
 import com.quantlime.videofeed.domain.Summary;
 import com.quantlime.videofeed.domain.Video;
 import com.quantlime.videofeed.domain.VideoTicker;
+import com.quantlime.videofeed.dto.response.VideoFeedChannelResponse;
 import com.quantlime.videofeed.dto.response.VideoFeedDetailResponse;
 import com.quantlime.videofeed.dto.response.VideoFeedItemResponse;
+import com.quantlime.videofeed.repository.ChannelRepository;
 import com.quantlime.videofeed.repository.SummaryRepository;
 import com.quantlime.videofeed.repository.VideoRepository;
 import com.quantlime.videofeed.repository.VideoTickerRepository;
@@ -49,11 +51,18 @@ class VideoFeedServiceTest {
     @Mock
     private VideoTickerRepository videoTickerRepository;
 
+    @Mock
+    private ChannelRepository channelRepository;
+
     private VideoFeedService videoFeedService;
 
-    private Video videoOf(Long id, String title) {
-        Channel channel = Channel.of(Platform.YOUTUBE, "UCtest", "UUtest", "테스트 채널", 10,
+    private Channel channelOf() {
+        return Channel.of(Platform.YOUTUBE, "UCtest", "UUtest", "테스트 채널", 10,
             new ChannelFilterConfig(180, 1.5, 5, List.of(), List.of()));
+    }
+
+    private Video videoOf(Long id, String title) {
+        Channel channel = channelOf();
         Video video = Video.of(channel, "vid-" + id, title, LocalDateTime.now(), 300, 100L, LocalDateTime.now());
         ReflectionTestUtils.setField(video, "id", id);
         return video;
@@ -62,6 +71,19 @@ class VideoFeedServiceTest {
     private Summary summaryOf(Video video, String summaryText) {
         String payload = "{\"summary\":\"" + summaryText
             + "\",\"key_points\":[\"포인트1\",\"포인트2\"],"
+            + "\"macro_points\":[\"매크로포인트1\"],"
+            + "\"mentioned_tickers\":[],\"caveat\":\"투자 권유 아님\"}";
+        Summary summary = Summary.of(video, "gemini-3.5-flash-lite", payload, 100, 50);
+        ReflectionTestUtils.setField(summary, "id", video.getId());
+        return summary;
+    }
+
+    // macro_points는 2026-08-08 신규 필드라, 그 이전에 생성된 Summary 행에는
+    // payload JSON에 이 키 자체가 없다 - 하위호환 방어(VideoFeedMapper의 null
+    // 가드) 검증용으로 별도 픽스처를 둔다.
+    private Summary summaryOfWithoutMacroPoints(Video video, String summaryText) {
+        String payload = "{\"summary\":\"" + summaryText
+            + "\",\"key_points\":[\"포인트1\"],"
             + "\"mentioned_tickers\":[],\"caveat\":\"투자 권유 아님\"}";
         Summary summary = Summary.of(video, "gemini-3.5-flash-lite", payload, 100, 50);
         ReflectionTestUtils.setField(summary, "id", video.getId());
@@ -71,7 +93,8 @@ class VideoFeedServiceTest {
     // ObjectMapper는 실제 빈을 그대로 new해서 쓴다 - JSON 역직렬화 자체가
     // 이 서비스의 핵심 동작이라 mock으로 대체하면 검증 의미가 없다.
     private VideoFeedService newService() {
-        return new VideoFeedService(videoRepository, summaryRepository, videoTickerRepository, new ObjectMapper());
+        return new VideoFeedService(
+            videoRepository, summaryRepository, videoTickerRepository, channelRepository, new ObjectMapper());
     }
 
     @Test
@@ -82,7 +105,7 @@ class VideoFeedServiceTest {
         Video video1 = videoOf(1L, "영상1");
         Video video2 = videoOf(2L, "영상2");
         Pageable pageable = PageRequest.of(0, 10);
-        given(videoRepository.findSummarizedVideos(null, null, null, pageable))
+        given(videoRepository.findSummarizedVideos(null, null, null, null, pageable))
             .willReturn(new SliceImpl<>(List.of(video1, video2)));
         given(summaryRepository.findByVideo_IdIn(List.of(1L, 2L)))
             .willReturn(List.of(summaryOf(video1, "요약1"), summaryOf(video2, "요약2")));
@@ -90,7 +113,7 @@ class VideoFeedServiceTest {
             .willReturn(List.of(VideoTicker.of(video1, "005930", "삼성전자", "BULLISH", BigDecimal.valueOf(0.8))));
 
         // when
-        Slice<VideoFeedItemResponse> result = videoFeedService.getVideos(null, null, pageable);
+        Slice<VideoFeedItemResponse> result = videoFeedService.getVideos(null, null, null, pageable);
 
         // then
         assertThat(result.getContent()).hasSize(2);
@@ -107,23 +130,39 @@ class VideoFeedServiceTest {
     }
 
     @Test
-    @DisplayName("[tickerCode/date를 지정하면 하루 범위(00:00~다음날 00:00)와 함께 리포지토리에 그대로 넘긴다]")
-    void getVideos_withTickerCodeAndDate_passesDayRangeToRepository() {
+    @DisplayName("[tickerCode/channelId/date를 지정하면 하루 범위(00:00~다음날 00:00)와 함께 리포지토리에 그대로 넘긴다]")
+    void getVideos_withTickerCodeChannelIdAndDate_passesFiltersToRepository() {
         // given
         videoFeedService = newService();
         Pageable pageable = PageRequest.of(0, 10);
         Slice<Video> emptySlice = new SliceImpl<>(List.of());
         LocalDate date = LocalDate.of(2026, 7, 30);
         given(videoRepository.findSummarizedVideos(
-            eq("005930"), eq(date.atStartOfDay()), eq(date.plusDays(1).atStartOfDay()), eq(pageable)))
+            eq("005930"), eq(1L), eq(date.atStartOfDay()), eq(date.plusDays(1).atStartOfDay()), eq(pageable)))
             .willReturn(emptySlice);
 
         // when
-        videoFeedService.getVideos("005930", date, pageable);
+        videoFeedService.getVideos("005930", 1L, date, pageable);
 
         // then
         verify(videoRepository).findSummarizedVideos(
-            "005930", date.atStartOfDay(), date.plusDays(1).atStartOfDay(), pageable);
+            "005930", 1L, date.atStartOfDay(), date.plusDays(1).atStartOfDay(), pageable);
+    }
+
+    @Test
+    @DisplayName("[채널 필터 목록은 활성 채널만 우선순위순으로 반환한다]")
+    void getChannels_returnsEnabledChannelsOrderedByPriority() {
+        // given
+        videoFeedService = newService();
+        Channel channel = channelOf();
+        ReflectionTestUtils.setField(channel, "id", 1L);
+        given(channelRepository.findByEnabledTrueOrderByPriorityAsc()).willReturn(List.of(channel));
+
+        // when
+        List<VideoFeedChannelResponse> result = videoFeedService.getChannels();
+
+        // then
+        assertThat(result).containsExactly(new VideoFeedChannelResponse(1L, "테스트 채널"));
     }
 
     @Test
@@ -143,8 +182,26 @@ class VideoFeedServiceTest {
         // then
         assertThat(result.summary()).isEqualTo("요약1");
         assertThat(result.keyPoints()).containsExactly("포인트1", "포인트2");
+        assertThat(result.macroPoints()).containsExactly("매크로포인트1");
         assertThat(result.caveat()).isEqualTo("투자 권유 아님");
         assertThat(result.tickers()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("[macro_points 필드가 없는 과거 요약 데이터를 조회해도 빈 리스트로 방어한다]")
+    void getVideoDetail_payloadWithoutMacroPoints_defaultsToEmptyList() {
+        // given
+        videoFeedService = newService();
+        Video video = videoOf(1L, "영상1");
+        given(videoRepository.findSummarizedVideoById(1L)).willReturn(Optional.of(video));
+        given(summaryRepository.findByVideo(video)).willReturn(Optional.of(summaryOfWithoutMacroPoints(video, "요약1")));
+        given(videoTickerRepository.findByVideo(video)).willReturn(List.of());
+
+        // when
+        VideoFeedDetailResponse result = videoFeedService.getVideoDetail(1L);
+
+        // then
+        assertThat(result.macroPoints()).isEmpty();
     }
 
     @Test

@@ -34,7 +34,7 @@ public class SwaggerConfig {
     public GroupedOpenApi quantlimeApi() {
         return GroupedOpenApi.builder()
             .group("QuantLime API v0.1")
-            .pathsToMatch("/api/**")
+            .pathsToMatch("/api/**", "/dev/**")
             .build();
     }
 }

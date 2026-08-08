@@ -1,6 +1,7 @@
 package com.quantlime.videofeed.controller;
 
 import com.quantlime.common.dto.PageResponse;
+import com.quantlime.videofeed.dto.response.VideoFeedChannelResponse;
 import com.quantlime.videofeed.dto.response.VideoFeedDetailResponse;
 import com.quantlime.videofeed.dto.response.VideoFeedItemResponse;
 import com.quantlime.videofeed.service.VideoFeedService;
@@ -8,6 +9,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.LocalDate;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
@@ -29,15 +31,27 @@ public class VideoFeedController {
     @Operation(
         summary = "요약된 영상 피드 목록 조회",
         description = "AI 요약까지 끝난 영상을 최신순으로 조회한다(로그인 불필요). "
-            + "tickerCode를 지정하면 해당 종목이 태깅된 영상만, date(yyyy-MM-dd)를 "
-            + "지정하면 해당 날짜에 게시된 영상만 조회한다"
+            + "tickerCode를 지정하면 해당 종목이 태깅된 영상만, channelId를 지정하면 "
+            + "해당 채널 영상만, date(yyyy-MM-dd)를 지정하면 해당 날짜에 게시된 영상만 조회한다"
     )
     @ApiResponse(useReturnTypeSchema = true)
     public ResponseEntity<PageResponse<VideoFeedItemResponse>> getVideos(
         @RequestParam(required = false) String tickerCode,
+        @RequestParam(required = false) Long channelId,
         @RequestParam(required = false) LocalDate date,
         Pageable pageable) {
-        return ResponseEntity.ok(PageResponse.of(videoFeedService.getVideos(tickerCode, date, pageable)));
+        return ResponseEntity.ok(
+            PageResponse.of(videoFeedService.getVideos(tickerCode, channelId, date, pageable)));
+    }
+
+    @GetMapping("/channels")
+    @Operation(
+        summary = "영상 피드 채널 필터 목록 조회",
+        description = "채널 필터 UI 구성을 위한 활성 채널 목록(우선순위순, 로그인 불필요)"
+    )
+    @ApiResponse(useReturnTypeSchema = true)
+    public ResponseEntity<List<VideoFeedChannelResponse>> getChannels() {
+        return ResponseEntity.ok(videoFeedService.getChannels());
     }
 
     @GetMapping("/videos/{videoId}")

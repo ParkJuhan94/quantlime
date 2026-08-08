@@ -146,6 +146,46 @@ class VideoFilterServiceTest {
     }
 
     @Test
+    @DisplayName("[max_per_run은 수집 사이클이 아니라 발행일 기준 하루 단위로 적용된다(2026-08-08 버그 수정)]")
+    void applyFilters_maxPerRunAppliesPerPublishedDateNotPerRun() {
+        // given: 서로 다른 이틀(오늘/어제)에 발행된 영상이 한 사이클(예: 며칠
+        // 건너뛴 뒤 몰아서 도는 로컬 개발 수집)에 함께 후보로 잡힌 상황.
+        // max_per_run=1이라도 날짜가 다르면 각 날짜에서 독립적으로 1개씩,
+        // 총 2개가 선정돼야 한다 - 사이클 전체에서 1개만 남으면 버그.
+        Channel channel = channelOf(new ChannelFilterConfig(180, 0.0, 1, List.of(), List.of()));
+        Video today = videoOf(channel, "오늘 영상", 400, 1000L, LocalDateTime.now());
+        Video yesterday = videoOf(channel, "어제 영상", 400, 1000L, LocalDateTime.now().minusDays(1));
+        given(videoRepository.findByChannelAndStatus(channel, VideoStatus.DISCOVERED))
+            .willReturn(List.of(today, yesterday));
+
+        // when
+        videoFilterService.applyFilters(channel);
+
+        // then
+        assertThat(today.getStatus()).isEqualTo(VideoStatus.SELECTED);
+        assertThat(yesterday.getStatus()).isEqualTo(VideoStatus.SELECTED);
+    }
+
+    @Test
+    @DisplayName("[해당 날짜에 이미 max_per_run만큼 선택돼 있으면 남은 쿼터가 0이라 신규 후보는 전부 컷된다]")
+    void applyFilters_dailyQuotaAlreadyExhausted_filtersOutAllNewCandidates() {
+        // given: DB에 그 날짜 SELECTED가 이미 1건 있다고 가정(다른 사이클에서
+        // 먼저 선택된 영상) - max_per_run=1이므로 이번 배치의 신규 후보는
+        // 조회수와 무관하게 전부 FILTERED_OUT돼야 한다.
+        Channel channel = channelOf(new ChannelFilterConfig(180, 0.0, 1, List.of(), List.of()));
+        Video video = videoOf(channel, "이번 사이클 신규 영상", 400, 9999L, LocalDateTime.now());
+        given(videoRepository.findByChannelAndStatus(channel, VideoStatus.DISCOVERED)).willReturn(List.of(video));
+        given(videoRepository.countByChannelAndStatusAndPublishedAtBetween(eq(channel), eq(VideoStatus.SELECTED), any(), any()))
+            .willReturn(1);
+
+        // when
+        videoFilterService.applyFilters(channel);
+
+        // then
+        assertThat(video.getStatus()).isEqualTo(VideoStatus.FILTERED_OUT);
+    }
+
+    @Test
     @DisplayName("[재평가 대상 조회는 같은 채널의 PENDING_REVIEW 영상만 골라낸다]")
     void findReevaluationCandidates_filtersByChannel() {
         // given

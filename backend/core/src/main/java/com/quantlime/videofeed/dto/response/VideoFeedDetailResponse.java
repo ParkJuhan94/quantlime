@@ -14,6 +14,7 @@ public record VideoFeedDetailResponse(
     Integer durationSec,
     String summary,
     List<String> keyPoints,
+    List<String> macroPoints,
     String caveat,
     List<VideoFeedTickerResponse> tickers
 ) {

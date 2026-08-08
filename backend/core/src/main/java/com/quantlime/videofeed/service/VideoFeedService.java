@@ -7,9 +7,11 @@ import com.quantlime.videofeed.domain.Video;
 import com.quantlime.videofeed.domain.VideoTicker;
 import com.quantlime.videofeed.dto.SummaryPayload;
 import com.quantlime.videofeed.dto.mapper.VideoFeedMapper;
+import com.quantlime.videofeed.dto.response.VideoFeedChannelResponse;
 import com.quantlime.videofeed.dto.response.VideoFeedDetailResponse;
 import com.quantlime.videofeed.dto.response.VideoFeedItemResponse;
 import com.quantlime.videofeed.exception.VideoFeedErrorCode;
+import com.quantlime.videofeed.repository.ChannelRepository;
 import com.quantlime.videofeed.repository.SummaryRepository;
 import com.quantlime.videofeed.repository.VideoRepository;
 import com.quantlime.videofeed.repository.VideoTickerRepository;
@@ -32,13 +34,15 @@ public class VideoFeedService {
     private final VideoRepository videoRepository;
     private final SummaryRepository summaryRepository;
     private final VideoTickerRepository videoTickerRepository;
+    private final ChannelRepository channelRepository;
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
-    public Slice<VideoFeedItemResponse> getVideos(String tickerCode, LocalDate date, Pageable pageable) {
+    public Slice<VideoFeedItemResponse> getVideos(String tickerCode, Long channelId, LocalDate date, Pageable pageable) {
         LocalDateTime publishedFrom = date == null ? null : date.atStartOfDay();
         LocalDateTime publishedTo = date == null ? null : date.plusDays(1).atStartOfDay();
-        Slice<Video> videos = videoRepository.findSummarizedVideos(tickerCode, publishedFrom, publishedTo, pageable);
+        Slice<Video> videos = videoRepository.findSummarizedVideos(
+            tickerCode, channelId, publishedFrom, publishedTo, pageable);
 
         List<Long> videoIds = videos.getContent().stream().map(Video::getId).toList();
         Map<Long, String> summaryByVideoId = toSummaryTextMap(summaryRepository.findByVideo_IdIn(videoIds));
@@ -48,6 +52,15 @@ public class VideoFeedService {
             video,
             summaryByVideoId.getOrDefault(video.getId(), ""),
             tickersByVideoId.getOrDefault(video.getId(), List.of())));
+    }
+
+    // 채널 필터 UI(칩) 옵션 목록용 - 관리자용 채널 목록(ChannelQueryService,
+    // filterConfig 등 운영 정보 포함)과 달리 활성 채널의 이름만 공개 노출한다.
+    @Transactional(readOnly = true)
+    public List<VideoFeedChannelResponse> getChannels() {
+        return channelRepository.findByEnabledTrueOrderByPriorityAsc().stream()
+            .map(VideoFeedMapper::toVideoFeedChannelResponse)
+            .toList();
     }
 
     @Transactional(readOnly = true)

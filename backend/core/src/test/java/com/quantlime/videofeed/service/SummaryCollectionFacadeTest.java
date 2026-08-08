@@ -78,7 +78,7 @@ class SummaryCollectionFacadeTest {
             .willReturn(new SliceImpl<>(List.of(video)));
         given(transcriptRepository.findByVideo(video)).willReturn(Optional.of(transcriptOf(video, "자막 내용")));
         SummarizeApiResponse response = new SummarizeApiResponse(
-            "요약", List.of(), List.of(), "고지", "gemini-2.5-flash", 100, 50);
+            "요약", List.of(), List.of(), List.of(), "고지", "gemini-2.5-flash", 100, 50);
         given(pythonEngineClient.summarize(new SummarizeApiRequest("제목1", "테스트 채널", "자막 내용")))
             .willReturn(response);
 
@@ -104,7 +104,7 @@ class SummaryCollectionFacadeTest {
         given(pythonEngineClient.summarize(new SummarizeApiRequest("실패영상", "테스트 채널", "자막1")))
             .willThrow(new ExternalApiException(PythonEngineErrorCode.SUMMARY_GENERATION_FAILED));
         SummarizeApiResponse okResponse = new SummarizeApiResponse(
-            "요약", List.of(), List.of(), "고지", "gemini-2.5-flash", 100, 50);
+            "요약", List.of(), List.of(), List.of(), "고지", "gemini-2.5-flash", 100, 50);
         given(pythonEngineClient.summarize(new SummarizeApiRequest("성공영상", "테스트 채널", "자막2")))
             .willReturn(okResponse);
 
@@ -128,7 +128,7 @@ class SummaryCollectionFacadeTest {
             .willReturn(new SliceImpl<>(List.of(video)));
         given(transcriptRepository.findByVideo(video)).willReturn(Optional.of(transcriptOf(video, "자막 내용")));
         SummarizeApiResponse response = new SummarizeApiResponse(
-            "요약", List.of(), List.of(), "고지", "gemini-3.6-flash", 100, 50);
+            "요약", List.of(), List.of(), List.of(), "고지", "gemini-3.6-flash", 100, 50);
         given(pythonEngineClient.summarize(new SummarizeApiRequest("제목1", "테스트 채널", "자막 내용")))
             .willReturn(response);
         given(redisLockService.runExclusively(any(), any(), any())).willAnswer(invocation -> {

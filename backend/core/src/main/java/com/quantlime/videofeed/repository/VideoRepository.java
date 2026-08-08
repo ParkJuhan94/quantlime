@@ -18,6 +18,16 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 
     List<Video> findByChannelAndStatus(Channel channel, VideoStatus status);
 
+    // max_per_run(채널별 회당 선택 상한)을 "한 번의 수집 사이클" 기준이 아니라
+    // "영상 발행일 기준 하루" 단위로 적용하기 위한 카운트 - VideoFilterService.
+    // selectUpToMaxPerRun 참고. 로컬 개발처럼 수집이 매일 규칙적으로 안 돌아가는
+    // 환경에서는 한 사이클에 여러 날짜의 백로그가 한꺼번에 후보로 잡힐 수 있는데,
+    // 사이클 기준 상한을 그대로 적용하면 그 백로그 전체에서 딱 max_per_run개만
+    // 남고 나머지는 영구 FILTERED_OUT돼버린다(2026-08-08 실제 발견 - 신규 채널
+    // 추가 시 과거 업로드 74개 중 3개만 살아남는 문제).
+    int countByChannelAndStatusAndPublishedAtBetween(
+        Channel channel, VideoStatus status, LocalDateTime start, LocalDateTime end);
+
     List<Video> findByStatusAndPublishedAtBefore(VideoStatus status, LocalDateTime publishedAt);
 
     // SELECTED(retryCount=0, 최초 시도)와 FAILED(재시도 대상, retryCount<maxRetryCount)를
@@ -56,21 +66,22 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
         Pageable pageable);
 
     // P6(프론트 피드 노출) - 요약까지 끝난 영상만 최신순으로 공개 노출한다.
-    // tickerCode/publishedFrom/publishedTo는 전부 선택 필터라 널이면 그
-    // 조건 자체를 건너뛴다(JPQL의 ":param is null or ..." 패턴) - 종목
-    // 필터만 있는 경우/날짜 필터만 있는 경우/둘 다 있는 경우를 각각
-    // 별도 쿼리 메서드로 만들지 않기 위함. join fetch로 channel을 미리
-    // 로딩(채널명/프로필사진 표시용, 위 findSummarizeCandidates와 동일한
-    // LazyInitializationException 방지 이유).
+    // tickerCode/channelId/publishedFrom/publishedTo는 전부 선택 필터라
+    // 널이면 그 조건 자체를 건너뛴다(JPQL의 ":param is null or ..." 패턴) -
+    // 필터 조합마다 별도 쿼리 메서드로 만들지 않기 위함. join fetch로
+    // channel을 미리 로딩(채널명/프로필사진 표시용, 위
+    // findSummarizeCandidates와 동일한 LazyInitializationException 방지 이유).
     @Query("select v from Video v join fetch v.channel "
         + "where v.status = com.quantlime.videofeed.domain.VideoStatus.SUMMARIZED "
         + "and (:tickerCode is null or exists "
         + "  (select 1 from VideoTicker vt where vt.video = v and vt.tickerCode = :tickerCode)) "
+        + "and (:channelId is null or v.channel.id = :channelId) "
         + "and (:publishedFrom is null or v.publishedAt >= :publishedFrom) "
         + "and (:publishedTo is null or v.publishedAt < :publishedTo) "
         + "order by v.publishedAt desc")
     Slice<Video> findSummarizedVideos(
         @Param("tickerCode") String tickerCode,
+        @Param("channelId") Long channelId,
         @Param("publishedFrom") LocalDateTime publishedFrom,
         @Param("publishedTo") LocalDateTime publishedTo,
         Pageable pageable);

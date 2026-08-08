@@ -65,8 +65,16 @@ class VideoRetentionServiceTest extends DataJpaTestSupport {
         // @DataJpaTest 슬라이스엔 Redis 빈이 없다 - 이 테스트는 락 없는
         // deleteVideosOlderThanRetention()만 직접 호출하고 runExclusively()는
         // 쓰지 않으므로 redisLockService는 실제로 참조되지 않는다.
-        videoRetentionService = new VideoRetentionService(
-            null, videoRepository, transcriptRepository, summaryRepository, videoTickerRepository);
+        //
+        // 주의: @DataJpaTest는 테스트 메서드 전체를 트랜잭션으로 감싸(기본
+        // 롤백) 항상 활성 트랜잭션이 존재하는 상태다 - 그래서 이 통합 테스트
+        // 만으로는 VideoRetentionDeleteService를 분리해 얻는 실익(실제
+        // 운영 경로에서 self-invocation 때문에 트랜잭션이 없어 발생하던
+        // TransactionRequiredException)을 검증하지 못한다. 여기선 삭제
+        // 로직 자체(자식 테이블부터 정확히 지워지는지)의 정확성만 검증한다.
+        VideoRetentionDeleteService videoRetentionDeleteService = new VideoRetentionDeleteService(
+            videoRepository, transcriptRepository, summaryRepository, videoTickerRepository);
+        videoRetentionService = new VideoRetentionService(null, videoRepository, videoRetentionDeleteService);
     }
 
     private Video seedVideo(String externalVideoId, LocalDateTime publishedAt) {
@@ -127,8 +135,10 @@ class VideoRetentionServiceTest extends DataJpaTestSupport {
     void runExclusively_whenLockAcquired_returnsDeletedCount() {
         // given
         RedisLockService redisLockService = mock(RedisLockService.class);
+        VideoRetentionDeleteService videoRetentionDeleteService = new VideoRetentionDeleteService(
+            videoRepository, transcriptRepository, summaryRepository, videoTickerRepository);
         VideoRetentionService serviceWithLock = new VideoRetentionService(
-            redisLockService, videoRepository, transcriptRepository, summaryRepository, videoTickerRepository);
+            redisLockService, videoRepository, videoRetentionDeleteService);
         seedVideo("vid-old", LocalDateTime.now().minusDays(15));
         given(redisLockService.runExclusively(any(), any(), any())).willAnswer(invocation -> {
             Supplier<Integer> task = invocation.getArgument(2);
@@ -147,8 +157,10 @@ class VideoRetentionServiceTest extends DataJpaTestSupport {
     void runExclusively_whenLockNotAcquired_skipsCleanup() {
         // given
         RedisLockService redisLockService = mock(RedisLockService.class);
+        VideoRetentionDeleteService videoRetentionDeleteService = new VideoRetentionDeleteService(
+            videoRepository, transcriptRepository, summaryRepository, videoTickerRepository);
         VideoRetentionService serviceWithLock = new VideoRetentionService(
-            redisLockService, videoRepository, transcriptRepository, summaryRepository, videoTickerRepository);
+            redisLockService, videoRepository, videoRetentionDeleteService);
         seedVideo("vid-old", LocalDateTime.now().minusDays(15));
         given(redisLockService.runExclusively(any(), any(), any())).willReturn(Optional.empty());
 
