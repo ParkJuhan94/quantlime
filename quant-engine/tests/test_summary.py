@@ -40,6 +40,7 @@ class TestGenerateSummary:
         parsed = _SummarySchema(
             summary="요약 내용입니다.",
             key_points=["포인트1", "포인트2"],
+            macro_points=["연준 9월 추가 인하 시사"],
             mentioned_tickers=[
                 _TickerMentionSchema(
                     ticker_code="005930", ticker_name="삼성전자", stance="BULLISH", confidence=0.8)
@@ -53,12 +54,26 @@ class TestGenerateSummary:
 
         assert result.summary == "요약 내용입니다."
         assert result.key_points == ["포인트1", "포인트2"]
+        assert result.macro_points == ["연준 9월 추가 인하 시사"]
         assert len(result.mentioned_tickers) == 1
         assert result.mentioned_tickers[0].ticker_code == "005930"
         assert result.mentioned_tickers[0].confidence == 0.8
         assert result.model == "gemini-3.5-flash-lite"
         assert result.input_tokens == 100
         assert result.output_tokens == 50
+
+    def test_macro_points_defaults_to_empty_when_not_provided(self, monkeypatch):
+        # given: macro_points는 default_factory=list라 스키마에 명시하지 않아도
+        # 생성이 깨지지 않고, 종목 특정 없이 시황만 다루는 영상이 아니면 빈 배열이어야 함
+        monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+        parsed = _SummarySchema(summary="요약", key_points=[], mentioned_tickers=[])
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = _fake_response(parsed)
+
+        with patch("summary.generator.genai.Client", return_value=mock_client):
+            result = generate_summary("제목", "채널", "자막")
+
+        assert result.macro_points == []
 
     def test_caveat_is_always_the_fixed_string_not_llm_generated(self, monkeypatch):
         # given: caveat 필드 자체가 더 이상 LLM 출력 스키마에 없음(2026-07-30 결정 -
@@ -82,6 +97,7 @@ class TestGenerateSummary:
 
         # then
         assert schema["properties"]["mentioned_tickers"]["maxItems"] == generator_module._MAX_TAGGED_TICKERS
+        assert schema["properties"]["macro_points"]["maxItems"] == generator_module._MAX_MACRO_POINTS
 
     def test_returns_empty_tickers_when_none_mentioned(self, monkeypatch):
         monkeypatch.setenv("GEMINI_API_KEY", "test-key")

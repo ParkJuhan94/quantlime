@@ -212,3 +212,36 @@ class TestSummarize:
             assert body["mentioned_tickers"][0]["ticker_code"] == "005930"
             assert body["input_tokens"] == 100
             mock_generate.assert_called_once_with("제목", "채널", "자막")
+
+    def test_gemini_rate_limit_maps_to_429_not_500(self):
+        # given: Gemini 무료 티어 분당 요청 한도(RESOURCE_EXHAUSTED) - Spring
+        # 쪽(PythonEngineClient)이 이 상황만 구분해 재시도할 수 있도록 그 외
+        # 예외(500)와 다르게 429로 내려가야 한다.
+        from google.genai.errors import ClientError
+
+        with patch("main.generate_summary") as mock_generate:
+            mock_generate.side_effect = ClientError(429, {"error": {"message": "RESOURCE_EXHAUSTED"}})
+
+            response = client.post("/summarize", json={
+                "video_title": "제목", "channel_name": "채널", "transcript_content": "자막",
+            })
+
+            assert response.status_code == 429
+
+    def test_other_gemini_client_error_still_maps_to_500(self):
+        # given: 429가 아닌 다른 4xx(예: 잘못된 요청)는 재시도 대상이 아니므로
+        # 기존과 동일하게 처리되지 않은 예외로 그대로 올라간다(다른 라우트의
+        # 미처리 예외와 동일한 기본 동작 - 운영 환경에서는 500으로 응답됨).
+        # raise_server_exceptions=False가 아니면 TestClient가 예외를 그대로
+        # 재전파하므로, 별도 클라이언트로 응답 객체를 받아 상태코드를 확인한다.
+        from google.genai.errors import ClientError
+
+        no_raise_client = TestClient(app, raise_server_exceptions=False)
+        with patch("main.generate_summary") as mock_generate:
+            mock_generate.side_effect = ClientError(400, {"error": {"message": "INVALID_ARGUMENT"}})
+
+            response = no_raise_client.post("/summarize", json={
+                "video_title": "제목", "channel_name": "채널", "transcript_content": "자막",
+            })
+
+            assert response.status_code == 500

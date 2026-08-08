@@ -129,6 +129,7 @@ class TickerMentionResponse(BaseModel):
 class SummarizeResponse(BaseModel):
     summary: str
     key_points: list[str]
+    macro_points: list[str]
     mentioned_tickers: list[TickerMentionResponse]
     caveat: str
     model: str

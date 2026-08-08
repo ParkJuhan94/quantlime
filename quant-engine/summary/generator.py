@@ -58,6 +58,11 @@ _FIXED_CAVEAT = "본 요약은 AI가 자동 생성한 정보 참고용 콘텐츠
 # 안 된다.
 _MAX_TAGGED_TICKERS = 7
 
+# 종목에 안 묶이는 거시 코멘트(금리/환율/지수/업종 전반 등)의 개수 상한 -
+# mentioned_tickers와 동일하게 "가장 중요한 것을 고르는" 게 아니라 생성 순서대로
+# 잘리는 방식이므로 개수 조절의 1차 수단은 프롬프트 지시(_PROMPT_INSTRUCTIONS)다.
+_MAX_MACRO_POINTS = 5
+
 # gemini-3.6-flash(무료 티어 계정별 하루 20회 확인, docs/CHANGELOG.md
 # 2026-07-29 참고)에서 gemini-3.5-flash-lite로 전환(2026-07-30) - 무료
 # RPD가 모델마다 별도 할당이라 flash-lite 쪽이 더 넉넉한지는 실제 배치로
@@ -95,6 +100,7 @@ class _TickerMentionSchema(BaseModel):
 class _SummarySchema(BaseModel):
     summary: str
     key_points: list[str]
+    macro_points: list[str] = Field(default_factory=list, max_length=_MAX_MACRO_POINTS)
     mentioned_tickers: list[_TickerMentionSchema] = Field(max_length=_MAX_TAGGED_TICKERS)
 
 
@@ -110,6 +116,7 @@ class TickerMention:
 class SummaryResult:
     summary: str
     key_points: list[str]
+    macro_points: list[str] = field(default_factory=list)
     mentioned_tickers: list[TickerMention] = field(default_factory=list)
     caveat: str = _FIXED_CAVEAT
     model: str = _MODEL
@@ -119,20 +126,32 @@ class SummaryResult:
 
 _PROMPT_INSTRUCTIONS = (
     "다음은 국내/해외 주식 투자 관련 유튜브 영상의 자막입니다. summary와 "
-    "key_points는 반드시 한국어로 답하세요(자막이 한국어라도 영어로 답하는 "
-    "경우가 있어 명시함). 영상 핵심 내용을 2~4문장으로 요약하고, 핵심 포인트를 "
-    "정리하세요.\n\n"
+    "key_points, macro_points는 반드시 한국어로 답하세요(자막이 한국어라도 "
+    "영어로 답하는 경우가 있어 명시함). 영상 핵심 내용을 2~4문장으로 "
+    "요약하세요.\n\n"
+    "key_points는 3~5개, 완전한 문장이 아니라 핵심 구문으로 압축해 답하세요"
+    "(예: \"연준 9월 추가 인하 시사\", \"삼성전자 3분기 실적 컨센서스 상회\").\n\n"
+    "macro_points는 특정 종목이 아니라 시장 전반/거시경제(금리, 환율, 지수, "
+    "업종 전반, 매크로 이벤트 등)에 대한 코멘트만 key_points와 동일한 형식의 "
+    "구문으로 뽑으세요. 해당 내용이 없으면 빈 배열로 두세요(억지로 채우지 "
+    f"마세요) - 아무리 많아도 {_MAX_MACRO_POINTS}개를 넘기지 마세요.\n\n"
     "mentioned_tickers는 자막에서 이름만 스치듯 언급된 종목이 아니라, 실제로 "
     "논의(실적/주가 흐름/전망/이슈 등)된 종목만 포함하세요. 목표는 5개 "
     f"이하이고, 아무리 많아도 {_MAX_TAGGED_TICKERS}개를 넘기지 마세요 - 애매하면 "
     "빼는 쪽을 택하세요.\n\n"
     "ticker_code는 국내 종목이면 6자리 숫자 코드(예: 005930), 해외 종목이면 "
     "티커 심볼(예: AAPL)로 답하세요. 정확한 코드/심볼을 모르면 그 종목은 "
-    "mentioned_tickers에서 아예 빼세요 - 틀린 값을 추측해서 채우지 마세요.\n\n"
+    "mentioned_tickers에서 아예 빼세요 - 틀린 값을 추측해서 채우지 마세요. "
+    "ticker_name은 자막/제목에 실제로 나온 표현을 그대로 쓰고, 확실하지 않으면 "
+    "비워두세요(새로 지어내지 마세요).\n\n"
     "confidence(0.0~1.0)는 \"이 종목이 영상에서 스치듯 언급된 게 아니라 실제로 "
     "유의미하게 논의됐다는 확신도\"를 뜻합니다 - 종목별로 실제 논의 비중에 "
     "따라 차등을 두세요(모든 종목에 같은 값을 반복해서 채우지 마세요). "
-    "stance는 BULLISH/BEARISH/NEUTRAL/MENTIONED 중 하나로 답하세요.\n\n"
+    "confidence가 낮게 나올 것 같은 종목은 애초에 mentioned_tickers에서 "
+    "제외하는 쪽을 우선 고려하세요.\n\n"
+    "stance는 BULLISH(강세 의견)/BEARISH(약세 의견)/NEUTRAL(중립 또는 강세·"
+    "약세 의견이 함께 언급됨)/MENTIONED(논의는 됐지만 방향성 의견이 뚜렷하지 "
+    "않음 - 예: 실적 수치만 전달) 중 하나로 답하세요.\n\n"
     "자막에 명확히 나오지 않는 구체적인 수치(가격, 등락률, 날짜 등)는 "
     "지어내지 말고, 확실하지 않으면 그 수치를 언급하지 마세요(자동 생성 자막은 "
     "숫자를 잘못 인식하는 경우가 흔합니다). 과도한 확신이나 투자 권유 표현은 "
@@ -181,6 +200,7 @@ def generate_summary(video_title: str, channel_name: str, transcript_content: st
     return SummaryResult(
         summary=parsed.summary,
         key_points=list(parsed.key_points),
+        macro_points=list(parsed.macro_points),
         mentioned_tickers=tickers,
         caveat=_FIXED_CAVEAT,
         model=_MODEL,

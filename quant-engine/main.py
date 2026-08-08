@@ -12,7 +12,8 @@ from __future__ import annotations
 
 import pandas as pd
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from google.genai.errors import ClientError
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from calculator.backtest import run_backtest
@@ -170,11 +171,22 @@ def summarize(request: SummarizeRequest) -> SummarizeResponse:
     """API 키 미설정이나 호출 실패는 여기서 폴백하지 않고 그대로 예외를
     올려 500으로 응답한다 - Summary.model에 "어떤 모델이 분석했는지"가
     영속화되므로, 가짜 폴백 문구를 진짜 분석 결과처럼 저장하면 안 된다
-    (summary/generator.py 모듈 docstring 참고)."""
-    result = generate_summary(request.video_title, request.channel_name, request.transcript_content)
+    (summary/generator.py 모듈 docstring 참고).
+
+    다만 Gemini 무료 티어 분당 요청 한도(429 RESOURCE_EXHAUSTED)는 예외적으로
+    구분해서 429로 응답한다 - 그 외 예외와 뭉뚱그려 500으로 내려가면 Spring
+    쪽(PythonEngineClient)이 재시도해도 되는 일시적 상황인지 구분할 수 없어
+    매번 즉시 실패 처리된다(2026-08-09, 신규 채널 백로그 재처리 중 실제 발견)."""
+    try:
+        result = generate_summary(request.video_title, request.channel_name, request.transcript_content)
+    except ClientError as e:
+        if e.code == 429:
+            raise HTTPException(status_code=429, detail="Gemini API rate limit exceeded") from e
+        raise
     return SummarizeResponse(
         summary=result.summary,
         key_points=result.key_points,
+        macro_points=result.macro_points,
         mentioned_tickers=[
             TickerMentionResponse(
                 ticker_code=t.ticker_code, ticker_name=t.ticker_name,
