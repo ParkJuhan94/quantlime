@@ -37,6 +37,19 @@ public class VideoFilterService {
     // 이 유예 기간 동안은 PENDING_REVIEW로 두고 이후 재평가한다(§7 리스크).
     private static final long VELOCITY_GRACE_HOURS = 6;
 
+    // VideoRetentionService.RETENTION_DAYS와 반드시 같은 값 유지(공유 설정
+    // 파일이 없어 각자 상수로 둠 - frontend VIDEO_FEED_RETENTION_DAYS와
+    // 동일한 관례). 이미 보존기간을 넘긴 영상은 여기서 바로 걸러 자막/요약
+    // 파이프라인에 들여보내지 않는다 - 신규 채널의 오래된 백로그가
+    // VideoPersistService.existsByExternalVideoId 기준 재수집→재분류→
+    // 재처리(자막/요약 API 호출)→보존기간 정리로 재삭제되는 낭비 루프를
+    // 방지하고, publishedAt asc로 오래된 것부터 배치를 채우는 Transcribe/
+    // SummarizeCandidates 쿼리가 이 오래된 영상들에 밀려 정작 최근 영상을
+    // 자막/요약 배치에서 못 뽑는 문제도 함께 막는다(2026-08-09 실제 로그로
+    // 확인 - 미과장 재수집 시 옛날 영상 수십 개가 배치를 독차지해 정작
+    // 14일 이내 최근 영상 2개는 계속 SELECTED에 머물러 있었음).
+    private static final int RETENTION_DAYS = 14;
+
     private final VideoRepository videoRepository;
 
     @Transactional
@@ -119,6 +132,10 @@ public class VideoFilterService {
     }
 
     private String hardFilterRejectionReason(Video video, ChannelFilterConfig config) {
+        LocalDateTime retentionCutoff = LocalDateTime.now().minusDays(RETENTION_DAYS);
+        if (video.getPublishedAt().isBefore(retentionCutoff)) {
+            return "TOO_OLD_FOR_RETENTION(publishedAt=%s)".formatted(video.getPublishedAt());
+        }
         if (video.getDurationSec() != null && video.getDurationSec() < config.minDurationSec()) {
             return "MIN_DURATION(durationSec=%d < %d)".formatted(video.getDurationSec(), config.minDurationSec());
         }
