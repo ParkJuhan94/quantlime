@@ -32,6 +32,11 @@ function initialDate(): string {
 export function VideoFeedPage() {
   const [selectedDate, setSelectedDate] = useState(initialDate)
   const [selectedChannelId, setSelectedChannelId] = useState<number | undefined>(undefined)
+  // 이전/다음 버튼 중 마지막으로 누른 방향(기본은 과거 방향) - 빈 날짜를
+  // 만나면 아래 useEffect가 이 방향으로 계속 넘겨 콘텐츠가 있는 날짜를
+  // 찾는다. 페이지 최초 진입(오늘이 비어있는 경우)도 "최신 콘텐츠부터
+  // 보여준다"는 의미로 과거 방향(-1)이 자연스럽다.
+  const [skipDirection, setSkipDirection] = useState<1 | -1>(-1)
   const channelsQuery = useVideoFeedChannelsQuery()
   const channels = channelsQuery.data ?? []
   const videoFeedQuery = useVideoFeedQuery(undefined, selectedChannelId, selectedDate)
@@ -44,6 +49,16 @@ export function VideoFeedPage() {
   const oldestSelectableDate = shiftDateString(todayDateString(), -VIDEO_FEED_RETENTION_DAYS)
   const canGoPrev = selectedDate > oldestSelectableDate
   const canGoNext = selectedDate < todayDateString()
+  const canSkipFurther =
+    skipDirection === -1 ? selectedDate > oldestSelectableDate : selectedDate < todayDateString()
+
+  // 날짜별로 "영상이 없어요" 빈 화면을 보여주는 대신, 조회 가능 범위 안에서
+  // 콘텐츠가 있는 날짜를 찾을 때까지 skipDirection으로 자동으로 계속
+  // 넘어간다(2026-08-09 - 빈 날짜를 수동으로 넘겨야 하는 불편함 제거).
+  useEffect(() => {
+    if (videoFeedQuery.isLoading || videos.length > 0 || !canSkipFurther) return
+    setSelectedDate((prev) => shiftDateString(prev, skipDirection))
+  }, [videoFeedQuery.isLoading, videos.length, canSkipFurther, skipDirection])
 
   return (
     <div className="mx-auto max-w-2xl space-y-4 px-2">
@@ -66,7 +81,10 @@ export function VideoFeedPage() {
             <button
               type="button"
               disabled={!canGoPrev}
-              onClick={() => setSelectedDate((prev) => shiftDateString(prev, -1))}
+              onClick={() => {
+                setSkipDirection(-1)
+                setSelectedDate((prev) => shiftDateString(prev, -1))
+              }}
               aria-label="하루 전"
               className="px-2 py-1.5 text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
             >
@@ -80,7 +98,10 @@ export function VideoFeedPage() {
             <button
               type="button"
               disabled={!canGoNext}
-              onClick={() => setSelectedDate((prev) => shiftDateString(prev, 1))}
+              onClick={() => {
+                setSkipDirection(1)
+                setSelectedDate((prev) => shiftDateString(prev, 1))
+              }}
               aria-label="하루 다음"
               className="px-2 py-1.5 text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
             >
@@ -122,9 +143,9 @@ export function VideoFeedPage() {
         </div>
       )}
 
-      {videoFeedQuery.isLoading && <LoadingSpinner />}
-      {!videoFeedQuery.isLoading && videos.length === 0 && (
-        <EmptyState message="이 날짜엔 요약된 영상이 없어요." />
+      {(videoFeedQuery.isLoading || (videos.length === 0 && canSkipFurther)) && <LoadingSpinner />}
+      {!videoFeedQuery.isLoading && videos.length === 0 && !canSkipFurther && (
+        <EmptyState message="아직 요약된 영상이 없어요." />
       )}
 
       <div className="space-y-3">
