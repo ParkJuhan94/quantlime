@@ -58,6 +58,13 @@ backend/api/uploads/
 # Playwright MCP 임시 아티팩트
 .playwright-mcp/
 
+# 로컬 개발용 파일 로그(application.yml dev 프로파일, logging.file.name) -
+# 실행 위치(루트/backend/backend/api)에 따라 상대경로가 셋 중 한 곳에 생길
+# 수 있음(backend/uploads/ 케이스와 동일 사유)
+logs/
+backend/logs/
+backend/api/logs/
+
 # Node
 node_modules/
 

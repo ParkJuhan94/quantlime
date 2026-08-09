@@ -196,3 +196,15 @@ spring:
 logging:
   pattern:
     console: "%clr(%d{HH:mm:ss.SSS}){faint} %clr(%5p) %clr([%15.15t]){faint} %clr(%-40.40logger{40}){cyan} %clr(:){faint} %m%n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}"
+  # IntelliJ 콘솔은 재시작하면 사라지고, 새벽 3시 영상 정리·16:00 배치처럼
+  # 사람이 안 보고 있을 때 도는 스케줄러 실패는 콘솔만으로 사후 확인이
+  # 불가능하다 - 콘솔과 별개로 파일에도 남겨 재시작 후에도 grep 가능하게
+  # 한다. logging.file.name을 주면 Spring Boot 기본 logback 설정이 FILE
+  # 어펜더를 자동 추가한다(별도 logback-spring.xml 불필요).
+  file:
+    name: logs/quantlime.log
+  logback:
+    rollingpolicy:
+      max-file-size: 20MB
+      max-history: 7
+      total-size-cap: 200MB
