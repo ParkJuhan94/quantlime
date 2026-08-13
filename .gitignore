@@ -30,9 +30,16 @@ quant-engine/docs/SCORING_DESIGN.md
 # 스코어링/백테스팅 방법론 외부 리뷰(claude-fable-5) 전문 보존, 로컬 전용
 quant-engine/docs/BACKTEST_METHODOLOGY_REVIEW.md
 
-# 포트폴리오 어필 포인트 초안 (공개 저장소 노출 방지, 로컬 전용)
+# 포트폴리오 문서 3종 (공개 저장소 노출 방지, 로컬 전용) - QuantLime·HandsUp
+# 두 프로젝트를 프로젝트 구분(# HandsUp 섹션)과 함께 한 문서씩에 통합
+# 관리한다(2026-08-11 - 이전엔 HandsUp 전용 파일 2개가 별도였으나 병합·삭제)
 docs/PORTFOLIO_HIGHLIGHTS.md
-docs/PORTFOLIO_HIGHLIGHTS_NOTES.md
+docs/PORTFOLIO_NOTES.md
+# 위 원재료를 선별·요약한 제출용 큐레이션본 (2026-08-05 신규, 동일 사유로 로컬 전용)
+docs/PORTFOLIO.md
+# 큐레이션본을 Obsidian(docs/를 볼트로 사용)으로 열 때 생기는 볼트 설정/플러그인
+# 캐시 - 포트폴리오 내용과 무관하지만 같은 폴더 하위라 실수로 커밋되지 않게 제외
+docs/.obsidian/
 
 # 세션 작업 문서(내부 컨벤션·변경 이력·로드맵·운영 런북) - public 저장소
 # 노출 방지 목적으로 로컬 전용 전환(2026-08-03, git-filter-repo로 과거
@@ -42,6 +49,9 @@ backend/CLAUDE.md
 frontend/CLAUDE.md
 docs/CHANGELOG.md
 docs/ROADMAP.md
+# 이력서/포트폴리오(캔바) 개편 진행 상황 추적 - 프로젝트 로드맵과 무관한
+# 개인 커리어 문서라 별도 파일로 분리, 동일 사유로 로컬 전용(2026-08-09)
+docs/RESUME_ROADMAP.md
 docs/DEVELOPMENT.md
 docs/DEPLOYMENT.md
 
