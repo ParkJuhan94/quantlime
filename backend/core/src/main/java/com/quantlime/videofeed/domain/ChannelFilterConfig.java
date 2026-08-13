@@ -22,4 +22,12 @@ public record ChannelFilterConfig(
         titleExclude = titleExclude == null ? List.of() : titleExclude;
         titleInclude = titleInclude == null ? List.of() : titleInclude;
     }
+
+    // channel.filter_config는 NOT NULL 컬럼이라 텔레그램 채널(Phase 8 P7)
+    // 행에도 값이 있어야 한다(ddl-auto=update는 기존 NOT NULL을 nullable로
+    // 못 되돌림). 텔레그램 파이프라인은 이 값을 절대 읽지 않으므로(플랫폼
+    // 한정 조회로 분리됨 - ChannelRepository 참고) 전부 무해한 값으로 채운다.
+    public static ChannelFilterConfig unusedForNonYoutube() {
+        return new ChannelFilterConfig(0, 0.0, 0, List.of(), List.of());
+    }
 }

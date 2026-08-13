@@ -2,6 +2,7 @@ package com.quantlime.videofeed.domain;
 
 import com.quantlime.common.domain.TimeBaseEntity;
 import com.quantlime.videofeed.domain.converter.ChannelFilterConfigConverter;
+import com.quantlime.videofeed.domain.converter.TelegramFilterConfigConverter;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
@@ -60,6 +61,14 @@ public class Channel extends TimeBaseEntity {
     @Column(name = "filter_config", nullable = false, columnDefinition = "json")
     private ChannelFilterConfig filterConfig;
 
+    // 텔레그램 채널(Phase 8 P7) 전용 필터 설정 - 유튜브 채널 행에서는 항상
+    // null. filter_config를 유니온으로 확장하지 않고 별도 nullable 컬럼을
+    // 둔 이유는 uploadsPlaylistId/medianVelocity가 이미 같은 패턴(플랫폼
+    // 전용 nullable 컬럼)을 쓰고 있어서다(docs/ROADMAP.md "Phase 8 P7" 참고).
+    @Convert(converter = TelegramFilterConfigConverter.class)
+    @Column(name = "telegram_filter_config", columnDefinition = "json")
+    private TelegramFilterConfig telegramFilterConfig;
+
     @Column(name = "median_velocity", precision = 12, scale = 2)
     private BigDecimal medianVelocity;
 
@@ -73,7 +82,8 @@ public class Channel extends TimeBaseEntity {
 
     @Builder
     private Channel(Platform platform, String externalChannelId, String uploadsPlaylistId,
-                     String name, boolean enabled, int priority, ChannelFilterConfig filterConfig) {
+                     String name, boolean enabled, int priority, ChannelFilterConfig filterConfig,
+                     TelegramFilterConfig telegramFilterConfig) {
         validateChannel(platform, externalChannelId, name, filterConfig);
         this.platform = platform;
         this.externalChannelId = externalChannelId;
@@ -82,6 +92,7 @@ public class Channel extends TimeBaseEntity {
         this.enabled = enabled;
         this.priority = priority;
         this.filterConfig = filterConfig;
+        this.telegramFilterConfig = telegramFilterConfig;
     }
 
     public static Channel of(Platform platform, String externalChannelId, String uploadsPlaylistId,
@@ -94,6 +105,23 @@ public class Channel extends TimeBaseEntity {
             .enabled(true)
             .priority(priority)
             .filterConfig(filterConfig)
+            .build();
+    }
+
+    // 텔레그램 채널(Phase 8 P7) 전용 팩터리 - uploadsPlaylistId는 유튜브
+    // 전용이라 항상 null, filter_config(NOT NULL 컬럼)는
+    // ChannelFilterConfig.unusedForNonYoutube()로 채운다(절대 읽히지 않음).
+    public static Channel ofTelegram(String externalChannelId, String name, int priority,
+                                      TelegramFilterConfig telegramFilterConfig) {
+        return Channel.builder()
+            .platform(Platform.TELEGRAM)
+            .externalChannelId(externalChannelId)
+            .uploadsPlaylistId(null)
+            .name(name)
+            .enabled(true)
+            .priority(priority)
+            .filterConfig(ChannelFilterConfig.unusedForNonYoutube())
+            .telegramFilterConfig(telegramFilterConfig)
             .build();
     }
 
