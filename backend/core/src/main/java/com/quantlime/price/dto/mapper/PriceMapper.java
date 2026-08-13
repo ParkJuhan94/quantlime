@@ -54,11 +54,22 @@ public final class PriceMapper {
     public static DailyChartResponse toDailyChartResponse(DomesticDailyPrice domesticDailyPrice) {
         return new DailyChartResponse(
             domesticDailyPrice.getTradeDate(),
-            domesticDailyPrice.getOpenPrice(),
-            domesticDailyPrice.getHighPrice(),
-            domesticDailyPrice.getLowPrice(),
-            domesticDailyPrice.getClosePrice(),
+            domesticDailyPrice.getOpenPrice().doubleValue(),
+            domesticDailyPrice.getHighPrice().doubleValue(),
+            domesticDailyPrice.getLowPrice().doubleValue(),
+            domesticDailyPrice.getClosePrice().doubleValue(),
             domesticDailyPrice.getVolume()
+        );
+    }
+
+    public static DailyChartResponse toDailyChartResponse(OverseasDailyPrice overseasDailyPrice) {
+        return new DailyChartResponse(
+            overseasDailyPrice.getTradeDate(),
+            overseasDailyPrice.getOpenPrice(),
+            overseasDailyPrice.getHighPrice(),
+            overseasDailyPrice.getLowPrice(),
+            overseasDailyPrice.getClosePrice(),
+            overseasDailyPrice.getVolume()
         );
     }
 }

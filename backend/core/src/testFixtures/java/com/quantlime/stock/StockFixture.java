@@ -18,4 +18,9 @@ public final class StockFixture {
         return Stock.of(stockCode, stockName, MarketType.KOSPI,
             ListingStatus.LISTED, "전기전자");
     }
+
+    public static Stock createOverseasStock(String stockCode, String stockName) {
+        return Stock.of(stockCode, stockName, MarketType.NASDAQ,
+            ListingStatus.LISTED, "Technology");
+    }
 }

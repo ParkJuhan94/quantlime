@@ -1,7 +1,9 @@
 package com.quantlime.price.dto.mapper;
 
 import com.quantlime.price.DomesticDailyPriceFixture;
+import com.quantlime.price.OverseasDailyPriceFixture;
 import com.quantlime.price.domain.DomesticDailyPrice;
+import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.price.dto.response.CurrentPriceResponse;
 import com.quantlime.price.dto.response.DailyChartResponse;
 import java.time.LocalDate;
@@ -66,12 +68,31 @@ class PriceMapperTest {
         // when
         DailyChartResponse response = PriceMapper.toDailyChartResponse(domesticDailyPrice);
 
+        // then: open/high/low/close는 Double로 확대된다(해외 종목 공용 응답 타입).
+        assertThat(response.tradeDate()).isEqualTo(tradeDate);
+        assertThat(response.open()).isEqualTo(domesticDailyPrice.getOpenPrice().doubleValue());
+        assertThat(response.high()).isEqualTo(domesticDailyPrice.getHighPrice().doubleValue());
+        assertThat(response.low()).isEqualTo(domesticDailyPrice.getLowPrice().doubleValue());
+        assertThat(response.close()).isEqualTo(domesticDailyPrice.getClosePrice().doubleValue());
+        assertThat(response.volume()).isEqualTo(domesticDailyPrice.getVolume());
+    }
+
+    @Test
+    @DisplayName("[OverseasDailyPrice를 DailyChartResponse로 매핑한다]")
+    void toDailyChartResponse_overseas_mapsAllFields() {
+        // given
+        LocalDate tradeDate = LocalDate.of(2026, 7, 3);
+        OverseasDailyPrice overseasDailyPrice = OverseasDailyPriceFixture.createDailyPrice("AAPL", tradeDate);
+
+        // when
+        DailyChartResponse response = PriceMapper.toDailyChartResponse(overseasDailyPrice);
+
         // then
         assertThat(response.tradeDate()).isEqualTo(tradeDate);
-        assertThat(response.open()).isEqualTo(domesticDailyPrice.getOpenPrice());
-        assertThat(response.high()).isEqualTo(domesticDailyPrice.getHighPrice());
-        assertThat(response.low()).isEqualTo(domesticDailyPrice.getLowPrice());
-        assertThat(response.close()).isEqualTo(domesticDailyPrice.getClosePrice());
-        assertThat(response.volume()).isEqualTo(domesticDailyPrice.getVolume());
+        assertThat(response.open()).isEqualTo(overseasDailyPrice.getOpenPrice());
+        assertThat(response.high()).isEqualTo(overseasDailyPrice.getHighPrice());
+        assertThat(response.low()).isEqualTo(overseasDailyPrice.getLowPrice());
+        assertThat(response.close()).isEqualTo(overseasDailyPrice.getClosePrice());
+        assertThat(response.volume()).isEqualTo(overseasDailyPrice.getVolume());
     }
 }

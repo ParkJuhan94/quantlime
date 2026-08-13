@@ -1,7 +1,8 @@
 package com.quantlime.price.service;
 
-import com.quantlime.price.cache.PreviousCloseCache;
 import com.quantlime.price.cache.PriceCacheStore;
+import com.quantlime.price.domain.DomesticDailyPrice;
+import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.price.dto.mapper.PriceMapper;
 import com.quantlime.price.dto.response.CurrentPriceResponse;
 import com.quantlime.price.dto.response.DailyChartResponse;
@@ -31,11 +32,6 @@ public class StockPriceService {
     private final DomesticDailyPriceRepository domesticDailyPriceRepository;
     private final OverseasDailyPriceRepository overseasDailyPriceRepository;
     private final PriceCacheStore priceCacheStore;
-    // 필드명이 PriceCacheConfig의 @Bean 메서드명과 일치해야 Spring이 같은
-    // 타입(PreviousCloseCache)의 두 Bean 중 이걸 고른다(By-Name
-    // 디스앰비규에이션 - MarketDataRefreshTaskExecutorConfig와 동일 관례).
-    private final PreviousCloseCache domesticPreviousCloseCache;
-    private final PreviousCloseCache overseasPreviousCloseCache;
 
     /**
      * 전종목 시세 스윕 스케줄러({@code DomesticMarketPriceSweepScheduler})가 관심종목
@@ -74,10 +70,27 @@ public class StockPriceService {
 
     // 캐시 미스 시 DB의 마지막 확정 종가로 응답 - Toss 재호출 금지 원칙
     // (아래 클래스 주석 참고)은 국내/해외 동일하게 적용한다.
+    //
+    // 전일종가는 PreviousCloseCache(오늘 기준 "전일" 고정)를 쓰지 않고
+    // latestClose.getTradeDate() 기준으로 직접 조회한다 - latestClose가
+    // 실제 오늘 거래일 종가일 때만 "오늘 이전 최신 종가"가 올바른 전일종가와
+    // 일치한다. 이 폴백은 캐시 미스(장 마감/주말/공휴일, 또는 스윕 첫 틱
+    // 이전)일 때 도는데, 이런 경우 latestClose는 대개 오늘이 아닌 지난
+    // 거래일 종가라 PreviousCloseCache로 조회하면 "오늘 이전 최신 종가"가
+    // latestClose 자기 자신과 같아져 등락률이 항상 0%로 계산되는 버그가
+    // 있었다(예: 토요일에 조회하면 전일종가도 금요일 종가가 잡혀 금요일
+    // 등락률이 통째로 사라짐) - 실시간 스윕/릴레이 경로는 isMarketOpenNow()
+    // 가드가 있어 "오늘=거래일"이 항상 성립하므로 이 문제가 없었다.
     private CurrentPriceResponse domesticFallback(String stockCode) {
         return domesticDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(stockCode)
             .map(latestClose -> {
-                Double previousClose = domesticPreviousCloseCache.get(List.of(stockCode)).get(stockCode);
+                Double previousClose = domesticDailyPriceRepository
+                    .findLatestBeforeDate(List.of(stockCode), latestClose.getTradeDate())
+                    .stream()
+                    .findFirst()
+                    .map(DomesticDailyPrice::getClosePrice)
+                    .map(Long::doubleValue)
+                    .orElse(null);
                 return PriceMapper.toCurrentPriceResponse(latestClose, previousClose);
             })
             .orElseGet(() -> {
@@ -89,7 +102,12 @@ public class StockPriceService {
     private CurrentPriceResponse overseasFallback(String stockCode) {
         return overseasDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(stockCode)
             .map(latestClose -> {
-                Double previousClose = overseasPreviousCloseCache.get(List.of(stockCode)).get(stockCode);
+                Double previousClose = overseasDailyPriceRepository
+                    .findLatestBeforeDate(List.of(stockCode), latestClose.getTradeDate())
+                    .stream()
+                    .findFirst()
+                    .map(OverseasDailyPrice::getClosePrice)
+                    .orElse(null);
                 return PriceMapper.toCurrentPriceResponse(latestClose, previousClose);
             })
             .orElseGet(() -> {
@@ -98,13 +116,21 @@ public class StockPriceService {
             });
     }
 
+    // 시장 구분 없이 항상 domestic_daily_price만 조회하던 버그가 있었다 -
+    // 해외 종목은 이 테이블에 행이 없어 차트가 항상 빈 배열로 응답됐다.
     @Transactional(readOnly = true)
     public List<DailyChartResponse> getChart(String stockCode, int days) {
-        stockMasterService.getStockByCode(stockCode);
+        Stock stock = stockMasterService.getStockByCode(stockCode);
 
         LocalDate end = LocalDate.now();
         LocalDate start = end.minusDays(days);
 
+        if (!stock.getMarketType().isDomestic()) {
+            return overseasDailyPriceRepository
+                .findByStockCodeAndTradeDateBetweenOrderByTradeDateDesc(stockCode, start, end).stream()
+                .map(PriceMapper::toDailyChartResponse)
+                .toList();
+        }
         return domesticDailyPriceService.getDailyPrices(stockCode, start, end).stream()
             .map(PriceMapper::toDailyChartResponse)
             .toList();
