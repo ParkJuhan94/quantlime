@@ -2,6 +2,7 @@ package com.quantlime.videofeed.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.quantlime.common.exception.NotFoundException;
+import com.quantlime.videofeed.domain.Platform;
 import com.quantlime.videofeed.domain.Summary;
 import com.quantlime.videofeed.domain.Video;
 import com.quantlime.videofeed.domain.VideoTicker;
@@ -56,9 +57,11 @@ public class VideoFeedService {
 
     // 채널 필터 UI(칩) 옵션 목록용 - 관리자용 채널 목록(ChannelQueryService,
     // filterConfig 등 운영 정보 포함)과 달리 활성 채널의 이름만 공개 노출한다.
+    // Platform.YOUTUBE로 한정 - 이 API는 /api/video-feed(유튜브 전용) 채널
+    // 필터라, 텔레그램 채널(Phase 8 P7)이 섞이면 선택해도 항상 빈 결과가 된다.
     @Transactional(readOnly = true)
     public List<VideoFeedChannelResponse> getChannels() {
-        return channelRepository.findByEnabledTrueOrderByPriorityAsc().stream()
+        return channelRepository.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.YOUTUBE).stream()
             .map(VideoFeedMapper::toVideoFeedChannelResponse)
             .toList();
     }

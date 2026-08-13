@@ -64,7 +64,7 @@ class FeedCollectionFacadeTest {
     void reevaluatePendingReview_withCandidates_fetchesFreshViewCountsBeforeReevaluating() {
         // given
         Channel channel = channelOf(1L);
-        given(channelRepository.findByEnabledTrueOrderByPriorityAsc()).willReturn(List.of(channel));
+        given(channelRepository.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.YOUTUBE)).willReturn(List.of(channel));
         Video candidate = videoOf(channel, 10L, "vid-pending");
         given(videoFilterService.findReevaluationCandidates(channel)).willReturn(List.of(candidate));
         Map<String, Long> freshViewCounts = Map.of("vid-pending", 5000L);
@@ -83,7 +83,7 @@ class FeedCollectionFacadeTest {
     void reevaluatePendingReview_noCandidates_skipsApiCall() {
         // given
         Channel channel = channelOf(1L);
-        given(channelRepository.findByEnabledTrueOrderByPriorityAsc()).willReturn(List.of(channel));
+        given(channelRepository.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.YOUTUBE)).willReturn(List.of(channel));
         given(videoFilterService.findReevaluationCandidates(channel)).willReturn(List.of());
 
         // when
@@ -100,7 +100,7 @@ class FeedCollectionFacadeTest {
         // given
         Channel failingChannel = channelOf(1L);
         Channel okChannel = channelOf(2L);
-        given(channelRepository.findByEnabledTrueOrderByPriorityAsc())
+        given(channelRepository.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.YOUTUBE))
             .willReturn(List.of(failingChannel, okChannel));
         given(videoFilterService.findReevaluationCandidates(failingChannel))
             .willThrow(new RuntimeException("유튜브 API 장애"));

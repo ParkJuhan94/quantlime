@@ -80,9 +80,11 @@ public final class VideoFeedMapper {
             ticker.getTickerCode(), ticker.getTickerName(), ticker.getStance(), ticker.getConfidence());
     }
 
-    // 현재 시딩된 채널은 전부 YOUTUBE라 이 케이스만 실제로 쓰이지만, 스키마가
-    // 이미 Platform.TELEGRAM을 지원하므로(P7 준비) exhaustive switch로 강제해
-    // 나중에 텔레그램 채널이 추가되는 순간 컴파일 에러로 이 분기 추가를 상기시킨다.
+    // Video는 유튜브 전용 엔티티로 남기고 텔레그램 글은 별도 TelegramPost로
+    // 분리하기로 했으므로(Phase 8 P7 설계, docs/ROADMAP.md 참고) 이 TELEGRAM
+    // 분기는 도달 불가능하다 - 삭제하지 않고 exhaustive switch로 남겨 향후
+    // Video가 실수로 텔레그램에도 재사용되는 변경이 생기면 컴파일 에러로
+    // 바로 드러나게 한다.
     private static String toVideoUrl(Video video) {
         return switch (video.getChannel().getPlatform()) {
             case YOUTUBE -> "https://www.youtube.com/watch?v=" + video.getExternalVideoId();
@@ -93,7 +95,7 @@ public final class VideoFeedMapper {
     private static String toChannelUrl(Channel channel) {
         return switch (channel.getPlatform()) {
             case YOUTUBE -> "https://www.youtube.com/channel/" + channel.getExternalChannelId();
-            case TELEGRAM -> null;
+            case TELEGRAM -> "https://t.me/" + channel.getExternalChannelId();
         };
     }
 }

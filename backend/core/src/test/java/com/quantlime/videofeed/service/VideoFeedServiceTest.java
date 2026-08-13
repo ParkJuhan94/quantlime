@@ -156,7 +156,7 @@ class VideoFeedServiceTest {
         videoFeedService = newService();
         Channel channel = channelOf();
         ReflectionTestUtils.setField(channel, "id", 1L);
-        given(channelRepository.findByEnabledTrueOrderByPriorityAsc()).willReturn(List.of(channel));
+        given(channelRepository.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.YOUTUBE)).willReturn(List.of(channel));
 
         // when
         List<VideoFeedChannelResponse> result = videoFeedService.getChannels();

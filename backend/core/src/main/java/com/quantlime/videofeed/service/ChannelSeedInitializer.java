@@ -94,7 +94,9 @@ public class ChannelSeedInitializer implements ApplicationRunner {
     // API 장애/쿼터 소진으로 실패해도 앱 기동을 막지 않는다 - 다음 기동 시
     // profile_image_url이 여전히 null인 채널만 다시 시도된다.
     private void backfillProfileImagesIfMissing() {
-        List<Channel> channelsMissingImage = channelRepository.findByProfileImageUrlIsNull();
+        // Platform.YOUTUBE로 한정 - 안 걸르면 텔레그램 채널(Phase 8 P7)의
+        // 핸들을 유튜브 channels.list API에 넘기는 무의미한 호출이 된다.
+        List<Channel> channelsMissingImage = channelRepository.findByPlatformAndProfileImageUrlIsNull(Platform.YOUTUBE);
         if (channelsMissingImage.isEmpty()) {
             return;
         }
