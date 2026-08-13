@@ -18,6 +18,7 @@ import io.micrometer.core.instrument.Timer;
 import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
@@ -47,7 +48,7 @@ public class TossApiClient {
     // 강제해 몇 개 스레드가 동시에 부르든 결합 호출률이 이 값을 넘지 않게 한다.
     private static final long MIN_CANDLE_CALL_INTERVAL_MS = 150;
     // 전역 페이싱(위 MIN_CANDLE_CALL_INTERVAL_MS)을 거쳐도 순간적으로
-    // 429가 날 수 있어 1회 재시도한다(2026-08-01 - 이전엔
+    // 429가 날 수 있어 재시도한다(2026-08-01 - 이전엔
     // DomesticDailyPriceService/OverseasDailyPriceBackfillService가 각자
     // fetchCandlesWithRetry로 동일한 18줄을 복붙해 재구현했는데, 정작
     // PriceGapFillService.fillDomesticGap이 부르는 일별 갭필 경로
@@ -55,7 +56,23 @@ public class TossApiClient {
     // 즉시 실패가 반복되는 실제 버그가 있었다 - "이 엔드포인트를 안전하게
     // 부르는 방법"이라는 같은 책임이므로 클라이언트 레벨로 옮겨 모든
     // 호출부가 예외 없이 혜택을 받게 한다).
+    //
+    // 2026-08-10: 실측 결과 재시도 1회로는 부족한 경우가 있어(히트율
+    // 약 10%, 실패 시 결국 재요청으로 다 채워지긴 함) 재시도 상한을
+    // 완화하고, 대기시간도 고정값 대신 서버가 응답 헤더로 알려주는 값
+    // (resolveRateLimitBackoffMillis 참고)을 우선 쓰도록 바꿨다 - 이
+    // 상수는 이제 헤더가 없거나 파싱에 실패했을 때의 폴백값이다.
     private static final long RATE_LIMIT_BACKOFF_MS = 3000;
+    // 헤더 값이 비정상적으로 작거나(0에 가까워 즉시 재요청) 크면(절대
+    // 타임스탬프를 초 단위 델타로 오인하는 등) 안전한 범위로 강제한다.
+    private static final long MIN_RATE_LIMIT_BACKOFF_MS = 500;
+    private static final long MAX_RATE_LIMIT_BACKOFF_MS = 10_000;
+    // 최초 시도 포함 총 시도 횟수는 이 값 + 1(예: 2면 최대 3회 시도).
+    private static final int MAX_RATE_LIMIT_RETRIES = 2;
+    // 토스 API 스펙에 정확한 의미(델타 초 vs 절대 타임스탬프)가 확정돼
+    // 있지 않은 헤더라 Retry-After보다 후순위 폴백으로만 쓴다(CLAUDE.md
+    // §10 참고).
+    private static final String HEADER_X_RATE_LIMIT_RESET = "X-RateLimit-Reset";
 
     private final RestClient tossRestClient;
     private final TossTokenManager tokenManager;
@@ -65,19 +82,60 @@ public class TossApiClient {
     private volatile long lastCandleCallAtMillis = 0;
 
     public TossCandleResponse getDailyCandles(String symbol, int count, String before) {
-        try {
-            return fetchDailyCandles(symbol, count, before);
-        } catch (ExternalApiException e) {
-            if (!TossApiErrorCode.RATE_LIMIT_EXCEEDED.getCode().equals(e.getCode())) {
-                throw e;
+        for (int attempt = 0; ; attempt++) {
+            try {
+                return fetchDailyCandles(symbol, count, before);
+            } catch (ExternalApiException e) {
+                boolean rateLimited = TossApiErrorCode.RATE_LIMIT_EXCEEDED.getCode().equals(e.getCode());
+                if (!rateLimited || attempt >= MAX_RATE_LIMIT_RETRIES) {
+                    throw e;
+                }
+                long backoffMs = resolveRateLimitBackoffMillis(e);
+                log.warn("캔들 조회 Rate Limit 도달({}/{}), {}ms 대기 후 재시도: symbol={}",
+                    attempt + 1, MAX_RATE_LIMIT_RETRIES, backoffMs, symbol);
+                if (!SleepUtil.sleepMillis(backoffMs)) {
+                    throw new ExternalApiException(TossApiErrorCode.RATE_LIMIT_EXCEEDED, e);
+                }
             }
-            log.warn("캔들 조회 Rate Limit 도달, {}ms 대기 후 1회 재시도: symbol={}",
-                RATE_LIMIT_BACKOFF_MS, symbol);
-            if (!SleepUtil.sleepMillis(RATE_LIMIT_BACKOFF_MS)) {
-                throw new ExternalApiException(TossApiErrorCode.RATE_LIMIT_EXCEEDED, e);
-            }
-            return fetchDailyCandles(symbol, count, before);
         }
+    }
+
+    /**
+     * 429 응답의 Retry-After(우선)/X-RateLimit-Reset(폴백) 헤더에서 대기시간을
+     * 읽는다 - 둘 다 없거나 파싱에 실패하면 고정값({@link #RATE_LIMIT_BACKOFF_MS})으로
+     * 폴백한다. HTTP-date 형식의 Retry-After는 이 API에서 쓰는 걸 확인한 바 없어
+     * 지원하지 않는다(초 단위 정수만 파싱).
+     */
+    private long resolveRateLimitBackoffMillis(ExternalApiException e) {
+        if (e.getCause() instanceof HttpClientErrorException httpError) {
+            HttpHeaders headers = httpError.getResponseHeaders();
+            if (headers != null) {
+                Long seconds = parseSecondsHeader(headers.getFirst(HttpHeaders.RETRY_AFTER));
+                if (seconds == null) {
+                    seconds = parseSecondsHeader(headers.getFirst(HEADER_X_RATE_LIMIT_RESET));
+                }
+                if (seconds != null) {
+                    return clampBackoffMillis(seconds * 1000);
+                }
+            }
+        }
+        return RATE_LIMIT_BACKOFF_MS;
+    }
+
+    private Long parseSecondsHeader(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            long seconds = Long.parseLong(value.trim());
+            return seconds >= 0 ? seconds : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private long clampBackoffMillis(long millis) {
+        return Math.min(Math.max(millis, MIN_RATE_LIMIT_BACKOFF_MS), MAX_RATE_LIMIT_BACKOFF_MS);
     }
 
     private TossCandleResponse fetchDailyCandles(String symbol, int count, String before) {
