@@ -101,10 +101,19 @@ public class FeedCollectionFacade {
         return CollectResult.success(channel.getName(), insertedCount);
     }
 
+    // updateLastCollectedAt(Long)이 collectChannel -> runAll -> runAllExclusively로
+    // self-invocation되는 경로뿐이라 위 @Transactional은 프록시를 안 타 무시된다
+    // (VideoRetentionDeleteService와 동일 원인) - findById는 SimpleJpaRepository
+    // 내장 메서드라 그 자체로 트랜잭셔널이지만, 반환된 엔티티는 곧바로 detached되므로
+    // save()를 명시적으로 호출해야 변경분이 실제로 반영된다(그렇지 않으면 조용히
+    // 버려짐, 2026-08-10 발견 - ChannelVelocityInitializationService.persistMedianVelocity와
+    // 동일한 이유의 동일 수정. save()도 내장 메서드라 감싸는 메서드의 무력화된
+    // @Transactional과 무관하게 자체적으로 트랜잭셔널함).
     @Transactional
     void updateLastCollectedAt(Long channelId) {
         Channel channel = channelRepository.findById(channelId)
             .orElseThrow(() -> new NotFoundException(VideoFeedErrorCode.NOT_FOUND_CHANNEL));
         channel.updateLastCollectedAt(LocalDateTime.now());
+        channelRepository.save(channel);
     }
 }

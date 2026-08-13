@@ -27,10 +27,21 @@ import org.springframework.transaction.annotation.Transactional;
  * 이 문제가 없다). videoRepository.deleteAllByIdInBatch는 JpaRepository 내장
  * 메서드라 원래도 자체적으로 트랜잭셔널하지만, 네 삭제를 하나의 트랜잭션으로
  * 묶는 게 더 안전해 여기 함께 포함했다.
+ *
+ * <p>클래스/메서드를 public으로 둔다(2026-08-10). 처음엔 "package-private이면
+ * AnnotationTransactionAttributeSource의 publicMethodsOnly 기본값(true) 때문에
+ * @Transactional이 무시돼 위와 동일한 TransactionRequiredException이 재현될
+ * 것"이라 추정했는데, VideoFeedTransactionProxyIntegrationTest(ApiTestSupport
+ * 기반, 실제 프록시 체인 경유)로 직접 되돌려 검증해보니 이 앱에서는
+ * package-private이어도 트랜잭션이 정상적으로 열려 재현되지 않았다 - 즉 이
+ * 가시성 자체가 실제 버그를 일으키진 않는다(추정이 틀렸음을 테스트로 확인).
+ * 그래도 public을 유지하는 건 TranscriptPersistService/SummaryPersistService와
+ * 동일한 패턴을 지켜 향후 Spring 버전이 바뀌어 이 동작이 실제로 달라지더라도
+ * 안전하게 하기 위한 방어적 선택이다.
  */
 @Service
 @RequiredArgsConstructor
-class VideoRetentionDeleteService {
+public class VideoRetentionDeleteService {
 
     private final VideoRepository videoRepository;
     private final TranscriptRepository transcriptRepository;
@@ -38,7 +49,7 @@ class VideoRetentionDeleteService {
     private final VideoTickerRepository videoTickerRepository;
 
     @Transactional
-    void deleteBatch(List<Long> videoIds) {
+    public void deleteBatch(List<Long> videoIds) {
         videoTickerRepository.deleteByVideo_IdIn(videoIds);
         summaryRepository.deleteByVideo_IdIn(videoIds);
         transcriptRepository.deleteByVideo_IdIn(videoIds);
