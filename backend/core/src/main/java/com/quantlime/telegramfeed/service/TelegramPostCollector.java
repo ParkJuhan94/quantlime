@@ -7,6 +7,7 @@ import com.quantlime.infra.telegram.dto.TelegramPreviewMessage;
 import com.quantlime.infra.telegram.dto.TelegramPreviewPage;
 import com.quantlime.telegramfeed.dto.CollectedTelegramPost;
 import com.quantlime.telegramfeed.dto.TelegramChannelMeta;
+import com.quantlime.telegramfeed.dto.TelegramCollectionOutcome;
 import com.quantlime.telegramfeed.repository.TelegramPostRepository;
 import com.quantlime.videofeed.domain.Channel;
 import java.time.LocalDateTime;
@@ -38,24 +39,22 @@ public class TelegramPostCollector {
     private final TelegramPostRepository telegramPostRepository;
     private final TelegramApiProperties telegramApiProperties;
 
-    public List<CollectedTelegramPost> collect(Channel channel) {
+    public TelegramCollectionOutcome collect(Channel channel) {
         String handle = channel.getExternalChannelId();
         return telegramPostRepository.findMaxMessageIdByChannel(channel)
             .map(cursor -> collectIncremental(handle, cursor))
             .orElseGet(() -> collectInitial(handle));
     }
 
-    // 채널 시딩/프로필 사진 갱신용 - 글 목록은 버리고 메타만 쓴다.
-    public TelegramChannelMeta fetchChannelMeta(String channelHandle) {
-        TelegramPreviewPage page = telegramWebPreviewClient.fetchPage(channelHandle, null, null);
-        return new TelegramChannelMeta(page.channelTitle(), page.channelPhotoUrl());
-    }
-
-    private List<CollectedTelegramPost> collectIncremental(String handle, long cursor) {
+    private TelegramCollectionOutcome collectIncremental(String handle, long cursor) {
         List<CollectedTelegramPost> collected = new ArrayList<>();
+        TelegramChannelMeta channelMeta = null;
         long afterId = cursor;
         for (int page = 0; page < MAX_PAGES_PER_RUN; page++) {
             TelegramPreviewPage previewPage = telegramWebPreviewClient.fetchPage(handle, afterId, null);
+            if (channelMeta == null) {
+                channelMeta = toChannelMeta(previewPage);
+            }
             if (previewPage.messages().isEmpty()) {
                 break;
             }
@@ -65,15 +64,19 @@ public class TelegramPostCollector {
                 break;
             }
         }
-        return collected;
+        return new TelegramCollectionOutcome(collected, channelMeta);
     }
 
-    private List<CollectedTelegramPost> collectInitial(String handle) {
+    private TelegramCollectionOutcome collectInitial(String handle) {
         List<CollectedTelegramPost> collected = new ArrayList<>();
+        TelegramChannelMeta channelMeta = null;
         LocalDateTime retentionCutoff = LocalDateTime.now().minusDays(RETENTION_DAYS);
         Long beforeId = null;
         for (int page = 0; page < MAX_PAGES_FIRST_RUN; page++) {
             TelegramPreviewPage previewPage = telegramWebPreviewClient.fetchPage(handle, null, beforeId);
+            if (channelMeta == null) {
+                channelMeta = toChannelMeta(previewPage);
+            }
             if (previewPage.messages().isEmpty()) {
                 break;
             }
@@ -88,7 +91,11 @@ public class TelegramPostCollector {
                 break;
             }
         }
-        return collected;
+        return new TelegramCollectionOutcome(collected, channelMeta);
+    }
+
+    private TelegramChannelMeta toChannelMeta(TelegramPreviewPage page) {
+        return new TelegramChannelMeta(page.channelTitle(), page.channelPhotoUrl());
     }
 
     private List<CollectedTelegramPost> toCollectedPosts(List<TelegramPreviewMessage> messages) {

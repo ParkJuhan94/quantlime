@@ -25,4 +25,9 @@ public interface ChannelRepository extends JpaRepository<Channel, Long> {
     List<Channel> findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform platform);
 
     List<Channel> findByPlatformAndProfileImageUrlIsNull(Platform platform);
+
+    // 텔레그램 관리자 채널 목록(TelegramChannelQueryService)용 - 활성/
+    // 비활성 전체를 보여줘야 하는 건 ChannelQueryService와 같지만, 유튜브
+    // 채널이 섞여 나오면 안 되므로 플랫폼으로 한정한다.
+    List<Channel> findByPlatformOrderByPriorityAsc(Platform platform);
 }
