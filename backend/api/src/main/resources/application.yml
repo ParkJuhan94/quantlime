@@ -101,6 +101,14 @@ kind:
 upbit:
   base-url: ${UPBIT_BASE_URL:https://api.upbit.com}
 
+# 텔레그램 채널 공개 웹 미리보기 스크래핑(Phase 8 P7) - Bot API가 아니라
+# t.me/s/<핸들> 정적 페이지라 인증 불필요. User-Agent가 없으면 마크업이
+# 달라질 수 있어 명시적으로 지정한다(docs/ROADMAP.md "Phase 8 P7" 참고).
+telegram:
+  base-url: ${TELEGRAM_PREVIEW_BASE_URL:https://t.me}
+  user-agent: ${TELEGRAM_USER_AGENT:Mozilla/5.0 (compatible; QuantLimeBot/1.0; +https://quantlime.com)}
+  request-delay-ms: ${TELEGRAM_REQUEST_DELAY_MS:1200}
+
 naver-finance:
   base-url: ${NAVER_FINANCE_BASE_URL:https://m.stock.naver.com}
   chart-base-url: ${NAVER_FINANCE_CHART_BASE_URL:https://api.stock.naver.com}
