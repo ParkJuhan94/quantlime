@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useVideoFeedDetailQuery } from '../../hooks/queries/useVideoFeed'
 import { LoadingSpinner } from '../common/LoadingSpinner'
-import { VideoFeedChannelAvatar } from './VideoFeedChannelAvatar'
-import { VideoFeedTickerChip } from './VideoFeedTickerChip'
+import { ChannelAvatar } from '../common/ChannelAvatar'
+import { TickerChip } from '../common/TickerChip'
 import type { VideoFeedItem } from '../../types/videoFeed'
 import { formatVideoPublishedAt } from '../../utils/dateFilter'
 
@@ -13,7 +13,7 @@ export function VideoFeedCard({ video }: { video: VideoFeedItem }) {
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-5">
       <div className="flex items-center gap-2 text-xs text-gray-500">
-        <VideoFeedChannelAvatar
+        <ChannelAvatar
           name={video.channelName}
           profileImageUrl={video.channelProfileImageUrl}
           channelUrl={video.channelUrl}
@@ -39,7 +39,7 @@ export function VideoFeedCard({ video }: { video: VideoFeedItem }) {
       {video.tickers.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {video.tickers.map((ticker) => (
-            <VideoFeedTickerChip key={ticker.tickerCode} ticker={ticker} />
+            <TickerChip key={ticker.tickerCode} ticker={ticker} />
           ))}
         </div>
       )}

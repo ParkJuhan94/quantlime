@@ -16,13 +16,15 @@ function avatarColorClass(name: string): string {
   return AVATAR_COLORS[hash % AVATAR_COLORS.length]
 }
 
-interface VideoFeedChannelAvatarProps {
+interface ChannelAvatarProps {
   name: string
   profileImageUrl: string | null
   channelUrl: string | null
 }
 
-export function VideoFeedChannelAvatar({ name, profileImageUrl, channelUrl }: VideoFeedChannelAvatarProps) {
+// VideoFeedChannelAvatar(유튜브 요약)에서 이름을 일반화해 추출(Phase 8
+// P7-F1) - 텔레그램 요약 피드 채널 아바타도 이걸 그대로 쓴다.
+export function ChannelAvatar({ name, profileImageUrl, channelUrl }: ChannelAvatarProps) {
   const [imageFailed, setImageFailed] = useState(false)
   const showImage = Boolean(profileImageUrl) && !imageFailed
 
