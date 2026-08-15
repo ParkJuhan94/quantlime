@@ -43,4 +43,26 @@ public interface TelegramPostRepository extends JpaRepository<TelegramPost, Long
     Slice<TelegramPost> findSummarizeCandidates(
         @Param("statuses") List<TelegramPostStatus> statuses, @Param("maxRetryCount") int maxRetryCount,
         Pageable pageable);
+
+    // P7-5(공개 조회) - 요약까지 끝난 글만 최신순으로 공개 노출한다.
+    // VideoRepository.findSummarizedVideos와 동일한 ":param is null or ..." 패턴 -
+    // tickerCode/channelId/publishedFrom/publishedTo는 전부 선택 필터.
+    @Query("select p from TelegramPost p join fetch p.channel "
+        + "where p.status = com.quantlime.telegramfeed.domain.TelegramPostStatus.SUMMARIZED "
+        + "and (:tickerCode is null or exists "
+        + "  (select 1 from TelegramPostTicker t where t.telegramPost = p and t.tickerCode = :tickerCode)) "
+        + "and (:channelId is null or p.channel.id = :channelId) "
+        + "and (:publishedFrom is null or p.publishedAt >= :publishedFrom) "
+        + "and (:publishedTo is null or p.publishedAt < :publishedTo) "
+        + "order by p.publishedAt desc")
+    Slice<TelegramPost> findSummarizedPosts(
+        @Param("tickerCode") String tickerCode,
+        @Param("channelId") Long channelId,
+        @Param("publishedFrom") LocalDateTime publishedFrom,
+        @Param("publishedTo") LocalDateTime publishedTo,
+        Pageable pageable);
+
+    @Query("select p from TelegramPost p join fetch p.channel "
+        + "where p.id = :telegramPostId and p.status = com.quantlime.telegramfeed.domain.TelegramPostStatus.SUMMARIZED")
+    Optional<TelegramPost> findSummarizedPostById(@Param("telegramPostId") Long telegramPostId);
 }

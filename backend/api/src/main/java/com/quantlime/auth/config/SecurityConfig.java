@@ -97,6 +97,9 @@ public class SecurityConfig {
                 // 동일하게 누구나 볼 수 있어야 한다 - 수집/요약 트리거는 여전히
                 // /api/admin/**로 막혀 있고 이건 조회 전용 GET만 연다.
                 .requestMatchers(HttpMethod.GET, "/api/video-feed/**").permitAll()
+                // 텔레그램 요약 피드(Phase 8 P7-5) 열람도 위 video-feed와 동일
+                // 이유로 GET만 연다 - 수집/요약 트리거는 /api/admin/telegram-feed/**로 막혀 있음.
+                .requestMatchers(HttpMethod.GET, "/api/telegram-feed/**").permitAll()
                 // 투자 콘텐츠 요약 피드 수집 수동 트리거 등 관리자 전용
                 // API - UserRole.ADMIN인 사용자만(JwtAuthenticationFilter가
                 // 부여하는 ROLE_ADMIN) 호출 가능하다.
