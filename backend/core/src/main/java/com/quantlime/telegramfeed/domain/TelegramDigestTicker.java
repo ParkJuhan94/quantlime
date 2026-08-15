@@ -21,25 +21,26 @@ import org.springframework.util.Assert;
 import static jakarta.persistence.ConstraintMode.NO_CONSTRAINT;
 import static lombok.AccessLevel.PROTECTED;
 
-// videofeed.domain.VideoTicker와 구조적으로 동일 - 종목 태깅 결과(P7-4에서
-// TelegramSummary.payload의 mentioned_tickers를 정규화해 저장).
+// TelegramPostTicker(2026-08-15 제거)를 대체 - videofeed.domain.VideoTicker와
+// 구조적으로 동일하되, 이제 개별 글이 아니라 다이제스트(TelegramDigest)에
+// 태깅된다.
 @Entity
-@Table(name = "telegram_post_ticker", indexes = {
-    @Index(name = "idx_telegram_post_ticker_ticker_code", columnList = "ticker_code"),
-    @Index(name = "idx_telegram_post_ticker_post", columnList = "telegram_post_id")
+@Table(name = "telegram_digest_ticker", indexes = {
+    @Index(name = "idx_telegram_digest_ticker_ticker_code", columnList = "ticker_code"),
+    @Index(name = "idx_telegram_digest_ticker_digest", columnList = "telegram_digest_id")
 })
 @Getter
 @NoArgsConstructor(access = PROTECTED)
-public class TelegramPostTicker extends TimeBaseEntity {
+public class TelegramDigestTicker extends TimeBaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "telegram_post_ticker_id")
+    @Column(name = "telegram_digest_ticker_id")
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "telegram_post_id", nullable = false, foreignKey = @ForeignKey(NO_CONSTRAINT))
-    private TelegramPost telegramPost;
+    @JoinColumn(name = "telegram_digest_id", nullable = false, foreignKey = @ForeignKey(NO_CONSTRAINT))
+    private TelegramDigest telegramDigest;
 
     @Column(name = "ticker_code", nullable = false, length = 10)
     private String tickerCode;
@@ -54,20 +55,20 @@ public class TelegramPostTicker extends TimeBaseEntity {
     private BigDecimal confidence;
 
     @Builder
-    private TelegramPostTicker(TelegramPost telegramPost, String tickerCode, String tickerName,
-                                String stance, BigDecimal confidence) {
-        validateTelegramPostTicker(telegramPost, tickerCode);
-        this.telegramPost = telegramPost;
+    private TelegramDigestTicker(TelegramDigest telegramDigest, String tickerCode, String tickerName,
+                                  String stance, BigDecimal confidence) {
+        validateTelegramDigestTicker(telegramDigest, tickerCode);
+        this.telegramDigest = telegramDigest;
         this.tickerCode = tickerCode;
         this.tickerName = tickerName;
         this.stance = stance;
         this.confidence = confidence;
     }
 
-    public static TelegramPostTicker of(TelegramPost telegramPost, String tickerCode, String tickerName,
-                                         String stance, BigDecimal confidence) {
-        return TelegramPostTicker.builder()
-            .telegramPost(telegramPost)
+    public static TelegramDigestTicker of(TelegramDigest telegramDigest, String tickerCode, String tickerName,
+                                           String stance, BigDecimal confidence) {
+        return TelegramDigestTicker.builder()
+            .telegramDigest(telegramDigest)
             .tickerCode(tickerCode)
             .tickerName(tickerName)
             .stance(stance)
@@ -75,8 +76,8 @@ public class TelegramPostTicker extends TimeBaseEntity {
             .build();
     }
 
-    private void validateTelegramPostTicker(TelegramPost telegramPost, String tickerCode) {
-        Assert.notNull(telegramPost, "텔레그램 글은 필수입니다.");
+    private void validateTelegramDigestTicker(TelegramDigest telegramDigest, String tickerCode) {
+        Assert.notNull(telegramDigest, "다이제스트는 필수입니다.");
         Assert.hasText(tickerCode, "종목 코드는 필수입니다.");
     }
 }

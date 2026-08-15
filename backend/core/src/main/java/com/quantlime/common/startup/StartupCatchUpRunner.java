@@ -3,8 +3,8 @@ package com.quantlime.common.startup;
 import com.quantlime.common.util.SafeExecutor;
 import com.quantlime.market.service.MarketDataRefreshService;
 import com.quantlime.telegramfeed.service.TelegramCollectionFacade;
+import com.quantlime.telegramfeed.service.TelegramDigestGenerationFacade;
 import com.quantlime.telegramfeed.service.TelegramPostRetentionService;
-import com.quantlime.telegramfeed.service.TelegramSummaryCollectionFacade;
 import com.quantlime.videofeed.service.FeedCollectionFacade;
 import com.quantlime.videofeed.service.SummaryCollectionFacade;
 import com.quantlime.videofeed.service.TranscriptCollectionFacade;
@@ -73,7 +73,7 @@ public class StartupCatchUpRunner implements ApplicationRunner {
     private final SummaryCollectionFacade summaryCollectionFacade;
     private final VideoRetentionService videoRetentionService;
     private final TelegramCollectionFacade telegramCollectionFacade;
-    private final TelegramSummaryCollectionFacade telegramSummaryCollectionFacade;
+    private final TelegramDigestGenerationFacade telegramDigestGenerationFacade;
     private final TelegramPostRetentionService telegramPostRetentionService;
     private final TaskExecutor marketDataCatchUpTaskExecutor;
     private final TaskExecutor videoFeedCatchUpTaskExecutor;
@@ -103,11 +103,12 @@ public class StartupCatchUpRunner implements ApplicationRunner {
         videoRetentionService.runExclusively();
     }
 
-    // 텔레그램은 자막 단계가 없어(본문이 이미 텍스트) 수집→요약→보존기간
-    // 정리 3단계뿐이다.
+    // 텔레그램은 자막 단계가 없어(본문이 이미 텍스트) 수집→다이제스트 생성→
+    // 보존기간 정리 3단계뿐이다(2026-08-15부로 요약이 글 단위에서 채널×날짜
+    // 다이제스트로 바뀌었지만 3단계 구조 자체는 동일).
     private void catchUpTelegramFeed() {
         telegramCollectionFacade.runAllExclusively();
-        telegramSummaryCollectionFacade.runBatchExclusively();
+        telegramDigestGenerationFacade.runAllExclusively();
         telegramPostRetentionService.runExclusively();
     }
 }

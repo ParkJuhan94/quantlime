@@ -2,14 +2,15 @@ package com.quantlime.telegramfeed.controller;
 
 import com.quantlime.common.exception.ValidationException;
 import com.quantlime.telegramfeed.dto.TelegramCollectResult;
-import com.quantlime.telegramfeed.dto.TelegramSummarizeResult;
+import com.quantlime.telegramfeed.dto.TelegramDigestGenerateResult;
+import com.quantlime.telegramfeed.dto.TelegramRetentionResult;
 import com.quantlime.telegramfeed.dto.mapper.TelegramFeedMapper;
 import com.quantlime.telegramfeed.dto.response.TelegramChannelResponse;
 import com.quantlime.telegramfeed.exception.TelegramFeedErrorCode;
 import com.quantlime.telegramfeed.service.TelegramChannelQueryService;
 import com.quantlime.telegramfeed.service.TelegramCollectionFacade;
+import com.quantlime.telegramfeed.service.TelegramDigestGenerationFacade;
 import com.quantlime.telegramfeed.service.TelegramPostRetentionService;
-import com.quantlime.telegramfeed.service.TelegramSummaryCollectionFacade;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -23,10 +24,14 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * ROLE_ADMIN만 호출 가능(SecurityConfig의 /api/admin/** 매처 참고).
- * 정규 실행 경로는 TelegramCollectionScheduler(하루 3회)이고, 이 엔드포인트는
- * 그 사이에 수동으로 즉시 실행하고 싶을 때 쓴다. FeedCollectionAdminController
- * (유튜브)와 대응하되 /transcribe, /channels/{id}/velocity/initialize는
- * 없다(자막 단계·velocity 개념 자체가 없음).
+ * 정규 실행 경로는 TelegramCollectionScheduler(수집, 1시간마다)와
+ * TelegramDigestGenerationScheduler(다이제스트 생성, 하루 3회)이고, 이
+ * 엔드포인트는 그 사이에 수동으로 즉시 실행하고 싶을 때 쓴다.
+ * FeedCollectionAdminController(유튜브)와 대응하되 /transcribe,
+ * /channels/{id}/velocity/initialize는 없다(자막 단계·velocity 개념
+ * 자체가 없음). 2026-08-15 다이제스트 재설계로 /summarize를
+ * /digest/generate로 개편했다(글 단위 요약이 아니라 채널×날짜 다이제스트
+ * 생성이므로).
  */
 @Tag(name = "텔레그램 피드 수집 관리자 API")
 @RestController
@@ -35,7 +40,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class TelegramFeedAdminController {
 
     private final TelegramCollectionFacade telegramCollectionFacade;
-    private final TelegramSummaryCollectionFacade telegramSummaryCollectionFacade;
+    private final TelegramDigestGenerationFacade telegramDigestGenerationFacade;
     private final TelegramPostRetentionService telegramPostRetentionService;
     private final TelegramChannelQueryService telegramChannelQueryService;
 
@@ -57,22 +62,22 @@ public class TelegramFeedAdminController {
             .orElseThrow(() -> new ValidationException(TelegramFeedErrorCode.TELEGRAM_JOB_IN_PROGRESS)));
     }
 
-    @PostMapping("/summarize")
-    @Operation(summary = "AI 요약 생성 수동 트리거",
-        description = "SELECTED(+ 재시도 상한 이내 FAILED) 텔레그램 글 배치의 AI 요약을 즉시 생성한다. "
+    @PostMapping("/digest/generate")
+    @Operation(summary = "AI 다이제스트 생성 수동 트리거",
+        description = "채널×오늘 단위로 그날 SELECTED된 글 전부를 합쳐 AI 다이제스트를 즉시 생성한다. "
             + "정규 스케줄러가 이미 실행 중이면 거절된다")
     @ApiResponse(useReturnTypeSchema = true)
-    public ResponseEntity<List<TelegramSummarizeResult>> summarize() {
-        return ResponseEntity.ok(telegramSummaryCollectionFacade.runBatchExclusively()
+    public ResponseEntity<List<TelegramDigestGenerateResult>> generateDigest() {
+        return ResponseEntity.ok(telegramDigestGenerationFacade.runAllExclusively()
             .orElseThrow(() -> new ValidationException(TelegramFeedErrorCode.TELEGRAM_JOB_IN_PROGRESS)));
     }
 
     @PostMapping("/retention/cleanup")
-    @Operation(summary = "보존 기간 초과 텔레그램 글 데이터 수동 정리",
-        description = "발행일이 보존 기간(14일)을 초과한 글+요약+태깅종목을 즉시 삭제한다. "
+    @Operation(summary = "보존 기간 초과 텔레그램 데이터 수동 정리",
+        description = "발행일/다이제스트 날짜가 보존 기간(14일)을 초과한 글+다이제스트+태깅종목을 즉시 삭제한다. "
             + "정규 스케줄러(매일 새벽 3시 10분)가 이미 실행 중이면 거절된다")
     @ApiResponse(useReturnTypeSchema = true)
-    public ResponseEntity<Integer> cleanupRetention() {
+    public ResponseEntity<TelegramRetentionResult> cleanupRetention() {
         return ResponseEntity.ok(telegramPostRetentionService.runExclusively()
             .orElseThrow(() -> new ValidationException(TelegramFeedErrorCode.RETENTION_JOB_IN_PROGRESS)));
     }

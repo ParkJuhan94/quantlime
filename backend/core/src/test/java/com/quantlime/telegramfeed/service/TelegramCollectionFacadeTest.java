@@ -48,7 +48,7 @@ class TelegramCollectionFacadeTest {
 
     private Channel channelOf(Long id, String handle) {
         Channel channel = Channel.ofTelegram(handle, "테스트 채널", 30,
-            new TelegramFilterConfig(300, 5, List.of(), List.of()));
+            new TelegramFilterConfig(300, List.of(), List.of()));
         ReflectionTestUtils.setField(channel, "id", id);
         return channel;
     }

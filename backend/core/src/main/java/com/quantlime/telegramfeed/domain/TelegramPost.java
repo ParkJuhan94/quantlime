@@ -84,12 +84,6 @@ public class TelegramPost extends TimeBaseEntity {
     @Column(name = "status", nullable = false, length = 30)
     private TelegramPostStatus status;
 
-    @Column(name = "fail_reason", columnDefinition = "TEXT")
-    private String failReason;
-
-    @Column(name = "retry_count", nullable = false)
-    private int retryCount;
-
     @Builder
     private TelegramPost(Channel channel, String externalPostId, long messageId, String content,
                           LocalDateTime publishedAt, Long viewCount, LocalDateTime viewCountCheckedAt,
@@ -105,7 +99,6 @@ public class TelegramPost extends TimeBaseEntity {
         this.viewCountCheckedAt = viewCountCheckedAt;
         this.hasMedia = hasMedia;
         this.status = TelegramPostStatus.DISCOVERED;
-        this.retryCount = 0;
     }
 
     public static TelegramPost of(Channel channel, String externalPostId, long messageId, String content,
@@ -134,16 +127,6 @@ public class TelegramPost extends TimeBaseEntity {
 
     public void markSelected() {
         this.status = TelegramPostStatus.SELECTED;
-    }
-
-    public void markSummarized() {
-        this.status = TelegramPostStatus.SUMMARIZED;
-    }
-
-    public void markFailed(String failReason) {
-        this.status = TelegramPostStatus.FAILED;
-        this.failReason = failReason;
-        this.retryCount++;
     }
 
     private void validateTelegramPost(Channel channel, String externalPostId, String content,

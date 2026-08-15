@@ -36,7 +36,7 @@ class TelegramPostPersistServiceTest {
     void upsertAll_skipsExistingPosts() {
         // given
         Channel channel = Channel.ofTelegram("testhandle", "테스트 채널", 30,
-            new TelegramFilterConfig(300, 5, List.of(), List.of()));
+            new TelegramFilterConfig(300, List.of(), List.of()));
         CollectedTelegramPost existing = new CollectedTelegramPost(
             "testhandle/1", 1L, "이미 있는 게시물", LocalDateTime.now(), 100L, false);
         CollectedTelegramPost fresh = new CollectedTelegramPost(

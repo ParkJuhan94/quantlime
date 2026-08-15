@@ -2,15 +2,16 @@ package com.quantlime.telegramfeed.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.quantlime.common.exception.NotFoundException;
+import com.quantlime.telegramfeed.domain.TelegramDigest;
+import com.quantlime.telegramfeed.domain.TelegramDigestTicker;
 import com.quantlime.telegramfeed.domain.TelegramPost;
-import com.quantlime.telegramfeed.domain.TelegramPostTicker;
-import com.quantlime.telegramfeed.domain.TelegramSummary;
+import com.quantlime.telegramfeed.domain.TelegramPostStatus;
 import com.quantlime.telegramfeed.dto.response.TelegramFeedChannelResponse;
-import com.quantlime.telegramfeed.dto.response.TelegramFeedDetailResponse;
-import com.quantlime.telegramfeed.dto.response.TelegramFeedPostResponse;
+import com.quantlime.telegramfeed.dto.response.TelegramFeedDigestDetailResponse;
+import com.quantlime.telegramfeed.dto.response.TelegramFeedDigestResponse;
+import com.quantlime.telegramfeed.repository.TelegramDigestRepository;
+import com.quantlime.telegramfeed.repository.TelegramDigestTickerRepository;
 import com.quantlime.telegramfeed.repository.TelegramPostRepository;
-import com.quantlime.telegramfeed.repository.TelegramPostTickerRepository;
-import com.quantlime.telegramfeed.repository.TelegramSummaryRepository;
 import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.Platform;
 import com.quantlime.videofeed.domain.TelegramFilterConfig;
@@ -34,6 +35,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
@@ -43,13 +45,13 @@ import static org.mockito.Mockito.verify;
 class TelegramFeedServiceTest {
 
     @Mock
+    private TelegramDigestRepository telegramDigestRepository;
+
+    @Mock
+    private TelegramDigestTickerRepository telegramDigestTickerRepository;
+
+    @Mock
     private TelegramPostRepository telegramPostRepository;
-
-    @Mock
-    private TelegramSummaryRepository telegramSummaryRepository;
-
-    @Mock
-    private TelegramPostTickerRepository telegramPostTickerRepository;
 
     @Mock
     private ChannelRepository channelRepository;
@@ -58,91 +60,85 @@ class TelegramFeedServiceTest {
 
     private Channel channelOf() {
         return Channel.ofTelegram("insidertracking", "테스트 채널", 30,
-            new TelegramFilterConfig(300, 2, List.of(), List.of()));
+            new TelegramFilterConfig(300, List.of(), List.of()));
     }
 
-    private TelegramPost postOf(Long id, String content) {
-        Channel channel = channelOf();
-        TelegramPost post = TelegramPost.of(channel, "insidertracking/" + id, id, content,
-            LocalDateTime.now(), 100L, LocalDateTime.now(), false);
-        ReflectionTestUtils.setField(post, "id", id);
-        return post;
-    }
-
-    private TelegramSummary summaryOf(TelegramPost post, String summaryText) {
+    private TelegramDigest digestOf(Long id, Channel channel, LocalDate digestDate, String summaryText) {
         String payload = "{\"summary\":\"" + summaryText
             + "\",\"key_points\":[\"포인트1\",\"포인트2\"],"
             + "\"macro_points\":[\"매크로포인트1\"],"
             + "\"mentioned_tickers\":[],\"caveat\":\"투자 권유 아님\"}";
-        TelegramSummary summary = TelegramSummary.of(post, "gemini-3.5-flash-lite", payload, 100, 50);
-        ReflectionTestUtils.setField(summary, "id", post.getId());
-        return summary;
+        TelegramDigest digest = TelegramDigest.of(channel, digestDate, "gemini-3.5-flash-lite", payload, 100, 50);
+        ReflectionTestUtils.setField(digest, "id", id);
+        return digest;
     }
 
-    private TelegramSummary summaryOfWithoutMacroPoints(TelegramPost post, String summaryText) {
+    private TelegramDigest digestOfWithoutMacroPoints(Long id, Channel channel, LocalDate digestDate, String summaryText) {
         String payload = "{\"summary\":\"" + summaryText
             + "\",\"key_points\":[\"포인트1\"],"
             + "\"mentioned_tickers\":[],\"caveat\":\"투자 권유 아님\"}";
-        TelegramSummary summary = TelegramSummary.of(post, "gemini-3.5-flash-lite", payload, 100, 50);
-        ReflectionTestUtils.setField(summary, "id", post.getId());
-        return summary;
+        TelegramDigest digest = TelegramDigest.of(channel, digestDate, "gemini-3.5-flash-lite", payload, 100, 50);
+        ReflectionTestUtils.setField(digest, "id", id);
+        return digest;
     }
 
     private TelegramFeedService newService() {
-        return new TelegramFeedService(telegramPostRepository, telegramSummaryRepository,
-            telegramPostTickerRepository, channelRepository, new ObjectMapper());
+        return new TelegramFeedService(telegramDigestRepository, telegramDigestTickerRepository,
+            telegramPostRepository, channelRepository, new ObjectMapper());
     }
 
     @Test
-    @DisplayName("[tickerCode/date가 없으면 전체 요약 글을 최신순으로 조회하고, 각 글의 요약문/태깅 종목을 배치로 채운다]")
-    void getPosts_withoutFilters_returnsAllSummarizedPosts() {
+    @DisplayName("[tickerCode/date가 없으면 전체 다이제스트를 최신순으로 조회하고, 각 다이제스트의 요약문/태깅 종목/재료 글 개수를 채운다]")
+    void getDigests_withoutFilters_returnsAllDigests() {
         // given
         telegramFeedService = newService();
-        TelegramPost post1 = postOf(1L, "본문1");
-        TelegramPost post2 = postOf(2L, "본문2");
+        Channel channel = channelOf();
+        LocalDate date = LocalDate.of(2026, 8, 15);
+        TelegramDigest digest1 = digestOf(1L, channel, date, "요약1");
+        TelegramDigest digest2 = digestOf(2L, channel, date.minusDays(1), "요약2");
         Pageable pageable = PageRequest.of(0, 10);
-        given(telegramPostRepository.findSummarizedPosts(null, null, null, null, pageable))
-            .willReturn(new SliceImpl<>(List.of(post1, post2)));
-        given(telegramSummaryRepository.findByTelegramPost_IdIn(List.of(1L, 2L)))
-            .willReturn(List.of(summaryOf(post1, "요약1"), summaryOf(post2, "요약2")));
-        given(telegramPostTickerRepository.findByTelegramPost_IdIn(List.of(1L, 2L)))
-            .willReturn(List.of(TelegramPostTicker.of(post1, "AAPL", "애플", "BULLISH", BigDecimal.valueOf(0.8))));
+        given(telegramDigestRepository.findDigests(null, null, null, pageable))
+            .willReturn(new SliceImpl<>(List.of(digest1, digest2)));
+        given(telegramDigestTickerRepository.findByTelegramDigest_IdIn(List.of(1L, 2L)))
+            .willReturn(List.of(TelegramDigestTicker.of(digest1, "AAPL", "애플", "BULLISH", BigDecimal.valueOf(0.8))));
+        given(telegramPostRepository.findByChannelAndStatusAndPublishedAtBetween(
+            eq(channel), eq(TelegramPostStatus.SELECTED), any(), any()))
+            .willReturn(List.of(
+                TelegramPost.of(channel, "insidertracking/1", 1L, "본문", LocalDateTime.now(), 10L, LocalDateTime.now(), false)));
 
         // when
-        Slice<TelegramFeedPostResponse> result = telegramFeedService.getPosts(null, null, null, pageable);
+        Slice<TelegramFeedDigestResponse> result = telegramFeedService.getDigests(null, null, null, pageable);
 
         // then
         assertThat(result.getContent()).hasSize(2);
-        TelegramFeedPostResponse item1 = result.getContent().get(0);
+        TelegramFeedDigestResponse item1 = result.getContent().get(0);
         assertThat(item1.summary()).isEqualTo("요약1");
         assertThat(item1.tickers()).hasSize(1);
         assertThat(item1.tickers().get(0).tickerCode()).isEqualTo("AAPL");
-        assertThat(item1.postUrl()).isEqualTo("https://t.me/insidertracking/1");
+        assertThat(item1.sourcePostCount()).isEqualTo(1);
         assertThat(item1.channelUrl()).isEqualTo("https://t.me/insidertracking");
 
-        TelegramFeedPostResponse item2 = result.getContent().get(1);
+        TelegramFeedDigestResponse item2 = result.getContent().get(1);
         assertThat(item2.summary()).isEqualTo("요약2");
         assertThat(item2.tickers()).isEmpty();
     }
 
     @Test
-    @DisplayName("[tickerCode/channelId/date를 지정하면 하루 범위(00:00~다음날 00:00)와 함께 리포지토리에 그대로 넘긴다]")
-    void getPosts_withTickerCodeChannelIdAndDate_passesFiltersToRepository() {
+    @DisplayName("[tickerCode/channelId/date를 지정하면 리포지토리에 그대로 넘긴다]")
+    void getDigests_withTickerCodeChannelIdAndDate_passesFiltersToRepository() {
         // given
         telegramFeedService = newService();
         Pageable pageable = PageRequest.of(0, 10);
-        Slice<TelegramPost> emptySlice = new SliceImpl<>(List.of());
+        Slice<TelegramDigest> emptySlice = new SliceImpl<>(List.of());
         LocalDate date = LocalDate.of(2026, 8, 14);
-        given(telegramPostRepository.findSummarizedPosts(
-            eq("AAPL"), eq(1L), eq(date.atStartOfDay()), eq(date.plusDays(1).atStartOfDay()), eq(pageable)))
+        given(telegramDigestRepository.findDigests(eq("AAPL"), eq(1L), eq(date), eq(pageable)))
             .willReturn(emptySlice);
 
         // when
-        telegramFeedService.getPosts("AAPL", 1L, date, pageable);
+        telegramFeedService.getDigests("AAPL", 1L, date, pageable);
 
         // then
-        verify(telegramPostRepository).findSummarizedPosts(
-            "AAPL", 1L, date.atStartOfDay(), date.plusDays(1).atStartOfDay(), pageable);
+        verify(telegramDigestRepository).findDigests("AAPL", 1L, date, pageable);
     }
 
     @Test
@@ -163,55 +159,62 @@ class TelegramFeedServiceTest {
     }
 
     @Test
-    @DisplayName("[글 상세 조회 시 원문 전문/요약 전문/핵심포인트/고지문/태깅 종목을 모두 채운다]")
-    void getPostDetail_returnsFullDetail() {
+    @DisplayName("[다이제스트 상세 조회 시 요약 전문/핵심포인트/고지문/태깅 종목/원문 링크 목록을 모두 채운다]")
+    void getDigestDetail_returnsFullDetail() {
         // given
         telegramFeedService = newService();
-        TelegramPost post = postOf(1L, "본문 전문 내용");
-        given(telegramPostRepository.findSummarizedPostById(1L)).willReturn(Optional.of(post));
-        given(telegramSummaryRepository.findByTelegramPost(post)).willReturn(Optional.of(summaryOf(post, "요약1")));
-        given(telegramPostTickerRepository.findByTelegramPost(post))
-            .willReturn(List.of(TelegramPostTicker.of(post, "AAPL", "애플", "BULLISH", BigDecimal.valueOf(0.8))));
+        Channel channel = channelOf();
+        LocalDate date = LocalDate.of(2026, 8, 15);
+        TelegramDigest digest = digestOf(1L, channel, date, "요약1");
+        given(telegramDigestRepository.findByIdWithChannel(1L)).willReturn(Optional.of(digest));
+        given(telegramDigestTickerRepository.findByTelegramDigest(digest))
+            .willReturn(List.of(TelegramDigestTicker.of(digest, "AAPL", "애플", "BULLISH", BigDecimal.valueOf(0.8))));
+        given(telegramPostRepository.findByChannelAndStatusAndPublishedAtBetween(
+            eq(channel), eq(TelegramPostStatus.SELECTED), any(), any()))
+            .willReturn(List.of(
+                TelegramPost.of(channel, "insidertracking/1", 1L, "본문", date.atTime(9, 0), 10L, LocalDateTime.now(), false)));
 
         // when
-        TelegramFeedDetailResponse result = telegramFeedService.getPostDetail(1L);
+        TelegramFeedDigestDetailResponse result = telegramFeedService.getDigestDetail(1L);
 
         // then
-        assertThat(result.content()).isEqualTo("본문 전문 내용");
         assertThat(result.summary()).isEqualTo("요약1");
         assertThat(result.keyPoints()).containsExactly("포인트1", "포인트2");
         assertThat(result.macroPoints()).containsExactly("매크로포인트1");
         assertThat(result.caveat()).isEqualTo("투자 권유 아님");
         assertThat(result.tickers()).hasSize(1);
+        assertThat(result.sourcePostUrls()).containsExactly("https://t.me/insidertracking/1");
     }
 
     @Test
-    @DisplayName("[macro_points 필드가 없는 과거 요약 데이터를 조회해도 빈 리스트로 방어한다]")
-    void getPostDetail_payloadWithoutMacroPoints_defaultsToEmptyList() {
+    @DisplayName("[macro_points 필드가 없는 과거 다이제스트 데이터를 조회해도 빈 리스트로 방어한다]")
+    void getDigestDetail_payloadWithoutMacroPoints_defaultsToEmptyList() {
         // given
         telegramFeedService = newService();
-        TelegramPost post = postOf(1L, "본문");
-        given(telegramPostRepository.findSummarizedPostById(1L)).willReturn(Optional.of(post));
-        given(telegramSummaryRepository.findByTelegramPost(post))
-            .willReturn(Optional.of(summaryOfWithoutMacroPoints(post, "요약1")));
-        given(telegramPostTickerRepository.findByTelegramPost(post)).willReturn(List.of());
+        Channel channel = channelOf();
+        TelegramDigest digest = digestOfWithoutMacroPoints(1L, channel, LocalDate.of(2026, 8, 15), "요약1");
+        given(telegramDigestRepository.findByIdWithChannel(1L)).willReturn(Optional.of(digest));
+        given(telegramDigestTickerRepository.findByTelegramDigest(digest)).willReturn(List.of());
+        given(telegramPostRepository.findByChannelAndStatusAndPublishedAtBetween(
+            eq(channel), eq(TelegramPostStatus.SELECTED), any(), any()))
+            .willReturn(List.of());
 
         // when
-        TelegramFeedDetailResponse result = telegramFeedService.getPostDetail(1L);
+        TelegramFeedDigestDetailResponse result = telegramFeedService.getDigestDetail(1L);
 
         // then
         assertThat(result.macroPoints()).isEmpty();
     }
 
     @Test
-    @DisplayName("[존재하지 않거나 아직 요약되지 않은 글이면 NotFoundException을 던진다]")
-    void getPostDetail_notFoundOrNotSummarized_throwsNotFoundException() {
+    @DisplayName("[존재하지 않는 다이제스트면 NotFoundException을 던진다]")
+    void getDigestDetail_notFound_throwsNotFoundException() {
         // given
         telegramFeedService = newService();
-        given(telegramPostRepository.findSummarizedPostById(999L)).willReturn(Optional.empty());
+        given(telegramDigestRepository.findByIdWithChannel(999L)).willReturn(Optional.empty());
 
         // when & then
-        assertThatThrownBy(() -> telegramFeedService.getPostDetail(999L))
+        assertThatThrownBy(() -> telegramFeedService.getDigestDetail(999L))
             .isInstanceOf(NotFoundException.class);
     }
 }

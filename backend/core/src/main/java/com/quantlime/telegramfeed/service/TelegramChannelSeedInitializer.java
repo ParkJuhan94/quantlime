@@ -34,10 +34,15 @@ public class TelegramChannelSeedInitializer implements ApplicationRunner {
     // 필요가 없다(ChannelSeedInitializer.run()과 동일한 이유).
     @Override
     public void run(ApplicationArguments args) {
+        // insidertracking은 번역 단신 뉴스 채널이라 원문이 구조적으로 짧다 -
+        // 300자 기준으로는 200~299자 구간의 실질적 단신 뉴스(예: "SK하이닉스
+        // 파생상품 손실 인식", "연준 국채매입 중단")까지 함께 잘려나가는 걸
+        // 실제 수집 데이터로 확인해 200자로 낮췄다(2026-08-15). Donmaek은
+        // 장문 에세이 채널이라 300자를 그대로 유지.
         seedIfAbsent("insidertracking", "미국 주식 인사이더", 30,
-            new TelegramFilterConfig(300, 2, DEFAULT_CONTENT_EXCLUDE, List.of()));
+            new TelegramFilterConfig(200, DEFAULT_CONTENT_EXCLUDE, List.of()));
         seedIfAbsent("Donmaek", "돈맥경화 연구소", 30,
-            new TelegramFilterConfig(300, 2, DEFAULT_CONTENT_EXCLUDE, List.of()));
+            new TelegramFilterConfig(300, DEFAULT_CONTENT_EXCLUDE, List.of()));
     }
 
     // channelRepository.save() 자체가 Spring Data 리포지토리 프록시를 통해
