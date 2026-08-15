@@ -1,45 +1,38 @@
 import { useState } from 'react'
-import { useTelegramFeedDetailQuery } from '../../hooks/queries/useTelegramFeed'
+import { useTelegramDigestDetailQuery } from '../../hooks/queries/useTelegramFeed'
 import { LoadingSpinner } from '../common/LoadingSpinner'
 import { ChannelAvatar } from '../common/ChannelAvatar'
 import { TickerChip } from '../common/TickerChip'
-import type { TelegramFeedPost } from '../../types/telegramFeed'
-import { formatVideoPublishedAt } from '../../utils/dateFilter'
+import type { TelegramFeedDigest } from '../../types/telegramFeed'
+import { formatDayLabel } from '../../utils/dateFilter'
 
-// VideoFeedCard(유튜브 요약)와 구조적으로 동일(Phase 8 P7-F2) - 텔레그램
-// 글은 제목이 없어 제목 자리에 "원문 보기" 링크(postUrl, 실제 t.me 글로
-// 이동)를 별도로 둔다. 핵심포인트 더보기/접기 애니메이션(grid-template-rows
-// 트랜지션)도 동일 패턴을 그대로 재사용.
-export function TelegramFeedCard({ post }: { post: TelegramFeedPost }) {
+// VideoFeedCard(유튜브 요약)와 구조적으로 동일(Phase 8 P7-F2)하되, 텔레그램은
+// 채널×날짜 다이제스트(여러 글을 합친 요약, 2026-08-15 재설계)라 원문이
+// 하나가 아니다 - 목록 단계에서는 "게시물 N개 종합" 배지만 보여주고, 펼쳤을
+// 때(상세 조회) 그날 재료가 된 원문 링크 전부를 핵심포인트 아래에 나열한다.
+export function TelegramFeedCard({ digest }: { digest: TelegramFeedDigest }) {
   const [expanded, setExpanded] = useState(false)
-  const detailQuery = useTelegramFeedDetailQuery(post.telegramPostId, expanded)
+  const detailQuery = useTelegramDigestDetailQuery(digest.telegramDigestId, expanded)
 
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-5">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-xs text-gray-500">
           <ChannelAvatar
-            name={post.channelName}
-            profileImageUrl={post.channelProfileImageUrl}
-            channelUrl={post.channelUrl}
+            name={digest.channelName}
+            profileImageUrl={digest.channelProfileImageUrl}
+            channelUrl={digest.channelUrl}
           />
-          <span>· {formatVideoPublishedAt(post.publishedAt)}</span>
+          <span>· {formatDayLabel(digest.digestDate)}</span>
         </div>
-        <a
-          href={post.postUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="shrink-0 text-xs font-medium text-gray-500 transition hover:text-gray-700 hover:underline"
-        >
-          원문 보기
-        </a>
+        <span className="shrink-0 text-xs font-medium text-gray-400">게시물 {digest.sourcePostCount}개 종합</span>
       </div>
 
-      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-gray-700">{post.summary}</p>
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-gray-700">{digest.summary}</p>
 
-      {post.tickers.length > 0 && (
+      {digest.tickers.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
-          {post.tickers.map((ticker) => (
+          {digest.tickers.map((ticker) => (
             <TickerChip key={ticker.tickerCode} ticker={ticker} />
           ))}
         </div>
@@ -90,6 +83,24 @@ export function TelegramFeedCard({ post }: { post: TelegramFeedPost }) {
                         <li key={index}>{point}</li>
                       ))}
                     </ul>
+                  </div>
+                )}
+                {detailQuery.data.sourcePostUrls.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-xs font-medium text-gray-500">원문 보기</p>
+                    <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1">
+                      {detailQuery.data.sourcePostUrls.map((url, index) => (
+                        <a
+                          key={url}
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
+                        >
+                          원문 {index + 1}
+                        </a>
+                      ))}
+                    </div>
                   </div>
                 )}
               </>
