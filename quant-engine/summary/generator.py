@@ -124,11 +124,25 @@ class SummaryResult:
     output_tokens: int = 0
 
 
-_PROMPT_INSTRUCTIONS = (
+_PROMPT_INTRO_YOUTUBE = (
     "다음은 국내/해외 주식 투자 관련 유튜브 영상의 자막입니다. summary와 "
     "key_points, macro_points는 반드시 한국어로 답하세요(자막이 한국어라도 "
     "영어로 답하는 경우가 있어 명시함). 영상 핵심 내용을 2~4문장으로 "
     "요약하세요.\n\n"
+)
+
+# 텔레그램은 음성인식 자막이 아니라 작성자가 직접 쓴 글이라 숫자/고유명사
+# 오인식 걱정이 없다는 점만 유튜브 인트로와 다르게 명시한다(Phase 8 P7-4) -
+# 아래 공통 지시사항(_PROMPT_INSTRUCTIONS_BODY)의 "자동 생성 자막은 숫자를
+# 잘못 인식하는 경우가 흔합니다" 문구가 텔레그램에는 맞지 않기 때문.
+_PROMPT_INTRO_TELEGRAM = (
+    "다음은 국내/해외 주식 투자 관련 텔레그램 채널 게시글입니다. 음성인식 "
+    "자막이 아니라 작성자가 직접 작성한 글이므로 본문에 적힌 수치·고유명사는"
+    "그대로 신뢰해도 됩니다. summary와 key_points, macro_points는 반드시 "
+    "한국어로 답하세요. 게시글 핵심 내용을 2~4문장으로 요약하세요.\n\n"
+)
+
+_PROMPT_INSTRUCTIONS_BODY = (
     "key_points는 3~5개, 완전한 문장이 아니라 핵심 구문으로 압축해 답하세요"
     "(예: \"연준 9월 추가 인하 시사\", \"삼성전자 3분기 실적 컨센서스 상회\").\n\n"
     "macro_points는 특정 종목이 아니라 시장 전반/거시경제(금리, 환율, 지수, "
@@ -152,14 +166,24 @@ _PROMPT_INSTRUCTIONS = (
     "stance는 BULLISH(강세 의견)/BEARISH(약세 의견)/NEUTRAL(중립 또는 강세·"
     "약세 의견이 함께 언급됨)/MENTIONED(논의는 됐지만 방향성 의견이 뚜렷하지 "
     "않음 - 예: 실적 수치만 전달) 중 하나로 답하세요.\n\n"
-    "자막에 명확히 나오지 않는 구체적인 수치(가격, 등락률, 날짜 등)는 "
-    "지어내지 말고, 확실하지 않으면 그 수치를 언급하지 마세요(자동 생성 자막은 "
-    "숫자를 잘못 인식하는 경우가 흔합니다). 과도한 확신이나 투자 권유 표현은 "
-    "피하세요."
+    "본문에 명확히 나오지 않는 구체적인 수치(가격, 등락률, 날짜 등)는 지어내지 "
+    "말고, 확실하지 않으면 그 수치를 언급하지 마세요. 과도한 확신이나 투자 "
+    "권유 표현은 피하세요."
 )
 
+# 유튜브 자막은 음성인식 오류로 숫자를 잘못 인식하는 경우가 흔해 이 캐비엇을
+# 별도로 덧붙인다 - 텔레그램은 작성자가 직접 쓴 글이라 이 문구를 붙이면
+# 인트로(_PROMPT_INTRO_TELEGRAM)의 "본문 수치를 그대로 신뢰해도 됩니다"와
+# 모순되므로 유튜브에만 적용한다.
+_PROMPT_CAVEAT_YOUTUBE_TRANSCRIPT_ERROR = "(자동 생성 자막은 숫자를 잘못 인식하는 경우가 흔합니다.)"
 
-def generate_summary(video_title: str, channel_name: str, transcript_content: str) -> SummaryResult:
+
+def generate_summary(
+    video_title: str | None,
+    channel_name: str,
+    transcript_content: str,
+    source_kind: Literal["youtube", "telegram"] = "youtube",
+) -> SummaryResult:
     input_tokens = 0
     output_tokens = 0
 
@@ -169,11 +193,17 @@ def generate_summary(video_title: str, channel_name: str, transcript_content: st
         output_tokens += chunk_output
 
     client = _get_client()
+    is_telegram = source_kind == "telegram"
+    intro = _PROMPT_INTRO_TELEGRAM if is_telegram else _PROMPT_INTRO_YOUTUBE
+    caveat = "" if is_telegram else f"\n\n{_PROMPT_CAVEAT_YOUTUBE_TRANSCRIPT_ERROR}"
+    # 텔레그램은 제목이 없는 글이라 "영상 제목" 줄 자체를 생략한다(video_title=None).
+    title_line = f"영상 제목: {video_title}\n" if video_title else ""
+    content_label = "본문" if is_telegram else "자막"
     prompt = (
-        f"{_PROMPT_INSTRUCTIONS}\n\n"
+        f"{intro}{_PROMPT_INSTRUCTIONS_BODY}{caveat}\n\n"
         f"채널명: {channel_name}\n"
-        f"영상 제목: {video_title}\n"
-        f"자막:\n{transcript_content}"
+        f"{title_line}"
+        f"{content_label}:\n{transcript_content}"
     )
     response = client.models.generate_content(
         model=_MODEL,

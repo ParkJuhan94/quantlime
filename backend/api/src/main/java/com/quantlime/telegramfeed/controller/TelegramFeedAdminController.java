@@ -2,11 +2,13 @@ package com.quantlime.telegramfeed.controller;
 
 import com.quantlime.common.exception.ValidationException;
 import com.quantlime.telegramfeed.dto.TelegramCollectResult;
+import com.quantlime.telegramfeed.dto.TelegramSummarizeResult;
 import com.quantlime.telegramfeed.dto.mapper.TelegramFeedMapper;
 import com.quantlime.telegramfeed.dto.response.TelegramChannelResponse;
 import com.quantlime.telegramfeed.exception.TelegramFeedErrorCode;
 import com.quantlime.telegramfeed.service.TelegramChannelQueryService;
 import com.quantlime.telegramfeed.service.TelegramCollectionFacade;
+import com.quantlime.telegramfeed.service.TelegramSummaryCollectionFacade;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -32,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class TelegramFeedAdminController {
 
     private final TelegramCollectionFacade telegramCollectionFacade;
+    private final TelegramSummaryCollectionFacade telegramSummaryCollectionFacade;
     private final TelegramChannelQueryService telegramChannelQueryService;
 
     @GetMapping("/channels")
@@ -49,6 +52,16 @@ public class TelegramFeedAdminController {
     @ApiResponse(useReturnTypeSchema = true)
     public ResponseEntity<List<TelegramCollectResult>> collect() {
         return ResponseEntity.ok(telegramCollectionFacade.runAllExclusively()
+            .orElseThrow(() -> new ValidationException(TelegramFeedErrorCode.TELEGRAM_JOB_IN_PROGRESS)));
+    }
+
+    @PostMapping("/summarize")
+    @Operation(summary = "AI 요약 생성 수동 트리거",
+        description = "SELECTED(+ 재시도 상한 이내 FAILED) 텔레그램 글 배치의 AI 요약을 즉시 생성한다. "
+            + "정규 스케줄러가 이미 실행 중이면 거절된다")
+    @ApiResponse(useReturnTypeSchema = true)
+    public ResponseEntity<List<TelegramSummarizeResult>> summarize() {
+        return ResponseEntity.ok(telegramSummaryCollectionFacade.runBatchExclusively()
             .orElseThrow(() -> new ValidationException(TelegramFeedErrorCode.TELEGRAM_JOB_IN_PROGRESS)));
     }
 }

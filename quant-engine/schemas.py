@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -114,9 +115,14 @@ class TranscribeResponse(BaseModel):
 
 
 class SummarizeRequest(BaseModel):
-    video_title: str
+    # 텔레그램 글은 제목이 없는 짧은 게시물이라 video_title 없이 채널명+본문만
+    # 넘어온다(Phase 8 P7-4). source_kind 기본값을 "youtube"로 둬 기존 Java
+    # 호출부(SummarizeApiRequest 3-arg 생성자)가 이 필드를 안 보내도 그대로
+    # 동작한다.
+    video_title: str | None = None
     channel_name: str
     transcript_content: str
+    source_kind: Literal["youtube", "telegram"] = "youtube"
 
 
 class TickerMentionResponse(BaseModel):

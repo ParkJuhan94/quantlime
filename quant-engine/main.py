@@ -178,7 +178,8 @@ def summarize(request: SummarizeRequest) -> SummarizeResponse:
     쪽(PythonEngineClient)이 재시도해도 되는 일시적 상황인지 구분할 수 없어
     매번 즉시 실패 처리된다(2026-08-09, 신규 채널 백로그 재처리 중 실제 발견)."""
     try:
-        result = generate_summary(request.video_title, request.channel_name, request.transcript_content)
+        result = generate_summary(
+            request.video_title, request.channel_name, request.transcript_content, request.source_kind)
     except ClientError as e:
         if e.code == 429:
             raise HTTPException(status_code=429, detail="Gemini API rate limit exceeded") from e

@@ -121,6 +121,39 @@ class TestGenerateSummary:
             with pytest.raises(ValueError):
                 generate_summary("제목", "채널", "자막")
 
+    def test_telegram_source_kind_omits_title_line_and_uses_telegram_intro(self, monkeypatch):
+        # given: 텔레그램 글은 제목이 없어(video_title=None) "영상 제목" 줄 자체가
+        # 빠져야 하고, 유튜브 전용 "자동 생성 자막 오인식" 캐비엇도 붙으면 안 됨
+        # (인트로에서 "본문 수치를 그대로 신뢰해도 됩니다"라고 했으므로 모순 방지)
+        monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+        parsed = _SummarySchema(summary="요약", key_points=[], mentioned_tickers=[])
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = _fake_response(parsed)
+
+        with patch("summary.generator.genai.Client", return_value=mock_client):
+            generate_summary(None, "채널", "게시글 본문", source_kind="telegram")
+
+        prompt = mock_client.models.generate_content.call_args.kwargs["contents"]
+        assert "영상 제목" not in prompt
+        assert "텔레그램 채널 게시글" in prompt
+        assert "본문:\n게시글 본문" in prompt
+        assert "자동 생성 자막은 숫자를 잘못 인식" not in prompt
+
+    def test_youtube_source_kind_includes_title_line_and_transcript_caveat(self, monkeypatch):
+        # given: source_kind 기본값("youtube")은 기존 프롬프트 구성을 그대로 유지해야 함
+        monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+        parsed = _SummarySchema(summary="요약", key_points=[], mentioned_tickers=[])
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = _fake_response(parsed)
+
+        with patch("summary.generator.genai.Client", return_value=mock_client):
+            generate_summary("영상 제목", "채널", "자막 내용")
+
+        prompt = mock_client.models.generate_content.call_args.kwargs["contents"]
+        assert "영상 제목: 영상 제목" in prompt
+        assert "자막:\n자막 내용" in prompt
+        assert "자동 생성 자막은 숫자를 잘못 인식" in prompt
+
     def test_long_transcript_uses_map_reduce_and_accumulates_tokens(self, monkeypatch):
         # given: 임계값(5만자)을 넘는 긴 자막 - 청크 요약 호출 여러 번(response_schema
         # 없이 plain text) + 최종 구조화 호출 1번. 청크 수는 chunk_text의 슬라이딩

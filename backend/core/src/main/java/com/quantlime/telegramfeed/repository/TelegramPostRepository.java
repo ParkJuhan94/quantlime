@@ -6,6 +6,8 @@ import com.quantlime.videofeed.domain.Channel;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -28,4 +30,17 @@ public interface TelegramPostRepository extends JpaRepository<TelegramPost, Long
     // .countByChannelAndStatusAndPublishedAtBetween과 동일 이유).
     int countByChannelAndStatusAndPublishedAtBetween(
         Channel channel, TelegramPostStatus status, LocalDateTime start, LocalDateTime end);
+
+    // SummaryCollectionFacade(유튜브)의 findSummarizeCandidates와 동일 이유로
+    // join fetch p.channel을 강제한다 - 트랜잭션 밖에서
+    // post.getChannel().getName()을 읽으면 LazyInitializationException이 난다.
+    // 텔레그램은 자막 단계가 없어(본문이 이미 텍스트) "and exists Transcript"
+    // 조건이 없다 - status=SELECTED 자체가 유튜브의 TRANSCRIBED에 대응한다.
+    @Query("select p from TelegramPost p join fetch p.channel "
+        + "where p.status in :statuses and p.retryCount < :maxRetryCount "
+        + "and not exists (select 1 from TelegramSummary s where s.telegramPost = p) "
+        + "order by p.publishedAt asc")
+    Slice<TelegramPost> findSummarizeCandidates(
+        @Param("statuses") List<TelegramPostStatus> statuses, @Param("maxRetryCount") int maxRetryCount,
+        Pageable pageable);
 }

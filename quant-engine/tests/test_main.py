@@ -211,7 +211,25 @@ class TestSummarize:
             assert body["summary"] == "요약 내용"
             assert body["mentioned_tickers"][0]["ticker_code"] == "005930"
             assert body["input_tokens"] == 100
-            mock_generate.assert_called_once_with("제목", "채널", "자막")
+            mock_generate.assert_called_once_with("제목", "채널", "자막", "youtube")
+
+    def test_telegram_source_kind_passes_through_without_title(self):
+        # given: 텔레그램 글은 video_title 없이(Phase 8 P7-4) source_kind="telegram"으로
+        # 요청되고, generate_summary에도 그대로 전달돼야 한다.
+        with patch("main.generate_summary") as mock_generate:
+            mock_generate.return_value = SummaryResult(
+                summary="요약 내용", key_points=[], mentioned_tickers=[],
+                caveat="투자 권유 아님", model="gemini-3.5-flash-lite",
+                input_tokens=10, output_tokens=5,
+            )
+
+            response = client.post("/summarize", json={
+                "channel_name": "채널", "transcript_content": "게시글 본문",
+                "source_kind": "telegram",
+            })
+
+            assert response.status_code == 200
+            mock_generate.assert_called_once_with(None, "채널", "게시글 본문", "telegram")
 
     def test_gemini_rate_limit_maps_to_429_not_500(self):
         # given: Gemini 무료 티어 분당 요청 한도(RESOURCE_EXHAUSTED) - Spring
