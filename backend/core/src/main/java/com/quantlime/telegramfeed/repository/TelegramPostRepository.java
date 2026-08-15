@@ -65,4 +65,10 @@ public interface TelegramPostRepository extends JpaRepository<TelegramPost, Long
     @Query("select p from TelegramPost p join fetch p.channel "
         + "where p.id = :telegramPostId and p.status = com.quantlime.telegramfeed.domain.TelegramPostStatus.SUMMARIZED")
     Optional<TelegramPost> findSummarizedPostById(@Param("telegramPostId") Long telegramPostId);
+
+    // 보존 기간(TelegramPostRetentionService.RETENTION_DAYS) 정리용 - 상태 무관하게
+    // 발행일 기준으로만 대상을 잡는다(VideoRepository.findIdsByPublishedAtBefore와
+    // 동일 이유 - FILTERED_OUT처럼 피드에 노출된 적 없는 글도 함께 정리 대상).
+    @Query("select p.id from TelegramPost p where p.publishedAt < :cutoff")
+    List<Long> findIdsByPublishedAtBefore(@Param("cutoff") LocalDateTime cutoff);
 }

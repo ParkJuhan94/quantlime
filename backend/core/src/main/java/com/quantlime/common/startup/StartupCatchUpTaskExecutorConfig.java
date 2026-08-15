@@ -28,6 +28,14 @@ public class StartupCatchUpTaskExecutorConfig {
         return singleThreadExecutor("video-feed-catchup-");
     }
 
+    // 텔레그램 피드(Phase 8 P7)는 유튜브와 서로 다른 외부 API(t.me 스크래핑 vs
+    // YouTube Data API)를 호출하는 별도 도메인이라 전용 풀을 분리한다(위
+    // videoFeedCatchUpTaskExecutor와 동일 이유).
+    @Bean
+    public TaskExecutor telegramFeedCatchUpTaskExecutor() {
+        return singleThreadExecutor("telegram-feed-catchup-");
+    }
+
     private TaskExecutor singleThreadExecutor(String threadNamePrefix) {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(1);

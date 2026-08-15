@@ -2,6 +2,9 @@ package com.quantlime.common.startup;
 
 import com.quantlime.common.util.SafeExecutor;
 import com.quantlime.market.service.MarketDataRefreshService;
+import com.quantlime.telegramfeed.service.TelegramCollectionFacade;
+import com.quantlime.telegramfeed.service.TelegramPostRetentionService;
+import com.quantlime.telegramfeed.service.TelegramSummaryCollectionFacade;
 import com.quantlime.videofeed.service.FeedCollectionFacade;
 import com.quantlime.videofeed.service.SummaryCollectionFacade;
 import com.quantlime.videofeed.service.TranscriptCollectionFacade;
@@ -46,6 +49,12 @@ import org.springframework.stereotype.Component;
  * 쪼개지 않고 하나의 실행기에서 순서대로 처리한다 - 보존기간 정리는
  * 지울 게 없으면 즉시 끝나는 가벼운 작업이라 별도 실행기를 줄 실익이 없다.
  *
+ * <p>텔레그램 피드 캐치업(수집→요약→보존기간 정리, Phase 8 P7-6)도 같은
+ * 이유(로컬 개발 환경에서 정기 스케줄 시각에 서버가 꺼져있으면 그 사이클이
+ * 영구 스킵됨)로 함께 묶었다 - 자막 단계가 없어 3단계뿐이고, 유튜브와
+ * 마찬가지로 서로 다른 외부 API(t.me 스크래핑)를 부르므로 전용 실행기
+ * (telegramFeedCatchUpTaskExecutor)를 별도로 쓴다.
+ *
  * <p>{@code ChannelSeedInitializer}(채널 시딩)와의 실행 순서는 Spring이
  * 보장해주지 않는다 - 만약 채널 시딩보다 먼저 이 캐치업이 돌면 이번 기동에서는
  * 채널이 0개라 영상 수집이 그냥 아무 일도 안 하고 끝난다. 이는 오류가 아니라
@@ -63,8 +72,12 @@ public class StartupCatchUpRunner implements ApplicationRunner {
     private final TranscriptCollectionFacade transcriptCollectionFacade;
     private final SummaryCollectionFacade summaryCollectionFacade;
     private final VideoRetentionService videoRetentionService;
+    private final TelegramCollectionFacade telegramCollectionFacade;
+    private final TelegramSummaryCollectionFacade telegramSummaryCollectionFacade;
+    private final TelegramPostRetentionService telegramPostRetentionService;
     private final TaskExecutor marketDataCatchUpTaskExecutor;
     private final TaskExecutor videoFeedCatchUpTaskExecutor;
+    private final TaskExecutor telegramFeedCatchUpTaskExecutor;
 
     @Override
     public void run(ApplicationArguments args) {
@@ -74,6 +87,8 @@ public class StartupCatchUpRunner implements ApplicationRunner {
                 () -> marketDataRefreshService.refreshAllExclusively()));
         videoFeedCatchUpTaskExecutor.execute(() ->
             SafeExecutor.runSafely("기동 시 영상 피드 캐치업", this::catchUpVideoFeed));
+        telegramFeedCatchUpTaskExecutor.execute(() ->
+            SafeExecutor.runSafely("기동 시 텔레그램 피드 캐치업", this::catchUpTelegramFeed));
     }
 
     // 수집→자막→요약→보존기간 정리 순서를 지켜 순차 호출한다(자막은 SELECTED
@@ -86,5 +101,13 @@ public class StartupCatchUpRunner implements ApplicationRunner {
         transcriptCollectionFacade.runBatchExclusively();
         summaryCollectionFacade.runBatchExclusively();
         videoRetentionService.runExclusively();
+    }
+
+    // 텔레그램은 자막 단계가 없어(본문이 이미 텍스트) 수집→요약→보존기간
+    // 정리 3단계뿐이다.
+    private void catchUpTelegramFeed() {
+        telegramCollectionFacade.runAllExclusively();
+        telegramSummaryCollectionFacade.runBatchExclusively();
+        telegramPostRetentionService.runExclusively();
     }
 }
