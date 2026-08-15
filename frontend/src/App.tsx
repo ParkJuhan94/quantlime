@@ -7,6 +7,7 @@ import { OAuthCallbackPage } from './pages/OAuthCallbackPage'
 import { HomePage } from './pages/HomePage'
 import { FeedPage } from './pages/FeedPage'
 import { VideoFeedPage } from './pages/VideoFeedPage'
+import { TelegramFeedPage } from './pages/TelegramFeedPage'
 import { StockDetailPage } from './pages/StockDetailPage'
 import { BacktestPage } from './pages/BacktestPage'
 import { IndexDetailPage } from './pages/IndexDetailPage'
@@ -54,6 +55,7 @@ function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/feed" element={<FeedPage />} />
             <Route path="/videos" element={<VideoFeedPage />} />
+            <Route path="/telegram" element={<TelegramFeedPage />} />
             <Route element={<ProtectedRoute />}>
               <Route path="/me" element={<MyInfoPage />} />
               <Route path="/subscribe" element={<SubscribePage />} />

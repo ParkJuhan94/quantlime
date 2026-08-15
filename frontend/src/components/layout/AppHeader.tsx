@@ -102,6 +102,9 @@ export function AppHeader({ onLoggedOut }: AppHeaderProps) {
           <NavLink to="/videos" className={navLinkClassName}>
             영상 요약
           </NavLink>
+          <NavLink to="/telegram" className={navLinkClassName}>
+            텔레그램 요약
+          </NavLink>
         </nav>
 
         <div className="flex-1" />

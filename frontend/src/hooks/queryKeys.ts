@@ -32,6 +32,10 @@ export const queryKeys = {
     ['videoFeed', tickerCode ?? 'all', channelId ?? 'all', date ?? 'all'] as const,
   videoFeedDetail: (videoId: number) => ['videoFeed', 'detail', videoId] as const,
   videoFeedChannels: () => ['videoFeed', 'channels'] as const,
+  telegramFeed: (tickerCode?: string, channelId?: number, date?: string) =>
+    ['telegramFeed', tickerCode ?? 'all', channelId ?? 'all', date ?? 'all'] as const,
+  telegramFeedDetail: (telegramPostId: number) => ['telegramFeed', 'detail', telegramPostId] as const,
+  telegramFeedChannels: () => ['telegramFeed', 'channels'] as const,
   subscriptionPlans: ['subscription', 'plans'] as const,
   subscriptionMe: ['subscription', 'me'] as const,
   subscriptionPayments: ['subscription', 'payments'] as const,
