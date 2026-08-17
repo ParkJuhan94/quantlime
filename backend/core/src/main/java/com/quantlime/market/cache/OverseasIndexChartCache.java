@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
@@ -21,6 +22,7 @@ import org.springframework.stereotype.Component;
  * 같은 ETF는 지수가 아니라 종목 엔드포인트로 조회해야 해(OverseasIndexCode
  * 참고) isEtf 플래그로 분기한다.
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class OverseasIndexChartCache {
@@ -45,16 +47,26 @@ public class OverseasIndexChartCache {
         if (existing != null && !existing.isStale()) {
             return existing; // 락 대기 중 다른 스레드가 이미 갱신함
         }
-        List<NaverIndexCandleResponse> raw = isEtf
-            ? naverFinanceApiClient.getWorldStockPrices(reutersCode, PAGE_SIZE)
-            : naverFinanceApiClient.getWorldIndexPrices(reutersCode, PAGE_SIZE);
-        List<IndexChartResponse> candles = raw.stream()
-            .map(this::toChartResponse)
-            .sorted(Comparator.comparing(IndexChartResponse::tradeDate))
-            .toList();
-        CacheEntry entry = new CacheEntry(candles, Instant.now());
-        cacheByCode.put(reutersCode, entry);
-        return entry;
+        try {
+            List<NaverIndexCandleResponse> raw = isEtf
+                ? naverFinanceApiClient.getWorldStockPrices(reutersCode, PAGE_SIZE)
+                : naverFinanceApiClient.getWorldIndexPrices(reutersCode, PAGE_SIZE);
+            List<IndexChartResponse> candles = raw.stream()
+                .map(this::toChartResponse)
+                .sorted(Comparator.comparing(IndexChartResponse::tradeDate))
+                .toList();
+            CacheEntry entry = new CacheEntry(candles, Instant.now());
+            cacheByCode.put(reutersCode, entry);
+            return entry;
+        } catch (Exception e) {
+            // stale-serve 패턴(2026-08-17) - DomesticIndexChartCache와 동일.
+            if (existing == null) {
+                throw e;
+            }
+            log.warn("네이버 금융 해외지수 차트 조회 실패, 이전 캐시로 폴백: reutersCode={}, error={}",
+                reutersCode, e.getMessage());
+            return existing;
+        }
     }
 
     private IndexChartResponse toChartResponse(NaverIndexCandleResponse candle) {

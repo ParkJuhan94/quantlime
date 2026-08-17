@@ -12,6 +12,8 @@ import com.quantlime.infra.python.dto.SummarizeApiResponse;
 import com.quantlime.infra.python.dto.TranscribeApiRequest;
 import com.quantlime.infra.python.dto.TranscribeApiResponse;
 import com.quantlime.infra.python.exception.PythonEngineErrorCode;
+import io.github.resilience4j.bulkhead.annotation.Bulkhead;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +22,14 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
+/**
+ * 진입점(public) 메서드마다 {@code @CircuitBreaker}/{@code @Bulkhead}(둘 다
+ * {@code "quant-engine"} 인스턴스, application.yml 설정 참고)를 붙인다. 별도
+ * fallback 메서드는 두지 않는다 - 예외 전파가 곧 "이번 재계산/요약을
+ * 건너뛴다"는 뜻이고, 스코어는 DB에 남은 직전 값이 그대로 서빙되는 구조가
+ * 이미 fallback 역할을 한다(ScoreService 클래스 주석, CLAUDE.md §10 참고,
+ * 2026-08-17).
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -44,6 +54,8 @@ public class PythonEngineClient {
     private final RestClient pythonEngineRestClient;
     private final MeterRegistry meterRegistry;
 
+    @CircuitBreaker(name = "quant-engine")
+    @Bulkhead(name = "quant-engine")
     public ScoreSeriesBatchApiResponse calculateScoreSeries(ScoreBatchApiRequest request) {
         Timer.Sample sample = Timer.start(meterRegistry);
         try {
@@ -62,6 +74,8 @@ public class PythonEngineClient {
         }
     }
 
+    @CircuitBreaker(name = "quant-engine")
+    @Bulkhead(name = "quant-engine")
     public BacktestApiResponse runBacktest(BacktestApiRequest request) {
         Timer.Sample sample = Timer.start(meterRegistry);
         try {
@@ -80,6 +94,8 @@ public class PythonEngineClient {
         }
     }
 
+    @CircuitBreaker(name = "quant-engine")
+    @Bulkhead(name = "quant-engine")
     public TranscribeApiResponse fetchTranscript(TranscribeApiRequest request) {
         Timer.Sample sample = Timer.start(meterRegistry);
         try {
@@ -98,6 +114,8 @@ public class PythonEngineClient {
         }
     }
 
+    @CircuitBreaker(name = "quant-engine")
+    @Bulkhead(name = "quant-engine")
     public SummarizeApiResponse summarize(SummarizeApiRequest request) {
         Timer.Sample sample = Timer.start(meterRegistry);
         try {

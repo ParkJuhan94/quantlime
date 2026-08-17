@@ -87,19 +87,19 @@ public class MarketIndexCache {
         if (!isStale()) {
             return; // 락 대기 중 다른 스레드가 이미 갱신함
         }
-        TossExchangeRateResponse.ExchangeRateResult exchangeRate =
-            tossApiClient.getExchangeRate(USD, KRW).result();
-        UpbitTicker bitcoinTicker = getBitcoinTicker();
+        MarketIndexResponse previous = cached;
+        ExchangeRateSnapshot exchangeRate = fetchExchangeRateSnapshot(previous);
+        BitcoinSnapshot bitcoin = fetchBitcoinSnapshot(previous);
         TradingViewSymbolResponse treasuryYield = fetchUsTreasuryYield();
         recordTreasuryYieldHistory(treasuryYield);
         Map<String, String> domesticIndexPrices = fetchDomesticIndexPrices();
 
         cached = new MarketIndexResponse(
-            Double.parseDouble(exchangeRate.rate()),
+            exchangeRate.rate(),
             exchangeRate.rateChangeType(),
             fetchUsdKrwChangeRate(),
-            bitcoinTicker.tradePrice(),
-            bitcoinTicker.signedChangeRate() * 100,
+            bitcoin.priceKrw(),
+            bitcoin.changeRate(),
             treasuryYield != null ? treasuryYield.close() : null,
             treasuryYield != null ? treasuryYield.changeRate() : null,
             List.copyOf(treasuryYieldHistory),
@@ -110,6 +110,47 @@ public class MarketIndexCache {
             fetchWorldIndexQuote(OverseasIndexCode.SOXX)
         );
         cachedAt = Instant.now();
+    }
+
+    /**
+     * 이 클래스에서 유일하게 폴백 없이 예외를 그대로 전파하던 두 호출
+     * (Toss 환율/Upbit 비트코인) - 사용자 요청 스레드가 이 {@code synchronized}
+     * 블록에 직접 진입하고, 실패 시 홈 화면 지수 위젯 전체가 503이 되는
+     * 걸 2026-08-17 감사에서 발견했다. {@code TossMarketRankingCache}가
+     * 이미 쓰고 있는 "실패하면 만료됐더라도 이전 캐시값을 그대로 반환"
+     * 패턴을 그대로 적용한다 - 이전 값도 없으면(최초 기동 직후 등) 보여줄
+     * 값 자체가 없으므로 예외를 그대로 전파한다.
+     */
+    private ExchangeRateSnapshot fetchExchangeRateSnapshot(MarketIndexResponse previous) {
+        try {
+            TossExchangeRateResponse.ExchangeRateResult result = tossApiClient.getExchangeRate(USD, KRW).result();
+            return new ExchangeRateSnapshot(Double.parseDouble(result.rate()), result.rateChangeType());
+        } catch (Exception e) {
+            if (previous == null) {
+                throw e;
+            }
+            log.warn("토스 환율 조회 실패, 이전 캐시로 폴백: error={}", e.getMessage());
+            return new ExchangeRateSnapshot(previous.usdKrwRate(), previous.usdKrwChangeType());
+        }
+    }
+
+    private BitcoinSnapshot fetchBitcoinSnapshot(MarketIndexResponse previous) {
+        try {
+            UpbitTicker bitcoinTicker = getBitcoinTicker();
+            return new BitcoinSnapshot(bitcoinTicker.tradePrice(), bitcoinTicker.signedChangeRate() * 100);
+        } catch (Exception e) {
+            if (previous == null) {
+                throw e;
+            }
+            log.warn("Upbit 비트코인 시세 조회 실패, 이전 캐시로 폴백: error={}", e.getMessage());
+            return new BitcoinSnapshot(previous.bitcoinPriceKrw(), previous.bitcoinChangeRate());
+        }
+    }
+
+    private record ExchangeRateSnapshot(double rate, String rateChangeType) {
+    }
+
+    private record BitcoinSnapshot(long priceKrw, double changeRate) {
     }
 
     /** TradingView 조회 실패는 흡수하고 null 반환 - 다른 지수와 동일한 폴백 원칙. */

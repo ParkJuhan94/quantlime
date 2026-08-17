@@ -1,5 +1,6 @@
 package com.quantlime.infra.python;
 
+import com.quantlime.common.config.HttpClientFactorySupport;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import lombok.RequiredArgsConstructor;
@@ -36,13 +37,8 @@ public class PythonEngineConfig {
      */
     @Bean
     public RestClient pythonEngineRestClient() {
-        HttpClient httpClient = HttpClient.newBuilder()
-            .version(HttpClient.Version.HTTP_1_1)
-            .connectTimeout(CONNECT_TIMEOUT)
-            .build();
-
-        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
-        requestFactory.setReadTimeout(READ_TIMEOUT);
+        JdkClientHttpRequestFactory requestFactory = HttpClientFactorySupport.create(
+            CONNECT_TIMEOUT, READ_TIMEOUT, HttpClient.Version.HTTP_1_1);
 
         return RestClient.builder()
             .baseUrl(properties.getBaseUrl())

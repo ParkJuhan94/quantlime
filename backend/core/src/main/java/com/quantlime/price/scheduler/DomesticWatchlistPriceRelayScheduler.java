@@ -36,7 +36,10 @@ public class DomesticWatchlistPriceRelayScheduler {
     private final PriceCacheStore priceCacheStore;
     private final SimpMessagingTemplate messagingTemplate;
 
-    @Scheduled(fixedDelayString = "${realtime-price.poll-interval-ms:3000}")
+    // 전용 풀(SchedulerConfig.priceSweepTaskScheduler)에서 실행 - 사유는
+    // DomesticMarketPriceSweepScheduler 참고(2026-08-17).
+    @Scheduled(fixedDelayString = "${realtime-price.poll-interval-ms:3000}",
+        scheduler = "priceSweepTaskScheduler")
     public void broadcastCurrentPrices() {
         SafeExecutor.runSafely("실시간 시세 브로드캐스트", this::broadcastOnce);
     }

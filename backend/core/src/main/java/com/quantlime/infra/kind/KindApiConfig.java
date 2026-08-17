@@ -1,5 +1,7 @@
 package com.quantlime.infra.kind;
 
+import com.quantlime.common.config.HttpClientFactorySupport;
+import java.time.Duration;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -11,6 +13,9 @@ import org.springframework.web.client.RestClient;
 @EnableConfigurationProperties(KindApiProperties.class)
 public class KindApiConfig {
 
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(3);
+    private static final Duration READ_TIMEOUT = Duration.ofSeconds(5);
+
     private final KindApiProperties properties;
 
     @Bean
@@ -20,6 +25,7 @@ public class KindApiConfig {
         return RestClient.builder()
             .baseUrl(properties.getBaseUrl())
             .defaultHeader("User-Agent", "Mozilla/5.0")
+            .requestFactory(HttpClientFactorySupport.create(CONNECT_TIMEOUT, READ_TIMEOUT))
             .build();
     }
 }

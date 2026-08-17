@@ -56,7 +56,10 @@ public class OverseasWatchlistPriceScheduler {
     private final PriceCacheStore priceCacheStore;
     private final SimpMessagingTemplate messagingTemplate;
 
-    @Scheduled(fixedDelayString = "${realtime-price.poll-interval-ms:3000}")
+    // 전용 풀(SchedulerConfig.priceSweepTaskScheduler)에서 실행 - 사유는
+    // DomesticMarketPriceSweepScheduler 참고(2026-08-17).
+    @Scheduled(fixedDelayString = "${realtime-price.poll-interval-ms:3000}",
+        scheduler = "priceSweepTaskScheduler")
     public void refreshAndBroadcast() {
         SafeExecutor.runSafely("해외 관심종목 실시간가 갱신", this::refreshOnce);
     }

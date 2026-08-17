@@ -21,7 +21,7 @@ import org.springframework.web.client.RestClient;
 public class SlackWebhookClient {
 
     private final SlackWebhookProperties properties;
-    private final RestClient slackRestClient = RestClient.create();
+    private final RestClient slackRestClient;
 
     public void sendMessage(String text) {
         String webhookUrl = properties.getFeedbackWebhookUrl();

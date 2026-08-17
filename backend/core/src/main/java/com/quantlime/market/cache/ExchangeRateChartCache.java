@@ -9,6 +9,7 @@ import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Component;
  * 동일한 단순 TTL 캐시 패턴). 시가/고가/저가는 제공되지 않아 종가를 4개
  * 필드 모두에 채운다 - 미니 차트는 close만 쓰므로 문제 없다.
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class ExchangeRateChartCache {
@@ -45,12 +47,21 @@ public class ExchangeRateChartCache {
         if (!isStale()) {
             return; // 락 대기 중 다른 스레드가 이미 갱신함
         }
-        List<NaverExchangeRateCandleResponse> raw = naverFinanceApiClient.getExchangeRatePrices(PAIR, PAGE_SIZE);
-        cached = raw.stream()
-            .map(this::toChartResponse)
-            .sorted(Comparator.comparing(IndexChartResponse::tradeDate))
-            .toList();
-        cachedAt = Instant.now();
+        try {
+            List<NaverExchangeRateCandleResponse> raw = naverFinanceApiClient.getExchangeRatePrices(PAIR, PAGE_SIZE);
+            cached = raw.stream()
+                .map(this::toChartResponse)
+                .sorted(Comparator.comparing(IndexChartResponse::tradeDate))
+                .toList();
+            cachedAt = Instant.now();
+        } catch (Exception e) {
+            // stale-serve 패턴(BitcoinChartCache/TossMarketRankingCache와 동일,
+            // 2026-08-17) - 이전 값이 없으면 예외를 그대로 전파한다.
+            if (cached == null) {
+                throw e;
+            }
+            log.warn("네이버 금융 환율 차트 조회 실패, 이전 캐시로 폴백: error={}", e.getMessage());
+        }
     }
 
     private IndexChartResponse toChartResponse(NaverExchangeRateCandleResponse candle) {

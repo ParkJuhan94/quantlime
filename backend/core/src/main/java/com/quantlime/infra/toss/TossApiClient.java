@@ -13,6 +13,8 @@ import com.quantlime.infra.toss.dto.TossPriceResponse;
 import com.quantlime.infra.toss.dto.TossRankingResponse;
 import com.quantlime.infra.toss.dto.TossUsMarketCalendarResponse;
 import com.quantlime.infra.toss.exception.TossApiErrorCode;
+import io.github.resilience4j.bulkhead.annotation.Bulkhead;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.util.function.Function;
@@ -23,6 +25,16 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
+/**
+ * 진입점(public) 메서드마다 {@code @CircuitBreaker}/{@code @Bulkhead}(둘 다
+ * {@code "toss"} 인스턴스, application.yml 설정 참고)를 붙인다 - Retry-After
+ * 기반 429 재시도(getDailyCandles)/토큰 재발급 재시도(withTokenRetry) 등
+ * 기존 커스텀 방어 로직은 프록시가 감싸는 메서드 "안쪽"에서 그대로
+ * 동작하므로 건드리지 않는다. 서킷 실패 집계에서 429는
+ * {@link com.quantlime.common.resilience.RateLimitAwareFailurePredicate}로
+ * 제외해, 레이트리밋을 "서버가 살아있다는 신호"로 계속 다루던 기존 설계와
+ * 충돌하지 않게 한다(2026-08-17).
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -81,6 +93,8 @@ public class TossApiClient {
     private final Object candleRateLimitLock = new Object();
     private volatile long lastCandleCallAtMillis = 0;
 
+    @CircuitBreaker(name = "toss")
+    @Bulkhead(name = "toss")
     public TossCandleResponse getDailyCandles(String symbol, int count, String before) {
         for (int attempt = 0; ; attempt++) {
             try {
@@ -162,6 +176,8 @@ public class TossApiClient {
             TossApiErrorCode.RATE_LIMIT_EXCEEDED));
     }
 
+    @CircuitBreaker(name = "toss")
+    @Bulkhead(name = "toss")
     public TossPriceResponse getCurrentPrices(String symbols) {
         return withTokenRetry("prices", token -> ExternalApiInvoker.call(
             TossApiErrorCode.PRICE_INQUIRY_FAILED,
@@ -182,6 +198,8 @@ public class TossApiClient {
      * MARKET_INFO라 별도 예산을 쓴다(장 운영 캘린더와 동일 그룹) -
      * 호출 측(MarketIndexCache)이 짧게 캐싱해 재호출을 줄인다.
      */
+    @CircuitBreaker(name = "toss")
+    @Bulkhead(name = "toss")
     public TossExchangeRateResponse getExchangeRate(String baseCurrency, String quoteCurrency) {
         return withTokenRetry("exchange-rate", token -> ExternalApiInvoker.call(
             TossApiErrorCode.EXCHANGE_RATE_INQUIRY_FAILED,
@@ -201,6 +219,8 @@ public class TossApiClient {
      * 조회(MARKET_DATA)와 분리된 MARKET_INFO라 별도 예산을 쓴다 - 호출
      * 측(DomesticMarketCalendarCache)이 하루 1회만 호출하도록 캐싱한다.
      */
+    @CircuitBreaker(name = "toss")
+    @Bulkhead(name = "toss")
     public TossMarketCalendarResponse getMarketCalendar() {
         return withTokenRetry("market-calendar", token -> ExternalApiInvoker.call(
             TossApiErrorCode.MARKET_CALENDAR_INQUIRY_FAILED,
@@ -223,6 +243,8 @@ public class TossApiClient {
      * 비율(0.0125=1.25%)이라 호출 측에서 ×100 필요(TossRankingResponse
      * 참고).
      */
+    @CircuitBreaker(name = "toss")
+    @Bulkhead(name = "toss")
     public TossRankingResponse getRankings(String type, String marketCountry, String duration, int count) {
         return withTokenRetry("rankings", token -> ExternalApiInvoker.call(
             TossApiErrorCode.RANKING_INQUIRY_FAILED,
@@ -247,6 +269,8 @@ public class TossApiClient {
      * (OverseasMarketCalendarCache)이 하루 1회만 호출하도록 캐싱한다. 국내
      * 캘린더와 응답 형태가 다르다(TossUsMarketCalendarResponse 주석 참고).
      */
+    @CircuitBreaker(name = "toss")
+    @Bulkhead(name = "toss")
     public TossUsMarketCalendarResponse getUsMarketCalendar() {
         return withTokenRetry("us-market-calendar", token -> ExternalApiInvoker.call(
             TossApiErrorCode.US_MARKET_CALENDAR_INQUIRY_FAILED,
@@ -264,6 +288,8 @@ public class TossApiClient {
      * {@code lastPrice}만 있고 등락률·장중여부는 없어 호출 측(MarketIndexCache)이
      * 직접 계산해야 한다.
      */
+    @CircuitBreaker(name = "toss")
+    @Bulkhead(name = "toss")
     public TossMarketIndicatorPriceResponse getMarketIndicatorPrices(String symbols) {
         return withTokenRetry("market-indicator-prices", token -> ExternalApiInvoker.call(
             TossApiErrorCode.MARKET_INDICATOR_PRICE_INQUIRY_FAILED,
@@ -285,6 +311,8 @@ public class TossApiClient {
      * 지원한다(호출 측이 지수 코드에 맞게 선택). Rate Limits Group은 위
      * 현재가 조회와 동일한 MARKET_INDICATOR.
      */
+    @CircuitBreaker(name = "toss")
+    @Bulkhead(name = "toss")
     public TossMarketIndicatorCandleResponse getMarketIndicatorCandles(
         String symbol, String interval, int count, String before) {
         return withTokenRetry("market-indicator-candles", token -> ExternalApiInvoker.call(
@@ -314,6 +342,8 @@ public class TossApiClient {
      * 전달, 최초 호출 시 null). Rate Limits Group은 MARKET_INDICATOR로
      * 위 두 메서드와 동일.
      */
+    @CircuitBreaker(name = "toss")
+    @Bulkhead(name = "toss")
     public TossInvestorTradingResponse getInvestorTrading(
         String symbol, String interval, int count, String until) {
         return withTokenRetry("investor-trading", token -> ExternalApiInvoker.call(

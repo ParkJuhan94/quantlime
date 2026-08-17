@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Component;
  * 캐싱한다. 단일 마켓(KRW-BTC)만 다뤄 지수처럼 코드별 맵이 아니라 필드
  * 하나로 충분하다(MarketIndexCache와 동일한 단순 TTL 캐시 패턴).
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class BitcoinChartCache {
@@ -45,13 +47,24 @@ public class BitcoinChartCache {
         if (!isStale()) {
             return; // 락 대기 중 다른 스레드가 이미 갱신함
         }
-        List<UpbitMinuteCandle> raw = upbitApiClient.getMinuteCandles(MARKET, UNIT_MINUTES, CANDLE_COUNT);
-        cached = raw.stream()
-            .map(candle -> new IndexMinuteChartResponse(
-                LocalDateTime.parse(candle.candleDateTimeKst()),
-                candle.tradePrice()))
-            .sorted(Comparator.comparing(IndexMinuteChartResponse::time))
-            .toList();
-        cachedAt = Instant.now();
+        try {
+            List<UpbitMinuteCandle> raw = upbitApiClient.getMinuteCandles(MARKET, UNIT_MINUTES, CANDLE_COUNT);
+            cached = raw.stream()
+                .map(candle -> new IndexMinuteChartResponse(
+                    LocalDateTime.parse(candle.candleDateTimeKst()),
+                    candle.tradePrice()))
+                .sorted(Comparator.comparing(IndexMinuteChartResponse::time))
+                .toList();
+            cachedAt = Instant.now();
+        } catch (Exception e) {
+            // 실패해도 이전에 캐싱된 값(만료됐더라도)이 있으면 그대로 유지한다
+            // - 차트가 통째로 비는 것보다 약간 오래된 값이 낫다(TossMarketRankingCache와
+            // 동일한 stale-serve 패턴, 2026-08-17). 이전 값이 아예 없으면(최초
+            // 기동 직후) 예외를 그대로 전파한다.
+            if (cached == null) {
+                throw e;
+            }
+            log.warn("Upbit 비트코인 차트 조회 실패, 이전 캐시로 폴백: error={}", e.getMessage());
+        }
     }
 }

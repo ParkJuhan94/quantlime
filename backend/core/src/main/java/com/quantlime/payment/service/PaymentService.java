@@ -45,6 +45,12 @@ public class PaymentService {
     // Redis 락으로 결제 흐름 자체를 직렬화해, 결제가 최대 1회만 일어나게
     // 한다. TTL은 결제 왕복이 끝나기 전에 풀리지 않도록 넉넉히 잡되(30초),
     // 프로세스가 죽어 finally가 못 돌아도 자동 만료되게 한다.
+    // Redis 장애 시 예외를 흡수하는 폴백은 두지 않는다 - 이 락이 막으려는
+    // 건 이중 결제라, 실패를 조용히 넘기면 락이 아예 없는 것과 같아진다.
+    // Redis가 죽으면 결제 흐름도 fail-closed로 막히는 게 맞는 동작이다
+    // (2026-08-17, PriceCacheStore와 다른 판단 - docs/RELIABILITY.md 참고).
+    // 이 락 자체의 알려진 한계(소유권 미검증 - RedisLockService의 UUID 토큰
+    // 방식과 다름)는 결제 도메인 백로그로 별도 관리한다.
     private static final String SUBSCRIBE_LOCK_KEY_PREFIX = "subscription:subscribe-lock:";
     private static final Duration SUBSCRIBE_LOCK_TTL = Duration.ofSeconds(30);
 

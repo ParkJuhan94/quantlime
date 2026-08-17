@@ -27,6 +27,17 @@ dependencies {
     // KIND(kind.krx.co.kr) 상장법인목록은 JSON이 아닌 HTML 테이블로 응답한다
     implementation 'org.jsoup:jsoup:1.18.1'
 
+    // 서킷브레이커/벌크헤드(2026-08-17, 장애 격리 강화) - toss/quant-engine/
+    // upbit/naver-finance 4개 핵심 외부 클라이언트에 우선 적용. AOP 프록시
+    // 기반이라 spring-boot-starter-aop이 별도로 필요하다(이전엔 AOP 의존성이
+    // 전무했음).
+    implementation 'io.github.resilience4j:resilience4j-spring-boot3'
+    implementation 'org.springframework.boot:spring-boot-starter-aop'
+    // 서킷브레이커/벌크헤드 상태를 MeterRegistry(→ /actuator/prometheus →
+    // Grafana)로 자동 노출하기 위함 - 없으면 CircuitBreakerMetricsAutoConfiguration이
+    // 등록되지 않는다.
+    implementation 'io.github.resilience4j:resilience4j-micrometer'
+
     testFixturesImplementation 'jakarta.persistence:jakarta.persistence-api:3.1.0'
     testFixturesImplementation 'org.springframework.boot:spring-boot-starter-test'
     testFixturesImplementation 'org.springframework.boot:spring-boot-starter-data-jpa'

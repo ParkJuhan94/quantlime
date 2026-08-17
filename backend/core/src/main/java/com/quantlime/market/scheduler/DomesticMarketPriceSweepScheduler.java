@@ -80,7 +80,11 @@ public class DomesticMarketPriceSweepScheduler {
     private final PriceCacheStore priceCacheStore;
     private final MeterRegistry meterRegistry;
 
-    @Scheduled(fixedDelayString = "${market-ranking.poll-interval-ms:100}")
+    // 전용 풀(SchedulerConfig.priceSweepTaskScheduler)에서 실행 - 공용
+    // 스케줄러 풀과 분리해 초당 여러 번 도는 이 틱이 cron 배치들을 뒤로
+    // 밀어내지 않게 한다(2026-08-17).
+    @Scheduled(fixedDelayString = "${market-ranking.poll-interval-ms:100}",
+        scheduler = "priceSweepTaskScheduler")
     public void refreshRanking() {
         SafeExecutor.runSafely("전종목 시세/랭킹 갱신", this::refreshOnce);
     }

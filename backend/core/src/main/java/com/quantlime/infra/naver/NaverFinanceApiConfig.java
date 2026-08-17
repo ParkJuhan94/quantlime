@@ -1,5 +1,7 @@
 package com.quantlime.infra.naver;
 
+import com.quantlime.common.config.HttpClientFactorySupport;
+import java.time.Duration;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -11,6 +13,9 @@ import org.springframework.web.client.RestClient;
 @EnableConfigurationProperties(NaverFinanceApiProperties.class)
 public class NaverFinanceApiConfig {
 
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(3);
+    private static final Duration READ_TIMEOUT = Duration.ofSeconds(5);
+
     private final NaverFinanceApiProperties properties;
 
     @Bean
@@ -21,6 +26,7 @@ public class NaverFinanceApiConfig {
             // 일반 모바일 브라우저처럼 보이는 UA를 고정으로 붙인다.
             .defaultHeader("User-Agent",
                 "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15")
+            .requestFactory(HttpClientFactorySupport.create(CONNECT_TIMEOUT, READ_TIMEOUT))
             .build();
     }
 
@@ -32,6 +38,7 @@ public class NaverFinanceApiConfig {
             .baseUrl(properties.getChartBaseUrl())
             .defaultHeader("User-Agent",
                 "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15")
+            .requestFactory(HttpClientFactorySupport.create(CONNECT_TIMEOUT, READ_TIMEOUT))
             .build();
     }
 }

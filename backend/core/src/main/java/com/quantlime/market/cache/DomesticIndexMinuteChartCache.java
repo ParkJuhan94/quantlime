@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
@@ -26,6 +27,7 @@ import org.springframework.stereotype.Component;
  * 호출량이 급증해, 최근 구간만 보여주는 쪽을 택했다(미니 차트 용도라
  * 실용적 트레이드오프로 판단).
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class DomesticIndexMinuteChartCache {
@@ -51,17 +53,27 @@ public class DomesticIndexMinuteChartCache {
         if (existing != null && !existing.isStale()) {
             return existing; // 락 대기 중 다른 스레드가 이미 갱신함
         }
-        TossMarketIndicatorCandleResponse response =
-            tossApiClient.getMarketIndicatorCandles(indexCode, INTERVAL_MINUTE, PAGE_SIZE, null);
-        List<TossMarketIndicatorCandleResponse.MarketIndicatorCandle> raw = response.result().candles();
-        List<IndexMinuteChartResponse> candles = (raw == null ? List.<TossMarketIndicatorCandleResponse.MarketIndicatorCandle>of() : raw)
-            .stream()
-            .map(this::toChartResponse)
-            .sorted(Comparator.comparing(IndexMinuteChartResponse::time))
-            .toList();
-        CacheEntry entry = new CacheEntry(candles, Instant.now());
-        cacheByCode.put(indexCode, entry);
-        return entry;
+        try {
+            TossMarketIndicatorCandleResponse response =
+                tossApiClient.getMarketIndicatorCandles(indexCode, INTERVAL_MINUTE, PAGE_SIZE, null);
+            List<TossMarketIndicatorCandleResponse.MarketIndicatorCandle> raw = response.result().candles();
+            List<IndexMinuteChartResponse> candles = (raw == null ? List.<TossMarketIndicatorCandleResponse.MarketIndicatorCandle>of() : raw)
+                .stream()
+                .map(this::toChartResponse)
+                .sorted(Comparator.comparing(IndexMinuteChartResponse::time))
+                .toList();
+            CacheEntry entry = new CacheEntry(candles, Instant.now());
+            cacheByCode.put(indexCode, entry);
+            return entry;
+        } catch (Exception e) {
+            // stale-serve 패턴(2026-08-17) - DomesticIndexChartCache와 동일.
+            if (existing == null) {
+                throw e;
+            }
+            log.warn("Toss 국내 지수 분봉 조회 실패, 이전 캐시로 폴백: indexCode={}, error={}",
+                indexCode, e.getMessage());
+            return existing;
+        }
     }
 
     private IndexMinuteChartResponse toChartResponse(TossMarketIndicatorCandleResponse.MarketIndicatorCandle candle) {

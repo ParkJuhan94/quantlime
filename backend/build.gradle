@@ -33,6 +33,9 @@ subprojects {
         imports {
             mavenBom "org.springframework.boot:spring-boot-dependencies:3.3.6"
             mavenBom "org.testcontainers:testcontainers-bom:1.21.4"
+            // 서킷브레이커/벌크헤드(core 모듈, 2026-08-17 도입) - Spring Boot 3.x
+            // 대응 버전
+            mavenBom "io.github.resilience4j:resilience4j-bom:2.2.0"
         }
     }
 

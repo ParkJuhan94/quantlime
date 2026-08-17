@@ -1,7 +1,9 @@
 package com.quantlime.infra.tosspayments;
 
+import com.quantlime.common.config.HttpClientFactorySupport;
 import jakarta.annotation.PostConstruct;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Base64;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,6 +18,9 @@ import org.springframework.web.client.RestClient;
 @RequiredArgsConstructor
 @EnableConfigurationProperties(TossPaymentsProperties.class)
 public class TossPaymentsConfig {
+
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(3);
+    private static final Duration READ_TIMEOUT = Duration.ofSeconds(10);
 
     private final TossPaymentsProperties properties;
 
@@ -38,6 +43,7 @@ public class TossPaymentsConfig {
             .baseUrl(properties.getBaseUrl())
             .defaultHeader("Authorization", "Basic " + basicAuth)
             .defaultHeader("Content-Type", "application/json")
+            .requestFactory(HttpClientFactorySupport.create(CONNECT_TIMEOUT, READ_TIMEOUT))
             .build();
     }
 }

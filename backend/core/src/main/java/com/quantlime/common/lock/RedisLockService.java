@@ -21,6 +21,12 @@ import org.springframework.stereotype.Component;
  * 실행이 새로 락을 잡은 뒤에는, 원래 소유자가 뒤늦게 반환되며 부르는
  * unlock이 그 다른 실행의 락을 지우지 않게 하기 위함(2026-07-30 발견 -
  * 이전 구현은 값이 상수라 소유권을 구분할 수 없었음).
+ *
+ * <p>Redis 장애 시 예외를 흡수하는 폴백은 두지 않는다 - 이 락은 배치
+ * 중복 실행 방지가 목적이라, 실패를 조용히 넘기고 "락 획득 성공"처럼
+ * 동작하면 중복 실행을 막는다는 락의 존재 이유 자체가 무력화된다.
+ * Redis가 죽으면 배치도 함께 fail-closed로 막히는 게 맞는 동작이다
+ * (2026-08-17, PriceCacheStore와 다른 판단 - docs/RELIABILITY.md 참고).
  */
 @Component
 @RequiredArgsConstructor

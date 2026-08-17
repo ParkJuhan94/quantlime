@@ -8,6 +8,15 @@ spring:
     url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3308}/${MYSQL_DATABASE:quantlime}?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
     username: ${DB_USER:root}
     password: ${DB_PASSWORD:quantlime}
+    hikari:
+      # 기존에도 사실상 이 값(Spring Boot 기본 10/30s)으로 동작하고
+      # 있었지만 암묵적 기본값에 맡기지 않고 명시한다 - 100ms 시세 스윕 +
+      # 스케줄러 12개 + WebSocket 릴레이가 함께 도는 워크로드 대비 사이징
+      # 근거가 문서화돼 있지 않았다(2026-08-17 감사). 값 자체는 실측 전이라
+      # 기존과 동일하게 유지하고, 다음 세션에서 커넥션 대기 지표를 보고
+      # 조정한다.
+      maximum-pool-size: 10
+      connection-timeout: 30000
   jpa:
     # SQL 로깅은 datasource-proxy(decorator.datasource, 파일 하단)가
     # 전담한다 - Hibernate 자체 SQL 로거(show-sql/format_sql/
@@ -20,6 +29,25 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6381}
+      # 미지정 시 Lettuce 기본 커맨드 타임아웃이 60초라, Redis가 응답을
+      # 멈추면 요청 스레드가 그만큼 블로킹된다(2026-08-17 감사에서 발견 -
+      # PriceCacheStore/RefreshTokenStore/RedisLockService 전부 무방비였음).
+      timeout: 2s
+      connect-timeout: 1s
+  task:
+    scheduling:
+      pool:
+        # 미지정 시 Spring Boot 기본값이 1이라 @Scheduled 13개가 스레드
+        # 하나를 공유한다 - 외부 호출 하나가 hang하면(타임아웃 부재와
+        # 결합 시) 스케줄러 전체가 영구 정지한다(2026-08-17 감사).
+        # 고빈도 시세 스윕/릴레이 3개는 SchedulerConfig.priceSweepTaskScheduler로
+        # 별도 격리했으니, 이 풀은 나머지 cron 배치용.
+        size: 5
+  lifecycle:
+    # 무중단 배포(블루그린/롤링)가 없어 배포 시 컨테이너가 재생성되는데,
+    # graceful shutdown 없이는 진행 중 요청이 즉시 끊긴다(2026-08-17).
+    # 이중화 자체를 대체하진 못하지만 최소한의 방어선.
+    timeout-per-shutdown-phase: 20s
   servlet:
     multipart:
       max-file-size: 5MB
@@ -27,6 +55,7 @@ spring:
 
 server:
   port: 8080
+  shutdown: graceful
 
 # Prometheus가 스크랩할 /actuator/prometheus만 열고 나머지 actuator
 # 엔드포인트는 닫아둔다(공격 표면 최소화). health는 DB/Redis 등 실제
@@ -57,6 +86,64 @@ management:
         http.server.requests: true
       percentiles:
         http.server.requests: 0.5,0.95,0.99
+
+# 서킷브레이커/벌크헤드(2026-08-17 도입) - toss/quant-engine/upbit/naver-finance
+# 4개 핵심 외부 클라이언트에 우선 적용(RELIABILITY.md 참고). 나머지 9개
+# 클라이언트(youtube/telegram/kis/kind/tradingview/oauth/slack/tosspayments)는
+# 배치 전용 경로라 타임아웃(위 HttpClientFactorySupport)만 적용하고 이번
+# 범위에서는 제외했다.
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+        register-health-indicator: true
+    instances:
+      toss:
+        base-config: default
+        # 429(레이트리밋)는 서버가 살아있다는 신호라 서킷 집계에서 제외한다 -
+        # RateLimitAwareFailurePredicate 클래스 주석 참고.
+        record-failure-predicate: com.quantlime.common.resilience.RateLimitAwareFailurePredicate
+      quant-engine:
+        base-config: default
+        # 스코어 배치 청크 하나가 최대 60초 걸릴 수 있어(PythonEngineConfig
+        # read timeout) 슬라이딩 윈도우를 작게, half-open 대기를 길게 둔다.
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        wait-duration-in-open-state: 60s
+      upbit:
+        base-config: default
+      naver-finance:
+        base-config: default
+  bulkhead:
+    configs:
+      default:
+        max-concurrent-calls: 10
+        max-wait-duration: 0
+    instances:
+      toss:
+        base-config: default
+        # 100ms 시세 스윕(14청크) + 3초 릴레이 2종 + on-demand 요청 스레드가
+        # 전부 이 클라이언트를 동시에 부를 수 있어 다른 인스턴스보다 상한을
+        # 넉넉히 둔다.
+        max-concurrent-calls: 30
+      quant-engine:
+        base-config: default
+        # MarketDataRefreshTaskExecutorConfig가 국내/해외 각각 core=1이라
+        # 실제 동시 호출은 많지 않다.
+        max-concurrent-calls: 6
+      upbit:
+        base-config: default
+        max-concurrent-calls: 5
+      naver-finance:
+        base-config: default
+        max-concurrent-calls: 5
 
 app:
   cors:

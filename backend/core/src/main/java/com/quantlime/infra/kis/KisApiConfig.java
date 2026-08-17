@@ -1,5 +1,7 @@
 package com.quantlime.infra.kis;
 
+import com.quantlime.common.config.HttpClientFactorySupport;
+import java.time.Duration;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -10,6 +12,11 @@ import org.springframework.web.client.RestClient;
 @RequiredArgsConstructor
 @EnableConfigurationProperties(KisApiProperties.class)
 public class KisApiConfig {
+
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
+    // 대용량 정적 파일(.mst.cod.zip) 다운로드라 다른 클라이언트보다 read
+    // 타임아웃을 넉넉히 준다.
+    private static final Duration READ_TIMEOUT = Duration.ofSeconds(60);
 
     private final KisApiProperties properties;
 
@@ -22,6 +29,7 @@ public class KisApiConfig {
     public RestClient kisMasterFileRestClient() {
         return RestClient.builder()
             .baseUrl(properties.getMasterFileBaseUrl())
+            .requestFactory(HttpClientFactorySupport.create(CONNECT_TIMEOUT, READ_TIMEOUT))
             .build();
     }
 }
