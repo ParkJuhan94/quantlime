@@ -60,6 +60,20 @@ public class DomesticMarketCalendarCache {
         return tradingSessions.stream().anyMatch(session -> isWithin(now, session));
     }
 
+    /**
+     * 오늘이 영업일인지(세션 존재 여부)만 판별한다 - {@code
+     * DomesticRegularCloseCaptureScheduler}가 15:30 고정 cron으로 도는데, 휴장일에도
+     * 매번 캘린더 API를 호출하지 않도록 {@link #isMarketOpenNow()}와 동일한
+     * 캐시를 재사용한다.
+     */
+    public boolean isTradingDayToday() {
+        LocalDate today = LocalDate.now();
+        if (!cachedDate.equals(today)) {
+            refresh(today);
+        }
+        return !tradingSessions.isEmpty();
+    }
+
     private boolean isWithin(OffsetDateTime now, TossMarketCalendarResponse.MarketSession session) {
         OffsetDateTime start = OffsetDateTime.parse(session.startTime());
         OffsetDateTime end = OffsetDateTime.parse(session.endTime());

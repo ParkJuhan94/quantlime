@@ -1,7 +1,6 @@
 package com.quantlime.price.service;
 
 import com.quantlime.price.cache.PriceCacheStore;
-import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.price.dto.mapper.PriceMapper;
 import com.quantlime.price.dto.response.CurrentPriceResponse;
@@ -30,6 +29,7 @@ public class StockPriceService {
     private final StockMasterService stockMasterService;
     private final DomesticDailyPriceService domesticDailyPriceService;
     private final DomesticDailyPriceRepository domesticDailyPriceRepository;
+    private final DomesticPreviousCloseResolver domesticPreviousCloseResolver;
     private final OverseasDailyPriceRepository overseasDailyPriceRepository;
     private final PriceCacheStore priceCacheStore;
 
@@ -81,16 +81,16 @@ public class StockPriceService {
     // 있었다(예: 토요일에 조회하면 전일종가도 금요일 종가가 잡혀 금요일
     // 등락률이 통째로 사라짐) - 실시간 스윕/릴레이 경로는 isMarketOpenNow()
     // 가드가 있어 "오늘=거래일"이 항상 성립하므로 이 문제가 없었다.
+    //
+    // 전일종가 조회 자체는 DomesticPreviousCloseResolver에 위임한다 -
+    // domesticDailyPriceRepository를 직접 쓰면 NXT 애프터마켓까지 반영된
+    // 종가를 그대로 전일종가로 써서 등락률이 어긋난다(클래스 javadoc 참고).
     private CurrentPriceResponse domesticFallback(String stockCode) {
         return domesticDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(stockCode)
             .map(latestClose -> {
-                Double previousClose = domesticDailyPriceRepository
-                    .findLatestBeforeDate(List.of(stockCode), latestClose.getTradeDate())
-                    .stream()
-                    .findFirst()
-                    .map(DomesticDailyPrice::getClosePrice)
-                    .map(Long::doubleValue)
-                    .orElse(null);
+                Double previousClose = domesticPreviousCloseResolver
+                    .resolve(List.of(stockCode), latestClose.getTradeDate())
+                    .get(stockCode);
                 return PriceMapper.toCurrentPriceResponse(latestClose, previousClose);
             })
             .orElseGet(() -> {

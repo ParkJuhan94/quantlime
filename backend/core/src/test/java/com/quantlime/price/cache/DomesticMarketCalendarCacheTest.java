@@ -137,6 +137,48 @@ class DomesticMarketCalendarCacheTest {
         assertThat(result).isTrue();
     }
 
+    @Test
+    @DisplayName("[휴장일이면 영업일이 아니다]")
+    void isTradingDayToday_holiday_returnsFalse() {
+        // given: today.integrated가 null인 휴장일 응답
+        given(tossApiClient.getMarketCalendar()).willReturn(
+            new TossMarketCalendarResponse(
+                new KrMarketCalendarResult(new MarketDay("2026-05-05", null))));
+
+        // when
+        boolean result = domesticMarketCalendarCache.isTradingDayToday();
+
+        // then
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    @DisplayName("[영업일이면 정규장 시간 밖(장마감 후)이어도 영업일이다]")
+    void isTradingDayToday_businessDayAfterClose_returnsTrue() {
+        // given: 정규장 시간을 현재 시각 이전(-2시간 ~ -1시간, 이미 마감)으로 설정
+        given(tossApiClient.getMarketCalendar()).willReturn(businessDayResponse(-2, -1));
+
+        // when
+        boolean result = domesticMarketCalendarCache.isTradingDayToday();
+
+        // then
+        assertThat(result).isTrue();
+    }
+
+    @Test
+    @DisplayName("[isMarketOpenNow와 isTradingDayToday를 같은 날 함께 호출해도 캘린더 조회는 한 번만 한다]")
+    void isTradingDayToday_calledAfterIsMarketOpenNow_reusesSameDayCache() {
+        // given
+        given(tossApiClient.getMarketCalendar()).willReturn(businessDayResponse(-1, 1));
+
+        // when
+        domesticMarketCalendarCache.isMarketOpenNow();
+        domesticMarketCalendarCache.isTradingDayToday();
+
+        // then
+        verify(tossApiClient, times(1)).getMarketCalendar();
+    }
+
     private TossMarketCalendarResponse businessDayResponse(long startOffsetHours, long endOffsetHours) {
         OffsetDateTime start = OffsetDateTime.now().plusHours(startOffsetHours);
         OffsetDateTime end = OffsetDateTime.now().plusHours(endOffsetHours);

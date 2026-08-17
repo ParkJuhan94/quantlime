@@ -2,10 +2,9 @@ package com.quantlime.price.config;
 
 import com.quantlime.price.cache.PreviousCloseCache;
 import com.quantlime.price.cache.WatchlistedStockCodeCache;
-import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
-import com.quantlime.price.repository.DomesticDailyPriceRepository;
 import com.quantlime.price.repository.OverseasDailyPriceRepository;
+import com.quantlime.price.service.DomesticPreviousCloseResolver;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.watchlist.repository.WatchlistRepository;
 import java.util.stream.Collectors;
@@ -23,10 +22,8 @@ import org.springframework.context.annotation.Configuration;
 public class PriceCacheConfig {
 
     @Bean
-    public PreviousCloseCache domesticPreviousCloseCache(DomesticDailyPriceRepository domesticDailyPriceRepository) {
-        return new PreviousCloseCache((stockCodes, today) ->
-            domesticDailyPriceRepository.findLatestBeforeDate(stockCodes, today).stream()
-                .collect(Collectors.toMap(DomesticDailyPrice::getStockCode, PriceCacheConfig::toDouble)));
+    public PreviousCloseCache domesticPreviousCloseCache(DomesticPreviousCloseResolver domesticPreviousCloseResolver) {
+        return new PreviousCloseCache(domesticPreviousCloseResolver::resolve);
     }
 
     @Bean
@@ -44,10 +41,5 @@ public class PriceCacheConfig {
     @Bean
     public WatchlistedStockCodeCache overseasWatchlistedStockCodeCache(WatchlistRepository watchlistRepository) {
         return new WatchlistedStockCodeCache(watchlistRepository, MarketType.overseasValues());
-    }
-
-    private static Double toDouble(DomesticDailyPrice domesticDailyPrice) {
-        Long closePrice = domesticDailyPrice.getClosePrice();
-        return closePrice == null ? null : closePrice.doubleValue();
     }
 }
