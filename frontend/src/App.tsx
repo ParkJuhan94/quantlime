@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AppHeader } from './components/layout/AppHeader'
 import { AppSidePanel } from './components/layout/AppSidePanel'
 import { Toast } from './components/common/Toast'
+import { ErrorBoundary } from './components/common/ErrorBoundary'
 import { OAuthCallbackPage } from './pages/OAuthCallbackPage'
 import { HomePage } from './pages/HomePage'
 import { FeedPage } from './pages/FeedPage'
@@ -47,22 +48,27 @@ function App() {
       >
         <AppHeader onLoggedOut={() => setShowLogoutToast(true)} />
         <main className="mx-auto max-w-7xl px-4 py-6">
-          <Routes>
-            <Route path="/oauth/callback/:provider" element={<OAuthCallbackPage />} />
-            <Route path="/stocks/:stockCode" element={<StockDetailPage />} />
-            <Route path="/stocks/:stockCode/backtest" element={<BacktestPage />} />
-            <Route path="/indices/:code" element={<IndexDetailPage />} />
-            <Route path="/" element={<HomePage />} />
-            <Route path="/feed" element={<FeedPage />} />
-            <Route path="/videos" element={<VideoFeedPage />} />
-            <Route path="/telegram" element={<TelegramFeedPage />} />
-            <Route element={<ProtectedRoute />}>
-              <Route path="/me" element={<MyInfoPage />} />
-              <Route path="/subscribe" element={<SubscribePage />} />
-              <Route path="/subscribe/result" element={<PaymentResultPage />} />
-            </Route>
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+          {/* key=pathname으로 라우트가 바뀔 때마다 경계 상태를 리셋한다 -
+              한 페이지에서 렌더 에러가 나도 다른 페이지로 이동하면 다시
+              정상 렌더를 시도할 수 있게(전체 새로고침 없이). */}
+          <ErrorBoundary key={location.pathname}>
+            <Routes>
+              <Route path="/oauth/callback/:provider" element={<OAuthCallbackPage />} />
+              <Route path="/stocks/:stockCode" element={<StockDetailPage />} />
+              <Route path="/stocks/:stockCode/backtest" element={<BacktestPage />} />
+              <Route path="/indices/:code" element={<IndexDetailPage />} />
+              <Route path="/" element={<HomePage />} />
+              <Route path="/feed" element={<FeedPage />} />
+              <Route path="/videos" element={<VideoFeedPage />} />
+              <Route path="/telegram" element={<TelegramFeedPage />} />
+              <Route element={<ProtectedRoute />}>
+                <Route path="/me" element={<MyInfoPage />} />
+                <Route path="/subscribe" element={<SubscribePage />} />
+                <Route path="/subscribe/result" element={<PaymentResultPage />} />
+              </Route>
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </ErrorBoundary>
         </main>
       </div>
 

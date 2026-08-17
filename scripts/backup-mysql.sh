@@ -19,6 +19,12 @@ ENV_FILE="$QUANTLIME_DIR/.env.prod"
 BACKUP_DIR="$QUANTLIME_DIR/backups"
 CONTAINER_NAME="quantlime-prod-mysql"
 LOCAL_RETENTION_COUNT=3
+# node-exporter의 textfile collector가 스크랩하는 디렉터리(docker-compose.
+# monitoring.yml에 같은 경로로 마운트돼 있음) - 백업 실패는 여기까지 안
+# 오고 set -e로 먼저 중단되므로, 이 타임스탬프가 갱신 안 되는 것 자체가
+# "백업이 실패하고 있다"는 신호가 된다(MysqlBackupStale 알림, 2026-08-17 -
+# 이전엔 백업 실패를 알려주는 수단이 전혀 없었음).
+METRIC_DIR="$QUANTLIME_DIR/monitoring/textfile-collector"
 
 if [ ! -f "$ENV_FILE" ]; then
     echo "[backup-mysql] $ENV_FILE 이 없습니다." >&2
@@ -58,5 +64,17 @@ aws s3 cp "$FILEPATH" "s3://$BACKUP_S3_BUCKET/mysql/$FILENAME" --region "$AWS_RE
 ls -1t "$BACKUP_DIR"/quantlime-mysql-*.sql.gz 2>/dev/null \
     | tail -n +$((LOCAL_RETENTION_COUNT + 1)) \
     | xargs -r rm -f
+
+# 성공 시각을 node-exporter textfile collector 포맷으로 기록한다 - 임시
+# 파일에 쓴 뒤 rename하는 이유는 node-exporter가 스크랩 중간에 반쯤 쓰인
+# 파일을 읽지 않게 하기 위함(공식 권장 패턴).
+mkdir -p "$METRIC_DIR"
+METRIC_TMP="$METRIC_DIR/mysql_backup.prom.tmp"
+{
+    echo "# HELP mysql_backup_last_success_timestamp_seconds 마지막으로 성공한 MySQL 백업의 유닉스 타임스탬프"
+    echo "# TYPE mysql_backup_last_success_timestamp_seconds gauge"
+    echo "mysql_backup_last_success_timestamp_seconds $(date +%s)"
+} > "$METRIC_TMP"
+mv "$METRIC_TMP" "$METRIC_DIR/mysql_backup.prom"
 
 echo "[backup-mysql] 완료: $FILENAME"

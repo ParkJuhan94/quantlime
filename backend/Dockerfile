@@ -41,4 +41,9 @@ ENV SPRING_PROFILES_ACTIVE=prod
 ENV TZ=Asia/Seoul
 EXPOSE 8080
 
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# -Xmx 고정값 대신 컨테이너 메모리 제한(docker-compose.prod.yml의
+# mem_limit)의 비율로 힙을 잡는다 - 이전엔 JVM이 컨테이너 제한을 못 보고
+# 호스트 전체 RAM 기준으로 힙을 잡아, 컨테이너 mem_limit을 나중에 조정해도
+# JVM 힙 크기가 따라가지 못하는 구조였다(2026-08-17 감사). 75%는 JVM
+# 외 오버헤드(메타스페이스/스레드 스택/네이티브 버퍼)를 위한 여유분.
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75.0", "-jar", "app.jar"]

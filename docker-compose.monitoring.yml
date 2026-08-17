@@ -14,6 +14,16 @@
 # 로그(Loki)와 트레이스(Tempo)는 Phase 2/3로 별도 진행 예정 - 이 오버레이는
 # 메트릭 파이프라인(Prometheus/Alertmanager/exporter)과 시각화(Grafana)까지만
 # 다룬다.
+#
+# docker-compose.prod.yml에도 동일한 x-logging 앵커가 있는데, docker compose는
+# -f로 병합하는 각 파일을 독립적으로 파싱한 뒤 병합하므로 YAML 앵커가 파일
+# 경계를 넘어 공유되지 않는다 - 이 파일에서도 다시 정의해야 한다(2026-08-17).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   prometheus:
     image: prom/prometheus:v2.55.1
@@ -29,6 +39,8 @@ services:
     ports:
       - "9090:9090"
     restart: on-failure:5
+    mem_limit: 512m
+    logging: *default-logging
 
   alertmanager:
     image: prom/alertmanager:v0.27.0
@@ -57,10 +69,15 @@ services:
     ports:
       - "9093:9093"
     restart: on-failure:5
+    mem_limit: 128m
+    logging: *default-logging
 
   # 호스트(EC2) CPU/메모리/디스크/네트워크 - node_memory_*/node_filesystem_*
   # 등을 Prometheus가 스크랩(monitoring/prometheus/rules/alerts.yml의
-  # HostMemoryHigh/HostDiskHigh가 참조).
+  # HostMemoryHigh/HostDiskHigh가 참조). textfile collector 디렉터리는
+  # scripts/backup-mysql.sh가 백업 성공 시각을 기록하는 곳과 같은 경로 -
+  # MySQL 자체엔 백업 성공/실패를 노출할 방법이 없어 크론 스크립트가 직접
+  # 메트릭 파일을 쓰는 게 유일한 방법이다(MysqlBackupStale 알림, 2026-08-17).
   node-exporter:
     image: prom/node-exporter:v1.8.2
     container_name: quantlime-prod-node-exporter
@@ -68,15 +85,22 @@ services:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
       - /:/rootfs:ro
+      - ./monitoring/textfile-collector:/textfile-collector:ro
     command:
       - --path.procfs=/host/proc
       - --path.sysfs=/host/sys
       - --path.rootfs=/rootfs
       - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+      - --collector.textfile.directory=/textfile-collector
     restart: on-failure:5
+    mem_limit: 64m
+    logging: *default-logging
 
   # 컨테이너별 CPU/메모리/네트워크 사용량(어떤 컨테이너가 리소스를 먹는지
-  # node-exporter의 호스트 합산 지표만으로는 안 보이는 부분을 보완).
+  # node-exporter의 호스트 합산 지표만으로는 안 보이는 부분을 보완). 별도
+  # exporter 없이도 container_last_seen/container_start_time_seconds로
+  # FrontendDown/ContainerRestartLoop 알림을 만들 수 있어(2026-08-17)
+  # nginx용 exporter를 새로 추가하지 않았다.
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.49.1
     container_name: quantlime-prod-cadvisor
@@ -86,6 +110,36 @@ services:
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
     restart: on-failure:5
+    mem_limit: 128m
+    logging: *default-logging
+
+  # MySQL 자체 상태(mysql_up)를 Prometheus가 직접 볼 수 있게 한다 - 이전엔
+  # backend의 /api/health가 의존성을 안 보는 정적 200이라(application.yml
+  # 주석 참고) "MySQL만 죽은 상태"가 무알림으로 남았다(2026-08-17 감사).
+  mysqld-exporter:
+    image: prom/mysqld-exporter:v0.15.1
+    container_name: quantlime-prod-mysqld-exporter
+    environment:
+      DATA_SOURCE_NAME: "root:${DB_PASSWORD}@(mysql:3306)/"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: on-failure:5
+    mem_limit: 64m
+    logging: *default-logging
+
+  # Redis 자체 상태(redis_up)도 동일한 이유로 직접 스크랩한다.
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.62.0
+    container_name: quantlime-prod-redis-exporter
+    environment:
+      REDIS_ADDR: "redis://redis:6379"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: on-failure:5
+    mem_limit: 64m
+    logging: *default-logging
 
   grafana:
     image: grafana/grafana:11.3.1
@@ -111,6 +165,8 @@ services:
     depends_on:
       - prometheus
     restart: always
+    mem_limit: 256m
+    logging: *default-logging
 
 volumes:
   prometheus_data:

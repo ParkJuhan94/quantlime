@@ -23,6 +23,54 @@ groups:
           summary: "퀀트 엔진(quant-engine)이 다운됨"
           description: "Prometheus가 2분 이상 quant-engine을 스크랩하지 못했습니다. 스코어 재계산은 직전 이력으로 fallback되지만 신규 계산은 멈춥니다."
 
+      # backend의 /api/health는 의존성(DB/Redis)을 확인하지 않는 정적
+      # 200이라(application.yml 주석 참고), mysqld-exporter/redis-exporter가
+      # 직접 보고하는 mysql_up/redis_up 없이는 "DB만 죽은 상태"가 무알림으로
+      # 남는다(2026-08-17 감사에서 실제로 발견).
+      - alert: MysqlDown
+        expr: mysql_up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "MySQL이 다운됨"
+          description: "mysqld-exporter가 2분 이상 MySQL에 연결하지 못하고 있습니다."
+
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis가 다운됨"
+          description: "redis-exporter가 2분 이상 Redis에 연결하지 못하고 있습니다 - 로그인/재발급/구독 결제 락이 fail-closed로 막힙니다(RefreshTokenStore/RedisLockService/PaymentService 참고)."
+
+      # frontend(nginx)는 별도 /metrics가 없어 cAdvisor가 보는 컨테이너
+      # 생존 신호(container_last_seen)로 대체한다 - 전용 exporter 추가 없이
+      # 기존 스크랩 대상만으로 커버.
+      - alert: FrontendDown
+        expr: time() - container_last_seen{name="quantlime-prod-frontend"} > 60
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "frontend(nginx) 컨테이너가 응답하지 않음"
+          description: "cAdvisor가 1분 이상 frontend 컨테이너를 보지 못했습니다 - 80포트로 들어오는 모든 요청(정적/API 프록시/WS)이 도달 불가 상태일 수 있습니다."
+
+      # restart: on-failure:5(도커 자체 재시작)와 autoheal(healthcheck 기반
+      # 강제 재시작)이 반복적으로 발동하는 상황 - 둘 다 "복구는 됐지만
+      # 계속 재발하는" 상태라 개별 alert(BackendDown 등)로는 안 걸릴 수
+      # 있다(재시작이 매번 빠르게 성공하면 up==0 구간이 짧아 for 조건을
+      # 못 채움).
+      - alert: ContainerRestartLoop
+        expr: changes(container_start_time_seconds{name=~"quantlime-prod-.+"}[30m]) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "컨테이너 재시작 루프 감지: {{ $labels.name }}"
+          description: "{{ $labels.name }}이(가) 최근 30분간 3회 이상 재시작했습니다 - restart:on-failure 또는 autoheal이 반복 발동 중일 수 있습니다."
+
   # --- HTTP 지연/에러율 ---
   - name: quantlime-http
     rules:
@@ -64,6 +112,33 @@ groups:
         annotations:
           summary: "퀀트 엔진 호출 실패율 20% 초과"
           description: "스코어 재계산 호출이 실패해 직전 스코어로 fallback되는 비율이 높습니다(ScoreService/PythonEngineClient)."
+
+  # --- 백업(scripts/backup-mysql.sh가 node-exporter textfile collector로
+  # 직접 기록하는 성공 시각) ---
+  - name: quantlime-backup
+    rules:
+      - alert: MysqlBackupStale
+        expr: time() - mysql_backup_last_success_timestamp_seconds > 93600
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "MySQL 백업이 26시간 이상 갱신되지 않음"
+          description: "매일 03:00 크론(scripts/backup-mysql.sh)이 26시간 이상 성공하지 못했습니다 - 백업 자체가 조용히 실패하고 있을 수 있습니다(set -e라 실패 시 이 메트릭이 갱신되지 않음)."
+
+  # --- 서킷브레이커(2026-08-17 도입, resilience4j-micrometer가 노출) ---
+  # toss/quant-engine/upbit/naver-finance 4개 인스턴스만 존재(application.yml
+  # resilience4j.circuitbreaker.instances 참고).
+  - name: quantlime-resilience
+    rules:
+      - alert: CircuitBreakerOpen
+        expr: resilience4j_circuitbreaker_state{state="open"} == 1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "서킷브레이커 OPEN: {{ $labels.name }}"
+          description: "{{ $labels.name }} 서킷브레이커가 2분 이상 OPEN 상태입니다 - 해당 외부 클라이언트 호출이 즉시 실패 처리되고 있습니다."
 
   # --- 리소스: JVM 힙 + 호스트 메모리/디스크 ---
   # 호스트 메모리/디스크 알림은 원래 CloudWatch 커스텀 메트릭+SNS로 별도

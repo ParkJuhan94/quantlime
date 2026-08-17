@@ -43,3 +43,14 @@ scrape_configs:
   - job_name: cadvisor
     static_configs:
       - targets: ["cadvisor:8080"]
+
+  # MySQL/Redis 자체 상태(mysql_up/redis_up) - backend의 /api/health가
+  # 의존성을 안 보는 정적 200이라 이전엔 "DB만 죽은 상태"가 무알림으로
+  # 남았다(2026-08-17 감사, alerts.yml의 MysqlDown/RedisDown 참고).
+  - job_name: mysqld-exporter
+    static_configs:
+      - targets: ["mysqld-exporter:9104"]
+
+  - job_name: redis-exporter
+    static_configs:
+      - targets: ["redis-exporter:9121"]

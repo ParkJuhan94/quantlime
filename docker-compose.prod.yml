@@ -14,6 +14,15 @@
 # MySQL/Redis 컨테이너와 볼륨을 그대로 재사용(사실상 덮어씀)해버린다.
 name: quantlime-prod
 
+# 컨테이너 로그(docker json-file 드라이버)는 기본값이 무제한 증가라 루트
+# 디스크를 서서히 채운다(HostDiskHigh 알림으로만 사후 감지되던 문제,
+# 2026-08-17). 전 서비스가 공유하는 회전 정책을 앵커로 한 번만 정의한다.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   mysql:
     image: mysql:8.0
@@ -24,6 +33,11 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
     restart: on-failure:5
+    # t3.medium(4GB)에 컨테이너 11개(이 파일 6개 + monitoring 오버레이 5개)가
+    # 제한 없이 경쟁하던 문제(2026-08-17 감사) - 실측 전 추정치로 시작해
+    # 다음 세션에서 실제 사용량을 보고 조정한다.
+    mem_limit: 1g
+    logging: *default-logging
     healthcheck:
       test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
       interval: 10s
@@ -41,6 +55,8 @@ services:
     volumes:
       - redis_data:/data
     restart: on-failure:5
+    mem_limit: 256m
+    logging: *default-logging
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
@@ -54,6 +70,8 @@ services:
     container_name: quantlime-prod-quant-engine
     env_file: .env.prod
     restart: on-failure:5
+    mem_limit: 512m
+    logging: *default-logging
     healthcheck:
       # curl/wget이 없는 python:3.11-slim 베이스라 표준 라이브러리로 대체
       # (직접 pull해 실측 확인 - Dockerfile에 패키지를 추가하지 않고도
@@ -91,6 +109,8 @@ services:
       quant-engine:
         condition: service_healthy
     restart: on-failure:5
+    mem_limit: 1g
+    logging: *default-logging
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8080/api/health" ]
       interval: 15s
@@ -118,6 +138,8 @@ services:
     depends_on:
       - backend
     restart: on-failure:5
+    mem_limit: 128m
+    logging: *default-logging
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost/" ]
       interval: 15s
@@ -136,6 +158,8 @@ services:
     image: willfarrell/autoheal:1.2.0
     container_name: quantlime-prod-autoheal
     restart: always
+    mem_limit: 64m
+    logging: *default-logging
     environment:
       # 개별 서비스마다 label을 붙이는 대신 healthcheck가 정의된 컨테이너를
       # 전부 감시 - 새 서비스를 추가할 때 autoheal 설정을 따로 안 건드려도
