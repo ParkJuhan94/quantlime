@@ -9,6 +9,7 @@ import com.quantlime.price.repository.DomesticRegularClosePriceRepository;
 import com.quantlime.stock.StockFixture;
 import com.quantlime.stock.domain.Stock;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -125,5 +126,48 @@ class DomesticRegularCloseCaptureSchedulerTest {
 
         // when / then: SafeExecutor로 감싸 예외가 밖으로 새지 않아야 한다
         scheduler.captureRegularClose();
+    }
+
+    @Test
+    @DisplayName("[기동 캐치업: 15:30~15:35 안전 시간대 안이면 정상 캡처한다]")
+    void captureIfWithinStartupSafeWindow_withinWindow_capturesNormally() {
+        // given
+        String stockCode = stock.getStockCode();
+        given(domesticMarketCalendarCache.isTradingDayToday()).willReturn(true);
+        given(domesticListedStockCache.get()).willReturn(List.of(stock));
+        given(priceCacheStore.find(stockCode)).willReturn(
+            Optional.of(new PriceSnapshot(stockCode, 71200.0, 1.2, "2026-08-17T15:32:00+09:00")));
+        given(domesticRegularClosePriceRepository.existsByStockCodeAndTradeDate(eq(stockCode), any()))
+            .willReturn(false);
+
+        // when: 15:32는 안전 시간대(15:30~15:35) 안
+        scheduler.captureIfWithinStartupSafeWindow(LocalTime.of(15, 32));
+
+        // then
+        verify(domesticRegularClosePriceRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("[기동 캐치업: 안전 시간대를 넘긴 뒤(NXT 애프터마켓 중)엔 캡처를 스킵한다]")
+    void captureIfWithinStartupSafeWindow_afterWindow_skipsCaptureEvenIfSnapshotExists() {
+        // when: 19:47처럼 늦게 재기동하는 상황 - 이 시점 Redis 값은 이미 NXT
+        // 애프터마켓 드리프트가 꼈을 수 있어(회귀 대상) 아예 조회하지 않아야 한다.
+        scheduler.captureIfWithinStartupSafeWindow(LocalTime.of(19, 47));
+
+        // then
+        verify(domesticMarketCalendarCache, never()).isTradingDayToday();
+        verify(priceCacheStore, never()).find(any());
+        verify(domesticRegularClosePriceRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("[기동 캐치업: 15:30 이전(장중)에는 캡처를 스킵한다]")
+    void captureIfWithinStartupSafeWindow_beforeWindow_skipsCapture() {
+        // when
+        scheduler.captureIfWithinStartupSafeWindow(LocalTime.of(11, 0));
+
+        // then
+        verify(domesticMarketCalendarCache, never()).isTradingDayToday();
+        verify(domesticRegularClosePriceRepository, never()).save(any());
     }
 }

@@ -2,6 +2,7 @@ package com.quantlime.common.startup;
 
 import com.quantlime.common.util.SafeExecutor;
 import com.quantlime.market.service.MarketDataRefreshService;
+import com.quantlime.price.scheduler.DomesticRegularCloseCaptureScheduler;
 import com.quantlime.telegramfeed.service.TelegramCollectionFacade;
 import com.quantlime.telegramfeed.service.TelegramDigestGenerationFacade;
 import com.quantlime.telegramfeed.service.TelegramPostRetentionService;
@@ -55,6 +56,17 @@ import org.springframework.stereotype.Component;
  * 마찬가지로 서로 다른 외부 API(t.me 스크래핑)를 부르므로 전용 실행기
  * (telegramFeedCatchUpTaskExecutor)를 별도로 쓴다.
  *
+ * <p>정규장(15:30) 종가 캡처({@code DomesticRegularCloseCaptureScheduler})도
+ * 같은 이유(고정 cron 시각에 서버가 꺼져있으면 그날 캡처가 영구 스킵됨)로
+ * 함께 묶었다 - 다만 이 캡처는 시간 무관하게 "지금 값"을 채워넣으면 안 되는
+ * 특수성이 있다(NXT 애프터마켓이 계속 값을 드리프트시키므로, 창을 넘겨
+ * 캐치업하면 오히려 틀린 값을 확정 저장하게 됨 - 상세 근거는 그 클래스
+ * javadoc 참고). 그래서 다른 캐치업과 달리 무조건 재시도가 아니라 15:30~15:35
+ * 안전 시간대 안에서만 동작하고, 창을 넘긴 날은 스스로 스킵해 기존 폴백에
+ * 맡긴다. 별도 실행기 없이 가격/스코어 갭필과 같은
+ * {@code marketDataCatchUpTaskExecutor}에서 순차 실행한다(같은 가격 도메인,
+ * Redis 조회 위주라 가볍다).
+ *
  * <p>{@code ChannelSeedInitializer}(채널 시딩)와의 실행 순서는 Spring이
  * 보장해주지 않는다 - 만약 채널 시딩보다 먼저 이 캐치업이 돌면 이번 기동에서는
  * 채널이 0개라 영상 수집이 그냥 아무 일도 안 하고 끝난다. 이는 오류가 아니라
@@ -68,6 +80,7 @@ import org.springframework.stereotype.Component;
 public class StartupCatchUpRunner implements ApplicationRunner {
 
     private final MarketDataRefreshService marketDataRefreshService;
+    private final DomesticRegularCloseCaptureScheduler domesticRegularCloseCaptureScheduler;
     private final FeedCollectionFacade feedCollectionFacade;
     private final TranscriptCollectionFacade transcriptCollectionFacade;
     private final SummaryCollectionFacade summaryCollectionFacade;
@@ -82,9 +95,12 @@ public class StartupCatchUpRunner implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         log.info("기동 시 가격/스코어 갭필 및 영상 피드 캐치업(수집→자막→요약→보존기간 정리)을 비동기로 트리거합니다");
-        marketDataCatchUpTaskExecutor.execute(() ->
+        marketDataCatchUpTaskExecutor.execute(() -> {
             SafeExecutor.runSafely("기동 시 가격/스코어 갭필",
-                () -> marketDataRefreshService.refreshAllExclusively()));
+                () -> marketDataRefreshService.refreshAllExclusively());
+            SafeExecutor.runSafely("기동 시 정규장 종가 캡처(안전 시간대 한정)",
+                domesticRegularCloseCaptureScheduler::captureIfWithinStartupSafeWindow);
+        });
         videoFeedCatchUpTaskExecutor.execute(() ->
             SafeExecutor.runSafely("기동 시 영상 피드 캐치업", this::catchUpVideoFeed));
         telegramFeedCatchUpTaskExecutor.execute(() ->

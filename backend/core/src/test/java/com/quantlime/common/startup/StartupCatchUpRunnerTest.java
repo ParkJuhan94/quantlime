@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.quantlime.market.service.MarketDataRefreshService;
+import com.quantlime.price.scheduler.DomesticRegularCloseCaptureScheduler;
 import com.quantlime.telegramfeed.service.TelegramCollectionFacade;
 import com.quantlime.telegramfeed.service.TelegramPostRetentionService;
 import com.quantlime.telegramfeed.service.TelegramDigestGenerationFacade;
@@ -28,6 +29,9 @@ class StartupCatchUpRunnerTest {
 
     @Mock
     private MarketDataRefreshService marketDataRefreshService;
+
+    @Mock
+    private DomesticRegularCloseCaptureScheduler domesticRegularCloseCaptureScheduler;
 
     @Mock
     private FeedCollectionFacade feedCollectionFacade;
@@ -68,8 +72,8 @@ class StartupCatchUpRunnerTest {
     @BeforeEach
     void setUp() {
         startupCatchUpRunner = new StartupCatchUpRunner(
-            marketDataRefreshService, feedCollectionFacade, transcriptCollectionFacade,
-            summaryCollectionFacade, videoRetentionService,
+            marketDataRefreshService, domesticRegularCloseCaptureScheduler, feedCollectionFacade,
+            transcriptCollectionFacade, summaryCollectionFacade, videoRetentionService,
             telegramCollectionFacade, telegramDigestGenerationFacade, telegramPostRetentionService,
             marketDataCatchUpTaskExecutor, videoFeedCatchUpTaskExecutor, telegramFeedCatchUpTaskExecutor);
     }
@@ -99,6 +103,7 @@ class StartupCatchUpRunnerTest {
 
         // then
         verify(marketDataRefreshService).refreshAllExclusively();
+        verify(domesticRegularCloseCaptureScheduler).captureIfWithinStartupSafeWindow();
         verify(feedCollectionFacade).runAllExclusively();
         verify(transcriptCollectionFacade).runBatchExclusively();
         verify(summaryCollectionFacade).runBatchExclusively();
@@ -118,8 +123,8 @@ class StartupCatchUpRunnerTest {
         verify(marketDataCatchUpTaskExecutor).execute(any());
         verify(videoFeedCatchUpTaskExecutor).execute(any());
         verify(telegramFeedCatchUpTaskExecutor).execute(any());
-        verifyNoInteractions(marketDataRefreshService, feedCollectionFacade,
-            transcriptCollectionFacade, summaryCollectionFacade, videoRetentionService,
+        verifyNoInteractions(marketDataRefreshService, domesticRegularCloseCaptureScheduler,
+            feedCollectionFacade, transcriptCollectionFacade, summaryCollectionFacade, videoRetentionService,
             telegramCollectionFacade, telegramDigestGenerationFacade, telegramPostRetentionService);
     }
 }
