@@ -6,6 +6,7 @@ import com.quantlime.backtest.domain.BacktestDailyScore;
 import com.quantlime.backtest.domain.BacktestResult;
 import com.quantlime.backtest.repository.BacktestDailyScoreRepository;
 import com.quantlime.backtest.repository.BacktestResultRepository;
+import com.quantlime.backtest.repository.CrossSectionalBacktestResultRepository;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -36,6 +37,9 @@ class BacktestPersistenceServiceTest {
 
     @Mock
     private BacktestDailyScoreRepository backtestDailyScoreRepository;
+
+    @Mock
+    private CrossSectionalBacktestResultRepository crossSectionalBacktestResultRepository;
 
     @InjectMocks
     private BacktestPersistenceService backtestPersistenceService;

@@ -5,6 +5,8 @@ import com.quantlime.common.util.ExternalApiInvoker;
 import com.quantlime.common.util.SleepUtil;
 import com.quantlime.infra.python.dto.BacktestApiRequest;
 import com.quantlime.infra.python.dto.BacktestApiResponse;
+import com.quantlime.infra.python.dto.CrossSectionalBacktestApiRequest;
+import com.quantlime.infra.python.dto.CrossSectionalBacktestApiResponse;
 import com.quantlime.infra.python.dto.ScoreBatchApiRequest;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse;
 import com.quantlime.infra.python.dto.SummarizeApiRequest;
@@ -28,7 +30,13 @@ import org.springframework.web.client.RestClient;
  * fallback 메서드는 두지 않는다 - 예외 전파가 곧 "이번 재계산/요약을
  * 건너뛴다"는 뜻이고, 스코어는 DB에 남은 직전 값이 그대로 서빙되는 구조가
  * 이미 fallback 역할을 한다(ScoreService 클래스 주석, CLAUDE.md §10 참고,
- * 2026-08-17).
+ * 2026-08-17). {@link #summarize}가 텔레그램 다이제스트 재생성 중(재시도까지
+ * 소진 후) 던지는 예외도 동일 정책을 따른다 -
+ * {@code TelegramDigestGenerationFacade.generateForChannel}이 이 예외를 잡고
+ * {@code TelegramDigestPersistService.persistResult}를 아예 호출하지 않으므로,
+ * 그날 갱신은 실패해도 직전 다이제스트(어제/오전 값)가 그대로 서빙된다
+ * (2026-08-19 확인 - Gemini 무료 티어 쿼터가 유튜브와 21/20으로 근접해 있어
+ * 실제로 걸릴 수 있는 경로).
  */
 @Slf4j
 @Component
@@ -86,6 +94,32 @@ public class PythonEngineClient {
                         .body(request)
                         .retrieve()
                         .body(BacktestApiResponse.class));
+            recordOutcome(OUTCOME_SUCCESS, sample);
+            return response;
+        } catch (ExternalApiException e) {
+            recordOutcome(OUTCOME_FAILURE, sample);
+            throw e;
+        }
+    }
+
+    // 널 테스트(nullTest=true)는 시장 하나당 반복 200회 순환이동 재계산을
+    // 포함해 다른 엔진 호출보다 훨씬 오래 걸릴 수 있어(로컬 실측 수 초~수십
+    // 초, application.yml의 quant-engine 인스턴스 read timeout이 이 호출도
+    // 함께 적용됨을 인지할 것 - 필요시 별도 타임아웃 인스턴스 분리는 후속
+    // 검토), 운영 배치가 아니라 dev 엔드포인트 수동 트리거로만 호출한다
+    // (DevController 참고).
+    @CircuitBreaker(name = "quant-engine")
+    @Bulkhead(name = "quant-engine")
+    public CrossSectionalBacktestApiResponse runCrossSectionalBacktest(CrossSectionalBacktestApiRequest request) {
+        Timer.Sample sample = Timer.start(meterRegistry);
+        try {
+            CrossSectionalBacktestApiResponse response = ExternalApiInvoker.call(
+                PythonEngineErrorCode.CROSS_SECTIONAL_BACKTEST_FAILED, () ->
+                    pythonEngineRestClient.post()
+                        .uri("/backtest/cross-sectional")
+                        .body(request)
+                        .retrieve()
+                        .body(CrossSectionalBacktestApiResponse.class));
             recordOutcome(OUTCOME_SUCCESS, sample);
             return response;
         } catch (ExternalApiException e) {

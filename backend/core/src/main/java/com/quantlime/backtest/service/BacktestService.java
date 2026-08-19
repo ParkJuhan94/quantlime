@@ -47,9 +47,11 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class BacktestService {
 
-    // 백테스트 유니버스 심화 백필 목표(400일, DomesticUniverseSelectionService)에
-    // 맞춰, 거래일 400일을 담고도 남을 만큼 넉넉한 달력일 범위를 조회한다.
-    private static final int OHLCV_LOOKBACK_CALENDAR_DAYS = 600;
+    // 백테스트 유니버스 심화 백필 목표(520일, DomesticUniverseSelectionService)에
+    // 맞춰, 거래일 520일을 담고도 남을 만큼 넉넉한 달력일 범위를 조회한다
+    // (2026-08 감사 세션 - 400→520 상향과 함께 비례 조정하지 않으면 DB에
+    // 더 깊은 이력이 쌓여도 이 조회창이 그 전에 잘라버려 상향이 무의미해진다).
+    private static final int OHLCV_LOOKBACK_CALENDAR_DAYS = 750;
     // 나스닥 상장은 나스닥종합, 뉴욕 상장은 S&P500과 비교하는 통상적 매핑
     // (BenchmarkIndexBackfillService가 이 두 지수를 국내와 동일하게 백필).
     private static final Map<MarketType, String> BENCHMARK_INDEX_CODE = Map.of(

@@ -88,6 +88,56 @@ class ScoreSeriesBatchResponse(BaseModel):
     scores: list[StockScoreSeriesResponse]
 
 
+class DailyScorePointInput(BaseModel):
+    date: date
+    close: float
+    trend_score: float | None
+    mean_reversion_score: float | None
+
+
+class StockDailyScoreInput(BaseModel):
+    stock_code: str
+    daily_scores: list[DailyScorePointInput]
+
+
+class CrossSectionalBacktestRequest(BaseModel):
+    """이미 backtest_daily_score에 저장된 종목별 일별 스코어를 그대로 받아
+    (축, horizon) 하나에 대한 횡단면(cross-sectional) IC를 계산한다 - OHLCV
+    재조회·지표/스코어 재계산이 없다(calculator/cross_sectional.py 모듈
+    docstring 참고).
+
+    **호출당 (축, horizon) 하나로 좁힌 이유**: 500종목·520거래일 규모로
+    실측한 결과 8개 조합(축2 x horizon4)을 한 호출에 묶으면 널 테스트 없이도
+    PythonEngineClient read timeout(60초)을 넘겼다(2026-08 감사 세션).
+    """
+    market: str
+    score_version: str
+    stocks: list[StockDailyScoreInput]
+    benchmark_ohlcv: list[OhlcvItem]
+    axis: Literal["trend", "mean_reversion"]
+    horizon: int
+    null_test: bool = False
+    null_repeats: int = 200
+
+
+class CrossSectionalBacktestResponse(BaseModel):
+    market: str
+    score_version: str
+    stock_count: int
+    axis: str
+    horizon: int
+    mean_ic: float | None
+    ic_ci_low: float | None
+    ic_ci_high: float | None
+    n_dates: int
+    n_observations: int
+    buckets: list[BucketStatResponse]
+    null_mean: float | None = None
+    null_std: float | None = None
+    null_p2_5: float | None = None
+    null_p97_5: float | None = None
+
+
 class BacktestResponse(BaseModel):
     stock_code: str
     score_version: str

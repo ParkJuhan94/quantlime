@@ -2,8 +2,10 @@ package com.quantlime.backtest.service;
 
 import com.quantlime.backtest.domain.BacktestDailyScore;
 import com.quantlime.backtest.domain.BacktestResult;
+import com.quantlime.backtest.domain.CrossSectionalBacktestResult;
 import com.quantlime.backtest.repository.BacktestDailyScoreRepository;
 import com.quantlime.backtest.repository.BacktestResultRepository;
+import com.quantlime.backtest.repository.CrossSectionalBacktestResultRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +24,7 @@ public class BacktestPersistenceService {
 
     private final BacktestResultRepository backtestResultRepository;
     private final BacktestDailyScoreRepository backtestDailyScoreRepository;
+    private final CrossSectionalBacktestResultRepository crossSectionalBacktestResultRepository;
 
     /**
      * (축, horizon) 행 하나의 저장 실패가 나머지 행 저장까지 막지 않도록
@@ -61,5 +64,25 @@ public class BacktestPersistenceService {
     public void replaceDailyScores(String stockCode, String scoreVersion, List<BacktestDailyScore> dailyScores) {
         backtestDailyScoreRepository.deleteByStockCodeAndScoreVersion(stockCode, scoreVersion);
         backtestDailyScoreRepository.saveAll(dailyScores);
+    }
+
+    /**
+     * 횡단면 백테스트 결과 하나(시장·축·horizon·버전·표본분할 조합)를
+     * upsert한다 - saveOne(BacktestResult)과 동일한 find-or-update 패턴.
+     * {@link CrossSectionalBacktestService}가 조합마다 개별 호출하므로 리스트
+     * 배치가 아니라 단건 메서드로 둔다.
+     */
+    @Transactional
+    public void saveCrossSectional(CrossSectionalBacktestResult result) {
+        crossSectionalBacktestResultRepository.findByMarketTypeAndAxisAndHorizonDaysAndScoreVersionAndSampleSplit(
+                result.getMarketType(), result.getAxis(), result.getHorizonDays(),
+                result.getScoreVersion(), result.getSampleSplit())
+            .ifPresentOrElse(
+                existing -> existing.updateFrom(
+                    result.getBacktestDate(), result.getStockCount(), result.getMeanIc(),
+                    result.getIcCiLow(), result.getIcCiHigh(), result.getSampleDates(),
+                    result.getSampleObservations(), result.getNullMean(), result.getNullStd(),
+                    result.getNullPercentileLow(), result.getNullPercentileHigh(), result.getBuckets()),
+                () -> crossSectionalBacktestResultRepository.save(result));
     }
 }

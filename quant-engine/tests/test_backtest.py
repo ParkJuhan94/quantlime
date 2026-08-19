@@ -4,6 +4,8 @@ import pytest
 
 from calculator.backtest import (
     HORIZONS,
+    WARMUP_TRADING_DAYS,
+    _excess_returns_for_horizon,
     _forward_return,
     _prepare_backtest_frame,
     _quantile_buckets,
@@ -63,6 +65,36 @@ class TestSpearman:
         assert _spearman(df) is None
 
 
+class TestExcessReturnsForHorizon:
+    def test_excludes_rows_before_warmup_by_own_history_position(self):
+        # given: _score_row_index가 워밍업 미만인 앞쪽 3개 행은 스코어가
+        # 있어도 제외돼야 한다 (0,1,2행 제외, warmup_days=3)
+        merged = pd.DataFrame({
+            "date": pd.date_range("2026-01-01", periods=7, freq="B").strftime("%Y-%m-%d"),
+            "_score_row_index": [0, 1, 2, 3, 4, 5, 6],
+            "close": [100.0, 101.0, 102.0, 103.0, 104.0, 105.0, 106.0],
+            "benchmark_close": [1000.0] * 7,
+            "score": [10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0],
+        })
+
+        result = _excess_returns_for_horizon(merged, "score", horizon=1, warmup_days=3)
+
+        assert sorted(result["score"]) == [40.0, 50.0]
+
+    def test_zero_warmup_keeps_all_eligible_rows(self):
+        merged = pd.DataFrame({
+            "date": pd.date_range("2026-01-01", periods=3, freq="B").strftime("%Y-%m-%d"),
+            "_score_row_index": [0, 1, 2],
+            "close": [100.0, 101.0, 102.0],
+            "benchmark_close": [1000.0, 1000.0, 1000.0],
+            "score": [10.0, 20.0, 30.0],
+        })
+
+        result = _excess_returns_for_horizon(merged, "score", horizon=1, warmup_days=0)
+
+        assert len(result) == 1
+
+
 class TestQuantileBuckets:
     def test_splits_into_five_buckets_ordered_by_score(self):
         scores = np.arange(100)
@@ -83,15 +115,39 @@ class TestQuantileBuckets:
     def test_returns_empty_list_for_empty_input(self):
         assert _quantile_buckets(pd.DataFrame(columns=["score", "excess_return"])) == []
 
+    def test_returns_empty_list_when_ties_collapse_below_five_buckets(self):
+        # given: 값 대부분이 0/100 두 값에 몰려(클램프 saturation 등) qcut이
+        # duplicates="drop"으로 2~3개 버킷만 만들어내는 경우 - "버킷 1=최저
+        # 5분위"라는 해석이 깨지므로 버킷 없이 보고해야 한다
+        scores = [0.0] * 15 + [50.0] * 5 + [100.0] * 15
+        returns = np.linspace(-0.01, 0.01, len(scores))
+        assert _quantile_buckets(pd.DataFrame({"score": scores, "excess_return": returns})) == []
+
 
 class TestRankIcBootstrap:
-    def test_small_sample_skips_confidence_interval(self):
-        # given: BLOCK_SIZE(20)*2보다 훨씬 적은 샘플
+    def test_below_min_ic_sample_size_reports_nothing(self):
+        # given: MIN_IC_SAMPLE_SIZE(=BLOCK_SIZE=20)보다 훨씬 적은 샘플 - 몇 개
+        # 안 되는 점으로는 순위상관이 우연히 완벽해 보일 수 있어 IC 자체를
+        # 보고하지 않는다(2026-08 감사 세션에서 이 동작으로 수정)
         df = pd.DataFrame({"score": [1, 2, 3], "excess_return": [0.01, 0.02, 0.03]})
 
         ic, low, high = _rank_ic_with_bootstrap(df)
 
-        assert ic == pytest.approx(1.0)
+        assert ic is None
+        assert low is None
+        assert high is None
+
+    def test_between_min_sample_and_block_threshold_skips_confidence_interval(self):
+        # given: MIN_IC_SAMPLE_SIZE는 넘지만 block_size(기본 20)*2에는 못 미침
+        rng = np.random.default_rng(0)
+        n = 25
+        scores = rng.normal(size=n)
+        returns = scores * 0.01 + rng.normal(scale=0.001, size=n)
+        df = pd.DataFrame({"score": scores, "excess_return": returns})
+
+        ic, low, high = _rank_ic_with_bootstrap(df)
+
+        assert ic is not None
         assert low is None
         assert high is None
 
@@ -107,6 +163,23 @@ class TestRankIcBootstrap:
         assert ic > 0.5
         assert low is not None and high is not None
         assert low <= ic <= high
+
+    def test_block_size_parameter_actually_gates_confidence_interval(self):
+        # given: block_size가 호출측 인자로 실제로 흘러들어가는지 확인 -
+        # n=100일 때 block_size=20(기본)이면 CI가 나오지만, horizon=60용
+        # block_size=120(=max(2*60,20))을 그대로 쓰면 n < block_size*2라
+        # CI를 못 낸다(고정 20이 아니라 호출측 인자를 실제로 쓴다는 증거)
+        rng = np.random.default_rng(0)
+        n = 100
+        scores = rng.normal(size=n)
+        returns = scores * 0.01 + rng.normal(scale=0.001, size=n)
+        df = pd.DataFrame({"score": scores, "excess_return": returns})
+
+        _, low_default, high_default = _rank_ic_with_bootstrap(df, block_size=20)
+        _, low_h60, high_h60 = _rank_ic_with_bootstrap(df, block_size=120)
+
+        assert low_default is not None and high_default is not None
+        assert low_h60 is None and high_h60 is None
 
 
 class TestRunBacktestIntegration:

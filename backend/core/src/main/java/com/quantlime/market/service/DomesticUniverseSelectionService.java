@@ -34,7 +34,10 @@ public class DomesticUniverseSelectionService {
     // 1차 스캔(거래대금 랭킹용) 목표 일수 - "최근 3개월" 거래대금 합산 기준과
     // 거의 일치(거래일 기준 3개월 ≈ 60거래일).
     private static final int SCAN_TARGET_DAYS = 60;
-    private static final int UNIVERSE_TARGET_DAYS = 400;
+    // 백테스트 워밍업 제외(추세추종축 93거래일) 이후에도 horizon=60용 forward
+    // return을 계산할 표본이 충분히 남도록 400에서 상향(2026-08 감사 세션 -
+    // quant-engine/calculator/backtest.py WARMUP_TRADING_DAYS 참고).
+    private static final int UNIVERSE_TARGET_DAYS = 520;
     private static final int UNIVERSE_SIZE = 500;
 
     private final StockMasterService stockMasterService;

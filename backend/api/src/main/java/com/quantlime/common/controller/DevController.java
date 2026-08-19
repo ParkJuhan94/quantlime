@@ -8,12 +8,14 @@ import com.quantlime.auth.token.RefreshTokenStore;
 import com.quantlime.backtest.service.BacktestDatasetPreparationService;
 import com.quantlime.backtest.service.BacktestService;
 import com.quantlime.backtest.service.BacktestUniverseService;
+import com.quantlime.backtest.service.CrossSectionalBacktestService;
 import com.quantlime.infra.oauth.dto.OAuthUserInfo;
 import com.quantlime.market.service.MarketDataRefreshService;
 import com.quantlime.price.dto.PriceJumpReport;
 import com.quantlime.price.service.DailyPriceIntegrityService;
 import com.quantlime.price.service.DailyPriceResettlementService;
 import com.quantlime.score.service.ScoreService;
+import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.dto.StockMasterSyncResult;
 import com.quantlime.stock.service.OverseasStockMasterSyncService;
 import com.quantlime.stock.service.DomesticStockMasterSyncService;
@@ -51,6 +53,7 @@ public class DevController {
     private final BacktestDatasetPreparationService backtestDatasetPreparationService;
     private final BacktestService backtestService;
     private final BacktestUniverseService backtestUniverseService;
+    private final CrossSectionalBacktestService crossSectionalBacktestService;
     private final DailyPriceResettlementService dailyPriceResettlementService;
     private final DailyPriceIntegrityService dailyPriceIntegrityService;
     private final ScoreService scoreService;
@@ -186,6 +189,29 @@ public class DevController {
         backtestUniverseService.runUniverse(force);
         log.info("[dev] 유니버스 백테스트 수동 트리거 완료");
         return ResponseEntity.ok("유니버스 백테스트 완료");
+    }
+
+    @PostMapping("/backtest/cross-sectional")
+    @Operation(summary = "[개발용] 횡단면(cross-sectional) Rank IC 백테스트 수동 트리거 - "
+        + "종목 하나의 시간축 안에서만 상관을 재는 /backtest/run-universe와 달리, 같은 날짜의 "
+        + "여러 종목을 줄세워 비교한다(2026-08 감사 세션 - 둘의 결과가 반대 부호로 나온 걸 "
+        + "발견해 도입, docs/CHANGELOG.md 참고). 이미 저장된 backtest_daily_score를 그대로 쓰므로 "
+        + "run-universe가 먼저 실행돼 있어야 한다. market 생략 시 4개 시장(KOSPI/KOSDAQ/NASDAQ/NYSE) "
+        + "전부, 지정 시 그 시장만(축2 x horizon4=8개 조합). nullTest=true면 조합마다 순환이동 "
+        + "널 분포까지 계산해 훨씬 오래 걸린다(조합당 반복 200회).")
+    public ResponseEntity<String> triggerCrossSectionalBacktest(
+            @RequestParam(required = false) String market,
+            @RequestParam String scoreVersion,
+            @RequestParam(defaultValue = "false") boolean nullTest) {
+        log.info("[dev] 횡단면 백테스트 수동 트리거 시작: market={}, scoreVersion={}, nullTest={}",
+            market, scoreVersion, nullTest);
+        if (market == null) {
+            crossSectionalBacktestService.runAllMarkets(scoreVersion, nullTest);
+        } else {
+            crossSectionalBacktestService.runForMarket(MarketType.valueOf(market), scoreVersion, nullTest);
+        }
+        log.info("[dev] 횡단면 백테스트 수동 트리거 완료");
+        return ResponseEntity.ok("횡단면 백테스트 완료");
     }
 
     @PostMapping("/auth/token")

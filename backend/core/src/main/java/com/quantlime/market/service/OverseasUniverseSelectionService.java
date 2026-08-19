@@ -35,7 +35,9 @@ public class OverseasUniverseSelectionService {
     // enum이 아닌 자유 문자열 필드에 의존하는 것 자체가 이 방식의 한계).
     private static final String INDUSTRY_CODE_REAL_ESTATE = "630";
     private static final int SCAN_TARGET_DAYS = 60;
-    private static final int UNIVERSE_TARGET_DAYS = 400;
+    // DomesticUniverseSelectionService.UNIVERSE_TARGET_DAYS와 동일한 이유
+    // (백테스트 워밍업 제외 후에도 horizon=60 표본 확보).
+    private static final int UNIVERSE_TARGET_DAYS = 520;
     private static final int UNIVERSE_SIZE = 500;
     // 종목 간 호출 딜레이. 해외도 이제 국내와 같은 Toss 캔들 API를 쓰지만
     // (2026-07-29, KIS에서 이관), 최초 백필처럼 대부분 종목이 API를 실제로

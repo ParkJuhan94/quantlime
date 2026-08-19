@@ -60,3 +60,22 @@ POST {{baseUrl}}/dev/scores/rebuild?from=2025-06-01
 
 ### 6. 백테스트 재실행(force=true - 오늘 이미 돌았어도 새 가격/스코어로 다시 계산)
 POST {{baseUrl}}/dev/backtest/run-universe?force=true
+
+### 횡단면(cross-sectional) Rank IC 검증 런북(2026-08 감사 세션 - 종목별
+# 시계열 IC(/dev/backtest/run-universe)와 방법론이 완전히 다르고 실제로
+# 반대 부호가 나온 걸 발견해 도입. run-universe가 먼저 실행돼 있어야
+# backtest_daily_score가 존재한다(위 1~6번 또는 최초 실행). score_version은
+# quant-engine calculator/scorer.py의 SCORE_VERSION 상수값(현재 "v2.1")을
+# 그대로 넣는다.
+
+### 7. [1단계] 4개 시장 전부, 널 테스트 없이(빠름 - 시장당 8개 조합, 조합당 수 초)
+POST {{baseUrl}}/dev/backtest/cross-sectional?scoreVersion=v2.1
+
+### 7-1. 시장 하나만 볼 때(market은 KOSPI/KOSDAQ/NASDAQ/NYSE)
+POST {{baseUrl}}/dev/backtest/cross-sectional?market=KOSPI&scoreVersion=v2.1
+
+### 8. [2단계, 판정용] 7번 결과에서 신뢰구간이 0을 벗어난 조합만 nullTest=true로
+# 재실행 - 조합당 순환이동 반복 200회라 훨씬 오래 걸린다(시장 하나 8개 조합
+# 전부 널 테스트하면 수 분 이상). 관측 mean_ic가 null_p2_5~null_p97_5 밖에
+# 있어야 "우연/기계적 편향이 아니다"로 판정한다(계획 문서의 Gate A/B).
+POST {{baseUrl}}/dev/backtest/cross-sectional?market=KOSPI&scoreVersion=v2.1&nullTest=true

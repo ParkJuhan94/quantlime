@@ -12,6 +12,12 @@ public interface BacktestDailyScoreRepository extends JpaRepository<BacktestDail
     List<BacktestDailyScore> findByStockCodeAndScoreVersionOrderByTradeDateAsc(
         String stockCode, String scoreVersion);
 
+    // CrossSectionalBacktestService가 시장 하나(최대 500종목)의 저장된
+    // 스코어를 한 번에 읽어 횡단면 패널을 구성할 때 쓴다 - 종목별로 개별
+    // 조회하면 최대 500번 왕복이 되므로 IN절로 한 번에 가져온다.
+    List<BacktestDailyScore> findByStockCodeInAndScoreVersionOrderByStockCodeAscTradeDateAsc(
+        List<String> stockCodes, String scoreVersion);
+
     // 파생 delete 메서드(deleteBy...)는 대상 엔티티를 로드해 각각
     // entityManager.remove()를 호출하는데, 이 삭제는 액션 큐에 쌓일 뿐 즉시
     // 실행되지 않는다. Hibernate는 같은 플러시 안에서 삭제보다 삽입을 먼저

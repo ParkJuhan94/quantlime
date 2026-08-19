@@ -17,6 +17,7 @@ from google.genai.errors import ClientError
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from calculator.backtest import run_backtest
+from calculator.cross_sectional import run_cross_sectional_backtest
 from calculator.indicators import compute_all_indicators
 from calculator.scorer import SCORE_VERSION, compute_scores
 from schemas import (
@@ -24,6 +25,8 @@ from schemas import (
     BacktestRequest,
     BacktestResponse,
     BucketStatResponse,
+    CrossSectionalBacktestRequest,
+    CrossSectionalBacktestResponse,
     DailyScoreResponse,
     DivergenceResponse,
     HorizonStatResponse,
@@ -153,6 +156,54 @@ def backtest_score(request: BacktestRequest) -> BacktestResponse:
             )
             for axis_result in axis_results
         ],
+    )
+
+
+@app.post("/backtest/cross-sectional", response_model=CrossSectionalBacktestResponse)
+def backtest_cross_sectional(request: CrossSectionalBacktestRequest) -> CrossSectionalBacktestResponse:
+    """여러 종목의 (이미 계산된) 일별 스코어를 한 번에 받아 (축, horizon)
+    하나에 대한 횡단면 Rank IC를 계산한다 - `/backtest/score`(종목별 시계열
+    IC)와 답하는 질문이 다르다(calculator/cross_sectional.py 모듈 docstring
+    참고). 지표/스코어를 다시 계산하지 않으므로 OHLCV가 아니라 스코어
+    시계열 자체를 받는다. 호출당 (축, horizon) 하나로 좁힌 이유는
+    CrossSectionalBacktestRequest 문서 참고.
+    """
+    stocks = [
+        (
+            stock.stock_code,
+            pd.DataFrame([item.model_dump() for item in stock.daily_scores])
+            .sort_values("date")
+            .reset_index(drop=True),
+        )
+        for stock in request.stocks
+    ]
+    benchmark_df = (
+        pd.DataFrame([item.model_dump() for item in request.benchmark_ohlcv])
+        .sort_values("date")
+        .reset_index(drop=True)
+    )
+
+    stat = run_cross_sectional_backtest(
+        stocks, benchmark_df, request.axis, request.horizon,
+        null_test=request.null_test, null_repeats=request.null_repeats,
+    )
+
+    return CrossSectionalBacktestResponse(
+        market=request.market,
+        score_version=request.score_version,
+        stock_count=len(request.stocks),
+        axis=request.axis,
+        horizon=stat.horizon,
+        mean_ic=stat.mean_ic,
+        ic_ci_low=stat.ic_ci_low,
+        ic_ci_high=stat.ic_ci_high,
+        n_dates=stat.n_dates,
+        n_observations=stat.n_observations,
+        buckets=[BucketStatResponse(**vars(b)) for b in stat.buckets],
+        null_mean=stat.null_mean,
+        null_std=stat.null_std,
+        null_p2_5=stat.null_p2_5,
+        null_p97_5=stat.null_p97_5,
     )
 
 
