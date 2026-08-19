@@ -36,6 +36,13 @@ public class TelegramDigestGenerationScheduler {
     }
 
     private void logSummary(List<TelegramDigestGenerateResult> results) {
+        List<TelegramDigestGenerateResult> failures = results.stream().filter(r -> !r.success()).toList();
+        if (!failures.isEmpty()) {
+            // 실패해도 예외를 던지지 않고 이전 다이제스트가 그대로 서빙되는 구조라
+            // (PythonEngineClient 클래스 주석 참고) 조용히 묻히기 쉽다 - info보다
+            // 눈에 띄게 warn으로 격상.
+            log.warn("텔레그램 다이제스트 생성 일부 실패: failures={}", failures);
+        }
         log.info("텔레그램 다이제스트 생성 완료: results={}", results);
     }
 }
