@@ -10,6 +10,16 @@ import { group, sleep } from 'k6';
 import { safeGet } from '../lib/guard.js';
 import { stockCodes, searchKeywords, pick, pickHot } from '../lib/data.js';
 import { abortThresholds } from '../config/options.js';
+import { serverErrors } from '../lib/metrics.js';
+
+// endpoint-ramp.js와 달리 그룹 안에서 요청을 여러 개 쏘므로, 호출부마다
+// serverErrors.add를 반복하지 않고 이 헬퍼로 감싼다. abortThresholds가
+// 참조하는 ql_server_error_rate 메트릭은 어딘가에서 이 모듈을 import해
+// Rate 인스턴스가 실제로 생성돼야만 존재한다 - 이 import 자체가 그 등록.
+function track(res) {
+  serverErrors.add(res.status >= 500);
+  return res;
+}
 
 export const options = {
   discardResponseBodies: true,
@@ -99,36 +109,36 @@ export const options = {
 
 export function home() {
   group('home', () => {
-    safeGet('/api/market/indices', { name: 'indices' });
-    safeGet('/api/market/ranking?scope=domestic&sort=gainers&limit=20', { name: 'ranking' });
+    track(safeGet('/api/market/indices', { name: 'indices' }));
+    track(safeGet('/api/market/ranking?scope=domestic&sort=gainers&limit=20', { name: 'ranking' }));
   });
   sleep(Math.random() * 2 + 1); // think time 1~3초
 }
 
 export function browse() {
   group('browse', () => {
-    safeGet(
+    track(safeGet(
       `/api/stocks/search?q=${encodeURIComponent(pick(searchKeywords))}&page=0&size=20`,
       { name: 'search' }
-    );
+    ));
     sleep(1);
     const code = pickHot(stockCodes, 200);
-    safeGet(`/api/stocks/${code}`, { name: 'stock-detail' });
-    safeGet(`/api/stocks/${code}/price`, { name: 'price' });
-    safeGet(`/api/stocks/${code}/chart?days=90`, { name: 'chart' });
+    track(safeGet(`/api/stocks/${code}`, { name: 'stock-detail' }));
+    track(safeGet(`/api/stocks/${code}/price`, { name: 'price' }));
+    track(safeGet(`/api/stocks/${code}/chart?days=90`, { name: 'chart' }));
   });
   sleep(Math.random() * 3 + 2);
 }
 
 export function feeds() {
   group('feeds', () => {
-    safeGet('/api/video-feed/videos?page=0&size=20', { name: 'video-feed' });
-    safeGet('/api/feed/posts?page=0&size=20', { name: 'feed' });
-    safeGet('/api/telegram-feed/digests?page=0&size=20', { name: 'telegram-feed' });
+    track(safeGet('/api/video-feed/videos?page=0&size=20', { name: 'video-feed' }));
+    track(safeGet('/api/feed/posts?page=0&size=20', { name: 'feed' }));
+    track(safeGet('/api/telegram-feed/digests?page=0&size=20', { name: 'telegram-feed' }));
   });
   sleep(Math.random() * 4 + 3);
 }
 
 export function canary() {
-  safeGet('/api/health', { name: 'canary-health' });
+  track(safeGet('/api/health', { name: 'canary-health' }));
 }
