@@ -56,6 +56,14 @@ spring:
 server:
   port: 8080
   shutdown: graceful
+  tomcat:
+    # 기본값(mbean 미등록) 상태에서는 Micrometer TomcatMetrics가 바인딩할
+    # MBean이 없어 tomcat_threads_busy/tomcat_threads_config_max가 전혀
+    # 노출되지 않는다 - Tomcat 워커 스레드(기본 200) vs HikariCP 커넥션
+    # 풀(10) 중 어느 쪽이 먼저 포화되는지 부하테스트로 확인하려면 필수
+    # (2026-08-17 부하테스트 세션에서 발견).
+    mbeanregistry:
+      enabled: true
 
 # Prometheus가 스크랩할 /actuator/prometheus만 열고 나머지 actuator
 # 엔드포인트는 닫아둔다(공격 표면 최소화). health는 DB/Redis 등 실제

@@ -1,0 +1,213 @@
+{
+  "uid": "quantlime-loadtest",
+  "title": "QuantLime - 부하테스트 관측",
+  "tags": ["quantlime", "loadtest"],
+  "timezone": "Asia/Seoul",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-30m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "HikariCP 대기 커넥션 (0보다 크면 DB 커넥션 풀이 병목)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 0.5 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "hikaricp_connections_pending{job=\"backend\"}",
+          "legendFormat": "pending"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "HikariCP 활성/유휴 커넥션 (maximum-pool-size=10)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "max": 10, "min": 0 }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "hikaricp_connections_active{job=\"backend\"}",
+          "legendFormat": "active"
+        },
+        {
+          "expr": "hikaricp_connections_idle{job=\"backend\"}",
+          "legendFormat": "idle"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "HikariCP 커넥션 획득 시간 (평균/최대 - acquire_seconds는 버킷이 없어 histogram_quantile 불가)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "rate(hikaricp_connections_acquire_seconds_sum{job=\"backend\"}[1m]) / rate(hikaricp_connections_acquire_seconds_count{job=\"backend\"}[1m])",
+          "legendFormat": "평균"
+        },
+        {
+          "expr": "hikaricp_connections_acquire_seconds_max{job=\"backend\"}",
+          "legendFormat": "최대"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Tomcat 사용 중 워커 스레드 (server.tomcat.mbeanregistry.enabled 필요)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "tomcat_threads_busy_threads{job=\"backend\"}",
+          "legendFormat": "busy"
+        },
+        {
+          "expr": "tomcat_threads_config_max_threads{job=\"backend\"}",
+          "legendFormat": "max(설정값, 기본 200)"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "URI별 요청률 (rps)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"backend\"}[1m])) by (uri)",
+          "legendFormat": "{{uri}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "서버 인지 지연시간 p95/p99 (전체 URI) - k6 클라이언트 지연과 비교용",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{job=\"backend\"}[1m])) by (le))",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{job=\"backend\"}[1m])) by (le))",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "5xx 에러율",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.01 },
+              { "color": "red", "value": 0.05 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"backend\", outcome=\"SERVER_ERROR\"}[1m])) / sum(rate(http_server_requests_seconds_count{job=\"backend\"}[1m]))",
+          "legendFormat": "5xx ratio"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "JVM 힙 사용량",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "sum(jvm_memory_used_bytes{job=\"backend\", area=\"heap\"})",
+          "legendFormat": "used"
+        },
+        {
+          "expr": "sum(jvm_memory_max_bytes{job=\"backend\", area=\"heap\"})",
+          "legendFormat": "max"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "GC 정지 시간 비율 (초/초 - 0.1 넘으면 GC로 10% 이상 손실)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "rate(jvm_gc_pause_seconds_sum{job=\"backend\"}[1m])",
+          "legendFormat": "GC pause ratio"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "전종목 스윕(MarketPriceSweepScheduler) 소요시간 - 부하 중 밀리는지 확인",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "rate(market_sweep_duration_seconds_sum{job=\"backend\"}[1m]) / rate(market_sweep_duration_seconds_count{job=\"backend\"}[1m])",
+          "legendFormat": "평균"
+        },
+        {
+          "expr": "market_sweep_duration_seconds_max{job=\"backend\"}",
+          "legendFormat": "최대"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "서킷브레이커/벌크헤드 여유 (toss/quant-engine/upbit/naver-finance)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "resilience4j_bulkhead_available_concurrent_calls{job=\"backend\"}",
+          "legendFormat": "{{name}}"
+        }
+      ]
+    }
+  ]
+}
