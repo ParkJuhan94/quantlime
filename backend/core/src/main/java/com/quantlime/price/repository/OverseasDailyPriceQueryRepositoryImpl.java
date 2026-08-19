@@ -1,8 +1,9 @@
 package com.quantlime.price.repository;
 
+import com.querydsl.core.Tuple;
 import com.querydsl.core.types.Projections;
-import com.querydsl.jpa.JPAExpressions;
-import com.querydsl.jpa.JPQLQuery;
+import com.querydsl.core.types.dsl.Expressions;
+import com.querydsl.jpa.impl.JPAQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.price.domain.QOverseasDailyPrice;
@@ -43,21 +44,21 @@ public class OverseasDailyPriceQueryRepositoryImpl implements OverseasDailyPrice
             return List.of();
         }
 
+        // 상관 서브쿼리 대신 비상관 튜플 IN 서브쿼리 사용 - 2026-08-19 실측,
+        // ScoreQueryRepositoryImpl.latestScoreDateTuple 주석 참고.
+        JPAQuery<Tuple> latestDates = queryFactory
+            .select(latest.stockCode, latest.tradeDate.max())
+            .from(latest)
+            .where(latest.stockCode.in(stockCodes), latest.tradeDate.lt(date))
+            .groupBy(latest.stockCode);
+
         return queryFactory
             .selectFrom(overseasDailyPrice)
             .where(
                 overseasDailyPrice.stockCode.in(stockCodes),
                 overseasDailyPrice.tradeDate.lt(date),
-                overseasDailyPrice.tradeDate.eq(latestTradeDateSubquery(latest, overseasDailyPrice, date))
+                Expressions.list(overseasDailyPrice.stockCode, overseasDailyPrice.tradeDate).in(latestDates)
             )
             .fetch();
-    }
-
-    private JPQLQuery<LocalDate> latestTradeDateSubquery(
-        QOverseasDailyPrice latest, QOverseasDailyPrice overseasDailyPrice, LocalDate date) {
-        return JPAExpressions
-            .select(latest.tradeDate.max())
-            .from(latest)
-            .where(latest.stockCode.eq(overseasDailyPrice.stockCode), latest.tradeDate.lt(date));
     }
 }

@@ -26,10 +26,23 @@ import static lombok.AccessLevel.PROTECTED;
         name = "uk_score_stock_date",
         columnNames = {"stock_code", "score_date"}
     ),
-    indexes = @Index(
-        name = "idx_score_stock_date",
-        columnList = "stock_code, score_date DESC"
-    )
+    indexes = {
+        @Index(
+            name = "idx_score_stock_date",
+            columnList = "stock_code, score_date DESC"
+        ),
+        // /api/dashboard/scores(전체 랭킹) 쿼리가 튜플 IN 서브쿼리로
+        // "종목별 최신 score_date"만 걸러낸 뒤 ORDER BY composite_score DESC
+        // LIMIT 50을 도는데, 이 인덱스가 없으면 옵티마이저가 전체 후보를
+        // 스캔한 뒤 정렬한다. 2026-08-19 실측: 이 인덱스 추가로 옵티마이저가
+        // composite_score 인덱스를 내림차순으로 훑으며 조건을 만족하는 50개를
+        // 찾는 즉시 멈추는 전략(EXPLAIN상 rows=50)으로 바뀌어 상관 서브쿼리
+        // 대비 약 100배(116.7초→~1초 내외) 단축됐다(성능 개선 계획 문서 B1 참고).
+        @Index(
+            name = "idx_score_composite_score",
+            columnList = "composite_score DESC"
+        )
+    }
 )
 @Getter
 @NoArgsConstructor(access = PROTECTED)

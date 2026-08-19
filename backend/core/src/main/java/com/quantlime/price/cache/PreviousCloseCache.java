@@ -3,6 +3,7 @@ package com.quantlime.price.cache;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.BiFunction;
 
 /**
@@ -25,6 +26,14 @@ public class PreviousCloseCache {
     private final BiFunction<List<String>, LocalDate, Map<String, Double>> priceFetcher;
 
     private volatile Map<String, Double> closeByStockCode = Map.of();
+    // needsRefresh가 "값이 있는 코드"가 아니라 "이미 시도해본 코드"를 기준으로
+    // 판단하게 하는 필드(2026-08-19 수렴 버그 수정). 이전엔
+    // closeByStockCode.keySet()으로 판단했는데, 가격 행이 아예 없는 종목
+    // (신규상장 직후 등)이 하나라도 섞이면 그 종목은 priceFetcher가 영원히
+    // 반환하지 않으므로 containsAll이 영구히 false가 되어, 100ms 주기 스윕이
+    // 매 틱마다 배치 조회를 재실행했다(2,596종목 IN절 기준 60초 이상 실측,
+    // `docs/LOAD_TESTING.md`/plan 문서 B2 참고).
+    private volatile Set<String> triedStockCodes = Set.of();
     private volatile LocalDate cachedDate = LocalDate.MIN;
 
     public PreviousCloseCache(BiFunction<List<String>, LocalDate, Map<String, Double>> priceFetcher) {
@@ -40,7 +49,7 @@ public class PreviousCloseCache {
     }
 
     private boolean needsRefresh(List<String> stockCodes, LocalDate today) {
-        return !cachedDate.equals(today) || !closeByStockCode.keySet().containsAll(stockCodes);
+        return !cachedDate.equals(today) || !triedStockCodes.containsAll(stockCodes);
     }
 
     private synchronized void refresh(List<String> stockCodes, LocalDate today) {
@@ -48,6 +57,7 @@ public class PreviousCloseCache {
             return; // 락 대기 중 다른 스레드가 이미 갱신함
         }
         closeByStockCode = priceFetcher.apply(stockCodes, today);
+        triedStockCodes = Set.copyOf(stockCodes);
         cachedDate = today;
     }
 }

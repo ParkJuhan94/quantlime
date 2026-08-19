@@ -48,6 +48,21 @@ services:
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_unicode_ci
       --default-time-zone=+09:00
+      --innodb-buffer-pool-size=512M
+      --innodb-buffer-pool-instances=1
+    # innodb_buffer_pool_size: 기본값 128MB로 방치돼 있었다(2026-08-19 실측
+    # - score/domestic_daily_price/overseas_daily_price 등 hot 테이블 합산
+    # ~1.1GB, 기본 버퍼풀 대비 9배). 512MB로 올린 근거: mem_limit이 1g라
+    # 버퍼풀에 컨테이너 메모리 전부를 줄 수 없다 - 커넥션별 sort/join
+    # buffer, InnoDB 어댑티브 해시 인덱스·redo log buffer, mysqld 기본
+    # 프로세스 오버헤드를 빼면 절반 정도가 안전한 상한이다(로컬에서 온라인
+    # 리사이즈로 256MB까지 무중단 테스트 확인 - `SET GLOBAL
+    # innodb_buffer_pool_size`는 재시작 없이 즉시 반영됨). 전체 hot
+    # 데이터셋(~1.1GB)을 다 못 덮지만 기존 대비 4배라 히트율이 유의미하게
+    # 개선될 것으로 예상 - t3.medium 4GB에 컨테이너 11개가 경쟁하는 제약상
+    # 이 이상은 실측(k6 부하테스트, `docs/LOAD_TESTING.md`) 없이 올리지
+    # 않는다. buffer-pool-instances=1은 버퍼풀이 1GB 미만일 때 MySQL 공식
+    # 권장값(인스턴스를 여러 개로 쪼개는 건 1GB 이상부터 의미가 있음).
 
   redis:
     image: redis:7-alpine

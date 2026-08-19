@@ -8,6 +8,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import lombok.Builder;
 import lombok.Getter;
@@ -17,7 +18,15 @@ import org.springframework.util.Assert;
 import static lombok.AccessLevel.PROTECTED;
 
 @Entity
-@Table(name = "stock")
+@Table(name = "stock",
+    // DomesticListedStockCache.refresh()가 600초마다
+    // findByListingStatusAndMarketTypeInAndPriceUnsupportedFalse로 이 두
+    // 컬럼을 필터링한다 - price_unsupported는 대부분 false라 선택도가
+    // 낮아 인덱스에 넣지 않고, 선택도 높은 listing_status/market_type만
+    // 복합 인덱스로 잡는다. 성능 개선 계획 문서 Phase 2 참고.
+    indexes = @Index(name = "idx_stock_listing_status_market_type",
+        columnList = "listing_status, market_type")
+)
 @Getter
 @NoArgsConstructor(access = PROTECTED)
 public class Stock extends TimeBaseEntity {

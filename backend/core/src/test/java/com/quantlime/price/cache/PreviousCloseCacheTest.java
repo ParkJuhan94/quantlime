@@ -95,6 +95,28 @@ class PreviousCloseCacheTest {
         assertThat(callCount).hasValue(2);
     }
 
+    @Test
+    @DisplayName("[전일종가가 없는 종목이 섞여 있어도 같은 날 재조회 시 배치 조회를 반복하지 않는다 "
+        + "- 2026-08-19 수렴 버그(containsAll이 결과맵 기준이라 영구 미스) 회귀 테스트]")
+    void get_codeWithNoPreviousClose_doesNotRefetchForever() {
+        // given: missingCode는 가격 행 자체가 없어(신규상장 직후 등) fetcher가 절대 반환하지 않음
+        String missingCode = "999999";
+        AtomicInteger callCount = new AtomicInteger();
+        BiFunction<List<String>, LocalDate, Map<String, Double>> fetcher = (codes, date) -> {
+            callCount.incrementAndGet();
+            return Map.of(STOCK_CODE, 70000.0);
+        };
+        PreviousCloseCache cache = new PreviousCloseCache(fetcher);
+
+        // when: 같은 (STOCK_CODE, missingCode) 조합으로 여러 번 조회(100ms 주기 스윕 재현)
+        cache.get(List.of(STOCK_CODE, missingCode));
+        cache.get(List.of(STOCK_CODE, missingCode));
+        cache.get(List.of(STOCK_CODE, missingCode));
+
+        // then: 수정 전이었다면 매번 재조회돼 callCount==3이었을 것
+        assertThat(callCount).hasValue(1);
+    }
+
     private PreviousCloseCache cacheReturning(AtomicInteger callCount, Map<String, Double> fixedResult) {
         BiFunction<List<String>, LocalDate, Map<String, Double>> fetcher = (codes, date) -> {
             callCount.incrementAndGet();

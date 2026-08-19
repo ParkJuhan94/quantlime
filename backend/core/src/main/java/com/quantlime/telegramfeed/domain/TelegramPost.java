@@ -33,7 +33,13 @@ import static lombok.AccessLevel.PROTECTED;
 @Table(name = "telegram_post", indexes = {
     @Index(name = "idx_telegram_post_status", columnList = "status"),
     @Index(name = "idx_telegram_post_published_at", columnList = "published_at"),
-    @Index(name = "idx_telegram_post_channel_message", columnList = "channel_id, message_id")
+    @Index(name = "idx_telegram_post_channel_message", columnList = "channel_id, message_id"),
+    // TelegramFeedService.findSourcePosts(다이제스트 상세/카운트 조회의
+    // 확정 N+1 경로)의 findByChannelAndStatusAndPublishedAtBetween이 이
+    // 세 컬럼을 그대로 쓴다 - 기존 단일 컬럼 인덱스로는 이 범위 조건에
+    // leftmost prefix가 안 맞는다. 성능 개선 계획 문서 Phase 2 참고.
+    @Index(name = "idx_telegram_post_channel_status_published",
+        columnList = "channel_id, status, published_at")
 })
 @Getter
 @NoArgsConstructor(access = PROTECTED)

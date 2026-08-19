@@ -1,6 +1,7 @@
 package com.quantlime.stock.service;
 
 import com.quantlime.common.exception.NotFoundException;
+import com.quantlime.stock.cache.StockSearchCache;
 import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
@@ -24,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class StockMasterService {
 
     private final StockRepository stockRepository;
+    private final StockSearchCache stockSearchCache;
 
     @Transactional(readOnly = true)
     public List<Stock> getAllListedStocks() {
@@ -75,11 +77,8 @@ public class StockMasterService {
         log.info("종목 마스터 일괄 등록 완료: count={}", stocks.size());
     }
 
-    @Transactional(readOnly = true)
     public Slice<Stock> searchStocks(String keyword, Pageable pageable) {
-        String trimmedKeyword = keyword.trim();
-        return stockRepository.findByStockNameContainingIgnoreCaseOrStockCodeContainingOrKoreanNameContainingIgnoreCase(
-            trimmedKeyword, trimmedKeyword, trimmedKeyword, pageable);
+        return stockSearchCache.search(keyword, pageable);
     }
 
     /**

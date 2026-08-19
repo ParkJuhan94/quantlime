@@ -9,6 +9,7 @@ import jakarta.persistence.ForeignKey;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -33,9 +34,16 @@ import static lombok.AccessLevel.PROTECTED;
  * (docs/ROADMAP.md "Phase 8 P7" 재검토 참고).
  */
 @Entity
-@Table(name = "telegram_digest", uniqueConstraints = {
-    @UniqueConstraint(name = "uk_telegram_digest", columnNames = {"channel_id", "digest_date"})
-})
+@Table(name = "telegram_digest",
+    uniqueConstraints = {
+        @UniqueConstraint(name = "uk_telegram_digest", columnNames = {"channel_id", "digest_date"})
+    },
+    // uk_telegram_digest는 (channel_id, digest_date) 복합이라 digest_date만
+    // 단독으로 정렬하는 쿼리(TelegramDigestRepository.findDigests의
+    // ORDER BY d.digestDate DESC)의 leftmost prefix로 못 쓴다. 성능 개선
+    // 계획 문서 Phase 2 참고.
+    indexes = @Index(name = "idx_telegram_digest_date", columnList = "digest_date DESC")
+)
 @Getter
 @NoArgsConstructor(access = PROTECTED)
 public class TelegramDigest extends TimeBaseEntity {

@@ -1,8 +1,9 @@
 package com.quantlime.price.repository;
 
+import com.querydsl.core.Tuple;
 import com.querydsl.core.types.Projections;
-import com.querydsl.jpa.JPAExpressions;
-import com.querydsl.jpa.JPQLQuery;
+import com.querydsl.core.types.dsl.Expressions;
+import com.querydsl.jpa.impl.JPAQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.QDomesticDailyPrice;
@@ -43,21 +44,23 @@ public class DomesticDailyPriceQueryRepositoryImpl implements DomesticDailyPrice
             return List.of();
         }
 
+        // 상관 서브쿼리 대신 비상관 튜플 IN 서브쿼리 사용 - 2026-08-19 실측,
+        // ScoreQueryRepositoryImpl.latestScoreDateTuple 주석 참고. 전일종가
+        // 조회가 관심종목 전체(수천 개)를 한 번에 묻는 경로라 상관 버전은
+        // 종목 수가 늘수록 초선형으로 느려진다(2,596종목 기준 60.3초 실측).
+        JPAQuery<Tuple> latestDates = queryFactory
+            .select(latest.stockCode, latest.tradeDate.max())
+            .from(latest)
+            .where(latest.stockCode.in(stockCodes), latest.tradeDate.lt(date))
+            .groupBy(latest.stockCode);
+
         return queryFactory
             .selectFrom(domesticDailyPrice)
             .where(
                 domesticDailyPrice.stockCode.in(stockCodes),
                 domesticDailyPrice.tradeDate.lt(date),
-                domesticDailyPrice.tradeDate.eq(latestTradeDateSubquery(latest, domesticDailyPrice, date))
+                Expressions.list(domesticDailyPrice.stockCode, domesticDailyPrice.tradeDate).in(latestDates)
             )
             .fetch();
-    }
-
-    private JPQLQuery<LocalDate> latestTradeDateSubquery(
-        QDomesticDailyPrice latest, QDomesticDailyPrice domesticDailyPrice, LocalDate date) {
-        return JPAExpressions
-            .select(latest.tradeDate.max())
-            .from(latest)
-            .where(latest.stockCode.eq(domesticDailyPrice.stockCode), latest.tradeDate.lt(date));
     }
 }
