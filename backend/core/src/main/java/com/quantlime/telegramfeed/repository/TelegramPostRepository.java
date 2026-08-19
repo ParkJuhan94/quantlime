@@ -29,6 +29,22 @@ public interface TelegramPostRepository extends JpaRepository<TelegramPost, Long
     List<TelegramPost> findByChannelAndStatusAndPublishedAtBetween(
         Channel channel, TelegramPostStatus status, LocalDateTime start, LocalDateTime end);
 
+    // TelegramFeedService.getDigests의 소스 글 개수 집계 전용 - 다이제스트는
+    // TelegramPost와 FK로 연결돼 있지 않고 (channel, 발행일)로만 대응되므로,
+    // 페이지의 여러 다이제스트를 위 findByChannelAndStatusAndPublishedAtBetween로
+    // 다이제스트마다 반복 호출하면 N+1이 되고 그마저도 카운트 하나 얻으려
+    // content(TEXT) 컬럼까지 포함한 전체 엔티티를 로딩했다(2026-08-19 발견).
+    // channel_id/published_at 두 컬럼만 페이지 전체 범위로 한 번에 가져와
+    // 자바에서 (channel_id, 날짜)별로 집계한다 - 페이지당 쿼리 1회로 축소.
+    @Query("SELECT p.channel.id, p.publishedAt FROM TelegramPost p "
+        + "WHERE p.status = :status AND p.channel.id IN :channelIds "
+        + "AND p.publishedAt >= :from AND p.publishedAt < :to")
+    List<Object[]> findChannelIdAndPublishedAtForCounting(
+        @Param("channelIds") List<Long> channelIds,
+        @Param("status") TelegramPostStatus status,
+        @Param("from") LocalDateTime from,
+        @Param("to") LocalDateTime to);
+
     // 보존 기간(TelegramPostRetentionService.RETENTION_DAYS) 정리용 - 상태 무관하게
     // 발행일 기준으로만 대상을 잡는다(VideoRepository.findIdsByPublishedAtBefore와
     // 동일 이유 - FILTERED_OUT처럼 피드에 노출된 적 없는 글도 함께 정리 대상).

@@ -5,7 +5,7 @@ import com.quantlime.price.cache.PriceCacheStore;
 import com.quantlime.price.cache.WatchlistedStockCodeCache;
 import com.quantlime.price.dto.response.PriceSnapshot;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -17,6 +17,7 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
@@ -54,7 +55,7 @@ class DomesticWatchlistPriceRelaySchedulerTest {
 
         // then
         verify(domesticWatchlistedStockCodeCache, never()).get();
-        verify(priceCacheStore, never()).find(anyString());
+        verify(priceCacheStore, never()).findAll(anyList());
     }
 
     @Test
@@ -68,17 +69,18 @@ class DomesticWatchlistPriceRelaySchedulerTest {
         domesticWatchlistPriceRelayScheduler.broadcastCurrentPrices();
 
         // then
-        verify(priceCacheStore, never()).find(anyString());
+        verify(priceCacheStore, never()).findAll(anyList());
     }
 
     @Test
     @DisplayName("[Redis에 캐시된 시세가 있으면 그대로 토픽으로 브로드캐스트한다(Toss를 직접 호출하지 않음)]")
     void broadcast_cacheHit_broadcastsWithoutCallingToss() {
-        // given
+        // given: 관심종목 수만큼 순차 find 대신 findAll 파이프라인 하나로
+        // 조회한다(2026-08-19).
         PriceSnapshot cached = new PriceSnapshot(STOCK_CODE, 71400.0, 2.0, "2026-07-15T09:00:00+09:00");
         given(domesticMarketCalendarCache.isMarketOpenNow()).willReturn(true);
         given(domesticWatchlistedStockCodeCache.get()).willReturn(List.of(STOCK_CODE));
-        given(priceCacheStore.find(STOCK_CODE)).willReturn(Optional.of(cached));
+        given(priceCacheStore.findAll(List.of(STOCK_CODE))).willReturn(Map.of(STOCK_CODE, cached));
 
         // when
         domesticWatchlistPriceRelayScheduler.broadcastCurrentPrices();
@@ -93,7 +95,7 @@ class DomesticWatchlistPriceRelaySchedulerTest {
         // given
         given(domesticMarketCalendarCache.isMarketOpenNow()).willReturn(true);
         given(domesticWatchlistedStockCodeCache.get()).willReturn(List.of(STOCK_CODE));
-        given(priceCacheStore.find(STOCK_CODE)).willReturn(Optional.empty());
+        given(priceCacheStore.findAll(List.of(STOCK_CODE))).willReturn(Map.of());
 
         // when
         domesticWatchlistPriceRelayScheduler.broadcastCurrentPrices();
@@ -108,7 +110,7 @@ class DomesticWatchlistPriceRelaySchedulerTest {
         // given
         given(domesticMarketCalendarCache.isMarketOpenNow()).willReturn(true);
         given(domesticWatchlistedStockCodeCache.get()).willReturn(List.of(STOCK_CODE));
-        given(priceCacheStore.find(STOCK_CODE)).willThrow(new RuntimeException("Redis 장애"));
+        given(priceCacheStore.findAll(List.of(STOCK_CODE))).willThrow(new RuntimeException("Redis 장애"));
 
         // when & then: SafeExecutor가 내부에서 흡수하므로 예외가 밖으로 나오면 안 됨
         assertThatCode(() -> domesticWatchlistPriceRelayScheduler.broadcastCurrentPrices())

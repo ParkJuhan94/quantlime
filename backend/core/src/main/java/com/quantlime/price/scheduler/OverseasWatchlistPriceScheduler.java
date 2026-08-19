@@ -10,6 +10,7 @@ import com.quantlime.price.cache.WatchlistedStockCodeCache;
 import com.quantlime.price.cache.OverseasMarketCalendarCache;
 import com.quantlime.price.dto.response.PriceSnapshot;
 import com.quantlime.price.util.ChangeRateCalculator;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
@@ -93,14 +94,26 @@ public class OverseasWatchlistPriceScheduler {
         if (prices == null) {
             return;
         }
+
+        // 종목당 개별 save 대신 청크 전체를 파이프라인 하나로 저장한다
+        // (2026-08-19, PriceCacheStore.saveAll 참고) - 브로드캐스트는 종목별로
+        // 토픽이 달라 그대로 개별 전송한다.
+        List<PriceSnapshot> snapshots = new ArrayList<>();
         for (TossPriceResponse.TossPrice price : prices) {
-            cacheAndBroadcast(price, previousCloseByCode);
+            PriceSnapshot snapshot = toSnapshot(price, previousCloseByCode);
+            if (snapshot != null) {
+                snapshots.add(snapshot);
+            }
+        }
+        priceCacheStore.saveAll(snapshots);
+        for (PriceSnapshot snapshot : snapshots) {
+            messagingTemplate.convertAndSend(PRICE_TOPIC_PREFIX + snapshot.stockCode(), snapshot);
         }
     }
 
-    private void cacheAndBroadcast(TossPriceResponse.TossPrice price, Map<String, Double> previousCloseByCode) {
+    private PriceSnapshot toSnapshot(TossPriceResponse.TossPrice price, Map<String, Double> previousCloseByCode) {
         if (!StringUtils.hasText(price.lastPrice())) {
-            return;
+            return null;
         }
         Double currentPrice = parseLastPrice(price.lastPrice());
         if (currentPrice == null) {
@@ -108,13 +121,11 @@ public class OverseasWatchlistPriceScheduler {
             // 해당 종목만 스킵하고 나머지는 계속 처리한다.
             log.warn("해외 현재가 파싱 실패로 해당 종목만 스킵: symbol={}, lastPrice={}",
                 price.symbol(), price.lastPrice());
-            return;
+            return null;
         }
         Double previousClose = previousCloseByCode.get(price.symbol());
         Double changeRate = ChangeRateCalculator.calculate(currentPrice, previousClose);
-        PriceSnapshot snapshot = new PriceSnapshot(price.symbol(), currentPrice, changeRate, price.timestamp());
-        priceCacheStore.save(snapshot);
-        messagingTemplate.convertAndSend(PRICE_TOPIC_PREFIX + price.symbol(), snapshot);
+        return new PriceSnapshot(price.symbol(), currentPrice, changeRate, price.timestamp());
     }
 
     private Double parseLastPrice(String lastPrice) {

@@ -18,6 +18,7 @@ import com.quantlime.telegramfeed.repository.TelegramPostRepository;
 import com.quantlime.videofeed.domain.Platform;
 import com.quantlime.videofeed.repository.ChannelRepository;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -49,12 +50,14 @@ public class TelegramFeedService {
         Map<Long, String> summaryByDigestId = toSummaryTextMap(digests.getContent());
         Map<Long, List<TelegramDigestTicker>> tickersByDigestId =
             groupByDigestId(telegramDigestTickerRepository.findByTelegramDigest_IdIn(digestIds));
+        Map<String, Integer> sourcePostCountByChannelAndDate = countSourcePostsByDigest(digests.getContent());
 
         return digests.map(digest -> TelegramFeedMapper.toDigestResponse(
             digest,
             summaryByDigestId.getOrDefault(digest.getId(), ""),
             tickersByDigestId.getOrDefault(digest.getId(), List.of()),
-            countSourcePosts(digest)));
+            sourcePostCountByChannelAndDate.getOrDefault(
+                channelDateKey(digest.getChannel().getId(), digest.getDigestDate()), 0)));
     }
 
     // 채널 필터 UI(칩) 옵션 목록용 - Platform.TELEGRAM으로 한정(VideoFeedService
@@ -77,8 +80,42 @@ public class TelegramFeedService {
         return TelegramFeedMapper.toDigestDetailResponse(digest, toPayload(digest), tickers, sourcePostUrls);
     }
 
-    private int countSourcePosts(TelegramDigest digest) {
-        return findSourcePosts(digest).size();
+    /**
+     * getDigests(페이지 목록)의 다이제스트별 소스 글 개수를 쿼리 1회로
+     * 집계한다 - 다이제스트가 TelegramPost와 FK로 연결돼 있지 않고
+     * (channel, 발행일)로만 대응돼, 예전엔 다이제스트마다 findSourcePosts를
+     * 반복 호출하는 N+1이었고 그마저 카운트 하나 위해 본문(content, TEXT)
+     * 포함 전체 엔티티를 로딩했다(2026-08-19 발견 - 성능 개선 계획 문서
+     * Phase 3 참고). channel_id/published_at 두 컬럼만 페이지 전체 날짜
+     * 범위로 한 번에 가져와 자바에서 집계한다.
+     */
+    private Map<String, Integer> countSourcePostsByDigest(List<TelegramDigest> digests) {
+        if (digests.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> channelIds = digests.stream()
+            .map(digest -> digest.getChannel().getId())
+            .distinct()
+            .toList();
+        LocalDate minDate = digests.stream().map(TelegramDigest::getDigestDate)
+            .min(Comparator.naturalOrder()).orElseThrow();
+        LocalDate maxDate = digests.stream().map(TelegramDigest::getDigestDate)
+            .max(Comparator.naturalOrder()).orElseThrow();
+
+        List<Object[]> rows = telegramPostRepository.findChannelIdAndPublishedAtForCounting(
+            channelIds, TelegramPostStatus.SELECTED, minDate.atStartOfDay(), maxDate.plusDays(1).atStartOfDay());
+
+        Map<String, Integer> countByChannelAndDate = new HashMap<>();
+        for (Object[] row : rows) {
+            Long channelId = (Long) row[0];
+            LocalDate publishedDate = ((LocalDateTime) row[1]).toLocalDate();
+            countByChannelAndDate.merge(channelDateKey(channelId, publishedDate), 1, Integer::sum);
+        }
+        return countByChannelAndDate;
+    }
+
+    private String channelDateKey(Long channelId, LocalDate date) {
+        return channelId + "_" + date;
     }
 
     private List<TelegramPost> findSourcePosts(TelegramDigest digest) {

@@ -4,7 +4,9 @@ import com.quantlime.common.util.SafeExecutor;
 import com.quantlime.price.cache.DomesticMarketCalendarCache;
 import com.quantlime.price.cache.PriceCacheStore;
 import com.quantlime.price.cache.WatchlistedStockCodeCache;
+import com.quantlime.price.dto.response.PriceSnapshot;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -50,13 +52,18 @@ public class DomesticWatchlistPriceRelayScheduler {
         }
 
         List<String> stockCodes = domesticWatchlistedStockCodeCache.get();
-        for (String stockCode : stockCodes) {
-            broadcastIfCached(stockCode);
+        if (stockCodes.isEmpty()) {
+            return;
         }
-    }
 
-    private void broadcastIfCached(String stockCode) {
-        priceCacheStore.find(stockCode)
-            .ifPresent(snapshot -> messagingTemplate.convertAndSend(PRICE_TOPIC_PREFIX + stockCode, snapshot));
+        // 관심종목 수만큼 순차 GET을 반복하던 것을 파이프라인 하나로 묶는다
+        // (2026-08-19, PriceCacheStore.findAll 참고).
+        Map<String, PriceSnapshot> snapshotByStockCode = priceCacheStore.findAll(stockCodes);
+        for (String stockCode : stockCodes) {
+            PriceSnapshot snapshot = snapshotByStockCode.get(stockCode);
+            if (snapshot != null) {
+                messagingTemplate.convertAndSend(PRICE_TOPIC_PREFIX + stockCode, snapshot);
+            }
+        }
     }
 }

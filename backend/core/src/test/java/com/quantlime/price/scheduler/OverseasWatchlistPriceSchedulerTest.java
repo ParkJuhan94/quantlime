@@ -100,10 +100,12 @@ class OverseasWatchlistPriceSchedulerTest {
         // when
         overseasWatchlistPriceScheduler.refreshAndBroadcast();
 
-        // then
-        ArgumentCaptor<PriceSnapshot> savedCaptor = ArgumentCaptor.forClass(PriceSnapshot.class);
-        verify(priceCacheStore).save(savedCaptor.capture());
-        PriceSnapshot saved = savedCaptor.getValue();
+        // then: 종목당 개별 save 대신 청크 단위 saveAll(파이프라인)로 바뀌었다
+        // (2026-08-19, PriceCacheStore.saveAll 참고).
+        ArgumentCaptor<List<PriceSnapshot>> savedCaptor = ArgumentCaptor.forClass(List.class);
+        verify(priceCacheStore).saveAll(savedCaptor.capture());
+        assertThat(savedCaptor.getValue()).hasSize(1);
+        PriceSnapshot saved = savedCaptor.getValue().get(0);
         assertThat(saved.stockCode()).isEqualTo(STOCK_CODE);
         assertThat(saved.currentPrice()).isCloseTo(341.43, offset(0.001));
         assertThat(saved.changeRate()).isCloseTo(0.4206, offset(0.001));
@@ -125,9 +127,10 @@ class OverseasWatchlistPriceSchedulerTest {
         overseasWatchlistPriceScheduler.refreshAndBroadcast();
 
         // then
-        ArgumentCaptor<PriceSnapshot> savedCaptor = ArgumentCaptor.forClass(PriceSnapshot.class);
-        verify(priceCacheStore).save(savedCaptor.capture());
-        assertThat(savedCaptor.getValue().changeRate()).isNull();
+        ArgumentCaptor<List<PriceSnapshot>> savedCaptor = ArgumentCaptor.forClass(List.class);
+        verify(priceCacheStore).saveAll(savedCaptor.capture());
+        assertThat(savedCaptor.getValue()).hasSize(1);
+        assertThat(savedCaptor.getValue().get(0).changeRate()).isNull();
     }
 
     @Test
@@ -143,6 +146,6 @@ class OverseasWatchlistPriceSchedulerTest {
         // when & then
         assertThatCode(() -> overseasWatchlistPriceScheduler.refreshAndBroadcast())
             .doesNotThrowAnyException();
-        verify(priceCacheStore, never()).save(any());
+        verify(priceCacheStore, never()).saveAll(any());
     }
 }

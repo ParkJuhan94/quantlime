@@ -151,24 +151,33 @@ public class DomesticMarketPriceSweepScheduler {
             return List.of();
         }
 
+        // 종목당 개별 Redis SET 왕복(청크당 최대 200회) 대신 청크 전체를
+        // 파이프라인 하나로 저장한다(2026-08-19, PriceCacheStore.saveAll 참고).
+        List<PriceSnapshot> snapshots = new ArrayList<>();
         List<MarketRankingResponse> result = new ArrayList<>();
         for (TossPriceResponse.TossPrice price : prices) {
-            MarketRankingResponse ranked = cacheAndRank(price, stockByCode, previousCloseByStockCode);
-            if (ranked != null) {
-                result.add(ranked);
+            CachedPrice cached = cacheAndRank(price, stockByCode, previousCloseByStockCode);
+            if (cached == null) {
+                continue;
+            }
+            snapshots.add(cached.snapshot());
+            if (cached.ranking() != null) {
+                result.add(cached.ranking());
             }
         }
+        priceCacheStore.saveAll(snapshots);
         return result;
     }
 
     /**
-     * 심볼 하나의 시세를 (previousClose 유무와 무관하게) Redis에 항상
-     * 적재하고, 랭킹에는 등락률을 계산할 수 있는 경우에만 포함한다 -
+     * 심볼 하나의 시세 스냅샷은 (previousClose 유무와 무관하게) 항상
+     * 만들고, 랭킹은 등락률을 계산할 수 있는 경우에만 채운다 -
      * {@code DomesticWatchlistPriceRelayScheduler}가 이 캐시를 그대로 브로드캐스트하므로,
      * 관심종목인데 전일종가가 없는 경우에도 시세 자체는 화면에 보여야
      * 한다(과거 PriceBroadcastScheduler.toBroadcastMessage와 동일한 규칙).
+     * 실제 Redis 저장은 fetchChunk가 청크 단위로 한 번에 파이프라인한다.
      */
-    private MarketRankingResponse cacheAndRank(
+    private CachedPrice cacheAndRank(
         TossPriceResponse.TossPrice price, Map<String, Stock> stockByCode,
         Map<String, Double> previousCloseByStockCode) {
         if (!StringUtils.hasText(price.lastPrice())) {
@@ -187,18 +196,23 @@ public class DomesticMarketPriceSweepScheduler {
         }
         Double previousClose = previousCloseByStockCode.get(price.symbol());
         Double changeRate = ChangeRateCalculator.calculate(currentPrice.doubleValue(), previousClose);
-        priceCacheStore.save(new PriceSnapshot(price.symbol(), currentPrice.doubleValue(), changeRate, price.timestamp()));
+        PriceSnapshot snapshot = new PriceSnapshot(price.symbol(), currentPrice.doubleValue(), changeRate, price.timestamp());
 
         Stock stock = stockByCode.get(price.symbol());
         if (stock == null || changeRate == null) {
-            return null;
+            return new CachedPrice(snapshot, null);
         }
         // 거래량/거래대금/통화는 이 자체 계산 경로(국내 관심종목만 보기 전용,
         // DomesticMarketRankingCache)에서 다루지 않는 값이라 null - Toss `prices`가
         // 애초에 거래량을 안 주고(PriceSnapshot 주석 참고), 통화는 국내
         // 전용 경로라 항상 KRW이므로 프론트에서 굳이 표시할 필요가 없다.
-        return new MarketRankingResponse(stock.getStockCode(), stock.getStockName(), stock.getSector(),
-            currentPrice.doubleValue(), changeRate, null, null, null, StockMapper.toLogoUrl(stock), true);
+        MarketRankingResponse ranking = new MarketRankingResponse(stock.getStockCode(), stock.getStockName(),
+            stock.getSector(), currentPrice.doubleValue(), changeRate, null, null, null,
+            StockMapper.toLogoUrl(stock), true);
+        return new CachedPrice(snapshot, ranking);
+    }
+
+    private record CachedPrice(PriceSnapshot snapshot, MarketRankingResponse ranking) {
     }
 
     private Long parseLastPrice(String lastPrice) {

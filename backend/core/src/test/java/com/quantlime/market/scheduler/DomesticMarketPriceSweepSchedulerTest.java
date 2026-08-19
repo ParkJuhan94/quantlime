@@ -28,7 +28,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
@@ -120,11 +119,15 @@ class DomesticMarketPriceSweepSchedulerTest {
         assertThat(ranked.currentPrice()).isEqualTo(71400L);
         assertThat(ranked.changeRate()).isEqualTo(2.0);
 
-        ArgumentCaptor<PriceSnapshot> cacheCaptor = ArgumentCaptor.forClass(PriceSnapshot.class);
-        verify(priceCacheStore).save(cacheCaptor.capture());
-        assertThat(cacheCaptor.getValue().stockCode()).isEqualTo(STOCK_CODE);
-        assertThat(cacheCaptor.getValue().currentPrice()).isEqualTo(71400L);
-        assertThat(cacheCaptor.getValue().changeRate()).isEqualTo(2.0);
+        // 종목당 개별 save가 아니라 청크 단위 saveAll(파이프라인)로 바뀌었다
+        // (2026-08-19, PriceCacheStore.saveAll 참고).
+        ArgumentCaptor<List<PriceSnapshot>> cacheCaptor = ArgumentCaptor.forClass(List.class);
+        verify(priceCacheStore).saveAll(cacheCaptor.capture());
+        assertThat(cacheCaptor.getValue()).hasSize(1);
+        PriceSnapshot cachedSnapshot = cacheCaptor.getValue().get(0);
+        assertThat(cachedSnapshot.stockCode()).isEqualTo(STOCK_CODE);
+        assertThat(cachedSnapshot.currentPrice()).isEqualTo(71400L);
+        assertThat(cachedSnapshot.changeRate()).isEqualTo(2.0);
     }
 
     @Test
@@ -146,10 +149,11 @@ class DomesticMarketPriceSweepSchedulerTest {
         verify(domesticMarketRankingCache).update(captor.capture());
         assertThat(captor.getValue()).isEmpty();
 
-        ArgumentCaptor<PriceSnapshot> cacheCaptor = ArgumentCaptor.forClass(PriceSnapshot.class);
-        verify(priceCacheStore).save(cacheCaptor.capture());
-        assertThat(cacheCaptor.getValue().currentPrice()).isEqualTo(71400L);
-        assertThat(cacheCaptor.getValue().changeRate()).isNull();
+        ArgumentCaptor<List<PriceSnapshot>> cacheCaptor = ArgumentCaptor.forClass(List.class);
+        verify(priceCacheStore).saveAll(cacheCaptor.capture());
+        assertThat(cacheCaptor.getValue()).hasSize(1);
+        assertThat(cacheCaptor.getValue().get(0).currentPrice()).isEqualTo(71400L);
+        assertThat(cacheCaptor.getValue().get(0).changeRate()).isNull();
     }
 
     @Test
@@ -177,7 +181,12 @@ class DomesticMarketPriceSweepSchedulerTest {
         verify(domesticMarketRankingCache).update(captor.capture());
         assertThat(captor.getValue()).hasSize(1);
         assertThat(captor.getValue().get(0).stockCode()).isEqualTo(STOCK_CODE);
-        verify(priceCacheStore, times(1)).save(any(PriceSnapshot.class));
+        // 두 종목이 한 청크(단일 Toss 호출)에 섞여 있으므로 saveAll도 1회만
+        // 호출되고, 그 안에 담긴 스냅샷은 파싱 성공한 종목 1개뿐이어야 한다.
+        ArgumentCaptor<List<PriceSnapshot>> cacheCaptor = ArgumentCaptor.forClass(List.class);
+        verify(priceCacheStore, times(1)).saveAll(cacheCaptor.capture());
+        assertThat(cacheCaptor.getValue()).hasSize(1);
+        assertThat(cacheCaptor.getValue().get(0).stockCode()).isEqualTo(STOCK_CODE);
     }
 
     @Test

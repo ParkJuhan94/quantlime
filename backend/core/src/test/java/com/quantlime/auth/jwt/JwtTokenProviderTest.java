@@ -50,6 +50,38 @@ class JwtTokenProviderTest {
     }
 
     @Test
+    @DisplayName("[parseToken은 한 번의 파싱으로 사용자ID/권한/리프레시여부를 함께 반환한다]")
+    void parseToken_accessToken_returnsAllFieldsAtOnce() {
+        // given
+        Long userId = 1L;
+        String accessToken = jwtTokenProvider.createAccessToken(userId, UserRole.USER);
+
+        // when
+        JwtTokenProvider.ParsedToken parsed = jwtTokenProvider.parseToken(accessToken);
+
+        // then
+        assertThat(parsed.userId()).isEqualTo(userId);
+        assertThat(parsed.role()).isEqualTo(UserRole.USER);
+        assertThat(parsed.isRefreshToken()).isFalse();
+    }
+
+    @Test
+    @DisplayName("[parseToken은 리프레시 토큰에 대해 role=null, isRefreshToken=true를 반환한다]")
+    void parseToken_refreshToken_returnsNullRoleAndRefreshTrue() {
+        // given
+        Long userId = 1L;
+        String refreshToken = jwtTokenProvider.createRefreshToken(userId);
+
+        // when
+        JwtTokenProvider.ParsedToken parsed = jwtTokenProvider.parseToken(refreshToken);
+
+        // then
+        assertThat(parsed.userId()).isEqualTo(userId);
+        assertThat(parsed.role()).isNull();
+        assertThat(parsed.isRefreshToken()).isTrue();
+    }
+
+    @Test
     @DisplayName("[형식이 올바르지 않은 토큰을 검증하면 예외가 발생한다]")
     void validate_malformedToken_throwsUnauthorizedException() {
         // given
