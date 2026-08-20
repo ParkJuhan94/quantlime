@@ -154,6 +154,14 @@ resilience4j:
         max-concurrent-calls: 5
 
 app:
+  datasource:
+    replica:
+      # 로컬 primary-replica 복제 검증(2026-08-20)에서만 켠다 - 기본은
+      # false라 DataSourceConfig 자체가 로드되지 않고 Spring Boot 기본
+      # 단일 DataSource로 동작한다. scripts/setup-replication.sh로 replica를
+      # 구성한 뒤 DB_REPLICA_ENABLED=true로 재기동해 라우팅을 검증할 것.
+      enabled: ${DB_REPLICA_ENABLED:false}
+      url: jdbc:mysql://${MYSQL_REPLICA_HOST:localhost}:${MYSQL_REPLICA_PORT:3309}/${MYSQL_DATABASE:quantlime}?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
   cors:
     allowed-origin: ${APP_CORS_ALLOWED_ORIGIN:http://localhost:3001}
   cookie:

@@ -1,0 +1,43 @@
+# 로컬 DB 복제(주/부) 검증 전용 오버레이 - 기본 docker-compose.yml 위에
+# 얹어서만 쓴다(단독 실행 불가, mysql 서비스가 없음):
+#
+#   docker-compose -f docker-compose.yml -f docker-compose.replica.yml up -d mysql-replica
+#
+# 평소 개발(`docker-compose up -d` / `make infra`)에는 포함되지 않는다 -
+# 복제는 이번 세션의 로컬 검증 목적이라 상시 기동 리소스를 늘릴 이유가
+# 없다. 초기 동기화는 scripts/setup-replication.sh가 수행한다(빈 복제본에
+# GTID만 걸면 과거 binlog가 없어 실패하므로 덤프 기반으로 시작해야 함).
+services:
+  mysql-replica:
+    image: mysql:8.0
+    container_name: quantlime-mysql-replica
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-quantlime}
+    ports:
+      - "3309:3306"
+    volumes:
+      - mysql_replica_data:/var/lib/mysql
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    # read-only/super-read-only은 여기서 켜지 않는다 - 최초 부팅 시
+    # mysql 공식 이미지의 엔트리포인트 스크립트 자체가 root 비밀번호
+    # 설정 등 초기화 SQL을 실행해야 하는데, 이 플래그가 있으면 그 초기화
+    # 쓰기까지 막혀 root 비밀번호가 미설정 상태로 남는다(2026-08-19 실측
+    # - ERROR 1290 (HY000): running with the --super-read-only option).
+    # 대신 scripts/setup-replication.sh가 초기 덤프 적재까지 끝낸
+    # 뒤 SET PERSIST로 켠다.
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --default-time-zone=+09:00
+      --server-id=2
+      --gtid-mode=ON
+      --enforce-gtid-consistency=ON
+
+volumes:
+  mysql_replica_data:
