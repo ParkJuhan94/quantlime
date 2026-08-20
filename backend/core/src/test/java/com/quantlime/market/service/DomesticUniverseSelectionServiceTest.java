@@ -84,7 +84,7 @@ class DomesticUniverseSelectionServiceTest {
     }
 
     @Test
-    @DisplayName("[선정된 종목만 400일 목표로 2차 백필한다]")
+    @DisplayName("[선정된 종목만 520일 목표로 2차 백필한다]")
     void selectAndBackfillUniverse_deepensOnlySelected() {
         // given
         given(stockMasterService.getAllListedStocks())
@@ -96,8 +96,8 @@ class DomesticUniverseSelectionServiceTest {
         domesticUniverseSelectionService.selectAndBackfillUniverse();
 
         // then
-        verify(domesticDailyPriceService, times(1)).backfillHistoryIfNeeded("005930", 400);
-        verify(domesticDailyPriceService, never()).backfillHistoryIfNeeded(eq("000660"), eq(400));
+        verify(domesticDailyPriceService, times(1)).backfillHistoryIfNeeded("005930", 520);
+        verify(domesticDailyPriceService, never()).backfillHistoryIfNeeded(eq("000660"), eq(520));
     }
 
     @Test

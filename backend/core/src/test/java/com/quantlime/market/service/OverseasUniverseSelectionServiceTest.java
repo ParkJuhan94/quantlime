@@ -85,7 +85,7 @@ class OverseasUniverseSelectionServiceTest {
     }
 
     @Test
-    @DisplayName("[선정된 종목만 400일 목표로 2차 백필한다]")
+    @DisplayName("[선정된 종목만 520일 목표로 2차 백필한다]")
     void selectAndBackfillUniverse_deepensOnlySelected() {
         // given
         given(stockMasterService.getAllListedStocks()).willReturn(List.of(
@@ -100,9 +100,9 @@ class OverseasUniverseSelectionServiceTest {
 
         // then
         verify(overseasDailyPriceBackfillService, times(1))
-            .backfillHistoryIfNeeded("AAPL", 400);
+            .backfillHistoryIfNeeded("AAPL", 520);
         verify(overseasDailyPriceBackfillService, times(0))
-            .backfillHistoryIfNeeded(eq("MSFT"), eq(400));
+            .backfillHistoryIfNeeded(eq("MSFT"), eq(520));
     }
 
     private Stock stock(String code, String name, MarketType marketType) {
