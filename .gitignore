@@ -70,6 +70,12 @@ docs/PERFORMANCE.md
 # 사유로 로컬 전용 전환. 과거 커밋(fb571fc)엔 남겨두고 추적만 제외
 # (2026-08-20)
 docs/LOAD_TESTING.md
+# 채용공고 정리 - RESUME_ROADMAP.md와 동일한 사유(개인 구직 문서)로
+# 로컬 전용(2026-08-20). 노트 하나=공고 하나 구조(Bases)로 전환하며
+# job-postings/ 폴더와 .base 뷰 파일도 함께 제외 대상에 추가
+docs/JOB_POSTINGS.md
+docs/JOB_POSTINGS.base
+docs/job-postings/
 
 # 사용자 업로드 이미지(로컬 디스크 저장, FileStorageService 참고) - 실행 시
 # 자동 생성되는 런타임 데이터라 저장소에 커밋하지 않는다. 실행 위치(루트

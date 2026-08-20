@@ -16,7 +16,7 @@ import { durByEndpoint, serverErrors } from '../lib/metrics.js';
 import { abortThresholds } from '../config/options.js';
 
 // 엔드포인트별 프로파일. 시작값/상한은 이번 세션에 실측한 비용에서
-// 역산했다(각 항목 주석 참고 - docs/LOAD_TESTING.md와 plan 문서에 근거 기록).
+// 역산했다(각 항목 주석 참고 - docs/PERFORMANCE.md §3·§8과 plan 문서에 근거 기록).
 const PROFILES = {
   // 정적 200, I/O 없음. nginx+톰캣+2 vCPU 자체 상한을 잰다.
   health: {
@@ -62,7 +62,7 @@ const PROFILES = {
   },
   // 10초 TTL 힙 캐시(TossMarketRankingCache). scope/sort는 절대 랜덤화하지
   // 않는다 - 조합을 늘리면 캐시 키가 늘어 Toss 레이트리밋 소모가 커진다
-  // (docs/LOAD_TESTING.md 안전 규칙 참고). 다른 조합은 별도 짧은 런으로.
+  // (docs/PERFORMANCE.md §8-5 안전 규칙 참고). 다른 조합은 별도 짧은 런으로.
   ranking: {
     startRate: 20,
     steps: [100, 300, 700, 1200],
