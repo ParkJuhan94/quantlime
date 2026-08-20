@@ -34,6 +34,15 @@ services:
     volumes:
       - redis_data:/data
     restart: unless-stopped
+    # maxmemory/maxmemory-policy 미지정 시 기본 noeviction이라, 캐시
+    # 활용도를 높이면 컨테이너 메모리 한도에서 OOM-kill되거나 쓰기가
+    # 실패한다(2026-08-19 감사). volatile-lru는 TTL이 있는 키(캐시+
+    # 토큰/락 전부)만 축출 대상으로 삼는다 - eviction 정책은 Redis
+    # 인스턴스 전체에 적용되고 DB 인덱스로는 격리되지 않아, 캐시 키만
+    # 축출 대상으로 좁히려면 별도 컨테이너가 필요하다(이번엔 비용 대비
+    # 과함으로 판단해 채택 안 함). TTL 없는 키가 새로 생기면 그건 절대
+    # 축출되지 않는 안전망으로만 동작한다.
+    command: redis-server --maxmemory 200mb --maxmemory-policy volatile-lru
 
   # 로컬 dev 전용 구성 - 기존 Dockerfile로 의존성만 이미지에 굽고, 소스는
   # 볼륨 마운트로 덮어써서 --reload 핫리로드를 유지한다(코드 수정마다
