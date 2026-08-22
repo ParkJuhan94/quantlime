@@ -1,7 +1,7 @@
 # QuantLime 부하테스트 (k6)
 
-전체 가이드는 `docs/PERFORMANCE.md` §8(k6 하네스 실행 가이드) 참고
-(2026-08-20, 구 `docs/LOAD_TESTING.md`를 병합 - 그 문서는 로컬 전용이라
+전체 가이드는 `docs/02 Tech/PERFORMANCE.md` §8(k6 하네스 실행 가이드) 참고
+(2026-08-20, 구 `docs/02 Tech/LOAD_TESTING.md`를 병합 - 그 문서는 로컬 전용이라
 여기서 링크할 수 없다).
 이 파일은 디렉터리 구조만 요약한다.
 
