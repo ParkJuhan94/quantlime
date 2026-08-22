@@ -30,42 +30,25 @@ quant-engine/docs/SCORING_DESIGN.md
 # 스코어링/백테스팅 방법론 외부 리뷰(claude-fable-5) 전문 보존, 로컬 전용
 quant-engine/docs/BACKTEST_METHODOLOGY_REVIEW.md
 
-# 포트폴리오/이력서/채용공고 - 프로젝트 로드맵과 무관한 개인 커리어 문서라
-# 프로젝트 수명과 분리하기로 하고 실제 파일을 ~/career/로 이전했다
-# (2026-08-22). 아래 두 경로는 그 실제 위치를 가리키는 심볼릭 링크만
-# 남아있다 - Obsidian은 여전히 quantlime/docs 볼트 하나로 프로젝트 문서와
-# 함께 보되, 실체는 quantlime git 이력과 완전히 무관하다. 심볼릭 링크
-# 자체도 git이 별도 파일로 추적하므로 제외 대상에 포함해야 한다
-docs/00 Porfolio
-docs/01 Job-Postings
-# 큐레이션본을 Obsidian(docs/를 볼트로 사용)으로 열 때 생기는 볼트 설정/플러그인
-# 캐시 - 포트폴리오 내용과 무관하지만 같은 폴더 하위라 실수로 커밋되지 않게 제외
-docs/.obsidian/
-# 프로젝트 루트 자체를 Obsidian 볼트로도 열 때 생기는 동일한 개인 설정 캐시
+# docs/ 전체 - 이 프로젝트의 "문서 계층"은 애초에 git 추적 대상이 아니다
+# (`git ls-files -- docs`가 항상 빈 결과 - CLAUDE.md와 동일한 사유로
+# 로컬 전용, 2026-08-03 git-filter-repo로 과거 히스토리에서도 제거된
+# 이력 있음). 포트폴리오/이력서/채용공고는 프로젝트 밖 ~/career/로 실제
+# 이전하고 여기엔 심볼릭 링크만 남겼으며(2026-08-22), 나머지(CHANGELOG/
+# ROADMAP/DEVELOPMENT/DEPLOYMENT/RELIABILITY/PERFORMANCE/LOAD_TESTING
+# 등)도 전부 로컬 참고 문서다. 하위 폴더·파일을 개별 나열하던 이전 방식은
+# Obsidian에서 폴더를 재정렬/재명명할 때마다(2026-08-23 실제 발생) 매칭이
+# 깨지는 문제가 있어, 폴더 전체를 통째로 제외하는 방식으로 바꿨다
+docs/
+# 프로젝트 루트 자체를 Obsidian 볼트로도 열 때 생기는 개인 설정 캐시
 .obsidian/
 
-# 세션 작업 문서(내부 컨벤션·변경 이력·로드맵·운영 런북) - public 저장소
-# 노출 방지 목적으로 로컬 전용 전환(2026-08-03, git-filter-repo로 과거
-# 히스토리에서도 제거). 파일 자체는 로컬에 계속 유지하고 git 추적만 제외
+# 세션 작업 문서(내부 컨벤션) - public 저장소 노출 방지 목적으로 로컬 전용
+# 전환(2026-08-03, git-filter-repo로 과거 히스토리에서도 제거). 파일
+# 자체는 로컬에 계속 유지하고 git 추적만 제외
 CLAUDE.md
 backend/CLAUDE.md
 frontend/CLAUDE.md
-docs/03 Resource/CHANGELOG.md
-# 2026-08-19: CHANGELOG.md가 계속 커지는 문제로 지난 달치를 분리한 아카이브
-docs/03 Resource/CHANGELOG_ARCHIVE.md
-docs/03 Resource/ROADMAP.md
-docs/03 Resource/DEVELOPMENT.md
-docs/03 Resource/DEPLOYMENT.md
-# 장애 허용성 감사 결과(SPOF 목록·인프라 세부사항 포함) - 위와 동일한
-# 사유로 로컬 전용(2026-08-17)
-docs/02 Tech/RELIABILITY.md
-# 성능 개선 스코어카드(병목 실측치·인프라 세부사항 포함) - 위와 동일한
-# 사유로 로컬 전용(2026-08-20)
-docs/02 Tech/PERFORMANCE.md
-# 부하테스트 가이드(위험 경로 목록·인프라 세부사항 포함) - 위와 동일한
-# 사유로 로컬 전용 전환. 과거 커밋(fb571fc)엔 남겨두고 추적만 제외
-# (2026-08-20)
-docs/02 Tech/LOAD_TESTING.md
 
 # 사용자 업로드 이미지(로컬 디스크 저장, FileStorageService 참고) - 실행 시
 # 자동 생성되는 런타임 데이터라 저장소에 커밋하지 않는다. 실행 위치(루트
