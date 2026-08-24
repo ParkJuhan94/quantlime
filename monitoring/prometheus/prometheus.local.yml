@@ -1,0 +1,29 @@
+# 로컬 bare 프로세스(./gradlew :api:bootRun, 8080 라이브 세션 또는 8081
+# 부하테스트 전용 인스턴스) 전용 Prometheus 설정. 기존 monitoring/prometheus/
+# prometheus.yml은 docker-compose.prod.yml로 띄운 컨테이너화된 backend만
+# 스크랩 대상(backend:8080, 컨테이너 이름)으로 하드코딩돼 있어 로컬 개발
+# 프로세스는 못 본다 - 이 파일은 host.docker.internal로 호스트에 떠 있는
+# bare 프로세스를 직접 스크랩한다.
+#
+# 어느 포트로 띄우든(8080/8081) 자동으로 잡히도록 둘 다 타겟으로 등록했다 -
+# 안 뜬 쪽은 Prometheus가 그냥 down으로 표시할 뿐 무해하고, 대시보드 패널은
+# job="backend" 라벨만 보므로 손댈 필요가 없다(quantlime-loadtest.json 등
+# 기존 대시보드 그대로 재사용).
+#
+# alerting/rule_files는 의도적으로 뺐다 - 이 파일은 로컬 1회성 진단용이라
+# Alertmanager 컨테이너가 없다(운영용 alerts.yml과는 무관).
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: backend
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - host.docker.internal:8080
+          - host.docker.internal:8081

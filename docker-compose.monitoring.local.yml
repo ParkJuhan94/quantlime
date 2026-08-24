@@ -1,0 +1,55 @@
+# 로컬 bare 프로세스(gradlew bootRun) 대상 애플리케이션 관측 스택(Prometheus
+# + Grafana) - 8080/8081 어느 포트로 띄우든 잡는다(prometheus.local.yml 참고).
+#
+# docker-compose.monitoring.yml과 별도 파일인 이유: 그건 docker-compose.prod.yml과
+# 반드시 함께 -f로 얹어야 하고(컨테이너화된 backend/mysql/redis를 스크랩,
+# job="backend" 타겟이 컨테이너 이름 backend:8080) 알림(Alertmanager)까지
+# 포함한 운영 스택이다. 이 파일은 반대로 그 컨테이너들과 완전히 무관하게
+# 호스트에서 직접 실행 중인 bare 프로세스만 보는 로컬 1회성 진단용이라 -
+# 같은 job명 "backend"가 서로 다른 타겟을 가리키게 되므로 두 스택을 동시에
+# 띄우면 안 된다(port 3002/9090이 어차피 겹쳐서 물리적으로도 동시 기동 불가).
+# 기존 Grafana 프로비저닝(대시보드 4종, 데이터소스)은 그대로 재사용한다.
+#
+#   docker compose -f docker-compose.monitoring.local.yml up -d
+#   docker compose -f docker-compose.monitoring.local.yml down
+name: quantlime-monitoring-local
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: quantlime-local-prometheus
+    volumes:
+      - ./monitoring/prometheus/prometheus.local.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_local_data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=2d
+    extra_hosts:
+      # Docker Desktop(macOS)은 host.docker.internal을 기본 지원하지만,
+      # Linux 등 다른 환경에서도 동작하도록 명시적으로 게이트웨이를 등록.
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    container_name: quantlime-local-grafana
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_local_data:/var/lib/grafana
+    environment:
+      # 로컬 1회성 진단용이라 .env.prod 시크릿 없이 고정값 사용 - 외부 노출
+      # 없음(로컬호스트 3002만 바인딩).
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "3002:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  prometheus_local_data:
+  grafana_local_data:
