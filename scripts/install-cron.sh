@@ -17,8 +17,10 @@ LOG_DIR="$QUANTLIME_DIR/logs"
 mkdir -p "$LOG_DIR"
 
 BACKUP_MARKER="# quantlime-backup-mysql"
+UPLOADS_MARKER="# quantlime-backup-uploads"
 
 BACKUP_LINE="0 3 * * * $QUANTLIME_DIR/scripts/backup-mysql.sh >> $LOG_DIR/backup-mysql.log 2>&1 $BACKUP_MARKER"
+UPLOADS_LINE="15 3 * * * $QUANTLIME_DIR/scripts/backup-uploads.sh >> $LOG_DIR/backup-uploads.log 2>&1 $UPLOADS_MARKER"
 
 current_crontab="$(crontab -l 2>/dev/null || true)"
 
@@ -30,6 +32,14 @@ $BACKUP_LINE"
     echo "[install-cron] MySQL 백업(매일 03:00) 등록"
 else
     echo "[install-cron] MySQL 백업 - 이미 등록됨, 건너뜀"
+fi
+
+if ! grep -qF "$UPLOADS_MARKER" <<< "$new_crontab"; then
+    new_crontab="$new_crontab
+$UPLOADS_LINE"
+    echo "[install-cron] 업로드 이미지 백업(매일 03:15) 등록"
+else
+    echo "[install-cron] 업로드 이미지 백업 - 이미 등록됨, 건너뜀"
 fi
 
 # 앞뒤 빈 줄 정리 후 반영
