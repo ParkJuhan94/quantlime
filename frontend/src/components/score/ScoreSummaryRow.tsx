@@ -30,8 +30,8 @@ type ScoreSummaryRowProps =
 // 어느 등급이 활성인지도 노출하면 안 되므로(등급 자체가 스코어의 결론이라
 // 게이팅이 무력화됨) 5칸 전부 비활성 스타일로 그리고, 숫자 자리는
 // PremiumGate가 블러+CTA로 덮는다(components/common/PremiumGate 참고).
-export function ScoreSummaryRow({ score, locked = false }: ScoreSummaryRowProps) {
-  if (locked) {
+export function ScoreSummaryRow(props: ScoreSummaryRowProps) {
+  if (props.locked) {
     return (
       <div className="max-w-xl flex-1 rounded-2xl border border-gray-100 bg-gradient-to-br from-white to-gray-50 p-4">
         <div className="mb-1.5 flex items-center justify-between">
@@ -57,6 +57,7 @@ export function ScoreSummaryRow({ score, locked = false }: ScoreSummaryRowProps)
     )
   }
 
+  const { score } = props
   return (
     <div className="max-w-xl flex-1 rounded-2xl border border-gray-100 bg-gradient-to-br from-white to-gray-50 p-4">
       <div className="mb-1.5 flex items-center justify-between">
