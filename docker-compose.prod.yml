@@ -155,6 +155,10 @@ services:
     container_name: quantlime-prod-frontend
     ports:
       - "80:80"
+    volumes:
+      # Let's Encrypt HTTP-01 챌린지 webroot - 호스트에서 certbot이 이 경로에
+      # 쓰면 컨테이너의 nginx가 같은 경로를 서빙(nginx.conf 참고)
+      - ./certbot-webroot:/var/www/certbot:ro
     depends_on:
       - backend
     restart: on-failure:5
