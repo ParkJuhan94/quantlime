@@ -66,8 +66,19 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            set -euo pipefail
             cd ~/quantlime
-            git pull
+            # git pull(fetch+merge) 대신 fetch+reset --hard로 - 로컬 브랜치가
+            # 어떤 이유로든(과거 히스토리 재작성, 로컬 커밋 잔존 등) origin과
+            # divergent해지면 pull은 "Need to specify how to reconcile
+            # branches"로 실패하거나, 실패해도 set -e 없이는 스크립트가
+            # 조용히 다음 줄로 넘어가 옛 코드로 계속 배포되는 사고가 실제로
+            # 있었다(2026-09 AWS 계정 이전 중 발견 - 몇 달간 재배포가 반영
+            # 안 되고 있었음). reset --hard는 항상 origin과 정확히 일치시키므로
+            # 이 실패 모드 자체가 원천 차단된다.
+            git fetch origin
+            git reset --hard origin/main
+            echo "deployed commit: $(git rev-parse --short HEAD) ($(git log -1 --format=%s))"
             docker compose -f docker-compose.prod.yml -f docker-compose.monitoring.yml --env-file .env.prod pull
             docker compose -f docker-compose.prod.yml -f docker-compose.monitoring.yml --env-file .env.prod up -d
             docker image prune -f
