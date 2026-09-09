@@ -198,17 +198,23 @@ public class DevController {
         + "발견해 도입, docs/CHANGELOG.md 참고). 이미 저장된 backtest_daily_score를 그대로 쓰므로 "
         + "run-universe가 먼저 실행돼 있어야 한다. market 생략 시 4개 시장(KOSPI/KOSDAQ/NASDAQ/NYSE) "
         + "전부, 지정 시 그 시장만(축2 x horizon4=8개 조합). nullTest=true면 조합마다 순환이동 "
-        + "널 분포까지 계산해 훨씬 오래 걸린다(조합당 반복 200회).")
+        + "널 분포까지 계산해 훨씬 오래 걸린다 - nullRepeats(기본 200)로 반복 횟수를 조절할 수 있다. "
+        + "실측 결과 quant-engine이 다른 배치(기동 캐치업 등)와 CPU를 나눠 쓰는 로컬 환경에서는 "
+        + "200회가 read timeout(60초)을 넘길 수 있어, 그럴 땐 더 작은 값(예: 50)으로 낮춰서 쓸 것 - "
+        + "여러 시장을 동시에 여러 요청으로 병렬 호출하지 말 것(서킷브레이커를 공유해 한쪽이 "
+        + "느려지면 나머지가 전부 실패한다 - 2026-08 실측으로 발견).")
     public ResponseEntity<String> triggerCrossSectionalBacktest(
             @RequestParam(required = false) String market,
             @RequestParam String scoreVersion,
-            @RequestParam(defaultValue = "false") boolean nullTest) {
-        log.info("[dev] 횡단면 백테스트 수동 트리거 시작: market={}, scoreVersion={}, nullTest={}",
-            market, scoreVersion, nullTest);
+            @RequestParam(defaultValue = "false") boolean nullTest,
+            @RequestParam(defaultValue = "200") int nullRepeats) {
+        log.info("[dev] 횡단면 백테스트 수동 트리거 시작: market={}, scoreVersion={}, nullTest={}, nullRepeats={}",
+            market, scoreVersion, nullTest, nullRepeats);
         if (market == null) {
-            crossSectionalBacktestService.runAllMarkets(scoreVersion, nullTest);
+            crossSectionalBacktestService.runAllMarkets(scoreVersion, nullTest, nullRepeats);
         } else {
-            crossSectionalBacktestService.runForMarket(MarketType.valueOf(market), scoreVersion, nullTest);
+            crossSectionalBacktestService.runForMarket(
+                MarketType.valueOf(market), scoreVersion, nullTest, nullRepeats);
         }
         log.info("[dev] 횡단면 백테스트 수동 트리거 완료");
         return ResponseEntity.ok("횡단면 백테스트 완료");

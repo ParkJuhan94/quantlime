@@ -58,7 +58,7 @@ class CrossSectionalBacktestServiceTest {
     @Test
     @DisplayName("[벤치마크 매핑이 없는 시장(코넥스)은 UNSUPPORTED_MARKET 예외를 던진다]")
     void runForMarket_unsupportedMarket_throwsException() {
-        assertThatThrownBy(() -> crossSectionalBacktestService.runForMarket(MarketType.KONEX, SCORE_VERSION, false))
+        assertThatThrownBy(() -> crossSectionalBacktestService.runForMarket(MarketType.KONEX, SCORE_VERSION, false, 200))
             .isInstanceOf(ValidationException.class)
             .hasFieldOrPropertyWithValue("code", BacktestErrorCode.UNSUPPORTED_MARKET.getCode());
         verify(pythonEngineClient, never()).runCrossSectionalBacktest(any());
@@ -71,7 +71,7 @@ class CrossSectionalBacktestServiceTest {
         given(stockMasterService.getAllListedStocks()).willReturn(List.of(stock("AAPL", MarketType.NASDAQ)));
 
         // when
-        crossSectionalBacktestService.runForMarket(MarketType.KOSPI, SCORE_VERSION, false);
+        crossSectionalBacktestService.runForMarket(MarketType.KOSPI, SCORE_VERSION, false, 200);
 
         // then
         verify(pythonEngineClient, never()).runCrossSectionalBacktest(any());
@@ -87,7 +87,7 @@ class CrossSectionalBacktestServiceTest {
             .willReturn(List.of());
 
         // when
-        crossSectionalBacktestService.runForMarket(MarketType.KOSPI, SCORE_VERSION, false);
+        crossSectionalBacktestService.runForMarket(MarketType.KOSPI, SCORE_VERSION, false, 200);
 
         // then
         verify(pythonEngineClient, never()).runCrossSectionalBacktest(any());
@@ -106,7 +106,7 @@ class CrossSectionalBacktestServiceTest {
         given(pythonEngineClient.runCrossSectionalBacktest(any())).willReturn(apiResponse(5));
 
         // when
-        crossSectionalBacktestService.runForMarket(MarketType.KOSPI, SCORE_VERSION, false);
+        crossSectionalBacktestService.runForMarket(MarketType.KOSPI, SCORE_VERSION, false, 200);
 
         // then
         verify(pythonEngineClient, times(8)).runCrossSectionalBacktest(any());
@@ -128,7 +128,7 @@ class CrossSectionalBacktestServiceTest {
             .willReturn(apiResponse(10));
 
         // when: 예외를 던지지 않고 정상적으로 반환되어야 한다
-        crossSectionalBacktestService.runForMarket(MarketType.KOSPI, SCORE_VERSION, false);
+        crossSectionalBacktestService.runForMarket(MarketType.KOSPI, SCORE_VERSION, false, 200);
 
         // then: 8번 모두 시도되고, 실패한 1건을 제외한 7건만 저장된다
         verify(pythonEngineClient, times(8)).runCrossSectionalBacktest(any());
@@ -142,7 +142,7 @@ class CrossSectionalBacktestServiceTest {
         given(stockMasterService.getAllListedStocks()).willReturn(List.of());
 
         // when
-        crossSectionalBacktestService.runAllMarkets(SCORE_VERSION, false);
+        crossSectionalBacktestService.runAllMarkets(SCORE_VERSION, false, 200);
 
         // then: 시장 4개(KOSPI/KOSDAQ/NASDAQ/NYSE) 각각에 대해 getAllListedStocks가 호출된다
         verify(stockMasterService, times(4)).getAllListedStocks();

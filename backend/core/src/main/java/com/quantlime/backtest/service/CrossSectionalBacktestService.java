@@ -49,7 +49,6 @@ public class CrossSectionalBacktestService {
     // BacktestService.OHLCV_LOOKBACK_CALENDAR_DAYS와 동일 - 벤치마크 조회
     // 구간을 종목 스코어 이력 구간과 맞춰야 inner join에서 손실이 없다.
     private static final int LOOKBACK_CALENDAR_DAYS = 750;
-    private static final int NULL_TEST_REPEATS = 200;
 
     private final StockMasterService stockMasterService;
     private final BacktestDailyScoreRepository backtestDailyScoreRepository;
@@ -64,7 +63,7 @@ public class CrossSectionalBacktestService {
      * 좁힌 이유는 quant-engine의 CrossSectionalBacktestRequest 문서 참고
      * (500종목 규모에서 조합을 한 호출에 몰아넣으면 read timeout을 넘김).
      */
-    public void runForMarket(MarketType market, String scoreVersion, boolean nullTest) {
+    public void runForMarket(MarketType market, String scoreVersion, boolean nullTest, int nullRepeats) {
         String benchmarkIndexCode = BENCHMARK_INDEX_CODE.get(market);
         if (benchmarkIndexCode == null) {
             throw new ValidationException(BacktestErrorCode.UNSUPPORTED_MARKET);
@@ -95,23 +94,24 @@ public class CrossSectionalBacktestService {
 
         for (BacktestAxis axis : BacktestAxis.values()) {
             for (int horizonDays : HORIZONS) {
-                runOne(market, scoreVersion, dailyScoresByStock, benchmarkPrices, axis, horizonDays, nullTest);
+                runOne(market, scoreVersion, dailyScoresByStock, benchmarkPrices, axis, horizonDays,
+                    nullTest, nullRepeats);
             }
         }
     }
 
-    public void runAllMarkets(String scoreVersion, boolean nullTest) {
-        BENCHMARK_INDEX_CODE.keySet().forEach(market -> runForMarket(market, scoreVersion, nullTest));
+    public void runAllMarkets(String scoreVersion, boolean nullTest, int nullRepeats) {
+        BENCHMARK_INDEX_CODE.keySet().forEach(market -> runForMarket(market, scoreVersion, nullTest, nullRepeats));
     }
 
     private void runOne(MarketType market, String scoreVersion,
                         Map<String, List<BacktestDailyScore>> dailyScoresByStock,
                         List<BenchmarkIndex> benchmarkPrices, BacktestAxis axis, int horizonDays,
-                        boolean nullTest) {
+                        boolean nullTest, int nullRepeats) {
         try {
             CrossSectionalBacktestApiRequest request = CrossSectionalBacktestMapper.toApiRequest(
                 market, scoreVersion, dailyScoresByStock, benchmarkPrices, axis, horizonDays,
-                nullTest, NULL_TEST_REPEATS);
+                nullTest, nullRepeats);
             CrossSectionalBacktestApiResponse response = pythonEngineClient.runCrossSectionalBacktest(request);
             CrossSectionalBacktestResult result = CrossSectionalBacktestMapper.toResult(
                 market, axis, BacktestSampleSplit.FULL, LocalDate.now(), response);
