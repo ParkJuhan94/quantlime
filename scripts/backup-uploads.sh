@@ -19,6 +19,12 @@ set -euo pipefail
 QUANTLIME_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="$QUANTLIME_DIR/.env.prod"
 VOLUME_NAME="quantlime-prod_upload_data"
+# backup-mysql.sh와 동일한 이유로 성공 시각을 node-exporter textfile
+# collector에 남긴다 - set -e라 실패하면 여기까지 오지 못하므로, 이
+# 타임스탬프가 안 갱신되는 것 자체가 "백업이 조용히 실패 중"이라는
+# 신호가 된다(UploadsBackupStale 알림). 도입 당시(2026-09-05)엔 이
+# 기록이 빠져 있어 실패를 알 수단이 전혀 없었다.
+METRIC_DIR="$QUANTLIME_DIR/monitoring/textfile-collector"
 
 if [ ! -f "$ENV_FILE" ]; then
     echo "[backup-uploads] $ENV_FILE 이 없습니다." >&2
@@ -37,5 +43,16 @@ echo "[backup-uploads] 동기화 시작: $VOLUME_NAME -> s3://$BACKUP_S3_BUCKET/
 docker run --rm \
     -v "$VOLUME_NAME":/data:ro \
     amazon/aws-cli s3 sync /data "s3://$BACKUP_S3_BUCKET/uploads/" --region "$AWS_REGION"
+
+# 임시 파일에 쓴 뒤 rename - node-exporter가 스크랩 중간에 반쯤 쓰인 파일을
+# 읽지 않게 하기 위함(공식 권장 패턴, backup-mysql.sh와 동일).
+mkdir -p "$METRIC_DIR"
+METRIC_TMP="$METRIC_DIR/uploads_backup.prom.tmp"
+{
+    echo "# HELP uploads_backup_last_success_timestamp_seconds 마지막으로 성공한 업로드 이미지 백업의 유닉스 타임스탬프"
+    echo "# TYPE uploads_backup_last_success_timestamp_seconds gauge"
+    echo "uploads_backup_last_success_timestamp_seconds $(date +%s)"
+} > "$METRIC_TMP"
+mv "$METRIC_TMP" "$METRIC_DIR/uploads_backup.prom"
 
 echo "[backup-uploads] 완료"

@@ -113,8 +113,8 @@ groups:
           summary: "퀀트 엔진 호출 실패율 20% 초과"
           description: "스코어 재계산 호출이 실패해 직전 스코어로 fallback되는 비율이 높습니다(ScoreService/PythonEngineClient)."
 
-  # --- 백업(scripts/backup-mysql.sh가 node-exporter textfile collector로
-  # 직접 기록하는 성공 시각) ---
+  # --- 백업(scripts/backup-mysql.sh·backup-uploads.sh가 node-exporter
+  # textfile collector로 직접 기록하는 성공 시각) ---
   - name: quantlime-backup
     rules:
       - alert: MysqlBackupStale
@@ -125,6 +125,15 @@ groups:
         annotations:
           summary: "MySQL 백업이 26시간 이상 갱신되지 않음"
           description: "매일 03:00 크론(scripts/backup-mysql.sh)이 26시간 이상 성공하지 못했습니다 - 백업 자체가 조용히 실패하고 있을 수 있습니다(set -e라 실패 시 이 메트릭이 갱신되지 않음)."
+
+      - alert: UploadsBackupStale
+        expr: time() - uploads_backup_last_success_timestamp_seconds > 93600
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "업로드 이미지 백업이 26시간 이상 갱신되지 않음"
+          description: "매일 03:15 크론(scripts/backup-uploads.sh)이 26시간 이상 성공하지 못했습니다 - 업로드 이미지는 EBS 볼륨 손실 시 S3 백업이 유일한 복구 수단입니다(2026-09-10 추가, 그 전까지는 실패를 알 수단이 없었음)."
 
   # --- 서킷브레이커(2026-08-17 도입, resilience4j-micrometer가 노출) ---
   # toss/quant-engine/upbit/naver-finance 4개 인스턴스만 존재(application.yml
