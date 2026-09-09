@@ -31,7 +31,7 @@ import org.springframework.stereotype.Component;
  *
  * <p>이 프로젝트의 다른 캐시 10개는 전부 {@code synchronized refresh()}가
  * 갱신 I/O(대개 외부 HTTP 호출)를 요청 스레드에서 직접 기다리는 패턴인데,
- * 그 패턴이 만드는 thundering herd 위험(RELIABILITY.md 참고, 개선은 이후
+ * 그 패턴이 만드는 thundering herd 위험(docs/00-sre/SRE.md "캐시" 절 참고, 개선은 이후
  * Phase에서 나머지 캐시에도 적용 예정)을 새 캐시에 물려주지 않기 위해
  * 이 캐시는 처음부터 stale-while-revalidate로 만든다: TTL이 지나도 기존
  * 값을 즉시 반환하면서 갱신은 백그라운드로 한 번만 트리거한다. 갱신

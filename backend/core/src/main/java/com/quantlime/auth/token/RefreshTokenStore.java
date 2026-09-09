@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
  * 실패를 조용히 넘기면 위조되지 않은 토큰까지 로그인 실패로 잘못 처리하거나
  * (find 실패를 "토큰 없음"으로 오인) 반대로 무효화가 안 먹히는 것처럼 보일
  * 수 있다. Redis가 죽으면 로그인/재발급이 그대로 실패(fail-closed)하는 게
- * 맞는 동작이다(2026-08-17, docs/RELIABILITY.md 참고).
+ * 맞는 동작이다(2026-08-17, docs/00-sre/SRE.md "캐시" 절 참고).
  */
 @Component
 @RequiredArgsConstructor

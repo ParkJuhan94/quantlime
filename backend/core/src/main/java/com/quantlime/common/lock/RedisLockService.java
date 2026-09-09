@@ -26,7 +26,7 @@ import org.springframework.stereotype.Component;
  * 중복 실행 방지가 목적이라, 실패를 조용히 넘기고 "락 획득 성공"처럼
  * 동작하면 중복 실행을 막는다는 락의 존재 이유 자체가 무력화된다.
  * Redis가 죽으면 배치도 함께 fail-closed로 막히는 게 맞는 동작이다
- * (2026-08-17, PriceCacheStore와 다른 판단 - docs/RELIABILITY.md 참고).
+ * (2026-08-17, PriceCacheStore와 다른 판단 - docs/00-sre/SRE.md "캐시" 절 참고).
  */
 @Component
 @RequiredArgsConstructor

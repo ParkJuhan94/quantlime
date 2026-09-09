@@ -25,7 +25,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  *
  * <p>{@code @Transactional(readOnly = true)}가 이미 서비스 계층 35곳에
  * 붙어 있었지만 라우팅 데이터소스가 없어 지금까지는 아무 효과가 없었다
- * (docs/RELIABILITY.md 참고) - 이 클래스가 그 표시를 실제로 동작시킨다.
+ * (docs/00-sre/SRE.md "DB > 읽기/쓰기 분리" 참고) - 이 클래스가 그 표시를
+ * 실제로 동작시킨다.
  *
  * <p><b>{@link LazyConnectionDataSourceProxy}로 감싸는 게 필수다.</b> 이걸
  * 빼면 스프링이 트랜잭션 시작 시점(readOnly 여부가 결정되기 전)에 커넥션을

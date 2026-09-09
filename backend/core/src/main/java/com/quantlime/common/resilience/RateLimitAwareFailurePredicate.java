@@ -10,8 +10,8 @@ import java.util.function.Predicate;
  * 오히려 방해한다 - {@code TossApiClient.getDailyCandles}의 기존 동적 백오프
  * (Retry-After/X-RateLimit-Reset 헤더 기반)와 {@code TossTokenManager}의
  * 30초 쿨다운이 이미 이 신호를 별도로 다루고 있으므로, 서킷브레이커는 진짜
- * 장애(연결 실패/5xx/타임아웃)에만 반응하게 한다(2026-08-17, docs/RELIABILITY.md
- * 참고).
+ * 장애(연결 실패/5xx/타임아웃)에만 반응하게 한다(2026-08-17, docs/00-sre/SRE.md
+ * "외부 의존성 격리" 절 참고).
  *
  * <p>resilience4j의 {@code record-failure-predicate} 설정은 이 클래스를
  * 리플렉션으로(스프링 빈이 아니라 no-arg 생성자로) 인스턴스화하므로, 이

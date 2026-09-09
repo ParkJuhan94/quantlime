@@ -48,7 +48,7 @@ public class PaymentService {
     // Redis 장애 시 예외를 흡수하는 폴백은 두지 않는다 - 이 락이 막으려는
     // 건 이중 결제라, 실패를 조용히 넘기면 락이 아예 없는 것과 같아진다.
     // Redis가 죽으면 결제 흐름도 fail-closed로 막히는 게 맞는 동작이다
-    // (2026-08-17, PriceCacheStore와 다른 판단 - docs/RELIABILITY.md 참고).
+    // (2026-08-17, PriceCacheStore와 다른 판단 - docs/00-sre/SRE.md "캐시" 절 참고).
     // 이 락 자체의 알려진 한계(소유권 미검증 - RedisLockService의 UUID 토큰
     // 방식과 다름)는 결제 도메인 백로그로 별도 관리한다.
     private static final String SUBSCRIBE_LOCK_KEY_PREFIX = "subscription:subscribe-lock:";

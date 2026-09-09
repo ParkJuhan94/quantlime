@@ -32,7 +32,7 @@ public class PreviousCloseCache {
     // (신규상장 직후 등)이 하나라도 섞이면 그 종목은 priceFetcher가 영원히
     // 반환하지 않으므로 containsAll이 영구히 false가 되어, 100ms 주기 스윕이
     // 매 틱마다 배치 조회를 재실행했다(2,596종목 IN절 기준 60초 이상 실측,
-    // `docs/LOAD_TESTING.md`/plan 문서 B2 참고).
+    // `docs/00-sre/SRE.md` "캐시" 절 B2/plan 문서 참고).
     private volatile Set<String> triedStockCodes = Set.of();
     private volatile LocalDate cachedDate = LocalDate.MIN;
 

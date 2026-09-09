@@ -60,7 +60,7 @@ services:
     # innodb_buffer_pool_size`는 재시작 없이 즉시 반영됨). 전체 hot
     # 데이터셋(~1.1GB)을 다 못 덮지만 기존 대비 4배라 히트율이 유의미하게
     # 개선될 것으로 예상 - t3.medium 4GB에 컨테이너 11개가 경쟁하는 제약상
-    # 이 이상은 실측(k6 부하테스트, `docs/LOAD_TESTING.md`) 없이 올리지
+    # 이 이상은 실측(k6 부하테스트, `docs/00-sre/SRE.md` 부록 A) 없이 올리지
     # 않는다. buffer-pool-instances=1은 버퍼풀이 1GB 미만일 때 MySQL 공식
     # 권장값(인스턴스를 여러 개로 쪼개는 건 1GB 이상부터 의미가 있음).
 

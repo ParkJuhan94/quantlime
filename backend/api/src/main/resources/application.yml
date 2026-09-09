@@ -96,7 +96,7 @@ management:
         http.server.requests: 0.5,0.95,0.99
 
 # 서킷브레이커/벌크헤드(2026-08-17 도입) - toss/quant-engine/upbit/naver-finance
-# 4개 핵심 외부 클라이언트에 우선 적용(RELIABILITY.md 참고). 나머지 9개
+# 4개 핵심 외부 클라이언트에 우선 적용(docs/00-sre/SRE.md "외부 의존성 격리" 참고). 나머지 9개
 # 클라이언트(youtube/telegram/kis/kind/tradingview/oauth/slack/tosspayments)는
 # 배치 전용 경로라 타임아웃(위 HttpClientFactorySupport)만 적용하고 이번
 # 범위에서는 제외했다.
