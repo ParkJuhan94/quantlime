@@ -36,6 +36,13 @@ services:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=15d
+      # 규칙 파일은 볼륨 마운트라 배포 시 컨테이너 안에는 이미 반영되지만,
+      # 이 플래그가 없으면 그 변경을 읽어들일 방법이 HTTP 리로드가 아니라
+      # 컨테이너 재시작뿐이었다(2026-09-10 - UploadsBackupStale 알림 추가
+      # 배포 때 실제로 겪음, docs/00-sre/SRE.md "백업" 절 참고). 9090이
+      # 인바운드 방화벽으로 막혀 있어(SSH 터널로만 접근) 이 API를 외부에
+      # 노출하는 위험은 없다.
+      - --web.enable-lifecycle
     ports:
       - "9090:9090"
     restart: on-failure:5

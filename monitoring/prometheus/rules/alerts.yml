@@ -135,6 +135,31 @@ groups:
           summary: "업로드 이미지 백업이 26시간 이상 갱신되지 않음"
           description: "매일 03:15 크론(scripts/backup-uploads.sh)이 26시간 이상 성공하지 못했습니다 - 업로드 이미지는 EBS 볼륨 손실 시 S3 백업이 유일한 복구 수단입니다(2026-09-10 추가, 그 전까지는 실패를 알 수단이 없었음)."
 
+      # 위 두 *Stale 알림은 `time() - <메트릭> > 임계값` 형태라 메트릭이
+      # 아예 없으면(한 번도 성공한 적 없음) 빈 벡터가 되어 절대 발화하지
+      # 않는다 - 실제로 backup-uploads.sh가 실행 권한이 없어 5일 연속
+      # Permission denied로 실패하는 동안 이 사각지대에 걸려 무알림으로
+      # 지나갔다(2026-09-10 발견). absent()로 "메트릭 자체가 없다"를 별도로
+      # 잡는다. for: 25h는 배치가 하루 1회(24h 주기)라 최초 배포 직후
+      # 다음 실행 전까지의 정상적인 부재를 오탐으로 잡지 않기 위한 여유다.
+      - alert: MysqlBackupMetricMissing
+        expr: absent(mysql_backup_last_success_timestamp_seconds)
+        for: 25h
+        labels:
+          severity: warning
+        annotations:
+          summary: "MySQL 백업 성공 메트릭이 존재하지 않음"
+          description: "mysql_backup_last_success_timestamp_seconds 메트릭 자체가 없습니다 - 크론이 한 번도 성공하지 못했거나(예: 실행 권한 문제), textfile collector 경로 설정이 잘못됐을 수 있습니다. MysqlBackupStale과 달리 이 알림은 '오래됨'이 아니라 '존재하지 않음'을 감지합니다."
+
+      - alert: UploadsBackupMetricMissing
+        expr: absent(uploads_backup_last_success_timestamp_seconds)
+        for: 25h
+        labels:
+          severity: warning
+        annotations:
+          summary: "업로드 이미지 백업 성공 메트릭이 존재하지 않음"
+          description: "uploads_backup_last_success_timestamp_seconds 메트릭 자체가 없습니다 - 2026-09-05~09-09 실행 권한 결손으로 실제로 겪은 사각지대(Permission denied가 5일간 무알림으로 지나감)를 재발 방지하기 위해 추가했습니다."
+
   # --- 서킷브레이커(2026-08-17 도입, resilience4j-micrometer가 노출) ---
   # toss/quant-engine/upbit/naver-finance 4개 인스턴스만 존재(application.yml
   # resilience4j.circuitbreaker.instances 참고).
