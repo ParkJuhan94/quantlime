@@ -29,6 +29,7 @@ export function FeedPostCard({ post }: { post: FeedPostResponse }) {
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [deleteConfirming, setDeleteConfirming] = useState(false)
+  const [imageViewerOpen, setImageViewerOpen] = useState(false)
   const likePost = useLikeFeedPost()
   const unlikePost = useUnlikeFeedPost()
   const deletePost = useDeleteFeedPost()
@@ -128,11 +129,42 @@ export function FeedPostCard({ post }: { post: FeedPostResponse }) {
       <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-800">{post.title}</p>
 
       {post.imageUrl && (
-        <img
-          src={resolveUploadUrl(post.imageUrl)}
-          alt=""
-          className="mt-3 max-h-80 w-full rounded-xl object-cover"
-        />
+        <button
+          type="button"
+          onClick={() => setImageViewerOpen(true)}
+          className="mt-3 block w-full cursor-zoom-in overflow-hidden rounded-xl bg-gray-50"
+        >
+          <img
+            src={resolveUploadUrl(post.imageUrl)}
+            alt=""
+            className="max-h-80 w-full object-contain"
+          />
+        </button>
+      )}
+
+      {/* object-cover로 박스를 꽉 채우면 이미지가 잘려 보이는 문제가 있어
+          object-contain으로 전체가 보이게 하고, 원본을 더 크게 보고 싶을
+          때를 위해 클릭 시 확대 뷰어를 띄운다(2026-09-10 버그 리포트 - 잘림 +
+          클릭 무반응). */}
+      {post.imageUrl && imageViewerOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setImageViewerOpen(false)}
+        >
+          <img
+            src={resolveUploadUrl(post.imageUrl)}
+            alt=""
+            className="max-h-full max-w-full rounded-lg object-contain"
+          />
+          <button
+            type="button"
+            onClick={() => setImageViewerOpen(false)}
+            aria-label="닫기"
+            className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
+          >
+            ✕
+          </button>
+        </div>
       )}
 
       <div className="mt-3 flex items-center gap-4 text-xs text-gray-400">
