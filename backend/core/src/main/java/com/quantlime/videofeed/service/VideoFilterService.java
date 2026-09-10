@@ -10,6 +10,7 @@ import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -50,6 +51,14 @@ public class VideoFilterService {
     // 14일 이내 최근 영상 2개는 계속 SELECTED에 머물러 있었음).
     private static final int RETENTION_DAYS = 14;
 
+    // Video.publishedAt은 YoutubeVideoCollector가 SEOUL로 zone-strip해 저장한
+    // 값이라, 이와 비교하는 모든 "지금"은 bare LocalDateTime.now()(JVM 기본
+    // 타임존)가 아니라 이 zone을 명시해야 한다 - 프로덕션은 Dockerfile의
+    // TZ=Asia/Seoul 고정 덕에 우연히 맞았지만 CI(기본 UTC)에서 9시간 밀리는
+    // 버그를 실제로 재현해 확인함(2026-09-10, ChannelVelocityInitializationService
+    // 클래스 주석도 참고).
+    private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+
     private final VideoRepository videoRepository;
 
     @Transactional
@@ -68,7 +77,7 @@ public class VideoFilterService {
     // 담당한다.
     @Transactional(readOnly = true)
     public List<Video> findReevaluationCandidates(Channel channel) {
-        LocalDateTime cutoff = LocalDateTime.now().minusHours(VELOCITY_GRACE_HOURS);
+        LocalDateTime cutoff = LocalDateTime.now(SEOUL).minusHours(VELOCITY_GRACE_HOURS);
         return videoRepository.findByStatusAndPublishedAtBefore(VideoStatus.PENDING_REVIEW, cutoff)
             .stream()
             .filter(video -> video.getChannel().getId().equals(channel.getId()))
@@ -123,7 +132,7 @@ public class VideoFilterService {
         if (config.velocityMultiplier() <= 0) {
             return true;
         }
-        long hoursSincePublish = Duration.between(video.getPublishedAt(), LocalDateTime.now()).toHours();
+        long hoursSincePublish = Duration.between(video.getPublishedAt(), LocalDateTime.now(SEOUL)).toHours();
         if (hoursSincePublish < VELOCITY_GRACE_HOURS) {
             video.markPendingReview();
             return false;
@@ -132,7 +141,7 @@ public class VideoFilterService {
     }
 
     private String hardFilterRejectionReason(Video video, ChannelFilterConfig config) {
-        LocalDateTime retentionCutoff = LocalDateTime.now().minusDays(RETENTION_DAYS);
+        LocalDateTime retentionCutoff = LocalDateTime.now(SEOUL).minusDays(RETENTION_DAYS);
         if (video.getPublishedAt().isBefore(retentionCutoff)) {
             return "TOO_OLD_FOR_RETENTION(publishedAt=%s)".formatted(video.getPublishedAt());
         }

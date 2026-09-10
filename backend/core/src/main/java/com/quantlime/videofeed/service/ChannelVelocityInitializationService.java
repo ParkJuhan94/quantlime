@@ -83,7 +83,11 @@ public class ChannelVelocityInitializationService {
         }
         long viewCount = Long.parseLong(details.statistics().viewCount());
         LocalDateTime publishedAt = Instant.parse(item.snippet().publishedAt()).atZone(SEOUL).toLocalDateTime();
-        long hoursSincePublish = Math.max(Duration.between(publishedAt, LocalDateTime.now()).toHours(), 1);
+        // publishedAt이 SEOUL로 zone-strip된 값이라 bare LocalDateTime.now()(JVM
+        // 기본 타임존)와 비교하면 안 된다 - 프로덕션은 Dockerfile의 TZ=Asia/Seoul
+        // 고정 덕에 우연히 맞았지만, CI(ubuntu-latest 기본 UTC)에서 9시간이 밀려
+        // hoursSincePublish가 10→1로 잘못 계산되는 걸 실제로 재현해 확인함(2026-09-10).
+        long hoursSincePublish = Math.max(Duration.between(publishedAt, LocalDateTime.now(SEOUL)).toHours(), 1);
         return BigDecimal.valueOf(viewCount).divide(BigDecimal.valueOf(hoursSincePublish), 4, RoundingMode.HALF_UP);
     }
 

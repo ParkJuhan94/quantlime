@@ -11,6 +11,7 @@ import com.quantlime.videofeed.exception.VideoFeedErrorCode;
 import com.quantlime.videofeed.repository.ChannelRepository;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +32,11 @@ public class FeedCollectionFacade {
 
     private static final String LOCK_KEY = "lock:feed-collect";
     private static final Duration LOCK_TTL = Duration.ofMinutes(30);
+    // YoutubeVideoCollector.fetchNewPlaylistItems가 이 값을 SEOUL로 zone-strip된
+    // publishedAt과 비교한다 - bare LocalDateTime.now()(JVM 기본 타임존)로 저장하면
+    // CI(기본 UTC) 등 Seoul이 아닌 환경에서 어긋난다(VideoFilterService 클래스
+    // 주석과 동일 이유, 2026-09-10 확인).
+    private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
 
     private final RedisLockService redisLockService;
     private final ChannelRepository channelRepository;
@@ -117,7 +123,7 @@ public class FeedCollectionFacade {
     void updateLastCollectedAt(Long channelId) {
         Channel channel = channelRepository.findById(channelId)
             .orElseThrow(() -> new NotFoundException(VideoFeedErrorCode.NOT_FOUND_CHANNEL));
-        channel.updateLastCollectedAt(LocalDateTime.now());
+        channel.updateLastCollectedAt(LocalDateTime.now(SEOUL));
         channelRepository.save(channel);
     }
 }
