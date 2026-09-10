@@ -16,6 +16,11 @@ import java.util.List;
  * 제거했다 - 개별 글을 몇 개 뽑을지가 아니라 "그날 통과한 글 전부"가
  * 다이제스트 재료가 되므로 더 이상 의미가 없다.
  *
+ * <p>{@code content_include}(포함 키워드 화이트리스트)도 2026-09-10 제거했다 -
+ * insidertracking/Donmaek 두 채널 다 빈 배열로 남아 있어 필터 자체가 계속
+ * 스킵되는 죽은 설정이었고(리뷰 세션에서 화이트리스트를 채우기보다 제거하는
+ * 쪽으로 결정), 글자수+제외키워드만으로 노이즈는 이미 충분히 걸러지고 있었다.
+ *
  * <p>Channel 엔티티가 이 타입을 직접 필드로 갖기 때문에(텔레그램 채널도
  * Channel을 그대로 재사용) videofeed.domain에 둔다 - telegramfeed 패키지가
  * videofeed.domain을 단방향으로만 참조하는 설계를 지키기 위함(반대 방향
@@ -23,13 +28,11 @@ import java.util.List;
  */
 public record TelegramFilterConfig(
     @JsonProperty("min_char_count") int minCharCount,
-    @JsonProperty("content_exclude") List<String> contentExclude,
-    @JsonProperty("content_include") List<String> contentInclude
+    @JsonProperty("content_exclude") List<String> contentExclude
 ) {
 
     @JsonCreator
     public TelegramFilterConfig {
         contentExclude = contentExclude == null ? List.of() : contentExclude;
-        contentInclude = contentInclude == null ? List.of() : contentInclude;
     }
 }

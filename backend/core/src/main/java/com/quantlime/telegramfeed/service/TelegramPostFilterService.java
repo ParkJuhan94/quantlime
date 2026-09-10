@@ -73,10 +73,6 @@ public class TelegramPostFilterService {
         if (excludedKeyword != null) {
             return "CONTENT_EXCLUDE(keyword=%s)".formatted(excludedKeyword);
         }
-        if (!config.contentInclude().isEmpty()
-            && config.contentInclude().stream().noneMatch(keyword -> content.contains(keyword.toLowerCase(Locale.KOREAN)))) {
-            return "CONTENT_INCLUDE_MISSING";
-        }
         return null;
     }
 }

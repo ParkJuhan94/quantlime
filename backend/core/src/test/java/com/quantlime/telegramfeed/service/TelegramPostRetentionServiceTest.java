@@ -62,7 +62,7 @@ class TelegramPostRetentionServiceTest extends DataJpaTestSupport {
 
     private Channel channelOf(String handle) {
         return channelRepository.save(Channel.ofTelegram(handle, "테스트 채널", 30,
-            new TelegramFilterConfig(300, List.of(), List.of())));
+            new TelegramFilterConfig(300, List.of())));
     }
 
     private TelegramPost seedPost(Channel channel, long messageId, LocalDateTime publishedAt) {

@@ -40,9 +40,9 @@ public class TelegramChannelSeedInitializer implements ApplicationRunner {
         // 실제 수집 데이터로 확인해 200자로 낮췄다(2026-08-15). Donmaek은
         // 장문 에세이 채널이라 300자를 그대로 유지.
         seedIfAbsent("insidertracking", "미국 주식 인사이더", 30,
-            new TelegramFilterConfig(200, DEFAULT_CONTENT_EXCLUDE, List.of()));
+            new TelegramFilterConfig(200, DEFAULT_CONTENT_EXCLUDE));
         seedIfAbsent("Donmaek", "돈맥경화 연구소", 30,
-            new TelegramFilterConfig(300, DEFAULT_CONTENT_EXCLUDE, List.of()));
+            new TelegramFilterConfig(300, DEFAULT_CONTENT_EXCLUDE));
     }
 
     // channelRepository.save() 자체가 Spring Data 리포지토리 프록시를 통해

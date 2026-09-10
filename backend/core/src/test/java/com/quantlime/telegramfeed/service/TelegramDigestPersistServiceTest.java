@@ -44,7 +44,7 @@ class TelegramDigestPersistServiceTest {
 
     private Channel channelOf() {
         return Channel.ofTelegram("insidertracking", "테스트 채널", 30,
-            new TelegramFilterConfig(300, List.of(), List.of()));
+            new TelegramFilterConfig(300, List.of()));
     }
 
     private TelegramDigestPersistService newService() {

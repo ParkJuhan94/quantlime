@@ -39,6 +39,7 @@ public final class TelegramFeedMapper {
             channel.getProfileImageUrl(),
             toChannelUrl(channel),
             digest.getDigestDate(),
+            digest.getUpdatedAt(),
             sourcePostCount,
             summary,
             tickers.stream().map(TelegramFeedMapper::toTickerResponse).toList());
@@ -54,6 +55,7 @@ public final class TelegramFeedMapper {
             channel.getProfileImageUrl(),
             toChannelUrl(channel),
             digest.getDigestDate(),
+            digest.getUpdatedAt(),
             sourcePostUrls,
             payload.summary(),
             payload.keyPoints(),

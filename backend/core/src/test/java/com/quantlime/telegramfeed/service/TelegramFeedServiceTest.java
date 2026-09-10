@@ -60,7 +60,7 @@ class TelegramFeedServiceTest {
 
     private Channel channelOf() {
         Channel channel = Channel.ofTelegram("insidertracking", "테스트 채널", 30,
-            new TelegramFilterConfig(300, List.of(), List.of()));
+            new TelegramFilterConfig(300, List.of()));
         // countSourcePostsByDigest가 channel.getId()로 집계 키를 만들기 때문에
         // (2026-08-19 N+1 제거 리팩터링) 테스트에서도 id가 필요하다 - 실제
         // 영속화된 엔티티와 동일하게 미리 세팅해둔다.

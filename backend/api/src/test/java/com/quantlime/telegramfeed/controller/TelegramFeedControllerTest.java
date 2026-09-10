@@ -48,7 +48,7 @@ class TelegramFeedControllerTest extends ApiTestSupport {
     private TelegramDigest seedDigest(String handle, LocalDate digestDate, String tickerCode) {
         Channel channel = channelCache.computeIfAbsent(handle, h -> {
             Channel newChannel = Channel.ofTelegram(h, "테스트 채널", 30,
-                new TelegramFilterConfig(300, List.of(), List.of()));
+                new TelegramFilterConfig(300, List.of()));
             newChannel.updateProfileImageUrl("https://cdn.example.com/" + h + ".jpg");
             return channelRepository.save(newChannel);
         });
@@ -123,8 +123,8 @@ class TelegramFeedControllerTest extends ApiTestSupport {
     @DisplayName("[channelId로 필터링하면 해당 채널 다이제스트만 반환한다]")
     void getDigests_withChannelId_returnsOnlyThatChannelDigests() throws Exception {
         // given
-        Channel channelA = Channel.ofTelegram("channelA", "채널A", 30, new TelegramFilterConfig(300, List.of(), List.of()));
-        Channel channelB = Channel.ofTelegram("channelB", "채널B", 30, new TelegramFilterConfig(300, List.of(), List.of()));
+        Channel channelA = Channel.ofTelegram("channelA", "채널A", 30, new TelegramFilterConfig(300, List.of()));
+        Channel channelB = Channel.ofTelegram("channelB", "채널B", 30, new TelegramFilterConfig(300, List.of()));
         seedDigest("channelA", LocalDate.now(), null, channelRepository.save(channelA));
         TelegramDigest digestB = seedDigest("channelB", LocalDate.now(), null, channelRepository.save(channelB));
 
@@ -141,9 +141,9 @@ class TelegramFeedControllerTest extends ApiTestSupport {
     void getChannels_withoutAuth_returnsEnabledChannelsOrderedByPriority() throws Exception {
         // given
         Channel highPriority = channelRepository.save(Channel.ofTelegram(
-            "high", "우선순위높음", 10, new TelegramFilterConfig(300, List.of(), List.of())));
+            "high", "우선순위높음", 10, new TelegramFilterConfig(300, List.of())));
         Channel lowPriority = channelRepository.save(Channel.ofTelegram(
-            "low", "우선순위낮음", 20, new TelegramFilterConfig(300, List.of(), List.of())));
+            "low", "우선순위낮음", 20, new TelegramFilterConfig(300, List.of())));
 
         // when & then
         mockMvc.perform(get("/api/telegram-feed/channels"))
