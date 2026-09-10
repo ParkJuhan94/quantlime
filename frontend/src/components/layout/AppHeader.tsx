@@ -5,6 +5,7 @@ import { logout as logoutRequest } from '../../api/auth'
 import { SearchOverlay } from '../search/SearchOverlay'
 import { ProfileMenu } from './ProfileMenu'
 import { LoginModal } from '../auth/LoginModal'
+import { PlatformLogo } from '../common/PlatformLogo'
 
 const navLinkClassName = ({ isActive }: { isActive: boolean }) =>
   `rounded-lg px-2.5 py-1.5 text-sm transition hover:bg-gray-100 ${
@@ -100,10 +101,16 @@ export function AppHeader({ onLoggedOut }: AppHeaderProps) {
             피드
           </NavLink>
           <NavLink to="/videos" className={navLinkClassName}>
-            영상 요약
+            <span className="flex items-center gap-1.5">
+              <PlatformLogo platform="youtube" className="h-4 w-5" />
+              유튜브 요약
+            </span>
           </NavLink>
           <NavLink to="/telegram" className={navLinkClassName}>
-            텔레그램 요약
+            <span className="flex items-center gap-1.5">
+              <PlatformLogo platform="telegram" className="h-4 w-4" />
+              텔레그램 요약
+            </span>
           </NavLink>
         </nav>
 

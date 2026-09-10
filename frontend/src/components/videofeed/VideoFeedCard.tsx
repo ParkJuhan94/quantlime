@@ -100,6 +100,19 @@ export function VideoFeedCard({ video }: { video: VideoFeedItem }) {
                     </ul>
                   </div>
                 )}
+                {video.videoUrl && (
+                  <div className="mt-3">
+                    <p className="text-xs font-medium text-gray-500">원문 보기</p>
+                    <a
+                      href={video.videoUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-1 inline-block text-xs text-gray-500 hover:text-gray-700 hover:underline"
+                    >
+                      영상 보기
+                    </a>
+                  </div>
+                )}
               </>
             )}
           </div>

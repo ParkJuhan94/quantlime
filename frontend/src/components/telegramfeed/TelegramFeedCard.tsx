@@ -4,7 +4,7 @@ import { LoadingSpinner } from '../common/LoadingSpinner'
 import { ChannelAvatar } from '../common/ChannelAvatar'
 import { TickerChip } from '../common/TickerChip'
 import type { TelegramFeedDigest } from '../../types/telegramFeed'
-import { formatDayLabel } from '../../utils/dateFilter'
+import { formatDayLabel, formatUpdatedTimeLabel } from '../../utils/dateFilter'
 
 // VideoFeedCard(유튜브 요약)와 구조적으로 동일(Phase 8 P7-F2)하되, 텔레그램은
 // 채널×날짜 다이제스트(여러 글을 합친 요약, 2026-08-15 재설계)라 원문이
@@ -25,7 +25,13 @@ export function TelegramFeedCard({ digest }: { digest: TelegramFeedDigest }) {
           />
           <span>· {formatDayLabel(digest.digestDate)}</span>
         </div>
-        <span className="shrink-0 text-xs font-medium text-gray-400">게시물 {digest.sourcePostCount}개 종합</span>
+        <div className="flex shrink-0 flex-col items-end gap-0.5">
+          <span className="text-xs font-medium text-gray-400">게시물 {digest.sourcePostCount}개 종합</span>
+          {/* 다이제스트가 하루 중 계속 upsert로 갱신되므로, 지금 보이는 내용이
+              몇 시 기준 최신본인지 표시한다(리뷰 세션 Q2 - 버전 이력 없이
+              최소한의 신호만). */}
+          <span className="text-[11px] text-gray-400">{formatUpdatedTimeLabel(digest.updatedAt)}</span>
+        </div>
       </div>
 
       <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-gray-700">{digest.summary}</p>

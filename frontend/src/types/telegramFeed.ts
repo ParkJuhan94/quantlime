@@ -19,6 +19,9 @@ export interface TelegramFeedDigest {
   channelProfileImageUrl: string | null
   channelUrl: string
   digestDate: string
+  // 다이제스트는 하루 3회(08:30/13:30/20:30) upsert로 계속 덮어써진다 -
+  // 몇 시 기준 최신본인지 보여주기 위한 최소 대응(리뷰 세션 Q2, 2026-09-10).
+  updatedAt: string
   sourcePostCount: number
   summary: string
   tickers: TelegramFeedTicker[]
@@ -30,6 +33,7 @@ export interface TelegramFeedDigestDetail {
   channelProfileImageUrl: string | null
   channelUrl: string
   digestDate: string
+  updatedAt: string
   // 다이제스트가 여러 글을 합친 결과라 원문이 하나가 아니다 - 그날 재료가
   // 된 글의 원문 링크 목록(발행시각순).
   sourcePostUrls: string[]

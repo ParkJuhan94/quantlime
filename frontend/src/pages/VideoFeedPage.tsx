@@ -4,10 +4,11 @@ import { LoadingSpinner } from '../components/common/LoadingSpinner'
 import { EmptyState } from '../components/common/EmptyState'
 import { DateStepper } from '../components/common/DateStepper'
 import { FilterChipGroup } from '../components/common/FilterChipGroup'
+import { PlatformLogo } from '../components/common/PlatformLogo'
 import { useVideoFeedChannelsQuery, useVideoFeedQuery } from '../hooks/queries/useVideoFeed'
 import { useDateSkipNavigation } from '../hooks/useDateSkipNavigation'
 
-const DATE_COOKIE_NAME = 'videoFeedDate'
+const DATE_STORAGE_KEY = 'videoFeedDate'
 
 // 유튜브 투자 채널 신규 영상을 AI가 요약+종목 태깅한 결과를 최신순으로
 // 보여준다(Phase 8 P6, 2026-07-31). 글쓰기/좋아요 같은 사용자 상호작용이
@@ -18,7 +19,7 @@ const DATE_COOKIE_NAME = 'videoFeedDate'
 // TelegramFeedPage와 공유하는 공용 훅/컴포넌트로 추출돼 있다(Phase 8 P7-F1).
 export function VideoFeedPage() {
   const [selectedChannelId, setSelectedChannelId] = useState<number | undefined>(undefined)
-  const dateNav = useDateSkipNavigation({ cookieName: DATE_COOKIE_NAME })
+  const dateNav = useDateSkipNavigation({ storageKey: DATE_STORAGE_KEY })
   const channelsQuery = useVideoFeedChannelsQuery()
   const channels = channelsQuery.data ?? []
   const videoFeedQuery = useVideoFeedQuery(undefined, selectedChannelId, dateNav.selectedDate)
@@ -36,7 +37,10 @@ export function VideoFeedPage() {
     <div className="mx-auto max-w-2xl space-y-4 px-2">
       <div className="flex items-end justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold text-gray-900">영상 요약</h1>
+          <h1 className="flex items-center gap-1.5 text-lg font-semibold text-gray-900">
+            <PlatformLogo platform="youtube" className="h-5 w-6" />
+            유튜브 요약
+          </h1>
           <p className="mt-0.5 text-xs text-gray-500">투자 유튜브 채널의 신규 영상을 AI가 요약해드려요</p>
         </div>
 

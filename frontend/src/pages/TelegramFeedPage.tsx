@@ -4,10 +4,11 @@ import { LoadingSpinner } from '../components/common/LoadingSpinner'
 import { EmptyState } from '../components/common/EmptyState'
 import { DateStepper } from '../components/common/DateStepper'
 import { FilterChipGroup } from '../components/common/FilterChipGroup'
+import { PlatformLogo } from '../components/common/PlatformLogo'
 import { useTelegramDigestsQuery, useTelegramFeedChannelsQuery } from '../hooks/queries/useTelegramFeed'
 import { useDateSkipNavigation } from '../hooks/useDateSkipNavigation'
 
-const DATE_COOKIE_NAME = 'telegramFeedDate'
+const DATE_STORAGE_KEY = 'telegramFeedDate'
 
 // 텔레그램 투자 채널의 하루치 글을 AI가 채널×날짜 단위 다이제스트로 종합
 // 요약한 결과를 최신순으로 보여준다(Phase 8 P7-F2, 2026-08-15 다이제스트
@@ -17,7 +18,7 @@ const DATE_COOKIE_NAME = 'telegramFeedDate'
 // FilterChipGroup)를 그대로 쓴다.
 export function TelegramFeedPage() {
   const [selectedChannelId, setSelectedChannelId] = useState<number | undefined>(undefined)
-  const dateNav = useDateSkipNavigation({ cookieName: DATE_COOKIE_NAME })
+  const dateNav = useDateSkipNavigation({ storageKey: DATE_STORAGE_KEY })
   const channelsQuery = useTelegramFeedChannelsQuery()
   const channels = channelsQuery.data ?? []
   const telegramDigestsQuery = useTelegramDigestsQuery(undefined, selectedChannelId, dateNav.selectedDate)
@@ -36,7 +37,10 @@ export function TelegramFeedPage() {
     <div className="mx-auto max-w-2xl space-y-4 px-2">
       <div className="flex items-end justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold text-gray-900">텔레그램 요약</h1>
+          <h1 className="flex items-center gap-1.5 text-lg font-semibold text-gray-900">
+            <PlatformLogo platform="telegram" className="h-5 w-5" />
+            텔레그램 요약
+          </h1>
           <p className="mt-0.5 text-xs text-gray-500">투자 텔레그램 채널의 하루치 글을 AI가 종합 요약해드려요</p>
         </div>
 

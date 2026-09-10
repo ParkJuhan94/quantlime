@@ -64,6 +64,16 @@ export function formatDayLabel(dateStr: string): string {
 // 자정 기준으로 이미 "1일 전"이라 서로 다른 값이 보였다. 커뮤니티 피드
 // (FeedPostCard 등)는 진짜 실시간 경과 표기가 맞는 UX라 그 함수 자체는
 // 건드리지 않고, 영상 피드 전용으로 필터와 동일한 자정 기준 계산을 쓴다.
+// 텔레그램 다이제스트는 하루 3회(08:30/13:30/20:30) upsert로 계속
+// 덮어써진다 - 몇 시 기준 최신본인지만 보여주는 최소 대응(리뷰 세션 Q2,
+// 2026-09-10). 버전 이력/diff는 없음 - 지금 보이는 게 최신이라는 신호만.
+export function formatUpdatedTimeLabel(isoDateTime: string): string {
+  const date = new Date(isoDateTime)
+  const hh = String(date.getHours()).padStart(2, '0')
+  const mm = String(date.getMinutes()).padStart(2, '0')
+  return `${hh}:${mm} 기준`
+}
+
 export function formatVideoPublishedAt(isoDateTime: string): string {
   const diffMs = Date.now() - new Date(isoDateTime).getTime()
   const diffMinutes = Math.floor(diffMs / 60_000)
