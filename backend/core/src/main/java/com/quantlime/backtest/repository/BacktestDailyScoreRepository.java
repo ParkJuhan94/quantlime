@@ -2,6 +2,7 @@ package com.quantlime.backtest.repository;
 
 import com.quantlime.backtest.domain.BacktestDailyScore;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -11,6 +12,12 @@ public interface BacktestDailyScoreRepository extends JpaRepository<BacktestDail
 
     List<BacktestDailyScore> findByStockCodeAndScoreVersionOrderByTradeDateAsc(
         String stockCode, String scoreVersion);
+
+    // 자동 스케줄러(BacktestWeeklyScheduler)가 cross-sectional 단계에 넘길
+    // scoreVersion을 사람이 미리 알 필요 없이 알아내기 위한 용도 - run-universe
+    // 직후 가장 최근에 쓰인 버전(quant-engine의 SCORE_VERSION 상수, 배포마다
+    // 바뀔 수 있음)을 그대로 가져온다.
+    Optional<BacktestDailyScore> findTopByOrderByIdDesc();
 
     // CrossSectionalBacktestService가 시장 하나(최대 500종목)의 저장된
     // 스코어를 한 번에 읽어 횡단면 패널을 구성할 때 쓴다 - 종목별로 개별
