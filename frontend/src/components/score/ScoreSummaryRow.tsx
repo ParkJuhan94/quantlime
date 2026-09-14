@@ -80,9 +80,14 @@ export function ScoreSummaryRow(props: ScoreSummaryRowProps) {
             >
               <span className="text-xs font-medium">{tier.label}</span>
               {isActive && (
-                <span className="flex items-baseline gap-1">
-                  <span className="text-lg font-bold">{formatScore(score.compositeScore)}</span>
-                  <span className="text-[10px] font-medium opacity-70">/100</span>
+                <span className="flex flex-col items-center gap-0.5">
+                  <span className="flex items-baseline gap-1">
+                    <span className="text-lg font-bold">{formatScore(score.compositePercentile)}</span>
+                    <span className="text-[10px] font-medium opacity-70">/100</span>
+                  </span>
+                  {/* 등급은 이 백분위(같은 날 국내/해외 종목 대비 상대 순위)
+                      기준으로 매겨진다 - 원점수는 참고용으로 작게 병기 */}
+                  <span className="text-[9px] font-medium opacity-60">원점수 {formatScore(score.compositeScore)}</span>
                 </span>
               )}
             </div>
@@ -91,9 +96,9 @@ export function ScoreSummaryRow(props: ScoreSummaryRowProps) {
       </div>
 
       <div className="mt-3 flex items-center gap-3 border-t border-gray-100 pt-3">
-        <ScoreStat label="추세추종" value={score.trendScore} />
+        <ScoreStat label="추세추종" value={score.trendScore} percentile={score.trendPercentile} />
         <span className="h-6 w-px bg-gray-200" />
-        <ScoreStat label="평균회귀" value={score.meanReversionScore} />
+        <ScoreStat label="평균회귀" value={score.meanReversionScore} percentile={score.meanReversionPercentile} />
         <div className="group relative">
           <svg
             width="15"
@@ -121,11 +126,14 @@ export function ScoreSummaryRow(props: ScoreSummaryRowProps) {
   )
 }
 
-function ScoreStat({ label, value }: { label: string; value: number | null }) {
+function ScoreStat({ label, value, percentile }: { label: string; value: number | null; percentile: number | null }) {
   return (
     <div className="text-left">
       <p className="text-[10px] text-gray-400">{label}</p>
-      <p className="text-xs font-semibold text-gray-900">{formatScore(value)}</p>
+      <p className="text-xs font-semibold text-gray-900">
+        {formatScore(value)}
+        {percentile != null && <span className="ml-1 font-normal text-gray-400">(상위 {formatScore(100 - percentile)}%)</span>}
+      </p>
     </div>
   )
 }

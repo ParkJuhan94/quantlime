@@ -54,7 +54,10 @@ interface DisplayRow {
   changeRate: number | null
   currency: 'KRW' | 'USD' | null
   tradingAmount: number | null
-  compositeScore?: number | null
+  // v3.0부터 랭킹에 표시하는 "스코어"는 절대점수(compositeScore)가 아니라
+  // 같은 날 국내/해외 종목 대비 상대 순위(compositePercentile, 0~100) -
+  // 절대점수는 40~60 구간에 쏠려 변별력이 없었다(2026-09 감사 세션).
+  compositePercentile?: number | null
   grade?: string | null
   // 2026-08-01 추가 - 로컬 stock 테이블에 없는 종목(해외 랭킹 상위권이
   // 백테스트 유니버스 밖인 경우)은 상세페이지/관심종목 등록이 둘 다
@@ -158,7 +161,7 @@ function RankingRow({ row, index, isWatched, onToggleWatch }: {
         </span>
       </td>
       <td className="py-2.5 text-right">
-        {row.compositeScore != null ? (
+        {row.compositePercentile != null ? (
           // 종목상세 ScoreSummaryRow처럼 등급 색과 스코어 숫자를 하나의
           // 배지 안에 함께 담는다 - 예전엔 등급 배지와 숫자가 따로
           // 떨어져 있어(배지만 색, 숫자는 항상 회색) 등급과 점수가
@@ -168,7 +171,7 @@ function RankingRow({ row, index, isWatched, onToggleWatch }: {
               row.grade ? (GRADE_STYLES[row.grade] ?? 'bg-gray-100 text-gray-800') : 'bg-gray-100 text-gray-500'
             }`}
           >
-            {formatScore(row.compositeScore)}
+            {formatScore(row.compositePercentile)}
             {row.grade && <span className="font-normal opacity-80">{row.grade}</span>}
           </span>
         ) : (
@@ -313,7 +316,7 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
 
   const displayRows: DisplayRow[] = isScoreMode
     ? [...(scoreQuery.data ?? [])]
-        .sort((a, b) => (b.compositeScore ?? -Infinity) - (a.compositeScore ?? -Infinity))
+        .sort((a, b) => (b.compositePercentile ?? -Infinity) - (a.compositePercentile ?? -Infinity))
         .map((item) => {
           const livePrice = scoreSocketPrices[item.stockCode] ?? scoreRestPrices[item.stockCode]
           return {
@@ -324,9 +327,9 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
             overseas: item.overseas,
             price: livePrice?.currentPrice ?? null,
             changeRate: livePrice?.changeRate ?? null,
-            currency: null,
-            tradingAmount: null,
-            compositeScore: item.compositeScore,
+            currency: item.overseas ? 'USD' : 'KRW',
+            tradingAmount: item.avgTradingValue,
+            compositePercentile: item.compositePercentile,
             grade: item.grade,
             detailAvailable: true,
           }
@@ -450,7 +453,8 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
         {isScoreMode &&
           (effectiveWatchlistOnly
             ? '관심종목 중 종합점수가 높은 순입니다'
-            : '전 상장종목 중 종합점수가 높은 순입니다')}
+            : '전 상장종목 중 종합점수가 높은 순입니다') +
+            ' · 점수는 같은 날 국내/해외 종목 대비 상대 순위(백분위)입니다'}
         {isRealMode &&
           sortKey !== 'amount' &&
           (effectiveWatchlistOnly
