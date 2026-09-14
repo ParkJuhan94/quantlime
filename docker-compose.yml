@@ -15,6 +15,14 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
     restart: unless-stopped
+    # 컨테이너별 하드 메모리 리밋(2026-09-14, Docker Desktop VM 다운 대응) - 한 컨테이너가
+    # 폭주해도 VM 전체가 죽는 대신 그 컨테이너만 개별적으로 OOM-kill되게 한다. Compose v2는
+    # 스웜 없이도 deploy.resources.limits를 로컬에 그대로 적용한다. 시작값은 docker stats
+    # 실측(mysql 407MB)에 여유를 둔 것 - 필요시 조정.
+    deploy:
+      resources:
+        limits:
+          memory: 768M
     healthcheck:
       test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
       interval: 30s
@@ -37,6 +45,10 @@ services:
     volumes:
       - redis_data:/data
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
     # maxmemory/maxmemory-policy 미지정 시 기본 noeviction이라, 캐시
     # 활용도를 높이면 컨테이너 메모리 한도에서 OOM-kill되거나 쓰기가
     # 실패한다(2026-08-19 감사). volatile-lru는 TTL이 있는 키(캐시+
@@ -65,12 +77,80 @@ services:
       - ./quant-engine:/app
     command: uvicorn main:app --reload --host 0.0.0.0 --port 8000
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 20s
+
+  # 영상 피드 파이프라인 이벤트화(2026-09-14)용 로컬 전용 이벤트 브로커.
+  # 원래 apache/kafka(KRaft)였다가, Kafka+kafka-ui(둘 다 JVM) 추가 직후 Docker Desktop
+  # VM(당시 4GB 한도)이 반복적으로 다운되는 걸 겪고 같은 날 Redpanda로 교체했다 - 네이티브
+  # 단일 바이너리라 JVM 오버헤드가 없고, Kafka 와이어 프로토콜과 호환돼 Spring Kafka
+  # 클라이언트 코드/개념(파티션·컨슈머그룹·@RetryableTopic 등)은 전혀 안 바뀐다.
+  # 운영(EC2) 반영은 이번 스코프 아님 - docker-compose.prod.yml에는 추가하지 않는다.
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.2.18
+    container_name: quantlime-redpanda
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --memory=512M
+      - --reserve-memory=0M
+      - --overprovisioned
+      - --node-id=0
+      - --check=false
+      - --set redpanda.auto_create_topics_enabled=true
+      - --kafka-addr internal://0.0.0.0:9093,external://0.0.0.0:9092
+      # 컨테이너 내부(redpanda-console 등)는 redpanda:9093, 호스트에서 직접 붙는 경로
+      # (로컬 백엔드 bootRun 등)는 기존 Kafka와 동일하게 localhost:9092 유지 - 이러면
+      # application.yml의 bootstrap-servers 기본값을 안 바꿔도 된다.
+      - --advertise-kafka-addr internal://redpanda:9093,external://localhost:9092
+      - --rpc-addr redpanda:33145
+      - --advertise-rpc-addr redpanda:33145
+    ports:
+      - "9092:9092"
+    restart: unless-stopped
+    # redpanda 자체 --memory(512M)보다 여유를 둔다 - 컨테이너 전체 한도는 non-heap/OS
+    # 오버헤드까지 포함해야 하기 때문(JVM 힙 캡과 다른 지점).
+    deploy:
+      resources:
+        limits:
+          memory: 900M
+    healthcheck:
+      test: [ "CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1" ]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # 토픽/파티션/컨슈머 랙/DLT 내용을 눈으로 확인하기 위한 로컬 전용 도구 - kafka-ui(JVM)에서
+  # Redpanda Console(Go)로 교체(브로커가 Redpanda가 아니라 Apache Kafka여도 그대로 붙는
+  # 범용 도구). 기본 `docker compose up -d`에는 포함하지 않고 필요할 때만
+  # `docker compose --profile redpanda-console up -d redpanda-console`로 기동(온디맨드) -
+  # 평소엔 이 메모리(및 실행 자체)를 아예 안 쓴다.
+  redpanda-console:
+    image: docker.redpanda.com/redpandadata/console:v2.7.2
+    container_name: quantlime-redpanda-console
+    profiles: [ "redpanda-console" ]
+    environment:
+      KAFKA_BROKERS: redpanda:9093
+    ports:
+      - "8090:8080"
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
 volumes:
   mysql_data:
