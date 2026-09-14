@@ -151,6 +151,39 @@ class BacktestResponse(BaseModel):
     daily_scores: list[DailyScoreResponse]
 
 
+class CrossSectionAxisScoreInput(BaseModel):
+    stock_code: str
+    trend_score: float | None = None
+    mean_reversion_score: float | None = None
+
+
+class CrossSectionNormalizeRequest(BaseModel):
+    """같은 날짜·같은 모집단(국내 또는 해외)으로 이미 걸러진 절대 서브스코어
+    리스트를 받는다. OHLCV는 포함하지 않는다 - Spring이 이미 계산해 저장한
+    값만 넘기면 되므로 전종목(9천여개) 페이로드가 가볍다
+    (calculator/normalization.py 모듈 docstring 참고)."""
+    as_of: date
+    peer_group: Literal["domestic", "overseas"]
+    items: list[CrossSectionAxisScoreInput]
+
+
+class CrossSectionNormalizedItem(BaseModel):
+    stock_code: str
+    trend_percentile: float | None
+    mean_reversion_percentile: float | None
+    composite_percentile: float | None
+    grade: str | None
+
+
+class CrossSectionNormalizeResponse(BaseModel):
+    as_of: date
+    peer_group: str
+    # 표본이 MIN_STOCKS_PER_DATE 미만이면 False이고 이때 모든 items의
+    # percentile/grade는 None이다 - 호출자는 이 경우 저장을 건너뛰어야 한다.
+    min_sample_met: bool
+    items: list[CrossSectionNormalizedItem]
+
+
 class TranscribeRequest(BaseModel):
     video_id: str
 

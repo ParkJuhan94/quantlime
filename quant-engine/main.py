@@ -19,6 +19,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from calculator.backtest import run_backtest
 from calculator.cross_sectional import run_cross_sectional_backtest
 from calculator.indicators import compute_all_indicators
+from calculator.normalization import StockAxisScores, normalize_cross_section
 from calculator.scorer import SCORE_VERSION, compute_scores
 from schemas import (
     AxisBacktestResponse,
@@ -27,6 +28,9 @@ from schemas import (
     BucketStatResponse,
     CrossSectionalBacktestRequest,
     CrossSectionalBacktestResponse,
+    CrossSectionNormalizedItem,
+    CrossSectionNormalizeRequest,
+    CrossSectionNormalizeResponse,
     DailyScoreResponse,
     DivergenceResponse,
     HorizonStatResponse,
@@ -204,6 +208,41 @@ def backtest_cross_sectional(request: CrossSectionalBacktestRequest) -> CrossSec
         null_std=stat.null_std,
         null_p2_5=stat.null_p2_5,
         null_p97_5=stat.null_p97_5,
+    )
+
+
+@app.post("/normalize/cross-section", response_model=CrossSectionNormalizeResponse)
+def normalize_cross_section_endpoint(
+    request: CrossSectionNormalizeRequest,
+) -> CrossSectionNormalizeResponse:
+    """같은 날짜·같은 모집단(국내 또는 해외) 안에서 절대 서브스코어를
+    백분위로 바꾼다. OHLCV는 받지 않는다 - 이미 계산·저장된 절대 점수만
+    받으면 되므로 전종목 페이로드가 가볍다(calculator/normalization.py
+    모듈 docstring 참고). 날짜/모집단을 나누는 책임은 호출자(Spring)에
+    있다 - 이 엔드포인트는 받은 리스트 하나를 그대로 한 모집단으로 취급한다.
+    """
+    result = normalize_cross_section([
+        StockAxisScores(
+            stock_code=item.stock_code,
+            trend_score=item.trend_score,
+            mean_reversion_score=item.mean_reversion_score,
+        )
+        for item in request.items
+    ])
+    return CrossSectionNormalizeResponse(
+        as_of=request.as_of,
+        peer_group=request.peer_group,
+        min_sample_met=result.min_sample_met,
+        items=[
+            CrossSectionNormalizedItem(
+                stock_code=item.stock_code,
+                trend_percentile=item.trend_percentile,
+                mean_reversion_percentile=item.mean_reversion_percentile,
+                composite_percentile=item.composite_percentile,
+                grade=item.grade,
+            )
+            for item in result.items
+        ],
     )
 
 

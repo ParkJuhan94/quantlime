@@ -7,7 +7,12 @@ import pytest
 from calculator.indicators import compute_all_indicators
 from calculator.scorer import (
     DIVERGENCE_THRESHOLD,
+    GRADE_CUTOFFS,
+    MACD_MIN_RELATIVE_STD,
+    _apply_downtrend_gate,
     _apply_volume_multiplier,
+    _grade,
+    _macd_score,
     calculate_score,
     compute_scores,
 )
@@ -45,7 +50,9 @@ class TestCalculateScoreHappyPath:
         assert result.trend_score == pytest.approx(50.0)
         assert result.mean_reversion_score == pytest.approx(50.0)
         assert result.composite_score == pytest.approx(50.0)
-        assert result.grade == "NEUTRAL"
+        # v3.0부터 grade는 calculate_score가 아니라 횡단면 백분위 산출
+        # 단계(정규화 엔드포인트)에서 매겨진다 - 아래 TestGradeCutoffs 참고.
+        assert result.grade is None
         assert result.insufficient_data is False
 
     def test_oversold_rsi_and_bb_boost_mean_reversion(self):
@@ -98,8 +105,8 @@ class TestCalculateScoreColdStart:
         # then: 나머지 4개 이평선 기준으로 100점(전부 위)
         assert result.trend_score == pytest.approx(100.0)
 
-    def test_all_trend_indicators_missing_falls_back_to_mean_reversion_only(self):
-        # given: 추세추종 축 전체 데이터 부족
+    def test_all_trend_indicators_missing_yields_no_composite_score(self):
+        # given: 추세추종 축 전체 데이터 부족(평균회귀 축만 계산 가능)
         latest = _base_latest(
             macd_histogram=None,
             macd_histogram_std60=None,
@@ -110,10 +117,14 @@ class TestCalculateScoreColdStart:
         # when
         result = calculate_score(latest)
 
-        # then
+        # then: v3.0부터 단일 축 종합점수를 금지한다 - 이전엔 이 경우
+        # composite_score가 mean_reversion_score 값을 그대로 물려받아,
+        # 평균회귀 축이 아직 없는 신규상장 SPAC 등이 추세추종 단독 100점을
+        # 종합점수로 노출해 랭킹 최상위를 차지하는 문제가 있었다.
         assert result.trend_score is None
         assert result.mean_reversion_score is not None
-        assert result.composite_score == result.mean_reversion_score
+        assert result.composite_score is None
+        assert result.grade is None
         assert result.insufficient_data is False
 
     def test_both_axes_missing_marks_insufficient_data(self):
@@ -325,25 +336,120 @@ class TestComputeScores:
         assert bool(scores_df.iloc[0]["insufficient_data"]) is True
 
 
+class TestCalculateScoreNeverGrades:
+    def test_calculate_score_always_returns_none_grade(self):
+        # given/when: 두 축 모두 계산 가능한 정상 케이스
+        result = calculate_score(_base_latest(rsi=15.0, bollinger_percent_b=0.0, macd_histogram=10.0))
+
+        # then: v3.0부터 등급은 횡단면 백분위 산출 단계의 책임이라
+        # calculate_score는 입력과 무관하게 항상 None을 반환해야 한다.
+        assert result.grade is None
+
+
 class TestGradeCutoffs:
+    # v3.0부터 GRADE_CUTOFFS/_grade는 calculate_score의 raw composite가
+    # 아니라 횡단면 백분위(0~100, 높을수록 상위)에 적용된다 - 정규화
+    # 엔드포인트가 이 함수를 그대로 재사용하므로 여기서는 함수 자체의
+    # 컷오프 동작만 검증한다.
     @pytest.mark.parametrize(
-        "composite_inputs,expected_grade",
+        "percentile,expected_grade",
         [
-            # 두 축 모두 최고점(추세=MACD 강한 양수, 평균회귀=과매도 극단)
-            ({"rsi": 15.0, "bollinger_percent_b": 0.0, "macd_histogram": 10.0}, "STRONG_BUY"),
-            # 두 축 모두 정확히 중립(50)
-            ({"rsi": 50.0, "bollinger_percent_b": 0.5, "macd_histogram": 0.0}, "NEUTRAL"),
+            (95.0, "STRONG_BUY"),  # 상위 10%
+            (90.0, "STRONG_BUY"),  # 경계값 포함
+            (89.9, "BUY"),
+            (70.0, "BUY"),
+            (69.9, "NEUTRAL"),
+            (30.0, "NEUTRAL"),
+            (29.9, "SELL"),
+            (10.0, "SELL"),
+            (9.9, "STRONG_SELL"),
+            (0.0, "STRONG_SELL"),
         ],
     )
-    def test_grade_matches_expected_tier(self, composite_inputs, expected_grade):
-        # given: MA는 이산값이라 정확한 경계 테스트에서 제외
+    def test_grade_matches_percentile_tier(self, percentile, expected_grade):
+        assert _grade(percentile) == expected_grade
+
+    def test_grade_is_none_when_percentile_missing(self):
+        assert _grade(None) is None
+
+    def test_cutoffs_are_top_heavy_percentile_bands(self):
+        # given: 상위 10/30/70/90% 경계가 GRADE_CUTOFFS 정의와 일치하는지
+        labels = [label for label, _ in GRADE_CUTOFFS]
+        cutoffs = [cutoff for _, cutoff in GRADE_CUTOFFS]
+        assert labels == ["STRONG_BUY", "BUY", "NEUTRAL", "SELL"]
+        assert cutoffs == [90.0, 70.0, 30.0, 10.0]
+
+
+class TestMacdRelativeStdFloor:
+    def test_near_zero_std_no_longer_saturates_score(self):
+        # given: 2026-09 실측(SAMO 등 초저변동성 SPAC - 60일 종가 표준편차가
+        # 종가의 0.1%대)과 구조적으로 동일한 케이스를 라운드 넘버로 구성.
+        # std60(0.001)이 종가 대비 상대 하한(10.0*0.002=0.02)보다 훨씬
+        # 작은 초저변동성 상황에서, 하한이 없다면 z=histogram/std60=20으로
+        # tanh가 완전히 포화해 100점이 나온다.
+        histogram, std60, close = 0.02, 0.001, 10.0
+        without_floor_z = histogram / std60
+        assert 50.0 + 50.0 * math.tanh(without_floor_z) == pytest.approx(100.0, abs=0.01)
+
+        # when
+        score = _macd_score(histogram=histogram, std60=std60, close=close)
+
+        # then: 종가 대비 상대 하한(MACD_MIN_RELATIVE_STD)이 std60을
+        # 대체해 z가 20 대신 1.0(=0.02/0.02)로 줄어들고, 포화되지 않는다.
+        floor = close * MACD_MIN_RELATIVE_STD
+        expected_z = histogram / floor
+        assert score == pytest.approx(50.0 + 50.0 * math.tanh(expected_z))
+        assert score < 90.0  # 포화(100점 근방)되지 않음
+
+    def test_large_std_is_unaffected_by_floor(self):
+        # given: 정상적인 변동성(std60=1.0)에서는 하한이 개입하지 않아야 함
+        score = _macd_score(histogram=5.0, std60=1.0, close=100.0)
+
+        # then: 기존과 동일하게 z=histogram/std60 그대로 사용
+        assert score == pytest.approx(50.0 + 50.0 * math.tanh(5.0))
+
+    def test_missing_close_returns_none(self):
+        assert _macd_score(histogram=1.0, std60=1.0, close=None) is None
+
+
+class TestDowntrendGate:
+    def test_long_term_downtrend_suppresses_mean_reversion_toward_center(self):
+        # given: 종가가 60/120일선 모두 아래이고 60일선도 120일선 아래
+        # (장기 하락추세) + RSI/%B 둘 다 극단 과매도(원점수 100)
+        gated = _apply_downtrend_gate(
+            mean_reversion_raw=100.0, close=50.0, ma_60=80.0, ma_120=100.0,
+        )
+
+        # then: DOWNTREND_GATE_FACTOR(0.5)만큼 중심(50) 쪽으로 당겨져
+        # 100 -> 75 (편차 50 -> 25)
+        assert gated == pytest.approx(75.0)
+
+    def test_uptrend_is_not_gated(self):
+        # given: 종가가 이평선 위(정배열)인 경우 게이트 미적용
+        gated = _apply_downtrend_gate(
+            mean_reversion_raw=100.0, close=150.0, ma_60=120.0, ma_120=100.0,
+        )
+
+        assert gated == pytest.approx(100.0)
+
+    def test_missing_moving_averages_skip_gate(self):
+        # given: 신규상장 등으로 ma_120 계산 불가 - 판단 근거가 없어 게이트 미적용
+        gated = _apply_downtrend_gate(
+            mean_reversion_raw=100.0, close=50.0, ma_60=80.0, ma_120=None,
+        )
+
+        assert gated == pytest.approx(100.0)
+
+    def test_calculate_score_applies_gate_end_to_end(self):
+        # given: 장기 하락추세 + 평균회귀 원점수 100(RSI/%B 극단 과매도)
         latest = _base_latest(
-            ma_5=None, ma_10=None, ma_20=None, ma_60=None, ma_120=None,
-            **composite_inputs,
+            close=50.0, ma_5=50.0, ma_10=60.0, ma_20=70.0, ma_60=80.0, ma_120=100.0,
+            rsi=10.0, bollinger_percent_b=0.0,
+            macd_histogram=None, macd_histogram_std60=None,  # 추세축은 이번 검증과 무관하게 배제
         )
 
         # when
         result = calculate_score(latest)
 
-        # then
-        assert result.grade == expected_grade
+        # then: 게이트 미적용이면 100점이어야 하나, 실제로는 75점으로 억제
+        assert result.mean_reversion_score == pytest.approx(75.0)

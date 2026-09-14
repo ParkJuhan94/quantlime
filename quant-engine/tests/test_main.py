@@ -61,7 +61,9 @@ class TestCalculateScoreSeries:
         assert latest["trend_score"] is not None
         assert latest["mean_reversion_score"] is not None
         assert latest["composite_score"] is not None
-        assert latest["grade"] in {"STRONG_BUY", "BUY", "NEUTRAL", "SELL", "STRONG_SELL"}
+        # v3.0부터 grade는 이 엔드포인트가 아니라 횡단면 백분위 산출 단계
+        # (정규화 엔드포인트)의 책임이라 항상 None이다.
+        assert latest["grade"] is None
         assert latest["quadrant"] in {
             "trend_up_oversold", "trend_up_overbought",
             "trend_down_oversold", "trend_down_overbought",

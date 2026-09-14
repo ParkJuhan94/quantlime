@@ -90,7 +90,6 @@ def _build_prompt(stock_code: str, score: ScoreResult, indicators: dict) -> str:
         f"종목코드: {stock_code}\n"
         f"추세추종 점수: {trend_text}\n"
         f"평균회귀 점수: {reversion_text}\n"
-        f"종합 등급: {score.grade}\n"
         f"괴리 여부: {divergence_text}\n"
         f"RSI: {indicators.get('rsi')}\n"
         f"MACD 히스토그램: {indicators.get('macd_histogram')}\n"
