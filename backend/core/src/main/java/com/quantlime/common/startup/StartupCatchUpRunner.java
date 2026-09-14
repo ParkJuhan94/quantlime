@@ -114,8 +114,13 @@ public class StartupCatchUpRunner implements ApplicationRunner {
     // 별도로 확인하지 않는다(스킵돼도 다음 정기 스케줄에서 다시 시도됨).
     private void catchUpVideoFeed() {
         feedCollectionFacade.runAllExclusively();
-        transcriptCollectionFacade.runBatchExclusively();
-        summaryCollectionFacade.runBatchExclusively();
+        // 자막 조회는 2026-09-14부로 실시간 이벤트(VideoSelectedEvent → Kafka)로
+        // 처리된다 - 기동 캐치업은 서버가 꺼져있던 동안 그 실시간 트리거를
+        // 놓쳤을 영상만 백로그로 재발행한다(비동기, 처리 자체는 컨슈머가 함).
+        transcriptCollectionFacade.publishBacklog();
+        // 요약도 2026-09-14부로 실시간 이벤트(VideoTranscribedEvent → Kafka)로
+        // 처리된다 - 이유는 바로 위 자막 재발행과 동일.
+        summaryCollectionFacade.publishBacklog();
         videoRetentionService.runExclusively();
     }
 

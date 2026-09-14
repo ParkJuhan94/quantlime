@@ -6,6 +6,7 @@ import com.quantlime.videofeed.domain.ChannelFilterConfig;
 import com.quantlime.videofeed.domain.Platform;
 import com.quantlime.videofeed.domain.Video;
 import com.quantlime.videofeed.domain.VideoStatus;
+import com.quantlime.videofeed.event.VideoTranscribedEvent;
 import com.quantlime.videofeed.repository.TranscriptRepository;
 import com.quantlime.videofeed.repository.VideoRepository;
 import java.time.LocalDateTime;
@@ -19,12 +20,14 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
@@ -35,6 +38,9 @@ class TranscriptPersistServiceTest {
 
     @Mock
     private TranscriptRepository transcriptRepository;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private TranscriptPersistService transcriptPersistService;
@@ -66,6 +72,7 @@ class TranscriptPersistServiceTest {
         assertThat(captor.getValue().getContent()).isEqualTo("안녕하세요");
         assertThat(captor.getValue().getCharCount()).isEqualTo(5);
         assertThat(video.getStatus()).isEqualTo(VideoStatus.TRANSCRIBED);
+        verify(eventPublisher).publishEvent(new VideoTranscribedEvent(1L));
     }
 
     @Test
@@ -85,6 +92,7 @@ class TranscriptPersistServiceTest {
         assertThat(video.getStatus()).isEqualTo(VideoStatus.FAILED);
         assertThat(video.getFailReason()).contains("TranscriptsDisabled");
         assertThat(video.getRetryCount()).isEqualTo(1);
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test

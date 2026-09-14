@@ -161,8 +161,10 @@ groups:
           description: "uploads_backup_last_success_timestamp_seconds 메트릭 자체가 없습니다 - 2026-09-05~09-09 실행 권한 결손으로 실제로 겪은 사각지대(Permission denied가 5일간 무알림으로 지나감)를 재발 방지하기 위해 추가했습니다."
 
   # --- 서킷브레이커(2026-08-17 도입, resilience4j-micrometer가 노출) ---
-  # toss/quant-engine/upbit/naver-finance 4개 인스턴스만 존재(application.yml
-  # resilience4j.circuitbreaker.instances 참고).
+  # toss/quant-engine/quant-engine-transcript/upbit/naver-finance 5개 인스턴스만
+  # 존재(application.yml resilience4j.circuitbreaker.instances 참고, 2026-09-14
+  # fetchTranscript 분리로 quant-engine-transcript 추가). name 라벨 필터가 없어
+  # 새 인스턴스가 추가돼도 이 알림이 자동으로 커버한다.
   - name: quantlime-resilience
     rules:
       - alert: CircuitBreakerOpen

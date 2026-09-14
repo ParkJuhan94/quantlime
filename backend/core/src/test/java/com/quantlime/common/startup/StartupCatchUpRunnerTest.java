@@ -105,8 +105,8 @@ class StartupCatchUpRunnerTest {
         verify(marketDataRefreshService).refreshAllExclusively();
         verify(domesticRegularCloseCaptureScheduler).captureIfWithinStartupSafeWindow();
         verify(feedCollectionFacade).runAllExclusively();
-        verify(transcriptCollectionFacade).runBatchExclusively();
-        verify(summaryCollectionFacade).runBatchExclusively();
+        verify(transcriptCollectionFacade).publishBacklog();
+        verify(summaryCollectionFacade).publishBacklog();
         verify(videoRetentionService).runExclusively();
         verify(telegramCollectionFacade).runAllExclusively();
         verify(telegramDigestGenerationFacade).runAllExclusively();

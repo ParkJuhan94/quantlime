@@ -4,6 +4,7 @@ import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.ChannelFilterConfig;
 import com.quantlime.videofeed.domain.Video;
 import com.quantlime.videofeed.domain.VideoStatus;
+import com.quantlime.videofeed.event.VideoSelectedEvent;
 import com.quantlime.videofeed.repository.VideoRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -18,6 +19,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,6 +62,7 @@ public class VideoFilterService {
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
 
     private final VideoRepository videoRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public void applyFilters(Channel channel) {
@@ -207,12 +210,17 @@ public class VideoFilterService {
             .sorted(Comparator.comparing((Video v) -> v.getViewCount() != null ? v.getViewCount() : 0L).reversed())
             .toList();
         for (int i = 0; i < ranked.size(); i++) {
+            Video video = ranked.get(i);
             if (i < remainingQuota) {
-                ranked.get(i).markSelected();
+                video.markSelected();
+                // 자막 조회 파이프라인의 실시간 트리거(2026-09-14) - event 모듈이
+                // 이 이벤트를 받아 Kafka video.selected 토픽으로 중계한다. core는
+                // Kafka를 몰라야 해서 ApplicationEventPublisher로만 발행한다.
+                eventPublisher.publishEvent(new VideoSelectedEvent(video.getId()));
             } else {
-                ranked.get(i).markFilteredOut();
+                video.markFilteredOut();
                 log.info("영상 탈락(하루 max_per_run 컷): videoId={}, channel={}, publishedDate={}, title={}",
-                    ranked.get(i).getId(), channel.getName(), publishedDate, ranked.get(i).getTitle());
+                    video.getId(), channel.getName(), publishedDate, video.getTitle());
             }
         }
     }

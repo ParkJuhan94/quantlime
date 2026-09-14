@@ -2,8 +2,6 @@ package com.quantlime.videofeed.controller;
 
 import com.quantlime.common.exception.ValidationException;
 import com.quantlime.videofeed.dto.CollectResult;
-import com.quantlime.videofeed.dto.SummarizeResult;
-import com.quantlime.videofeed.dto.TranscribeResult;
 import com.quantlime.videofeed.dto.mapper.VideoFeedMapper;
 import com.quantlime.videofeed.dto.response.ChannelResponse;
 import com.quantlime.videofeed.exception.VideoFeedErrorCode;
@@ -65,23 +63,24 @@ public class FeedCollectionAdminController {
     }
 
     @PostMapping("/transcribe")
-    @Operation(summary = "자막 수집 수동 트리거",
-        description = "SELECTED(+ 재시도 상한 이내 FAILED) 영상 배치의 자막을 즉시 수집한다. "
-            + "정규 스케줄러가 이미 실행 중이면 거절된다")
+    @Operation(summary = "자막 수집 이벤트 재발행(수동 트리거)",
+        description = "정규 경로는 영상이 SELECTED될 때 발행되는 실시간 Kafka 이벤트다(video.selected). "
+            + "이 엔드포인트는 그 실시간 트리거를 놓쳤을 수 있는 SELECTED(+ 재시도 상한 이내 FAILED) "
+            + "영상에 대해 이벤트를 다시 발행만 한다 - 실제 자막 조회는 비동기로 처리되므로 "
+            + "이 응답은 처리 결과가 아니라 발행 건수다")
     @ApiResponse(useReturnTypeSchema = true)
-    public ResponseEntity<List<TranscribeResult>> transcribe() {
-        return ResponseEntity.ok(transcriptCollectionFacade.runBatchExclusively()
-            .orElseThrow(() -> new ValidationException(VideoFeedErrorCode.FEED_JOB_IN_PROGRESS)));
+    public ResponseEntity<Integer> transcribe() {
+        return ResponseEntity.ok(transcriptCollectionFacade.publishBacklog());
     }
 
     @PostMapping("/summarize")
-    @Operation(summary = "AI 요약 생성 수동 트리거",
-        description = "TRANSCRIBED(+ 재시도 상한 이내 FAILED) 영상 배치의 AI 요약을 즉시 생성한다. "
-            + "정규 스케줄러가 이미 실행 중이면 거절된다")
+    @Operation(summary = "AI 요약 이벤트 재발행(수동 트리거)",
+        description = "정규 경로는 영상이 TRANSCRIBED될 때 발행되는 실시간 Kafka 이벤트다(video.transcribed). "
+            + "이 엔드포인트는 그 실시간 트리거를 놓쳤을 수 있는 TRANSCRIBED(+ 재시도 상한 이내 FAILED) "
+            + "영상에 대해 이벤트를 다시 발행만 한다 - 응답은 처리 결과가 아니라 발행 건수다")
     @ApiResponse(useReturnTypeSchema = true)
-    public ResponseEntity<List<SummarizeResult>> summarize() {
-        return ResponseEntity.ok(summaryCollectionFacade.runBatchExclusively()
-            .orElseThrow(() -> new ValidationException(VideoFeedErrorCode.FEED_JOB_IN_PROGRESS)));
+    public ResponseEntity<Integer> summarize() {
+        return ResponseEntity.ok(summaryCollectionFacade.publishBacklog());
     }
 
     @PostMapping("/channels/{channelId}/velocity/initialize")

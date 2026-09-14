@@ -53,11 +53,11 @@ Authorization: Bearer {{devLogin.response.body.$.accessToken}}
 POST {{baseUrl}}/api/admin/feed/collect
 Authorization: Bearer {{devLogin.response.body.$.accessToken}}
 
-### 자막 수집 수동 트리거(SELECTED + 재시도 상한 이내 FAILED 배치)
+### 자막 조회 이벤트 재발행(2026-09-14 이벤트화 - 정규 경로는 SELECTED 시점 실시간 Kafka 이벤트, 이건 놓친 백로그만. 응답=발행 건수)
 POST {{baseUrl}}/api/admin/feed/transcribe
 Authorization: Bearer {{devLogin.response.body.$.accessToken}}
 
-### AI 요약 생성 수동 트리거(TRANSCRIBED + 재시도 상한 이내 FAILED 배치)
+### AI 요약 이벤트 재발행(위와 동일한 이유, TRANSCRIBED 백로그 대상)
 POST {{baseUrl}}/api/admin/feed/summarize
 Authorization: Bearer {{devLogin.response.body.$.accessToken}}
 

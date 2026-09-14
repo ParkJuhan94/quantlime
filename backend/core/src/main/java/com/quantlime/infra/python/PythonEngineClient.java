@@ -16,6 +16,7 @@ import com.quantlime.infra.python.dto.TranscribeApiResponse;
 import com.quantlime.infra.python.exception.PythonEngineErrorCode;
 import io.github.resilience4j.bulkhead.annotation.Bulkhead;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
@@ -25,9 +26,8 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 /**
- * 진입점(public) 메서드마다 {@code @CircuitBreaker}/{@code @Bulkhead}(둘 다
- * {@code "quant-engine"} 인스턴스, application.yml 설정 참고)를 붙인다. 별도
- * fallback 메서드는 두지 않는다 - 예외 전파가 곧 "이번 재계산/요약을
+ * 진입점(public) 메서드마다 {@code @CircuitBreaker}/{@code @Bulkhead}를 붙인다.
+ * 별도 fallback 메서드는 두지 않는다 - 예외 전파가 곧 "이번 재계산/요약을
  * 건너뛴다"는 뜻이고, 스코어는 DB에 남은 직전 값이 그대로 서빙되는 구조가
  * 이미 fallback 역할을 한다(ScoreService 클래스 주석, CLAUDE.md §10 참고,
  * 2026-08-17). {@link #summarize}가 텔레그램 다이제스트 재생성 중(재시도까지
@@ -37,6 +37,17 @@ import org.springframework.web.client.RestClient;
  * 그날 갱신은 실패해도 직전 다이제스트(어제/오전 값)가 그대로 서빙된다
  * (2026-08-19 확인 - Gemini 무료 티어 쿼터가 유튜브와 21/20으로 근접해 있어
  * 실제로 걸릴 수 있는 경로).
+ *
+ * <p>{@link #calculateScoreSeries}/{@link #runBacktest}/{@link #runCrossSectionalBacktest}/
+ * {@link #summarize} 4개는 {@code "quant-engine"} 인스턴스를 공유하지만,
+ * {@link #fetchTranscript}만 {@code "quant-engine-transcript"}로 분리돼 있다
+ * (application.yml 설정 참고, 2026-09-14). 자막 조회는 quant-engine 프로세스가
+ * 아니라 유튜브 자막 스크래핑(IP 차단 등)에 실패 원인이 있는 경우가 대부분이라,
+ * 같은 인스턴스를 쓰면 그 장애가 무관한 스코어/백테스트 호출까지 fail-fast로
+ * 막아버린다(2026-09-13 실제 발생 - 자막 500 5연속으로 CB가 열려 국내 스코어
+ * 재계산 26개 청크 중 20개가 즉시 차단됨). quant-engine 프로세스 자체가
+ * 죽는 경우는 어차피 4개 메서드 모두 곧 임계치를 넘겨 각자 OPEN되므로,
+ * 인스턴스를 나눠도 감지가 늦어지는 대가는 미미하다.
  */
 @Slf4j
 @Component
@@ -61,6 +72,7 @@ public class PythonEngineClient {
 
     private final RestClient pythonEngineRestClient;
     private final MeterRegistry meterRegistry;
+    private final GeminiDailyQuotaGate geminiDailyQuotaGate;
 
     @CircuitBreaker(name = "quant-engine")
     @Bulkhead(name = "quant-engine")
@@ -128,8 +140,8 @@ public class PythonEngineClient {
         }
     }
 
-    @CircuitBreaker(name = "quant-engine")
-    @Bulkhead(name = "quant-engine")
+    @CircuitBreaker(name = "quant-engine-transcript")
+    @Bulkhead(name = "quant-engine-transcript")
     public TranscribeApiResponse fetchTranscript(TranscribeApiRequest request) {
         Timer.Sample sample = Timer.start(meterRegistry);
         try {
@@ -150,9 +162,16 @@ public class PythonEngineClient {
 
     @CircuitBreaker(name = "quant-engine")
     @Bulkhead(name = "quant-engine")
+    @RateLimiter(name = "quant-engine-summarize")
     public SummarizeApiResponse summarize(SummarizeApiRequest request) {
         Timer.Sample sample = Timer.start(meterRegistry);
         try {
+            // 일일 예산(RPD, 실제 수치는 불확실 - GeminiDailyQuotaGate 주석 참고)을
+            // 넘었으면 quant-engine 호출 자체를 생략한다. 유튜브/텔레그램이 이
+            // 메서드 하나를 공유하므로 여기 걸어야 둘 다 같이 보호된다.
+            if (geminiDailyQuotaGate.isExceeded()) {
+                throw new ExternalApiException(PythonEngineErrorCode.SUMMARY_DAILY_QUOTA_EXCEEDED);
+            }
             SummarizeApiResponse response = summarizeWithRateLimitRetry(request);
             recordOutcome(OUTCOME_SUCCESS, sample);
             return response;

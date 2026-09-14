@@ -35,13 +35,16 @@ class PythonEngineClientTest {
         + "\"input_tokens\":100,\"output_tokens\":50}";
 
     private MockRestServiceServer mockServer;
+    private GeminiDailyQuotaGate geminiDailyQuotaGate;
     private PythonEngineClient pythonEngineClient;
 
     @BeforeEach
     void setUp() {
         RestClient.Builder builder = RestClient.builder().baseUrl(BASE_URL);
         mockServer = MockRestServiceServer.bindTo(builder).build();
-        pythonEngineClient = new PythonEngineClient(builder.build(), new SimpleMeterRegistry());
+        geminiDailyQuotaGate = Mockito.mock(GeminiDailyQuotaGate.class);
+        Mockito.when(geminiDailyQuotaGate.isExceeded()).thenReturn(false);
+        pythonEngineClient = new PythonEngineClient(builder.build(), new SimpleMeterRegistry(), geminiDailyQuotaGate);
     }
 
     @Test
@@ -95,6 +98,19 @@ class PythonEngineClientTest {
                 .hasFieldOrPropertyWithValue("code", PythonEngineErrorCode.SUMMARY_RATE_LIMIT_EXCEEDED.getCode());
             mockServer.verify();
         }
+    }
+
+    @Test
+    @DisplayName("[일일 쿼터 초과 시 quant-engine 호출 자체를 생략하고 SUMMARY_DAILY_QUOTA_EXCEEDED로 즉시 실패한다]")
+    void summarize_dailyQuotaExceeded_skipsCallEntirely() {
+        // given
+        Mockito.when(geminiDailyQuotaGate.isExceeded()).thenReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> pythonEngineClient.summarize(new SummarizeApiRequest("제목", "채널", "자막")))
+            .isInstanceOf(ExternalApiException.class)
+            .hasFieldOrPropertyWithValue("code", PythonEngineErrorCode.SUMMARY_DAILY_QUOTA_EXCEEDED.getCode());
+        mockServer.verify(); // 아무 요청도 기대하지 않았으므로, 실제로 호출됐다면 여기서 실패한다
     }
 
     @Test

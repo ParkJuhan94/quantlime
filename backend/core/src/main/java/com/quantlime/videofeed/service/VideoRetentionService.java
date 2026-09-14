@@ -35,7 +35,8 @@ public class VideoRetentionService {
      * 락을 잡은 채로 deleteVideosOlderThanRetention()을 실행한다.
      * VideoRetentionScheduler·FeedCollectionAdminController(수동 트리거)
      * 둘 다 이 진입점만 호출해야 동시에 같은 행을 지우려는 중복 실행을
-     * 막을 수 있다(SummaryCollectionFacade.runBatchExclusively와 동일 패턴).
+     * 막을 수 있다(FeedCollectionFacade.runAllExclusively와 동일 패턴 - 자막/요약은
+     * 2026-09-14 이벤트화로 이 락 패턴에서 빠졌다).
      */
     public Optional<Integer> runExclusively() {
         return redisLockService.runExclusively(LOCK_KEY, LOCK_TTL, this::deleteVideosOlderThanRetention);

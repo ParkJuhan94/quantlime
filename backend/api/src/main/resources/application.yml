@@ -34,6 +34,28 @@ spring:
       # PriceCacheStore/RefreshTokenStore/RedisLockService 전부 무방비였음).
       timeout: 2s
       connect-timeout: 1s
+  # 영상 피드 파이프라인 이벤트화(2026-09-14, event 모듈) - 로컬 전용
+  # docker-compose kafka 서비스(KRaft 단일 브로커)를 가리킨다. 운영(EC2) 반영은
+  # 이번 스코프 아님.
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      # 그룹 id는 리스너별로 @KafkaListener(groupId=...)에서 직접 지정한다
+      # (transcript-collector/summary-collector) - 여기 공통값을 두면 나중에
+      # 컨슈머가 늘어도 실수로 같은 그룹을 공유하는 걸 방지하기 위해 일부러
+      # 비워둔다.
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      # ErrorHandlingDeserializer로 감싸 역직렬화 자체가 깨지는 메시지(포맷
+      # 불일치 등)도 리스너 스레드를 죽이지 않고 예외로 흘려보낸다 -
+      # @RetryableTopic/DLT가 그 예외를 그대로 이어받는다.
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        spring.json.trusted.packages: com.quantlime.event.videofeed
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
   task:
     scheduling:
       pool:
@@ -125,6 +147,20 @@ resilience4j:
         sliding-window-size: 10
         minimum-number-of-calls: 5
         wait-duration-in-open-state: 60s
+        # Gemini 분당/일일 한도 자체 게이트(PythonEngineFailurePredicate 주석 참고) -
+        # 이게 없으면 요약 쿼터 소진이 무관한 스코어/백테스트 호출까지 막아버린다.
+        record-failure-predicate: com.quantlime.common.resilience.PythonEngineFailurePredicate
+      # 자막 조회(fetchTranscript)만 별도 인스턴스로 분리(2026-09-14) - 유튜브
+      # 자막 스크래핑(IP 차단 등)이 실패 원인일 때 quant-engine 인스턴스를 같이
+      # 쓰면 무관한 스코어/백테스트/요약 호출까지 fail-fast로 막힌다(2026-09-13
+      # 실제 발생 - 자막 500 5연속으로 CB가 열려 국내 스코어 재계산 26개 청크 중
+      # 20개가 즉시 차단됨). read timeout(60초)은 quant-engine과 동일한 RestClient를
+      # 공유해 같이 적용한다.
+      quant-engine-transcript:
+        base-config: default
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        wait-duration-in-open-state: 60s
       upbit:
         base-config: default
       naver-finance:
@@ -146,12 +182,31 @@ resilience4j:
         # MarketDataRefreshTaskExecutorConfig가 국내/해외 각각 core=1이라
         # 실제 동시 호출은 많지 않다.
         max-concurrent-calls: 6
+      # circuitbreaker와 동일한 이유로 분리(위 참고). 2026-09-14 이벤트화 이후
+      # 자막 조회는 Kafka 컨슈머(transcript-collector, 파티션 1개)가 순차
+      # 처리해 동시 호출이 사실상 없으므로 별도 상한 없이 기본값을 쓴다.
+      quant-engine-transcript:
+        base-config: default
       upbit:
         base-config: default
         max-concurrent-calls: 5
       naver-finance:
         base-config: default
         max-concurrent-calls: 5
+  # 요약 생성(2026-09-14) - Gemini 무료 티어 분당 한도(RPM=15, gemini-3.5-flash-lite
+  # 실측)에 여유를 둔 값. 이 인스턴스도 PythonEngineClient.summarize() 하나에 걸려
+  # 있어 유튜브/텔레그램 두 경로가 함께 보호받는다(위 quant-engine-summarize
+  # circuitbreaker/bulkhead 없음에 유의 - 레이트리미터만 필요, 서킷은 quant-engine
+  # 인스턴스를 그대로 공유).
+  ratelimiter:
+    instances:
+      quant-engine-summarize:
+        limit-for-period: 12
+        limit-refresh-period: 60s
+        # 대기 없이 즉시 실패시킨다 - 대기시켜도 어차피 quant-engine 자체
+        # 호출은 아니므로 컨슈머 스레드만 붙드는 손해가 크다. 실패는
+        # RetryableTopic 재시도 토픽이 이어받는다.
+        timeout-duration: 0s
 
 app:
   datasource:
@@ -240,6 +295,14 @@ slack:
 
 python-engine:
   base-url: ${PYTHON_ENGINE_URL:http://localhost:8000}
+  # Gemini 무료 티어 일일 쿼터 게이트(2026-09-14, GeminiDailyQuotaGate) - 유튜브
+  # 요약(SummaryCollectionFacade)과 텔레그램 다이제스트(TelegramDigestGenerationFacade)가
+  # PythonEngineClient.summarize() 하나를 공유해서 쓰므로 이 값도 둘이 공유한다.
+  # "일 20회"는 이전 모델(gemini-3.6-flash, 2026-07-29 실측)의 값이고, 지금 쓰는
+  # gemini-3.5-flash-lite의 실제 RPD는 미검증이다(quant-engine/summary/generator.py
+  # 주석 참고) - 그래서 20이 아니라 안전마진을 둔 18을 기본값으로 둔다. 실제 429
+  # 발생 시점을 관찰해 이 값을 확정 지을 것(후속 과제).
+  summarize-daily-budget: ${GEMINI_SUMMARIZE_DAILY_BUDGET:18}
 
 realtime-price:
   poll-interval-ms: ${REALTIME_PRICE_POLL_INTERVAL_MS:3000}

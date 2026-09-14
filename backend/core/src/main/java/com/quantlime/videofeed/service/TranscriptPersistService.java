@@ -4,10 +4,12 @@ import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.infra.python.dto.TranscribeApiResponse;
 import com.quantlime.videofeed.domain.Transcript;
 import com.quantlime.videofeed.domain.Video;
+import com.quantlime.videofeed.event.VideoTranscribedEvent;
 import com.quantlime.videofeed.exception.VideoFeedErrorCode;
 import com.quantlime.videofeed.repository.TranscriptRepository;
 import com.quantlime.videofeed.repository.VideoRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +29,7 @@ public class TranscriptPersistService {
 
     private final VideoRepository videoRepository;
     private final TranscriptRepository transcriptRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public void persistResult(Long videoId, TranscribeApiResponse response) {
@@ -38,6 +41,9 @@ public class TranscriptPersistService {
         transcriptRepository.save(Transcript.of(
             video, response.source(), response.lang(), response.content(), response.charCount()));
         video.markTranscribed();
+        // 요약 파이프라인의 실시간 트리거(2026-09-14) - VideoFilterService의
+        // VideoSelectedEvent 발행과 동일한 이유(core는 Kafka를 몰라야 함).
+        eventPublisher.publishEvent(new VideoTranscribedEvent(videoId));
     }
 
     @Transactional

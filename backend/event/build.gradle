@@ -2,4 +2,9 @@ dependencies {
     implementation project(':core')
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
+
+    // 영상 피드 파이프라인 이벤트화(2026-09-14) - Kafka Producer/Consumer는
+    // 이 모듈이 전담한다(모듈 표 "event: Kafka Producer/Consumer, 이벤트 설정" 참고).
+    implementation 'org.springframework.kafka:spring-kafka'
+    testImplementation 'org.springframework.kafka:spring-kafka-test'
 }

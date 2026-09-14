@@ -18,6 +18,14 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 
     List<Video> findByChannelAndStatus(Channel channel, VideoStatus status);
 
+    // SummaryProcessingService가 트랜잭션 밖(quant-engine 호출 전)에서
+    // video.getChannel().getName()을 읽어야 하는데, 일반 findById가 반환하는
+    // Video는 channel이 LAZY 프록시라 세션이 끝난 뒤 접근하면
+    // LazyInitializationException이 난다 - findSummarizeCandidates 등과
+    // 동일한 이유로 join fetch가 필요하다.
+    @Query("select v from Video v join fetch v.channel where v.id = :id")
+    Optional<Video> findByIdWithChannel(@Param("id") Long id);
+
     // max_per_run(채널별 회당 선택 상한)을 "한 번의 수집 사이클" 기준이 아니라
     // "영상 발행일 기준 하루" 단위로 적용하기 위한 카운트 - VideoFilterService.
     // selectUpToMaxPerRun 참고. 로컬 개발처럼 수집이 매일 규칙적으로 안 돌아가는
