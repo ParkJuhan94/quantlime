@@ -9,6 +9,7 @@ import com.quantlime.videofeed.repository.VideoRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 /**
@@ -50,8 +51,17 @@ public class TranscriptImportService {
             return TranscriptImportResult.invalidStatus(item.externalVideoId(), status.name());
         }
 
-        transcriptPersistService.persistResult(video.getId(),
-            new TranscribeApiResponse(true, item.source(), item.lang(), item.content(), item.charCount(), null));
+        try {
+            transcriptPersistService.persistResult(video.getId(),
+                new TranscribeApiResponse(true, item.source(), item.lang(), item.content(), item.charCount(), null));
+        } catch (DataIntegrityViolationException e) {
+            // 이 판정(status 조회)과 실제 저장 사이에 정규 파이프라인(Kafka
+            // video.selected 이벤트 등)이 같은 영상을 먼저 처리해버리는 경합이
+            // 실제로 있었다(2026-09-15, uk_transcript 유니크 제약 위반으로 500
+            // 재현) - 저장 시점에 또 한 번 걸러 안전하게 스킵 처리한다.
+            log.info("자막 수동 임포트: 저장 시점에 이미 처리됨(경합) - 스킵: externalVideoId={}", item.externalVideoId());
+            return TranscriptImportResult.alreadyDone(item.externalVideoId(), "저장 시점에 이미 처리됨(경합)");
+        }
         log.info("자막 수동 임포트 완료: externalVideoId={}, videoId={}", item.externalVideoId(), video.getId());
         return TranscriptImportResult.imported(item.externalVideoId());
     }
