@@ -2,7 +2,9 @@ package com.quantlime.videofeed.controller;
 
 import com.quantlime.common.exception.ValidationException;
 import com.quantlime.videofeed.dto.CollectResult;
+import com.quantlime.videofeed.dto.TranscriptImportResult;
 import com.quantlime.videofeed.dto.mapper.VideoFeedMapper;
+import com.quantlime.videofeed.dto.request.TranscriptImportRequest;
 import com.quantlime.videofeed.dto.response.ChannelResponse;
 import com.quantlime.videofeed.exception.VideoFeedErrorCode;
 import com.quantlime.videofeed.service.ChannelQueryService;
@@ -10,10 +12,12 @@ import com.quantlime.videofeed.service.ChannelVelocityInitializationService;
 import com.quantlime.videofeed.service.FeedCollectionFacade;
 import com.quantlime.videofeed.service.SummaryCollectionFacade;
 import com.quantlime.videofeed.service.TranscriptCollectionFacade;
+import com.quantlime.videofeed.service.TranscriptImportService;
 import com.quantlime.videofeed.service.VideoRetentionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.math.BigDecimal;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +25,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -41,6 +46,7 @@ public class FeedCollectionAdminController {
     private final SummaryCollectionFacade summaryCollectionFacade;
     private final VideoRetentionService videoRetentionService;
     private final ChannelQueryService channelQueryService;
+    private final TranscriptImportService transcriptImportService;
 
     @GetMapping("/channels")
     @Operation(summary = "채널 목록 조회",
@@ -88,6 +94,19 @@ public class FeedCollectionAdminController {
     @ApiResponse(useReturnTypeSchema = true)
     public ResponseEntity<BigDecimal> initializeVelocity(@PathVariable Long channelId) {
         return ResponseEntity.ok(channelVelocityInitializationService.initializeMedianVelocity(channelId));
+    }
+
+    @PostMapping("/transcripts/import")
+    @Operation(summary = "자막 수동 임포트(로컬 수집분 반영)",
+        description = "youtube-transcript-api가 운영 서버 IP를 차단해 직접 자막 수집이 막힌 경우, "
+            + "로컬에서 미리 수집한 자막을 externalVideoId로 매칭해 반영한다. 항목별로 "
+            + "IMPORTED(반영됨)/ALREADY_DONE(이미 처리됨, 스킵)/NOT_FOUND(운영에 해당 영상 없음)/"
+            + "INVALID_STATUS(자막을 받을 수 없는 상태)로 결과를 알려준다 - 같은 목록을 여러 번 "
+            + "보내도 안전(멱등)하므로 로컬 DB 전량을 매번 그대로 보내도 된다.")
+    @ApiResponse(useReturnTypeSchema = true)
+    public ResponseEntity<List<TranscriptImportResult>> importTranscripts(
+            @Valid @RequestBody TranscriptImportRequest request) {
+        return ResponseEntity.ok(transcriptImportService.importAll(request));
     }
 
     @PostMapping("/retention/cleanup")
