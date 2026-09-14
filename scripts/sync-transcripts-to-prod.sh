@@ -4,18 +4,21 @@
 #
 # youtube-transcript-api가 운영 서버(AWS) IP를 차단해(IpBlocked, 2026-09
 # 발견) 운영에서 직접 자막을 못 가져오는 문제의 우회로 - 로컬(IP 차단 없음)
-# 에서 이미 수집해둔 자막을 운영 DB로 옮긴다. 로컬이 간헐적으로만 켜지는
-# 환경이라 "지난번에 뭘 보냈는지" 추적하지 않고, 매번 로컬 DB의 TRANSCRIBED/
-# SUMMARIZED 영상 전량을 그대로 보낸다 - 운영 쪽 /api/admin/feed/transcripts/import가
-# 이미 처리된 영상은 조용히 스킵하는 멱등 엔드포인트라 안전하다(반복 실행/
-# 중간에 끊겨도 다음 실행이 빠진 부분을 마저 채움).
+# 에서 이미 수집해둔 자막을 운영 DB로 옮긴다. 정규 경로는 자막이 저장되는
+# 즉시 Kafka 이벤트로 실시간 동기화하는 LocalTranscriptSyncConsumer(로컬
+# 백엔드가 떠있을 때만 동작)이고, 이 스크립트는 그 실시간 경로가 놓친
+# 백로그(로컬 백엔드가 꺼져있던 동안 쌓인 것, 이 기능 도입 이전 자막 등)를
+# 보충하는 수동 배치용이다. 로컬이 간헐적으로만 켜지는 환경이라 "지난번에
+# 뭘 보냈는지" 추적하지 않고, 매번 로컬 DB의 TRANSCRIBED/SUMMARIZED 영상
+# 전량을 그대로 보낸다 - 운영 쪽 /api/admin/feed/transcripts/import가 이미
+# 처리된 영상은 조용히 스킵하는 멱등 엔드포인트라 안전하다.
 #
 # 사용법:
-#   PROD_ADMIN_TOKEN="eyJ..." ./scripts/sync-transcripts-to-prod.sh
+#   SYNC_API_KEY="..." ./scripts/sync-transcripts-to-prod.sh
 #
-# PROD_ADMIN_TOKEN 얻는 법: quantlime.com에 ROLE_ADMIN 계정(카카오)으로
-# 로그인한 뒤, 브라우저 개발자도구 > Application > Local Storage에서
-# accessToken 값을 복사한다. 유효시간 30분이라 매번 새로 받아야 한다.
+# SYNC_API_KEY는 로컬 .env와 운영 .env.prod가 공유하는 대칭키다(SYNC_API_KEY
+# 환경변수, application.yml의 sync.api-key) - 브라우저 로그인/토큰 복사가
+# 필요 없다.
 set -euo pipefail
 
 QUANTLIME_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -26,8 +29,8 @@ LOCAL_DB_USER="${LOCAL_DB_USER:-root}"
 LOCAL_DB_PASSWORD="${LOCAL_DB_PASSWORD:-quantlime}"
 LOCAL_DB_NAME="${LOCAL_DB_NAME:-quantlime}"
 
-if [ -z "${PROD_ADMIN_TOKEN:-}" ]; then
-    echo "[sync-transcripts] PROD_ADMIN_TOKEN 환경변수가 필요합니다(스크립트 상단 주석 참고)." >&2
+if [ -z "${SYNC_API_KEY:-}" ]; then
+    echo "[sync-transcripts] SYNC_API_KEY 환경변수가 필요합니다(스크립트 상단 주석 참고)." >&2
     exit 1
 fi
 
@@ -71,7 +74,7 @@ with open('$JSON_FILE', 'w', encoding='utf-8') as f:
 "
 
 curl -sS -m 120 -X POST \
-    -H "Authorization: Bearer $PROD_ADMIN_TOKEN" \
+    -H "X-Sync-Api-Key: $SYNC_API_KEY" \
     -H "Content-Type: application/json" \
     --data @"$JSON_FILE" \
     "$PROD_API_BASE/api/admin/feed/transcripts/import" > "$RESPONSE_FILE"

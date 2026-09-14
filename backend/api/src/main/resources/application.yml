@@ -286,6 +286,14 @@ upload:
   max-size-bytes: ${UPLOAD_MAX_SIZE_BYTES:5242880}
   public-base-url: ${UPLOAD_PUBLIC_BASE_URL:http://localhost:8080}
 
+# 로컬↔운영 자막 동기화(2026-09-15, youtube-transcript-api의 운영 IP 차단
+# 우회) 전용 설정 - api-key는 로컬/운영 양쪽에 같은 값을 넣어야 하는
+# 대칭키(SyncApiKeyAuthenticationFilter/SyncApiClient 참고). prod-api-base는
+# 로컬에서만 채운다(운영은 자기 자신을 호출하지 않음).
+sync:
+  api-key: ${SYNC_API_KEY:}
+  prod-api-base: ${SYNC_PROD_API_BASE:}
+
 slack:
   # 사이드패널 "의견 보내기" 기능이 전송할 Incoming Webhook URL. 비어
   # 있으면 SlackWebhookClient가 조용히 실패하지 않고 명시적으로

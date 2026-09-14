@@ -3,6 +3,7 @@ package com.quantlime.auth.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.quantlime.auth.exception.AuthErrorCode;
 import com.quantlime.auth.filter.JwtAuthenticationFilter;
+import com.quantlime.auth.filter.SyncApiKeyAuthenticationFilter;
 import com.quantlime.common.exception.ErrorResponseTemplate;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -60,6 +61,7 @@ public class SecurityConfig {
     };
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final SyncApiKeyAuthenticationFilter syncApiKeyAuthenticationFilter;
     private final ObjectMapper objectMapper;
 
     @Value("${app.cors.allowed-origin:http://localhost:3001}")
@@ -112,7 +114,8 @@ public class SecurityConfig {
                 .accessDeniedHandler((request, response, e) ->
                     writeErrorResponse(response, HttpServletResponse.SC_FORBIDDEN,
                         AuthErrorCode.INVALID_TOKEN)))
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterBefore(syncApiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 
