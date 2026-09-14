@@ -16,6 +16,10 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 
     boolean existsByExternalVideoId(String externalVideoId);
 
+    // 자막 수동 임포트(TranscriptImportService) - 로컬에서 성공적으로 수집한
+    // 자막을 external_video_id로 매칭해 운영 DB에 반영할 때 쓴다.
+    Optional<Video> findByExternalVideoId(String externalVideoId);
+
     List<Video> findByChannelAndStatus(Channel channel, VideoStatus status);
 
     // SummaryProcessingService가 트랜잭션 밖(quant-engine 호출 전)에서
