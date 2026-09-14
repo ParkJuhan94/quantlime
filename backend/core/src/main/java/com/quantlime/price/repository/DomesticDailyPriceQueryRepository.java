@@ -2,6 +2,7 @@ package com.quantlime.price.repository;
 
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.dto.DomesticStockTradingValue;
+import com.quantlime.price.dto.LiquiditySnapshot;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -28,4 +29,23 @@ public interface DomesticDailyPriceQueryRepository {
      * 자동으로 집계에서 빠진다.
      */
     List<DomesticStockTradingValue> findTopByTradingValue(LocalDate since, int limit);
+
+    /**
+     * {@code since} 이후 누적 거래대금(종가×거래량 합) 상위 순으로 정렬된
+     * 전체 종목코드 - limit 없이 전부 반환한다.
+     * {@link com.quantlime.market.service.MarketDataRefreshService}가
+     * 전종목 가격/스코어 갱신 순서를 결정하는 데 쓴다 - 갱신 도중 프로세스가
+     * 중단돼도(리소스 부족·재기동 등) 실사용 비중이 큰 종목이 먼저
+     * 반영되게 하기 위함(2026-09 감사 세션 - KOSPI가 KOSDAQ보다 항상 뒤늦게
+     * 처리돼 몇 주간 스코어가 갱신 안 되던 문제의 재발 방지책).
+     */
+    List<String> findStockCodesOrderedByTradingValueDesc(LocalDate since);
+
+    /**
+     * {@code since} 이후 종목별 일평균 거래대금(종가×거래량)과 거래량 0인
+     * 날 수를 집계한다 - 스코어 랭킹의 유동성/거래정지 필터 및 횡단면
+     * 정규화 모집단 결정용({@link com.quantlime.price.domain.StockLiquidity}
+     * 참고, 2026-09 감사 세션).
+     */
+    List<LiquiditySnapshot> findLiquiditySnapshot(LocalDate since);
 }

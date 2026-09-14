@@ -8,6 +8,8 @@ import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.price.repository.DomesticDailyPriceRepository;
 import com.quantlime.price.repository.OverseasDailyPriceRepository;
 import com.quantlime.price.service.PriceGapFillService;
+import com.quantlime.price.service.StockLiquidityService;
+import com.quantlime.score.domain.PeerGroup;
 import com.quantlime.score.repository.ScoreRepository;
 import com.quantlime.score.service.ScoreService;
 import com.quantlime.stock.domain.Stock;
@@ -17,7 +19,10 @@ import com.quantlime.stock.service.DomesticStockMasterSyncService;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -57,6 +62,13 @@ public class MarketDataRefreshService {
     // 실제 소요시간보다 짧으면 락이 만료돼 다른 트리거가 끼어들어 이
     // 수정의 목적(동시 실행 방지) 자체가 무의미해진다.
     private static final Duration LOCK_TTL = Duration.ofMinutes(60);
+    // 갱신 순서 결정용 거래대금 조회 기간 - DomesticUniverseSelectionService의
+    // 백테스트 유니버스 선정("최근 3개월")과 같은 값을 재사용한다.
+    private static final long TRADING_VALUE_LOOKBACK_MONTHS = 3;
+    // 유동성 스냅샷("최근 20거래일") 조회 기간 - 달력일 기준 근사치. 주말+
+    // 공휴일을 감안해 20거래일을 넉넉히 커버하도록 여유를 둔다(정밀한
+    // 거래일 캘린더 조인 없이 단순 날짜 뺄셈으로 충분한 용도).
+    private static final long LIQUIDITY_LOOKBACK_CALENDAR_DAYS = 28;
 
     private final StockMasterService stockMasterService;
     private final DomesticStockMasterSyncService domesticStockMasterSyncService;
@@ -65,6 +77,7 @@ public class MarketDataRefreshService {
     private final OverseasDailyPriceRepository overseasDailyPriceRepository;
     private final ScoreRepository scoreRepository;
     private final PriceGapFillService priceGapFillService;
+    private final StockLiquidityService stockLiquidityService;
     private final ScoreService scoreService;
     private final BenchmarkIndexBackfillService benchmarkIndexBackfillService;
     private final InvestorTradingBackfillService investorTradingBackfillService;
@@ -106,14 +119,19 @@ public class MarketDataRefreshService {
         // 가격 소스가 커버하지 않는 것으로 이미 표시된 종목(price_unsupported)은
         // 제외한다 - 매 기동마다 같은 stock-not-found(404)를 반복하지 않기 위함.
         List<Stock> stocks = stockMasterService.getAllListedStocks();
-        List<Stock> domestic = stocks.stream()
-            .filter(stock -> stock.getMarketType().isDomestic())
-            .filter(stock -> !stock.isPriceUnsupported())
-            .toList();
-        List<Stock> overseas = stocks.stream()
-            .filter(stock -> !stock.getMarketType().isDomestic())
-            .filter(stock -> !stock.isPriceUnsupported())
-            .toList();
+        LocalDate tradingValueSince = LocalDate.now().minusMonths(TRADING_VALUE_LOOKBACK_MONTHS);
+        List<Stock> domestic = orderByTradingValueDesc(
+            stocks.stream()
+                .filter(stock -> stock.getMarketType().isDomestic())
+                .filter(stock -> !stock.isPriceUnsupported())
+                .toList(),
+            domesticDailyPriceRepository.findStockCodesOrderedByTradingValueDesc(tradingValueSince));
+        List<Stock> overseas = orderByTradingValueDesc(
+            stocks.stream()
+                .filter(stock -> !stock.getMarketType().isDomestic())
+                .filter(stock -> !stock.isPriceUnsupported())
+                .toList(),
+            overseasDailyPriceRepository.findStockCodesOrderedByTradingValueDesc(tradingValueSince));
 
         AtomicInteger domesticFailures = new AtomicInteger();
         AtomicInteger overseasFailures = new AtomicInteger();
@@ -150,11 +168,18 @@ public class MarketDataRefreshService {
 
     private void refreshDomestic(List<Stock> stocks, AtomicInteger failures) {
         List<String> needsScoreRefresh = new ArrayList<>();
+        int processed = 0;
         for (Stock stock : stocks) {
             String stockCode = stock.getStockCode();
             try {
                 boolean calledApi = priceGapFillService.fillDomesticGap(stockCode);
                 if (calledApi && !sleepBetweenStocks()) {
+                    // 인터럽트로 중단되면 이후 종목(거래대금순 정렬 기준
+                    // 처리 못 한 나머지)이 이번 실행에서 아예 반영되지 않는다
+                    // - 다음에 같은 절단이 재발해도 로그만 보고 즉시 규모를
+                    // 파악할 수 있게 명시적으로 남긴다(2026-09 감사 세션 -
+                    // 원인 규명 당시 이 신호가 없어 원인 특정에 시간이 걸렸다).
+                    log.warn("국내 가격 갱신 중단(인터럽트): 처리={}/{}", processed, stocks.size());
                     break;
                 }
             } catch (Exception e) {
@@ -163,17 +188,31 @@ public class MarketDataRefreshService {
             if (needsScoreRefresh(stockCode, latestPriceDate(stockCode))) {
                 needsScoreRefresh.add(stockCode);
             }
+            processed++;
         }
+        // 유동성 스냅샷은 스코어 재계산보다 먼저 갱신한다 - 횡단면 정규화
+        // 모집단(잡주 제외) 결정에 쓰이므로 그 전 단계에서 최신이어야 한다.
+        // 실패해도 가격/스코어 갱신 자체는 막지 않는다(다른 백필과 동일 패턴).
+        SafeExecutor.runSafely("국내 유동성 스냅샷 갱신",
+            () -> stockLiquidityService.refreshDomestic(liquidityLookbackSince()));
         scoreService.recalculateDomesticScores(needsScoreRefresh);
+        // 원점수 저장 직후 같은 사이클 안에서 백분위/등급을 채운다 -
+        // recalculateDomesticScores가 이미 grade를 null로 초기화해 두므로
+        // (Score.updateFrom 주석 참고), 실패해도 다음 배치에서 재시도되게
+        // 격리한다.
+        SafeExecutor.runSafely("국내 스코어 횡단면 정규화",
+            () -> scoreService.normalizeCrossSection(PeerGroup.DOMESTIC));
     }
 
     private void refreshOverseas(List<Stock> stocks, AtomicInteger failures) {
         List<String> needsScoreRefresh = new ArrayList<>();
+        int processed = 0;
         for (Stock stock : stocks) {
             String stockCode = stock.getStockCode();
             try {
                 boolean calledApi = priceGapFillService.fillOverseasGap(stockCode);
                 if (calledApi && !sleepBetweenStocks()) {
+                    log.warn("해외 가격 갱신 중단(인터럽트): 처리={}/{}", processed, stocks.size());
                     break;
                 }
             } catch (Exception e) {
@@ -182,8 +221,13 @@ public class MarketDataRefreshService {
             if (needsScoreRefresh(stockCode, latestOverseasPriceDate(stockCode))) {
                 needsScoreRefresh.add(stockCode);
             }
+            processed++;
         }
+        SafeExecutor.runSafely("해외 유동성 스냅샷 갱신",
+            () -> stockLiquidityService.refreshOverseas(liquidityLookbackSince()));
         scoreService.recalculateOverseasScores(needsScoreRefresh);
+        SafeExecutor.runSafely("해외 스코어 횡단면 정규화",
+            () -> scoreService.normalizeCrossSection(PeerGroup.OVERSEAS));
     }
 
     /**
@@ -290,5 +334,34 @@ public class MarketDataRefreshService {
         return scoreRepository.findTopByStockCodeOrderByScoreDateDesc(stockCode)
             .map(score -> score.getScoreDate().isBefore(latestPriceDate.get()))
             .orElse(true);
+    }
+
+    /**
+     * {@code stocks}를 {@code rankedCodesDesc}(거래대금 상위 순 종목코드)의
+     * 순서로 정렬한다 - 갱신 도중 중단돼도(리소스 부족·재기동 등) 실사용
+     * 비중이 큰 종목이 먼저 처리되게 하기 위함(2026-09 감사 세션).
+     *
+     * <p>이전엔 {@code getAllListedStocks()}가 반환하는 순서(사실상
+     * {@code idx_stock_listing_status_market_type} 인덱스 스캔 순서, 시장구분
+     * enum명 오름차순인 KONEX→KOSDAQ→KOSPI)를 그대로 썼다 - 이 순서에는
+     * 아무 의도가 없었는데도 실행이 중간에 끊기면 항상 KOSPI가 가장 먼저
+     * 희생됐다(실측 - KOSPI 스코어가 몇 주간 갱신 안 됨). 거래대금 순위에
+     * 없는 종목(신규상장 등 최근 {@link #TRADING_VALUE_LOOKBACK_MONTHS}개월
+     * 거래 이력이 없는 경우)은 원래 상대 순서를 유지한 채 맨 뒤로 보낸다
+     * (안정 정렬 - {@link List#sort}는 TimSort라 동순위끼리 순서가 안 바뀐다).
+     */
+    private LocalDate liquidityLookbackSince() {
+        return LocalDate.now().minusDays(LIQUIDITY_LOOKBACK_CALENDAR_DAYS);
+    }
+
+    private List<Stock> orderByTradingValueDesc(List<Stock> stocks, List<String> rankedCodesDesc) {
+        Map<String, Integer> rankByCode = new HashMap<>();
+        for (int i = 0; i < rankedCodesDesc.size(); i++) {
+            rankByCode.put(rankedCodesDesc.get(i), i);
+        }
+        List<Stock> ordered = new ArrayList<>(stocks);
+        ordered.sort(Comparator.comparingInt(
+            stock -> rankByCode.getOrDefault(stock.getStockCode(), Integer.MAX_VALUE)));
+        return ordered;
     }
 }

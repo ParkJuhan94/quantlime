@@ -1,10 +1,15 @@
 package com.quantlime.score.dto.mapper;
 
+import com.quantlime.infra.python.dto.CrossSectionNormalizeApiRequest;
+import com.quantlime.infra.python.dto.CrossSectionNormalizeApiRequest.AxisScoreApiItem;
 import com.quantlime.infra.python.dto.ScoreBatchApiRequest;
 import com.quantlime.infra.python.dto.ScoreBatchApiRequest.OhlcvApiItem;
 import com.quantlime.infra.python.dto.ScoreBatchApiRequest.StockScoreApiRequest;
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
+import com.quantlime.score.domain.PeerGroup;
+import com.quantlime.score.domain.Score;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import lombok.NoArgsConstructor;
@@ -13,6 +18,15 @@ import static lombok.AccessLevel.PRIVATE;
 
 @NoArgsConstructor(access = PRIVATE)
 public final class ScoreRequestMapper {
+
+    public static CrossSectionNormalizeApiRequest toNormalizeRequest(
+        LocalDate asOf, PeerGroup peerGroup, List<Score> latestScores) {
+        List<AxisScoreApiItem> items = latestScores.stream()
+            .map(score -> new AxisScoreApiItem(
+                score.getStockCode(), score.getTrendScore(), score.getMeanReversionScore()))
+            .toList();
+        return new CrossSectionNormalizeApiRequest(asOf.toString(), peerGroup.getWireValue(), items);
+    }
 
     public static StockScoreApiRequest toStockScoreApiRequest(
         String stockCode, List<DomesticDailyPrice> domesticDailyPrices) {

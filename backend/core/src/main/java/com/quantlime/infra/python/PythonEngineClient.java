@@ -7,6 +7,8 @@ import com.quantlime.infra.python.dto.BacktestApiRequest;
 import com.quantlime.infra.python.dto.BacktestApiResponse;
 import com.quantlime.infra.python.dto.CrossSectionalBacktestApiRequest;
 import com.quantlime.infra.python.dto.CrossSectionalBacktestApiResponse;
+import com.quantlime.infra.python.dto.CrossSectionNormalizeApiRequest;
+import com.quantlime.infra.python.dto.CrossSectionNormalizeApiResponse;
 import com.quantlime.infra.python.dto.ScoreBatchApiRequest;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse;
 import com.quantlime.infra.python.dto.SummarizeApiRequest;
@@ -39,15 +41,15 @@ import org.springframework.web.client.RestClient;
  * 실제로 걸릴 수 있는 경로).
  *
  * <p>{@link #calculateScoreSeries}/{@link #runBacktest}/{@link #runCrossSectionalBacktest}/
- * {@link #summarize} 4개는 {@code "quant-engine"} 인스턴스를 공유하지만,
- * {@link #fetchTranscript}만 {@code "quant-engine-transcript"}로 분리돼 있다
- * (application.yml 설정 참고, 2026-09-14). 자막 조회는 quant-engine 프로세스가
- * 아니라 유튜브 자막 스크래핑(IP 차단 등)에 실패 원인이 있는 경우가 대부분이라,
- * 같은 인스턴스를 쓰면 그 장애가 무관한 스코어/백테스트 호출까지 fail-fast로
- * 막아버린다(2026-09-13 실제 발생 - 자막 500 5연속으로 CB가 열려 국내 스코어
- * 재계산 26개 청크 중 20개가 즉시 차단됨). quant-engine 프로세스 자체가
- * 죽는 경우는 어차피 4개 메서드 모두 곧 임계치를 넘겨 각자 OPEN되므로,
- * 인스턴스를 나눠도 감지가 늦어지는 대가는 미미하다.
+ * {@link #normalizeCrossSection}/{@link #summarize} 5개는 {@code "quant-engine"}
+ * 인스턴스를 공유하지만, {@link #fetchTranscript}만 {@code "quant-engine-transcript"}로
+ * 분리돼 있다(application.yml 설정 참고, 2026-09-14). 자막 조회는 quant-engine
+ * 프로세스가 아니라 유튜브 자막 스크래핑(IP 차단 등)에 실패 원인이 있는
+ * 경우가 대부분이라, 같은 인스턴스를 쓰면 그 장애가 무관한 스코어/백테스트
+ * 호출까지 fail-fast로 막아버린다(2026-09-13 실제 발생 - 자막 500 5연속으로
+ * CB가 열려 국내 스코어 재계산 26개 청크 중 20개가 즉시 차단됨). quant-engine
+ * 프로세스 자체가 죽는 경우는 어차피 5개 메서드 모두 곧 임계치를 넘겨 각자
+ * OPEN되므로, 인스턴스를 나눠도 감지가 늦어지는 대가는 미미하다.
  */
 @Slf4j
 @Component
@@ -132,6 +134,26 @@ public class PythonEngineClient {
                         .body(request)
                         .retrieve()
                         .body(CrossSectionalBacktestApiResponse.class));
+            recordOutcome(OUTCOME_SUCCESS, sample);
+            return response;
+        } catch (ExternalApiException e) {
+            recordOutcome(OUTCOME_FAILURE, sample);
+            throw e;
+        }
+    }
+
+    @CircuitBreaker(name = "quant-engine")
+    @Bulkhead(name = "quant-engine")
+    public CrossSectionNormalizeApiResponse normalizeCrossSection(CrossSectionNormalizeApiRequest request) {
+        Timer.Sample sample = Timer.start(meterRegistry);
+        try {
+            CrossSectionNormalizeApiResponse response = ExternalApiInvoker.call(
+                PythonEngineErrorCode.CROSS_SECTION_NORMALIZATION_FAILED, () ->
+                    pythonEngineRestClient.post()
+                        .uri("/normalize/cross-section")
+                        .body(request)
+                        .retrieve()
+                        .body(CrossSectionNormalizeApiResponse.class));
             recordOutcome(OUTCOME_SUCCESS, sample);
             return response;
         } catch (ExternalApiException e) {

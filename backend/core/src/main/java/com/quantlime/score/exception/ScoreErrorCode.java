@@ -10,7 +10,8 @@ public enum ScoreErrorCode implements ErrorCode {
 
     NOT_FOUND_SCORE("아직 계산된 스코어가 없습니다.", "SC_000"),
     INVALID_GRADE("유효하지 않은 등급입니다.", "SC_001"),
-    INVALID_QUADRANT("유효하지 않은 사분면 코드입니다.", "SC_002");
+    INVALID_QUADRANT("유효하지 않은 사분면 코드입니다.", "SC_002"),
+    INVALID_PEER_GROUP("유효하지 않은 정규화 모집단입니다.", "SC_003");
 
     private final String message;
     private final String code;

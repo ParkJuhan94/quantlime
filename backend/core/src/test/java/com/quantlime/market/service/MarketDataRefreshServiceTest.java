@@ -15,6 +15,7 @@ import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.price.repository.DomesticDailyPriceRepository;
 import com.quantlime.price.repository.OverseasDailyPriceRepository;
 import com.quantlime.price.service.PriceGapFillService;
+import com.quantlime.price.service.StockLiquidityService;
 import com.quantlime.score.domain.Score;
 import com.quantlime.score.repository.ScoreRepository;
 import com.quantlime.score.service.ScoreService;
@@ -70,6 +71,9 @@ class MarketDataRefreshServiceTest {
     private PriceGapFillService priceGapFillService;
 
     @Mock
+    private StockLiquidityService stockLiquidityService;
+
+    @Mock
     private ScoreService scoreService;
 
     @Mock
@@ -97,7 +101,7 @@ class MarketDataRefreshServiceTest {
         marketDataRefreshService = new MarketDataRefreshService(
             stockMasterService, domesticStockMasterSyncService, overseasStockMasterSyncService,
             domesticDailyPriceRepository, overseasDailyPriceRepository,
-            scoreRepository, priceGapFillService, scoreService,
+            scoreRepository, priceGapFillService, stockLiquidityService, scoreService,
             benchmarkIndexBackfillService, investorTradingBackfillService, redisLockService,
             domesticMarketDataRefreshTaskExecutor, overseasMarketDataRefreshTaskExecutor);
     }

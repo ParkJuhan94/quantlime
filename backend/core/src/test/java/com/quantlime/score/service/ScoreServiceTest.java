@@ -10,6 +10,7 @@ import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.DivergenceApiR
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.StockScoreSeriesApiResponse;
 import com.quantlime.infra.python.exception.PythonEngineErrorCode;
 import com.quantlime.price.domain.DomesticDailyPrice;
+import com.quantlime.price.repository.StockLiquidityRepository;
 import com.quantlime.price.service.DomesticDailyPriceService;
 import com.quantlime.score.domain.Divergence;
 import com.quantlime.score.domain.Quadrant;
@@ -62,6 +63,9 @@ class ScoreServiceTest {
 
     @Mock
     private ScoreRepository scoreRepository;
+
+    @Mock
+    private StockLiquidityRepository stockLiquidityRepository;
 
     @Mock
     private WatchlistRepository watchlistRepository;

@@ -24,4 +24,12 @@ public interface ScoreQueryRepository {
      *                     상위 N개가 한쪽 시장으로 쏠리는 문제가 있었음).
      */
     List<Score> findTopScoresOrderByCompositeScoreDesc(int limit, List<MarketType> marketTypes);
+
+    /**
+     * {@code marketTypes}(상장·가격지원·유동성 조건을 모두 만족하는
+     * 종목만)의 종목별 최신 스코어 행을 limit/정렬 없이 전부 반환한다 -
+     * 횡단면 정규화(quant-engine `/normalize/cross-section`) 입력 모집단으로
+     * 쓰인다({@link com.quantlime.score.service.ScoreService#normalizeCrossSection}).
+     */
+    List<Score> findLatestScoresForNormalization(List<MarketType> marketTypes);
 }

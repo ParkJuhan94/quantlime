@@ -2,13 +2,19 @@ package com.quantlime.score.service;
 
 import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.infra.python.PythonEngineClient;
+import com.quantlime.infra.python.dto.CrossSectionNormalizeApiRequest;
+import com.quantlime.infra.python.dto.CrossSectionNormalizeApiResponse;
 import com.quantlime.infra.python.dto.ScoreBatchApiRequest;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.StockScoreSeriesApiResponse;
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
+import com.quantlime.price.domain.StockLiquidity;
 import com.quantlime.price.repository.OverseasDailyPriceRepository;
+import com.quantlime.price.repository.StockLiquidityRepository;
 import com.quantlime.price.service.DomesticDailyPriceService;
+import com.quantlime.score.domain.Grade;
+import com.quantlime.score.domain.PeerGroup;
 import com.quantlime.score.domain.Score;
 import com.quantlime.score.dto.mapper.ScoreMapper;
 import com.quantlime.score.dto.mapper.ScoreRequestMapper;
@@ -25,8 +31,10 @@ import com.quantlime.watchlist.repository.WatchlistRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -64,6 +72,7 @@ public class ScoreService {
     private final PythonEngineClient pythonEngineClient;
     private final ScorePersistenceService scorePersistenceService;
     private final ScoreRepository scoreRepository;
+    private final StockLiquidityRepository stockLiquidityRepository;
     private final WatchlistRepository watchlistRepository;
     private final StockMasterService stockMasterService;
     private final MeterRegistry meterRegistry;
@@ -198,13 +207,15 @@ public class ScoreService {
         List<Score> latestScores = scoreRepository
             .findLatestScoresByStockCodesOrderByCompositeScoreDesc(
                 stockByCode.keySet().stream().toList());
+        Map<String, Double> avgTradingValueByCode = avgTradingValueByStockCode(stockByCode.keySet());
 
         return latestScores.stream()
             .map(score -> {
                 Stock stock = stockByCode.get(score.getStockCode());
                 return ScoreMapper.toScoreRankingResponse(
                     score, stock.getDisplayName(), stock.getSector(), StockMapper.toLogoUrl(stock),
-                    !stock.getMarketType().isDomestic());
+                    !stock.getMarketType().isDomestic(),
+                    avgTradingValueByCode.get(score.getStockCode()));
             })
             .toList();
     }
@@ -219,15 +230,82 @@ public class ScoreService {
         List<String> stockCodes = latestScores.stream().map(Score::getStockCode).toList();
         Map<String, Stock> stockByCode = stockMasterService.getStocksByCodesInOrder(stockCodes).stream()
             .collect(Collectors.toMap(Stock::getStockCode, stock -> stock));
+        Map<String, Double> avgTradingValueByCode = avgTradingValueByStockCode(stockByCode.keySet());
 
+        // getStocksByCodesInOrder는 stock 테이블에 없는 코드를 조용히 버린다
+        // (StockMasterService 주석 참고) - 쿼리 자체가 이제 stock을 이너
+        // 조인해 걸러진 코드만 반환하므로 실제로는 항상 채워져 있어야
+        // 하지만, 그 전제가 깨지는 경우(레이스 컨디션 등)에 대비해 방어적으로
+        // null을 건너뛴다(2026-09 감사 세션 - 예전엔 stock이 null이면
+        // getDisplayName() 호출에서 그대로 NPE가 났다).
         return latestScores.stream()
             .map(score -> {
                 Stock stock = stockByCode.get(score.getStockCode());
+                if (stock == null) {
+                    log.warn("스코어 랭킹 종목 조회 실패(stock 테이블에 없음), 건너뜀: stockCode={}",
+                        score.getStockCode());
+                    return null;
+                }
                 return ScoreMapper.toScoreRankingResponse(
                     score, stock.getDisplayName(), stock.getSector(), StockMapper.toLogoUrl(stock),
-                    !stock.getMarketType().isDomestic());
+                    !stock.getMarketType().isDomestic(),
+                    avgTradingValueByCode.get(score.getStockCode()));
             })
+            .filter(Objects::nonNull)
             .toList();
+    }
+
+    private Map<String, Double> avgTradingValueByStockCode(Collection<String> stockCodes) {
+        return stockLiquidityRepository.findAllByStockCodeIn(List.copyOf(stockCodes)).stream()
+            .collect(Collectors.toMap(StockLiquidity::getStockCode, StockLiquidity::getAvgTradingValue20d));
+    }
+
+    /**
+     * {@code peerGroup}(국내 또는 해외) 안에서 상장·가격지원·유동성 조건을
+     * 만족하는 종목들의 최신 절대 서브스코어를 quant-engine에 넘겨 횡단면
+     * 백분위를 받고, 각 종목의 최신 {@link Score} 행에 반영한다. 원점수
+     * 계산({@link #recalculateDomesticScores}/{@link #recalculateOverseasScores})
+     * 직후·같은 refreshAll() 사이클 안에서 호출돼야 한다 - 그 두 메서드가
+     * 이미 {@code Score.grade}를 null로 초기화해 두므로({@link Score#updateFrom}
+     * 주석 참고), 이 메서드가 실행되지 않으면 등급이 빈 채로 남는다.
+     *
+     * <p>표본이 quant-engine의 최소 기준(MIN_STOCKS_PER_DATE) 미만이면
+     * {@code minSampleMet=false}로 아무것도 반영하지 않는다 - 그 날짜의
+     * 횡단면 순위 자체가 불안정하기 때문(calculator/normalization.py 참고).
+     */
+    @Transactional
+    public void normalizeCrossSection(PeerGroup peerGroup) {
+        List<MarketType> marketTypes = peerGroup == PeerGroup.DOMESTIC
+            ? MarketType.domesticValues() : MarketType.overseasValues();
+        List<Score> latestScores = scoreRepository.findLatestScoresForNormalization(marketTypes);
+        if (latestScores.isEmpty()) {
+            log.debug("횡단면 정규화 스킵: 대상 종목 없음, peerGroup={}", peerGroup);
+            return;
+        }
+
+        Map<String, Score> scoreByStockCode = latestScores.stream()
+            .collect(Collectors.toMap(Score::getStockCode, score -> score));
+        CrossSectionNormalizeApiRequest request = ScoreRequestMapper.toNormalizeRequest(
+            LocalDate.now(), peerGroup, latestScores);
+        CrossSectionNormalizeApiResponse response = pythonEngineClient.normalizeCrossSection(request);
+
+        if (!response.minSampleMet()) {
+            log.info("횡단면 정규화 스킵: 표본 부족, peerGroup={}, 대상종목수={}",
+                peerGroup, latestScores.size());
+            return;
+        }
+
+        for (CrossSectionNormalizeApiResponse.NormalizedItemApiResponse item : response.items()) {
+            Score score = scoreByStockCode.get(item.stockCode());
+            if (score == null) {
+                continue;
+            }
+            Grade grade = item.grade() != null ? Grade.of(item.grade()) : null;
+            score.applyNormalization(
+                item.trendPercentile(), item.meanReversionPercentile(),
+                item.compositePercentile(), grade, peerGroup);
+        }
+        log.info("횡단면 정규화 완료: peerGroup={}, 대상종목수={}", peerGroup, latestScores.size());
     }
 
     /**
