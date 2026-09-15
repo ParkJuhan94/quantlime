@@ -74,14 +74,17 @@ public class DomesticStockMasterSyncService {
 
         Map<String, MarketType> marketByCode = resolveMarketTypes(newCodes);
         int count = 0;
+        int unresolvedMarketCount = 0;
         for (String code : newCodes) {
             MarketType marketType = marketByCode.get(code);
             if (marketType == null) {
-                // 코넥스 등 Toss가 KOSPI/KOSDAQ로 분류하지 않는 시장이거나
-                // Toss 조회 자체가 실패한 경우 - 잘못된 시장구분으로 등록하지
-                // 않고 다음 동기화(내일 배치)에서 다시 시도되게 스킵한다.
-                log.warn("종목마스터 동기화: 시장구분 확인 불가로 신규 등록 스킵: stockCode={}, name={}",
-                    code, latestByCode.get(code).corpName());
+                // 코넥스, 우선주/SPAC 등 Toss가 아예 취급하지 않는 종목이
+                // DART 목록에는 실제로 다수 섞여있다(2026-09 실측 - 신규 후보
+                // 1224건 중 1218건이 여기 해당, 매일 동일 종목이 반복
+                // 스킵됨) - 종목별 개별 로그를 남기면 매 배치마다 수천 줄이
+                // 쌓이므로 건수만 요약한다. 잘못된 시장구분으로 등록하지
+                // 않고 다음 동기화에서도 계속 재시도되게 둔다.
+                unresolvedMarketCount++;
                 continue;
             }
             DartCorpInfo info = latestByCode.get(code);
@@ -90,6 +93,10 @@ public class DomesticStockMasterSyncService {
             // 지어내지 않음).
             stockRepository.save(Stock.of(code, info.corpName(), marketType, ListingStatus.LISTED, "기타"));
             count++;
+        }
+        if (unresolvedMarketCount > 0) {
+            log.info("종목마스터 동기화: 시장구분 확인 불가로 스킵={}건(Toss 미지원 종목 - 코넥스/우선주/SPAC 등)",
+                unresolvedMarketCount);
         }
         return count;
     }
