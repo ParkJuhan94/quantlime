@@ -26,8 +26,8 @@ import org.springframework.web.client.RestClient;
  * 텔레그램 채널의 공개 웹 미리보기 페이지(t.me/s/&lt;핸들&gt;)를 스크래핑한다.
  * Bot API는 사용자가 관리자가 아닌 공개 채널을 읽을 수 없어(getUpdates는
  * 봇이 admin으로 추가된 채널만 대상) 인증이 필요 없는 이 경로를 택했다
- * (docs/ROADMAP.md "Phase 8 P7" 참고). KindApiClient와 동일한 구조
- * (RestClient + Jsoup + ExternalApiInvoker)를 따른다. 실측(2026-08-13)으로
+ * (docs/ROADMAP.md "Phase 8 P7" 참고). RestClient + Jsoup + ExternalApiInvoker
+ * 조합을 따른다(다른 HTML 스크래핑 클라이언트와 동일한 패턴). 실측(2026-08-13)으로
  * 확정한 마크업:
  * - 메시지 루트: div.tgme_widget_message[data-post], data-post는
  *   "&lt;핸들&gt;/&lt;메시지ID&gt;" 형태

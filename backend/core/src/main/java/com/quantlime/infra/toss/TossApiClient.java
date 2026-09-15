@@ -11,6 +11,7 @@ import com.quantlime.infra.toss.dto.TossMarketIndicatorCandleResponse;
 import com.quantlime.infra.toss.dto.TossMarketIndicatorPriceResponse;
 import com.quantlime.infra.toss.dto.TossPriceResponse;
 import com.quantlime.infra.toss.dto.TossRankingResponse;
+import com.quantlime.infra.toss.dto.TossStockInfoResponse;
 import com.quantlime.infra.toss.dto.TossUsMarketCalendarResponse;
 import com.quantlime.infra.toss.exception.TossApiErrorCode;
 import io.github.resilience4j.bulkhead.annotation.Bulkhead;
@@ -172,6 +173,29 @@ public class TossApiClient {
                 .header("authorization", "Bearer " + token)
                 .retrieve()
                 .body(TossCandleResponse.class),
+            HttpClientErrorException.TooManyRequests.class,
+            TossApiErrorCode.RATE_LIMIT_EXCEEDED));
+    }
+
+    /**
+     * 종목 기본 정보(시장구분 등) 조회. DomesticStockMasterSyncService가
+     * DART 신규상장 종목의 시장구분(KOSPI/KOSDAQ)을 알아내는 용도로 쓴다
+     * (DART corpCode API에는 시장구분 필드가 없음, 2026-09 KIND→DART
+     * 전환). 최대 200종목 일괄(§4 Toss Open API 문서 참고).
+     */
+    @CircuitBreaker(name = "toss")
+    @Bulkhead(name = "toss")
+    public TossStockInfoResponse getStockInfo(String symbols) {
+        return withTokenRetry("stocks", token -> ExternalApiInvoker.call(
+            TossApiErrorCode.STOCK_INFO_INQUIRY_FAILED,
+            () -> tossRestClient.get()
+                .uri(uriBuilder -> uriBuilder
+                    .path("/api/v1/stocks")
+                    .queryParam("symbols", symbols)
+                    .build())
+                .header("authorization", "Bearer " + token)
+                .retrieve()
+                .body(TossStockInfoResponse.class),
             HttpClientErrorException.TooManyRequests.class,
             TossApiErrorCode.RATE_LIMIT_EXCEEDED));
     }

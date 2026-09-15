@@ -253,8 +253,9 @@ subscription:
 kis:
   master-file-base-url: ${KIS_MASTER_FILE_BASE_URL:https://new.real.download.dws.co.kr}
 
-kind:
-  base-url: ${KIND_BASE_URL:https://kind.krx.co.kr}
+dart:
+  api-key: ${DART_API_KEY:}
+  base-url: ${DART_BASE_URL:https://opendart.fss.or.kr/api}
 
 upbit:
   base-url: ${UPBIT_BASE_URL:https://api.upbit.com}
