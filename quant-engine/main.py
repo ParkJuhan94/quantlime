@@ -239,7 +239,6 @@ def normalize_cross_section_endpoint(
                 trend_percentile=item.trend_percentile,
                 mean_reversion_percentile=item.mean_reversion_percentile,
                 composite_percentile=item.composite_percentile,
-                grade=item.grade,
             )
             for item in result.items
         ],

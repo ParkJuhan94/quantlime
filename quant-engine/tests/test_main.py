@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
+from calculator.scorer import _grade
 from main import app
 from summary.generator import SummaryResult, TickerMention
 from transcript.fetcher import TranscriptResult
@@ -61,9 +62,9 @@ class TestCalculateScoreSeries:
         assert latest["trend_score"] is not None
         assert latest["mean_reversion_score"] is not None
         assert latest["composite_score"] is not None
-        # v3.0부터 grade는 이 엔드포인트가 아니라 횡단면 백분위 산출 단계
-        # (정규화 엔드포인트)의 책임이라 항상 None이다.
-        assert latest["grade"] is None
+        # 등급은 raw composite_score(절대점수) 기준으로 이 엔드포인트가 직접
+        # 매긴다 - 횡단면 백분위(정규화 엔드포인트)와는 척도가 다른 별개 값.
+        assert latest["grade"] == _grade(latest["composite_score"])
         assert latest["quadrant"] in {
             "trend_up_oversold", "trend_up_overbought",
             "trend_down_oversold", "trend_down_overbought",

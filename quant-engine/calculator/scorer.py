@@ -46,20 +46,29 @@ MACD_MIN_RELATIVE_STD = 0.002
 # 실측 - 거래정지 직전 국내 잡주들이 이 축만으로 랭킹 상위 독식).
 DOWNTREND_GATE_FACTOR = 0.5
 
-# TODO: 초기값. v3.0부터 이 컷오프는 raw composite_score가 아니라 횡단면
-# 백분위(같은 날 국내/해외 모집단 대비 순위, quant-engine
-# `/normalize/cross-section` 엔드포인트가 산출)에 적용된다 - v2.1은 절대
-# 점수 기준이라 분포가 40~60에 쏠려 STRONG_BUY가 사실상 나오지 않았다
-# (2026-09 실측, 국내 600종목 중 89.5%가 40~60구간, 최고점 69.5). 백분위
-# 기준으로 바꾸면 상위 10%가 항상 STRONG_BUY가 되어 이 문제가 구조적으로
-# 사라진다. `calculate_score`는 더 이상 이 컷오프를 쓰지 않는다(항상
-# grade=None 반환) - `_grade`/`GRADE_CUTOFFS`는 정규화 단계가 재사용하도록
-# 여기 남겨둔다.
+# TODO: 임시값 - Phase 4(v3.0 백테스트 재검증) 때 실데이터로 재보정 필요.
+# 한때 이 컷오프를 raw composite_score 대신 횡단면 백분위(같은 날 모집단
+# 대비 순위)에 적용해본 적이 있었으나 되돌렸다 - 등급이 "이 종목이 절대
+# 기준으로 매수할 만한가"를 뜻해야 하는데, 백분위 기준이면 시장 전체가
+# 나쁜 날에도 상위 10%는 기계적으로 항상 STRONG_BUY가 된다(2026-09 재검토
+# - "등급=상대 순위"가 되어버리는 설계 결함으로 판단). 등급은 다시
+# raw composite_score(절대점수)를 기준으로 매기고, 횡단면 백분위는
+# `composite_percentile`이라는 별도 필드로 랭킹 정렬에만 쓴다(둘의 역할이
+# 분리됨 - normalization.py 참고).
+#
+# 다만 v2.1의 절대 컷오프(80/60/40/20)를 그대로 되돌리면 원래 문제(2026-09
+# 실측, 국내 600종목 중 89.5%가 40~60구간, 최고점 69.5)가 재현될 가능성이
+# 높다 - Phase 1의 가드 3종(단일축 종합점수 금지/MACD 분모 하한/하락추세
+# 게이트)은 전부 "가짜로 튀어 오르던 상단값을 깎는" 방향이지 정상 종목의
+# 원점수를 끌어올리는 방향이 아니기 때문이다. 아래 값은 그 실측 분포(최고점
+# 69.5, 50 중심 밀집)에 기반한 잠정 추정치일 뿐, v3.0 공식 적용 후 실제
+# 분포를 다시 재보기 전까지는 근거가 약하다 - STRONG_BUY가 특정 날짜에
+# 0개인 것은 버그가 아니라 절대 기준 등급의 정상적인 동작이다.
 GRADE_CUTOFFS: list[tuple[str, float]] = [
-    ("STRONG_BUY", 90.0),
-    ("BUY", 70.0),
-    ("NEUTRAL", 30.0),
-    ("SELL", 10.0),
+    ("STRONG_BUY", 65.0),
+    ("BUY", 55.0),
+    ("NEUTRAL", 45.0),
+    ("SELL", 35.0),
 ]
 DEFAULT_GRADE = "STRONG_SELL"
 
@@ -243,14 +252,14 @@ def calculate_score(latest: dict) -> ScoreResult:
     # v3.0부터 두 축 중 하나라도 None이면 종합점수를 내지 않는다(단일축
     # 종합점수 금지) - 이전엔 한 축만으로 100점이 나와 SPAC 등 상장 초기라
     # 평균회귀 축이 아직 계산 안 되는 종목이 추세추종 단독 100점으로 랭킹
-    # 최상위를 차지했다(2026-09 실측). 등급도 더 이상 여기서 매기지 않고
-    # 횡단면 백분위 산출 단계(quant-engine `/normalize/cross-section`)로
-    # 넘긴다 - raw composite는 종목마다 분포가 달라(위 GRADE_CUTOFFS 주석
-    # 참고) 절대 컷오프로는 등급이 40~60에 쏠린다.
+    # 최상위를 차지했다(2026-09 실측).
     composite = None
     if trend_final is not None and mean_reversion_final is not None:
         composite = (trend_final + mean_reversion_final) / 2.0
-    grade = None
+    # 등급은 raw composite(절대점수) 기준 - 위 GRADE_CUTOFFS 주석 참고.
+    # composite가 None이면 _grade(None)도 None을 반환해 자연히 등급 없음으로
+    # 남는다.
+    grade = _grade(composite)
     divergence = _divergence(trend_final, mean_reversion_final)
     insufficient = trend_final is None and mean_reversion_final is None
 

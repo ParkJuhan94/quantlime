@@ -2,11 +2,19 @@
 
 같은 날짜 · 같은 모집단(국내 또는 해외) 안에서 절대 서브스코어
 (trend_score/mean_reversion_score)를 상대 순위(백분위, 0~100, 높을수록
-상위)로 바꾼다. `calculator/scorer.py`는 여전히 절대 점수만 산출하고,
-랭킹 정렬에 실제로 쓰이는 값은 항상 이 모듈의 결과다 - v2.1까지는 절대
-점수로 그대로 정렬해 v3.0 감사 세션에서 실측된 문제(단일 축 포화,
-40~60 구간 밀집으로 STRONG_BUY가 사실상 안 나옴)가 그대로 랭킹 순서에
-반영됐다.
+상위)로 바꾼다. `calculator/scorer.py`는 여전히 절대 점수와 등급을
+산출하고, 랭킹 **정렬**에 실제로 쓰이는 값은 이 모듈의 결과(percentile)다
+- v2.1까지는 절대 점수로 그대로 정렬해 v3.0 감사 세션에서 실측된 문제(단일
+축 포화, 40~60 구간 밀집)가 랭킹 순서에 그대로 반영됐다.
+
+**등급(grade)은 이 모듈이 다루지 않는다** - 한때 등급도 이 모듈이 산출한
+백분위 기준으로 매긴 적이 있었으나 되돌렸다(2026-09 재검토). 등급은
+"이 종목이 절대 기준으로 매수할 만한가"를 뜻해야 하는데, 백분위 기준
+등급은 시장 전체가 나쁜 날에도 상위 10%가 기계적으로 항상 STRONG_BUY가
+되는 설계 결함이 있었다. 등급은 `scorer.calculate_score`가 raw
+composite_score로 이미 매겨 저장한 값을 그대로 쓰고, 이 모듈은 오직
+**정렬용 상대 순위**만 책임진다 - 두 개념(절대 등급 vs 상대 순위)이
+같은 척도를 공유하지 않는다는 게 핵심이다.
 
 같은 날짜/모집단 안에서만 비교해야 의미가 있으므로, 그 기준으로 이미 한
 데 모은 리스트를 받는다고 가정한다 - 날짜·모집단(국내/해외)을 나누는
@@ -21,7 +29,6 @@ from dataclasses import dataclass
 import pandas as pd
 
 from calculator.cross_sectional import MIN_STOCKS_PER_DATE
-from calculator.scorer import _grade
 
 # 종합 백분위 산출 시 두 축의 가중치. TODO: 초기값(균등) - Phase 4
 # 백테스트로 신호가 있는 축(2026-09 감사 세션 기준 평균회귀 축이 순환이동
@@ -43,7 +50,6 @@ class NormalizedStockScore:
     trend_percentile: float | None
     mean_reversion_percentile: float | None
     composite_percentile: float | None
-    grade: str | None
 
 
 @dataclass
@@ -82,7 +88,6 @@ def normalize_cross_section(scores: list[StockAxisScores]) -> CrossSectionalNorm
                     trend_percentile=None,
                     mean_reversion_percentile=None,
                     composite_percentile=None,
-                    grade=None,
                 )
                 for s in scores
             ],
@@ -111,7 +116,6 @@ def normalize_cross_section(scores: list[StockAxisScores]) -> CrossSectionalNorm
         + df["mean_reversion_percentile"] * MEAN_REVERSION_WEIGHT
     ).where(both_present)
     df["composite_percentile"] = _percentile_rank(weighted)
-    df["grade"] = df["composite_percentile"].map(lambda v: _grade(v) if pd.notna(v) else None)
 
     items = [
         NormalizedStockScore(
@@ -119,7 +123,6 @@ def normalize_cross_section(scores: list[StockAxisScores]) -> CrossSectionalNorm
             trend_percentile=_none_if_nan(row.trend_percentile),
             mean_reversion_percentile=_none_if_nan(row.mean_reversion_percentile),
             composite_percentile=_none_if_nan(row.composite_percentile),
-            grade=row.grade,
         )
         for row in df.itertuples()
     ]

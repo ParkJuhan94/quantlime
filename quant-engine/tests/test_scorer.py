@@ -50,9 +50,9 @@ class TestCalculateScoreHappyPath:
         assert result.trend_score == pytest.approx(50.0)
         assert result.mean_reversion_score == pytest.approx(50.0)
         assert result.composite_score == pytest.approx(50.0)
-        # v3.0부터 grade는 calculate_score가 아니라 횡단면 백분위 산출
-        # 단계(정규화 엔드포인트)에서 매겨진다 - 아래 TestGradeCutoffs 참고.
-        assert result.grade is None
+        # 등급은 raw composite(절대점수) 기준 - GRADE_CUTOFFS(65/55/45/35)상
+        # 50은 NEUTRAL 구간. 아래 TestGradeCutoffs 참고.
+        assert result.grade == "NEUTRAL"
         assert result.insufficient_data is False
 
     def test_oversold_rsi_and_bb_boost_mean_reversion(self):
@@ -336,48 +336,66 @@ class TestComputeScores:
         assert bool(scores_df.iloc[0]["insufficient_data"]) is True
 
 
-class TestCalculateScoreNeverGrades:
-    def test_calculate_score_always_returns_none_grade(self):
-        # given/when: 두 축 모두 계산 가능한 정상 케이스
-        result = calculate_score(_base_latest(rsi=15.0, bollinger_percent_b=0.0, macd_histogram=10.0))
+class TestCalculateScoreGradesFromAbsoluteComposite:
+    def test_calculate_score_assigns_grade_from_raw_composite(self):
+        # given: 두 축 모두 강하게 매수 신호(평균회귀 100 근방, 추세도 100 근방)
+        result = calculate_score(
+            _base_latest(rsi=15.0, bollinger_percent_b=0.0, macd_histogram=10.0, close=150.0)
+        )
 
-        # then: v3.0부터 등급은 횡단면 백분위 산출 단계의 책임이라
-        # calculate_score는 입력과 무관하게 항상 None을 반환해야 한다.
+        # then: 등급은 raw composite_score(절대점수) 기준으로 즉시 매겨진다
+        # - 시장 전체 분포와 무관하게 이 종목 자체의 점수만으로 결정된다.
+        assert result.composite_score is not None
+        assert result.grade == _grade(result.composite_score)
+
+    def test_none_composite_yields_none_grade(self):
+        # given: 단일축 종합점수 금지로 composite가 None인 케이스
+        latest = _base_latest(
+            macd_histogram=None,
+            macd_histogram_std60=None,
+            ma_5=None, ma_10=None, ma_20=None, ma_60=None, ma_120=None,
+            rsi=20.0,
+        )
+
+        # when
+        result = calculate_score(latest)
+
+        # then
+        assert result.composite_score is None
         assert result.grade is None
 
 
 class TestGradeCutoffs:
-    # v3.0부터 GRADE_CUTOFFS/_grade는 calculate_score의 raw composite가
-    # 아니라 횡단면 백분위(0~100, 높을수록 상위)에 적용된다 - 정규화
-    # 엔드포인트가 이 함수를 그대로 재사용하므로 여기서는 함수 자체의
-    # 컷오프 동작만 검증한다.
+    # 등급은 raw composite_score(0~100, 절대점수)에 적용된다 - 횡단면
+    # 백분위(compositePercentile)와는 척도가 다른 별개 값이다(정렬은 백분위,
+    # 등급은 절대점수 - normalization.py 모듈 docstring 참고). 아래 숫자는
+    # Phase 4 재보정 전 임시값(scorer.py GRADE_CUTOFFS 주석 참고).
     @pytest.mark.parametrize(
-        "percentile,expected_grade",
+        "score,expected_grade",
         [
-            (95.0, "STRONG_BUY"),  # 상위 10%
-            (90.0, "STRONG_BUY"),  # 경계값 포함
-            (89.9, "BUY"),
-            (70.0, "BUY"),
-            (69.9, "NEUTRAL"),
-            (30.0, "NEUTRAL"),
-            (29.9, "SELL"),
-            (10.0, "SELL"),
-            (9.9, "STRONG_SELL"),
+            (70.0, "STRONG_BUY"),
+            (65.0, "STRONG_BUY"),  # 경계값 포함
+            (64.9, "BUY"),
+            (55.0, "BUY"),
+            (54.9, "NEUTRAL"),
+            (45.0, "NEUTRAL"),
+            (44.9, "SELL"),
+            (35.0, "SELL"),
+            (34.9, "STRONG_SELL"),
             (0.0, "STRONG_SELL"),
         ],
     )
-    def test_grade_matches_percentile_tier(self, percentile, expected_grade):
-        assert _grade(percentile) == expected_grade
+    def test_grade_matches_absolute_score_tier(self, score, expected_grade):
+        assert _grade(score) == expected_grade
 
-    def test_grade_is_none_when_percentile_missing(self):
+    def test_grade_is_none_when_score_missing(self):
         assert _grade(None) is None
 
-    def test_cutoffs_are_top_heavy_percentile_bands(self):
-        # given: 상위 10/30/70/90% 경계가 GRADE_CUTOFFS 정의와 일치하는지
+    def test_cutoffs_are_defined_on_absolute_scale(self):
         labels = [label for label, _ in GRADE_CUTOFFS]
         cutoffs = [cutoff for _, cutoff in GRADE_CUTOFFS]
         assert labels == ["STRONG_BUY", "BUY", "NEUTRAL", "SELL"]
-        assert cutoffs == [90.0, 70.0, 30.0, 10.0]
+        assert cutoffs == [65.0, 55.0, 45.0, 35.0]
 
 
 class TestMacdRelativeStdFloor:

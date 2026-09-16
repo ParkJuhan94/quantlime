@@ -172,14 +172,16 @@ class CrossSectionNormalizedItem(BaseModel):
     trend_percentile: float | None
     mean_reversion_percentile: float | None
     composite_percentile: float | None
-    grade: str | None
 
 
 class CrossSectionNormalizeResponse(BaseModel):
     as_of: date
     peer_group: str
     # 표본이 MIN_STOCKS_PER_DATE 미만이면 False이고 이때 모든 items의
-    # percentile/grade는 None이다 - 호출자는 이 경우 저장을 건너뛰어야 한다.
+    # percentile은 None이다 - 호출자는 이 경우 저장을 건너뛰어야 한다.
+    # grade는 이 응답에 없다 - 등급은 calculate_score가 절대점수 기준으로
+    # 이미 매겨 저장했으므로 여기서 다시 채우지 않는다(calculator/
+    # normalization.py 모듈 docstring 참고).
     min_sample_met: bool
     items: list[CrossSectionNormalizedItem]
 

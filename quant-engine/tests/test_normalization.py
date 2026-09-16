@@ -39,7 +39,6 @@ class TestMinimumSampleGate:
         assert result.min_sample_met is False
         assert len(result.items) == len(scores)
         assert all(item.composite_percentile is None for item in result.items)
-        assert all(item.grade is None for item in result.items)
 
     def test_at_minimum_sample_computes_percentiles(self):
         # given: 정확히 MIN_STOCKS_PER_DATE
@@ -106,7 +105,6 @@ class TestCompositePercentile:
         by_code = {item.stock_code: item for item in result.items}
         assert by_code["000005"].mean_reversion_percentile is not None
         assert by_code["000005"].composite_percentile is None
-        assert by_code["000005"].grade is None
 
     def test_composite_is_percentile_of_weighted_axis_percentiles(self):
         # given: 추세추종은 오름차순(0~19), 평균회귀는 내림차순(19~0)이라
@@ -128,26 +126,3 @@ class TestCompositePercentile:
         # 완전히 대칭이라 가중합이 전부 같은 값(52.5) -> 전원 동점 ->
         # average rank = (n+1)/2 = 10.5 -> 백분위 10.5/20*100 = 52.5
         assert composites == pytest.approx([52.5] * n)
-
-    def test_grade_follows_composite_percentile_tier(self):
-        # given: 100종목, 인덱스 i의 백분위는 (i+1)/100*100 = i+1
-        n = 100
-        scores = _scores(n)
-
-        # when
-        result = normalize_cross_section(scores)
-
-        # then: 상위 10%(백분위>=90) STRONG_BUY, 다음 30%(>=70) BUY,
-        # 다음 70%(>=30) NEUTRAL, 다음 90%(>=10) SELL, 나머지 STRONG_SELL
-        # (인덱스 i -> 백분위 i+1이므로 경계값은 index=percentile-1)
-        by_code = {item.stock_code: item for item in result.items}
-        assert by_code["000099"].grade == "STRONG_BUY"  # 백분위 100
-        assert by_code["000089"].grade == "STRONG_BUY"  # 백분위 90(경계, 포함)
-        assert by_code["000088"].grade == "BUY"          # 백분위 89
-        assert by_code["000069"].grade == "BUY"          # 백분위 70(경계, 포함)
-        assert by_code["000068"].grade == "NEUTRAL"      # 백분위 69
-        assert by_code["000029"].grade == "NEUTRAL"      # 백분위 30(경계, 포함)
-        assert by_code["000028"].grade == "SELL"         # 백분위 29
-        assert by_code["000009"].grade == "SELL"         # 백분위 10(경계, 포함)
-        assert by_code["000008"].grade == "STRONG_SELL"  # 백분위 9
-        assert by_code["000000"].grade == "STRONG_SELL"  # 백분위 1
