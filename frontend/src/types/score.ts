@@ -5,8 +5,11 @@ export interface ScoreResponse {
   meanReversionScore: number | null
   compositeScore: number | null
   // v3.0부터 도입 - 같은 날짜·같은 모집단(국내/해외) 대비 상대 순위
-  // (0~100, 높을수록 상위). 화면에는 이 값을 "점수"로 보여주고
-  // compositeScore는 원점수 참고용으로만 병기한다.
+  // (0~100, 높을수록 상위). 등급(grade)은 이 값이 아니라 compositeScore
+  // (절대점수) 기준으로 매겨진다(2026-09-16 재검토 - 등급을 백분위 기준
+  // 으로 매기면 시장 전체가 나쁜 날에도 상위 10%가 기계적으로 STRONG_BUY가
+  // 되는 문제가 있었음) - 화면에는 compositeScore/grade와 이 값을
+  // "원점수"/"상위 N%"로 둘 다 동등하게 병기한다.
   trendPercentile: number | null
   meanReversionPercentile: number | null
   compositePercentile: number | null

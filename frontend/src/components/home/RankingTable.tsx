@@ -54,9 +54,14 @@ interface DisplayRow {
   changeRate: number | null
   currency: 'KRW' | 'USD' | null
   tradingAmount: number | null
-  // v3.0부터 랭킹에 표시하는 "스코어"는 절대점수(compositeScore)가 아니라
-  // 같은 날 국내/해외 종목 대비 상대 순위(compositePercentile, 0~100) -
-  // 절대점수는 40~60 구간에 쏠려 변별력이 없었다(2026-09 감사 세션).
+  // 정렬(랭킹 순서)은 compositePercentile(같은 날 국내/해외 종목 대비
+  // 상대 순위, 0~100)을 쓴다 - 절대점수는 40~60 구간에 쏠려 변별력이
+  // 없었다(2026-09 감사 세션). 다만 등급(grade)은 이 백분위가 아니라
+  // compositeScore(절대점수) 기준으로 매겨지므로(2026-09-16 재검토 -
+  // 등급을 백분위 기준으로 매기면 시장 전체가 나쁜 날에도 상위 10%가
+  // 기계적으로 STRONG_BUY가 되는 문제가 있었음), 배지는 compositeScore+
+  // grade로 표시하고 percentile은 그 옆에 "상위 N%"로 별도 병기한다.
+  compositeScore?: number | null
   compositePercentile?: number | null
   grade?: string | null
   // 2026-08-01 추가 - 로컬 stock 테이블에 없는 종목(해외 랭킹 상위권이
@@ -161,19 +166,27 @@ function RankingRow({ row, index, isWatched, onToggleWatch }: {
         </span>
       </td>
       <td className="py-2.5 text-right">
-        {row.compositePercentile != null ? (
-          // 종목상세 ScoreSummaryRow처럼 등급 색과 스코어 숫자를 하나의
-          // 배지 안에 함께 담는다 - 예전엔 등급 배지와 숫자가 따로
-          // 떨어져 있어(배지만 색, 숫자는 항상 회색) 등급과 점수가
-          // 시각적으로 연결되지 않아 보였다는 피드백(2026-07-17).
-          <span
-            className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold ${
-              row.grade ? (GRADE_STYLES[row.grade] ?? 'bg-gray-100 text-gray-800') : 'bg-gray-100 text-gray-500'
-            }`}
-          >
-            {formatScore(row.compositePercentile)}
-            {row.grade && <span className="font-normal opacity-80">{row.grade}</span>}
-          </span>
+        {row.compositeScore != null ? (
+          <div className="flex flex-col items-end gap-0.5">
+            {/* 종목상세 ScoreSummaryRow처럼 등급 색과 점수 숫자를 하나의
+                배지 안에 함께 담는다 - 예전엔 등급 배지와 숫자가 따로
+                떨어져 있어(배지만 색, 숫자는 항상 회색) 등급과 점수가
+                시각적으로 연결되지 않아 보였다는 피드백(2026-07-17).
+                배지 숫자는 등급의 기준인 compositeScore(절대점수)로
+                통일한다 - percentile을 쓰면 등급 색/라벨과 숫자가
+                서로 다른 척도라 어긋나 보일 수 있다(2026-09-16 재검토). */}
+            <span
+              className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold ${
+                row.grade ? (GRADE_STYLES[row.grade] ?? 'bg-gray-100 text-gray-800') : 'bg-gray-100 text-gray-500'
+              }`}
+            >
+              {formatScore(row.compositeScore)}
+              {row.grade && <span className="font-normal opacity-80">{row.grade}</span>}
+            </span>
+            {row.compositePercentile != null && (
+              <span className="text-[10px] text-gray-400">상위 {formatScore(100 - row.compositePercentile)}%</span>
+            )}
+          </div>
         ) : (
           <span className="text-sm text-gray-300">-</span>
         )}
@@ -329,6 +342,7 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
             changeRate: livePrice?.changeRate ?? null,
             currency: item.overseas ? 'USD' : 'KRW',
             tradingAmount: item.avgTradingValue,
+            compositeScore: item.compositeScore,
             compositePercentile: item.compositePercentile,
             grade: item.grade,
             detailAvailable: true,
@@ -452,9 +466,9 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
         {period !== '실시간' && '기간별 랭킹은 아직 준비 중이라 실시간 기준으로 보여드려요 · '}
         {isScoreMode &&
           (effectiveWatchlistOnly
-            ? '관심종목 중 종합점수가 높은 순입니다'
-            : '전 상장종목 중 종합점수가 높은 순입니다') +
-            ' · 점수는 같은 날 국내/해외 종목 대비 상대 순위(백분위)입니다'}
+            ? '관심종목 중 상대 순위(백분위)가 높은 순입니다'
+            : '전 상장종목 중 상대 순위(백분위)가 높은 순입니다') +
+            ' · 배지 숫자는 등급 산정 기준인 원점수, "상위 N%"는 같은 날 국내/해외 종목 대비 상대 순위입니다'}
         {isRealMode &&
           sortKey !== 'amount' &&
           (effectiveWatchlistOnly
