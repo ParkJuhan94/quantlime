@@ -3,7 +3,6 @@ package com.quantlime.score.repository;
 import com.quantlime.price.domain.StockLiquidity;
 import com.quantlime.price.repository.StockLiquidityRepository;
 import com.quantlime.score.domain.Divergence;
-import com.quantlime.score.domain.Grade;
 import com.quantlime.score.domain.PeerGroup;
 import com.quantlime.score.domain.Score;
 import com.quantlime.stock.domain.ListingStatus;
@@ -38,7 +37,7 @@ class ScoreQueryRepositoryImplTest extends DataJpaTestSupport {
         // v3.0부터 랭킹 정렬은 compositePercentile을 쓴다 - 정규화 단계
         // 없이도 정렬 기준 값을 직접 채워 이 리포지토리 계층만 검증한다.
         score.applyNormalization(compositePercentile, compositePercentile,
-            compositePercentile, Grade.NEUTRAL, PeerGroup.DOMESTIC);
+            compositePercentile, PeerGroup.DOMESTIC);
         return score;
     }
 

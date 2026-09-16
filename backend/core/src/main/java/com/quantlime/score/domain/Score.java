@@ -158,16 +158,13 @@ public class Score extends TimeBaseEntity {
      * 겹치는 경우) 새 행을 또 만들지 않고 기존 당일 행의 값을 갱신한다.
      * setter를 두지 않는 컨벤션을 지키기 위한 비즈니스 메서드.
      *
-     * <p>{@code grade}는 v3.0부터 quant-engine이 항상 null로 내려주므로
-     * (calculate_score는 더 이상 등급을 매기지 않음) 이 메서드가 호출되면
-     * grade가 일시적으로 null로 초기화된다 - percentile 필드도 마찬가지로
-     * 건드리지 않은 채 그대로 남는다.
-     * {@link com.quantlime.market.service.MarketDataRefreshService}의
-     * 배치 경로는 이 메서드 직후 {@code normalizeCrossSection}을 호출해
-     * 같은 사이클 안에서 다시 채우지만, 관심종목 등록 시 단건 재계산
-     * ({@code WatchlistService}) 등 배치 밖에서 이 메서드가 호출되는 경로는
-     * 다음 배치까지 grade가 null로 비어있을 수 있다 - 횡단면 정규화 자체가
-     * 표본 하나로는 의미가 없는 배치 연산이라 감수하는 트레이드오프.
+     * <p>{@code grade}는 quant-engine의 {@code calculate_score}가 raw
+     * composite_score(절대점수) 기준으로 즉시 매겨 내려주는 값이라, 이
+     * 메서드 호출만으로 바로 유효한 등급이 채워진다 - 관심종목 등록 시 단건
+     * 재계산({@code WatchlistService}) 등 배치 밖 경로에서도 다음 배치를
+     * 기다릴 필요가 없다. percentile 필드는 이 메서드가 건드리지 않고 그대로
+     * 남는다 - 그 값은 {@link #applyNormalization}(횡단면 정규화, 배치
+     * 전용)이 별도로 관리한다.
      */
     public void updateFrom(Double trendScore, Double meanReversionScore,
                            Double compositeScore, Grade grade, Quadrant quadrant,
@@ -183,16 +180,20 @@ public class Score extends TimeBaseEntity {
 
     /**
      * 횡단면 정규화 단계(quant-engine `/normalize/cross-section`)의 결과로
-     * 백분위·등급·모집단을 채운다. raw 서브스코어(trendScore 등)는 건드리지
-     * 않는다 - 그 값은 {@link #updateFrom}(스코어 재계산)이 별도로 관리한다.
-     * setter를 두지 않는 컨벤션을 지키기 위한 비즈니스 메서드.
+     * 백분위·모집단을 채운다. 등급(grade)은 이 메서드가 건드리지 않는다 -
+     * 등급은 "이 종목이 절대 기준으로 매수할 만한가"를 뜻해야 하는데, 횡단면
+     * 백분위 기준으로 매기면 시장 전체가 나쁜 날에도 상위 10%가 기계적으로
+     * 항상 STRONG_BUY가 되는 설계 결함이 있었다(2026-09 재검토) - 등급은
+     * {@link #updateFrom}이 이미 절대점수로 채워둔 값을 그대로 유지한다.
+     * raw 서브스코어(trendScore 등)도 건드리지 않는다 - 그 값은
+     * {@link #updateFrom}(스코어 재계산)이 별도로 관리한다. setter를 두지
+     * 않는 컨벤션을 지키기 위한 비즈니스 메서드.
      */
     public void applyNormalization(Double trendPercentile, Double meanReversionPercentile,
-                                   Double compositePercentile, Grade grade, PeerGroup peerGroup) {
+                                   Double compositePercentile, PeerGroup peerGroup) {
         this.trendPercentile = trendPercentile;
         this.meanReversionPercentile = meanReversionPercentile;
         this.compositePercentile = compositePercentile;
-        this.grade = grade;
         this.peerGroup = peerGroup;
     }
 

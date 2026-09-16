@@ -13,7 +13,6 @@ import com.quantlime.price.domain.StockLiquidity;
 import com.quantlime.price.repository.OverseasDailyPriceRepository;
 import com.quantlime.price.repository.StockLiquidityRepository;
 import com.quantlime.price.service.DomesticDailyPriceService;
-import com.quantlime.score.domain.Grade;
 import com.quantlime.score.domain.PeerGroup;
 import com.quantlime.score.domain.Score;
 import com.quantlime.score.dto.mapper.ScoreMapper;
@@ -263,11 +262,11 @@ public class ScoreService {
     /**
      * {@code peerGroup}(국내 또는 해외) 안에서 상장·가격지원·유동성 조건을
      * 만족하는 종목들의 최신 절대 서브스코어를 quant-engine에 넘겨 횡단면
-     * 백분위를 받고, 각 종목의 최신 {@link Score} 행에 반영한다. 원점수
-     * 계산({@link #recalculateDomesticScores}/{@link #recalculateOverseasScores})
-     * 직후·같은 refreshAll() 사이클 안에서 호출돼야 한다 - 그 두 메서드가
-     * 이미 {@code Score.grade}를 null로 초기화해 두므로({@link Score#updateFrom}
-     * 주석 참고), 이 메서드가 실행되지 않으면 등급이 빈 채로 남는다.
+     * 백분위(랭킹 정렬 전용)를 받고, 각 종목의 최신 {@link Score} 행에
+     * 반영한다. 등급(grade)은 이 경로와 무관하다 - 원점수 계산
+     * ({@link #recalculateDomesticScores}/{@link #recalculateOverseasScores})
+     * 시점에 quant-engine이 절대점수 기준으로 이미 매겨 저장했으므로, 이
+     * 메서드가 실행되지 않거나 늦어져도 등급은 항상 최신 상태다.
      *
      * <p>표본이 quant-engine의 최소 기준(MIN_STOCKS_PER_DATE) 미만이면
      * {@code minSampleMet=false}로 아무것도 반영하지 않는다 - 그 날짜의
@@ -300,10 +299,9 @@ public class ScoreService {
             if (score == null) {
                 continue;
             }
-            Grade grade = item.grade() != null ? Grade.of(item.grade()) : null;
             score.applyNormalization(
                 item.trendPercentile(), item.meanReversionPercentile(),
-                item.compositePercentile(), grade, peerGroup);
+                item.compositePercentile(), peerGroup);
         }
         log.info("횡단면 정규화 완료: peerGroup={}, 대상종목수={}", peerGroup, latestScores.size());
     }
