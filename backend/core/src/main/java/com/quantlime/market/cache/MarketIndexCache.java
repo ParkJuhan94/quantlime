@@ -17,6 +17,7 @@ import com.quantlime.market.exception.MarketErrorCode;
 import com.quantlime.market.repository.BenchmarkIndexRepository;
 import com.quantlime.price.cache.DomesticMarketCalendarCache;
 import com.quantlime.price.util.ChangeRateCalculator;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -24,6 +25,8 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -40,7 +43,17 @@ import org.springframework.stereotype.Component;
  * 비공식 스크래핑 대상(네이버·TradingView)이 IP 차단할 위험이 있다 -
  * 정확한 공개 레이트리밋 문서가 없어 "체감 실시간성 대 차단 위험"을
  * 저울질한 보수적 값. 429/차단 징후 없이 안정적이면 더 낮춰도 됨)
- * (DomesticMarketCalendarCache와 동일한 단순 TTL 캐시 패턴).
+ *
+ * <p>홈 화면 진입마다 타는 hot path인데, TTL이 5초로 짧아 만료 직후
+ * 요청이 그대로 8개 외부 호출(최악 ~40초)을 순차로 기다려야 했다
+ * (2026-08-17 감사에서 지목, 2026-09 성능 감사에서 이식) - {@link
+ * com.quantlime.stock.cache.StockSearchCache}에 이미 있는
+ * stale-while-revalidate 패턴을 그대로 옮겼다. 만료된 뒤에도 최초 1회
+ * (기동 직후, 보여줄 값 자체가 없을 때)만 동기로 채우고, 그 이후로는
+ * 항상 "만료됐어도 있는 값을 즉시 반환 + 백그라운드로 갱신"한다 - 실제
+ * 지수/환율 값 대비 최대 몇 초 지연된 값을 보여줄 수 있지만, 어차피
+ * 이 클래스 자체가 정확한 실시간이 아니라 근사치(TTL 5초, 폴링 스냅샷)를
+ * 다루므로 감내할 수 있는 트레이드오프다.
  */
 @Slf4j
 @Component
@@ -57,6 +70,10 @@ public class MarketIndexCache {
     private static final String MARKET_STATUS_OPEN = "OPEN";
     private static final String US_10Y_TREASURY_SYMBOL = "TVC:US10Y";
     private static final int TREASURY_YIELD_HISTORY_SIZE = 30;
+    // PriceCacheStore와 동일한 이유로 히트율을 직접 계측한다(2026-09 성능
+    // 감사) - "hit"는 TTL 안이라 즉시 신선한 값을 돌려준 경우, "miss"는
+    // 만료돼 (동기든 백그라운드든) 갱신을 트리거해야 했던 경우다.
+    private static final String METRIC_ACCESS = "market.index.cache.access";
 
     private final TossApiClient tossApiClient;
     private final UpbitApiClient upbitApiClient;
@@ -64,29 +81,63 @@ public class MarketIndexCache {
     private final TradingViewApiClient tradingViewApiClient;
     private final BenchmarkIndexRepository benchmarkIndexRepository;
     private final DomesticMarketCalendarCache domesticMarketCalendarCache;
+    private final MeterRegistry meterRegistry;
 
     private volatile MarketIndexResponse cached;
     private volatile Instant cachedAt = Instant.EPOCH;
-    // refresh()가 synchronized라 이 필드도 항상 그 안에서만 변경된다 -
-    // cached에 담기는 건 매번 새로 뜬 불변 스냅샷(List.copyOf)이라 다른
-    // 스레드가 cached를 읽는 동안 이 큐 자체가 동시에 수정될 일은 없다.
+    // refresh()는 최초 1회는 ensureWarm()의 synchronized 블록 안에서,
+    // 그 이후는 refreshing(아래) 하나만 진입을 허용하는 단일 비동기
+    // 작업으로 실행된다 - 두 경로가 동시에 refresh()를 실행할 일이 없어
+    // (cached==null일 때만 전자, 그 이후에만 후자) 이 필드도 항상 그
+    // 안에서만 순차적으로 변경된다. cached에 담기는 건 매번 새로 뜬
+    // 불변 스냅샷(List.copyOf)이라 다른 스레드가 cached를 읽는 동안 이
+    // 큐 자체가 동시에 수정될 일은 없다.
     private final Deque<Double> treasuryYieldHistory = new ArrayDeque<>();
+    private final AtomicBoolean refreshing = new AtomicBoolean(false);
 
     public MarketIndexResponse get() {
+        ensureWarm();
         if (isStale()) {
-            refresh();
+            meterRegistry.counter(METRIC_ACCESS, "result", "miss").increment();
+            triggerBackgroundRefresh();
+        } else {
+            meterRegistry.counter(METRIC_ACCESS, "result", "hit").increment();
         }
         return cached;
     }
 
-    private boolean isStale() {
-        return cached == null || Duration.between(cachedAt, Instant.now()).getSeconds() >= TTL_SECONDS;
+    // stale-while-revalidate는 "서빙할 이전 값이 있을 때"만 성립한다 -
+    // 기동 직후처럼 캐시가 아예 빈 상태에서 백그라운드 갱신만 트리거하면
+    // 그 몇 초 동안 홈 화면이 빈 값을 받는다. 최초 적재 한 번만 동기로
+    // 채우고, 그 이후는 전부 백그라운드 경로를 탄다(StockSearchCache와
+    // 동일 패턴).
+    private void ensureWarm() {
+        if (cached == null) {
+            synchronized (this) {
+                if (cached == null) {
+                    refresh();
+                }
+            }
+        }
     }
 
-    private synchronized void refresh() {
-        if (!isStale()) {
-            return; // 락 대기 중 다른 스레드가 이미 갱신함
+    private boolean isStale() {
+        return Duration.between(cachedAt, Instant.now()).getSeconds() >= TTL_SECONDS;
+    }
+
+    private void triggerBackgroundRefresh() {
+        if (refreshing.compareAndSet(false, true)) {
+            CompletableFuture.runAsync(this::refresh)
+                .whenComplete((ignored, ex) -> {
+                    refreshing.set(false);
+                    if (ex != null) {
+                        log.warn("시장 지수 캐시 갱신 실패: error={}", ex.getMessage(), ex);
+                    }
+                });
         }
+    }
+
+    private void refresh() {
         MarketIndexResponse previous = cached;
         ExchangeRateSnapshot exchangeRate = fetchExchangeRateSnapshot(previous);
         BitcoinSnapshot bitcoin = fetchBitcoinSnapshot(previous);
