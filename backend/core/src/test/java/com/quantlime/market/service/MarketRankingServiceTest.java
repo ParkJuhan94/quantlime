@@ -12,7 +12,6 @@ import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.repository.StockRepository;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -126,10 +125,9 @@ class MarketRankingServiceTest {
         given(stockRepository.findByStockCodeIn(anyList())).willReturn(List.of(aapl, msft));
         given(overseasPreviousCloseCache.get(anyList())).willReturn(
             Map.of("AAPL", 340.0, "MSFT", 400.0));
-        given(priceCacheStore.find("AAPL")).willReturn(
-            Optional.of(new PriceSnapshot("AAPL", 341.43, null, "t")));
-        given(priceCacheStore.find("MSFT")).willReturn(
-            Optional.of(new PriceSnapshot("MSFT", 397.0, null, "t"))); // 하락
+        given(priceCacheStore.findAll(anyList())).willReturn(Map.of(
+            "AAPL", new PriceSnapshot("AAPL", 341.43, null, "t"),
+            "MSFT", new PriceSnapshot("MSFT", 397.0, null, "t"))); // MSFT는 하락
 
         // when
         List<MarketRankingResponse> result =
@@ -148,7 +146,7 @@ class MarketRankingServiceTest {
         Stock aapl = overseasStock("AAPL", "Apple");
         given(stockRepository.findByStockCodeIn(anyList())).willReturn(List.of(aapl));
         given(overseasPreviousCloseCache.get(anyList())).willReturn(Map.of("AAPL", 340.0));
-        given(priceCacheStore.find("AAPL")).willReturn(Optional.empty());
+        given(priceCacheStore.findAll(anyList())).willReturn(Map.of());
 
         // when
         List<MarketRankingResponse> result =

@@ -12,8 +12,11 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -89,6 +92,14 @@ public class DomesticRegularCloseCaptureScheduler {
         doCapture();
     }
 
+    /**
+     * 종목당 개별 Redis GET + DB exists + save(왕복 3회 × ~2,700종목)를
+     * 왕복 3회로 줄인다(2026-09 성능 감사) - Redis 스냅샷 배치 조회
+     * (파이프라인), 오늘 이미 캡처된 종목 집합 배치 조회, 신규 행만 모은
+     * saveAll. {@link PriceCacheStore} TTL이 5분이라 종목별 순차 루프가
+     * 그 시간을 넘기면 후반 종목이 캐시 미스로 캡처를 놓치는 문제도
+     * 같이 해결한다(배치 조회는 한 번의 왕복이라 5분을 넘길 일이 없다).
+     */
     private void doCapture() {
         if (!domesticMarketCalendarCache.isTradingDayToday()) {
             log.debug("정규장 종가 캡처 스킵: 휴장일");
@@ -97,30 +108,56 @@ public class DomesticRegularCloseCaptureScheduler {
 
         LocalDate today = LocalDate.now();
         List<Stock> stocks = domesticListedStockCache.get();
-        int captured = 0;
-        for (Stock stock : stocks) {
-            if (capture(stock.getStockCode(), today)) {
-                captured++;
+        List<String> stockCodes = stocks.stream().map(Stock::getStockCode).toList();
+
+        Set<String> alreadyCaptured = new HashSet<>(
+            domesticRegularClosePriceRepository.findStockCodeByTradeDate(today));
+        Map<String, PriceSnapshot> snapshotByCode = priceCacheStore.findAll(stockCodes);
+
+        List<DomesticRegularClosePrice> candidates = new ArrayList<>();
+        for (String stockCode : stockCodes) {
+            if (alreadyCaptured.contains(stockCode)) {
+                continue; // 이미 캡처됨(재기동 등으로 중복 트리거된 경우) - 멱등 처리
             }
+            PriceSnapshot snapshot = snapshotByCode.get(stockCode);
+            if (snapshot == null || snapshot.currentPrice() == null) {
+                continue;
+            }
+            long closePrice = Math.round(snapshot.currentPrice());
+            candidates.add(DomesticRegularClosePrice.of(stockCode, today, closePrice));
         }
+
+        int captured = saveAllOrFallbackToIndividual(candidates);
         log.info("정규장 종가 캡처 완료: 대상={}종목, 캡처={}건", stocks.size(), captured);
     }
 
-    private boolean capture(String stockCode, LocalDate today) {
-        Optional<PriceSnapshot> snapshot = priceCacheStore.find(stockCode);
-        if (snapshot.isEmpty() || snapshot.get().currentPrice() == null) {
-            return false;
+    /**
+     * 정상 경로는 saveAll 한 번(왕복 1회)이지만, 정규 cron과 기동 캐치업이
+     * 좁은 창 안에서 동시에 돈 경우(클래스 javadoc 참고) 같은 종목을 두
+     * 실행이 동시에 캡처하려다 유니크 제약 충돌이 날 수 있다 - saveAll은
+     * 한 트랜잭션이라 그런 충돌 하나가 배치 전체를 롤백시킨다. 그 경우에만
+     * 종목별 save로 폴백해 충돌난 종목만 건너뛰고 나머지는 살린다(드문
+     * 경로라 이 폴백에서는 왕복 수를 아끼지 않는다).
+     */
+    private int saveAllOrFallbackToIndividual(List<DomesticRegularClosePrice> candidates) {
+        if (candidates.isEmpty()) {
+            return 0;
         }
-        if (domesticRegularClosePriceRepository.existsByStockCodeAndTradeDate(stockCode, today)) {
-            return false; // 이미 캡처됨(재기동 등으로 중복 트리거된 경우) - 멱등 처리
-        }
-        long closePrice = Math.round(snapshot.get().currentPrice());
         try {
-            domesticRegularClosePriceRepository.save(DomesticRegularClosePrice.of(stockCode, today, closePrice));
-            return true;
+            domesticRegularClosePriceRepository.saveAll(candidates);
+            return candidates.size();
         } catch (DataIntegrityViolationException e) {
-            log.debug("정규장 종가 캡처 동시 저장 충돌 스킵: stockCode={}", stockCode);
-            return false;
+            log.debug("정규장 종가 캡처 일괄 저장 충돌 - 종목별 저장으로 폴백: 대상={}건", candidates.size());
+            int captured = 0;
+            for (DomesticRegularClosePrice candidate : candidates) {
+                try {
+                    domesticRegularClosePriceRepository.save(candidate);
+                    captured++;
+                } catch (DataIntegrityViolationException individual) {
+                    log.debug("정규장 종가 캡처 동시 저장 충돌 스킵: stockCode={}", candidate.getStockCode());
+                }
+            }
+            return captured;
         }
     }
 }

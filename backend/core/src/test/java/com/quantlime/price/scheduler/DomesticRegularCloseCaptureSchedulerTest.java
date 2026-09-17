@@ -11,17 +11,19 @@ import com.quantlime.stock.domain.Stock;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -67,36 +69,38 @@ class DomesticRegularCloseCaptureSchedulerTest {
         String stockCode = stock.getStockCode();
         given(domesticMarketCalendarCache.isTradingDayToday()).willReturn(true);
         given(domesticListedStockCache.get()).willReturn(List.of(stock));
-        given(priceCacheStore.find(stockCode)).willReturn(
-            Optional.of(new PriceSnapshot(stockCode, 71200.0, 1.2, "2026-08-17T15:30:00+09:00")));
-        given(domesticRegularClosePriceRepository.existsByStockCodeAndTradeDate(eq(stockCode), any()))
-            .willReturn(false);
+        given(priceCacheStore.findAll(anyList())).willReturn(Map.of(
+            stockCode, new PriceSnapshot(stockCode, 71200.0, 1.2, "2026-08-17T15:30:00+09:00")));
+        given(domesticRegularClosePriceRepository.findStockCodeByTradeDate(any())).willReturn(List.of());
 
         // when
         scheduler.captureRegularClose();
 
-        // then: 소수점 시세는 반올림해 Long으로 저장(국내는 원 단위 정수)
-        verify(domesticRegularClosePriceRepository).save(
-            org.mockito.ArgumentMatchers.argThat((DomesticRegularClosePrice saved) ->
-                saved.getStockCode().equals(stockCode)
-                    && saved.getTradeDate().equals(LocalDate.now())
-                    && saved.getClosePrice() == 71200L));
+        // then: 소수점 시세는 반올림해 Long으로 저장(국내는 원 단위 정수), 신규 행만
+        // 모아 saveAll 한 번으로 저장한다(2026-09 성능 감사)
+        ArgumentCaptor<List<DomesticRegularClosePrice>> savedCaptor = ArgumentCaptor.forClass(List.class);
+        verify(domesticRegularClosePriceRepository).saveAll(savedCaptor.capture());
+        assertThat(savedCaptor.getValue()).hasSize(1);
+        DomesticRegularClosePrice saved = savedCaptor.getValue().get(0);
+        assertThat(saved.getStockCode()).isEqualTo(stockCode);
+        assertThat(saved.getTradeDate()).isEqualTo(LocalDate.now());
+        assertThat(saved.getClosePrice()).isEqualTo(71200L);
     }
 
     @Test
     @DisplayName("[Redis 시세 스냅샷이 없는 종목은 저장을 스킵한다]")
     void captureRegularClose_noSnapshot_skipsStock() {
         // given
-        String stockCode = stock.getStockCode();
         given(domesticMarketCalendarCache.isTradingDayToday()).willReturn(true);
         given(domesticListedStockCache.get()).willReturn(List.of(stock));
-        given(priceCacheStore.find(stockCode)).willReturn(Optional.empty());
+        given(priceCacheStore.findAll(anyList())).willReturn(Map.of());
+        given(domesticRegularClosePriceRepository.findStockCodeByTradeDate(any())).willReturn(List.of());
 
         // when
         scheduler.captureRegularClose();
 
         // then
-        verify(domesticRegularClosePriceRepository, never()).save(any());
+        verify(domesticRegularClosePriceRepository, never()).saveAll(any());
     }
 
     @Test
@@ -106,16 +110,15 @@ class DomesticRegularCloseCaptureSchedulerTest {
         String stockCode = stock.getStockCode();
         given(domesticMarketCalendarCache.isTradingDayToday()).willReturn(true);
         given(domesticListedStockCache.get()).willReturn(List.of(stock));
-        given(priceCacheStore.find(stockCode)).willReturn(
-            Optional.of(new PriceSnapshot(stockCode, 71200.0, 1.2, "2026-08-17T15:30:00+09:00")));
-        given(domesticRegularClosePriceRepository.existsByStockCodeAndTradeDate(eq(stockCode), any()))
-            .willReturn(true);
+        given(priceCacheStore.findAll(anyList())).willReturn(Map.of(
+            stockCode, new PriceSnapshot(stockCode, 71200.0, 1.2, "2026-08-17T15:30:00+09:00")));
+        given(domesticRegularClosePriceRepository.findStockCodeByTradeDate(any())).willReturn(List.of(stockCode));
 
         // when
         scheduler.captureRegularClose();
 
         // then
-        verify(domesticRegularClosePriceRepository, never()).save(any());
+        verify(domesticRegularClosePriceRepository, never()).saveAll(any());
     }
 
     @Test
@@ -135,16 +138,15 @@ class DomesticRegularCloseCaptureSchedulerTest {
         String stockCode = stock.getStockCode();
         given(domesticMarketCalendarCache.isTradingDayToday()).willReturn(true);
         given(domesticListedStockCache.get()).willReturn(List.of(stock));
-        given(priceCacheStore.find(stockCode)).willReturn(
-            Optional.of(new PriceSnapshot(stockCode, 71200.0, 1.2, "2026-08-17T15:32:00+09:00")));
-        given(domesticRegularClosePriceRepository.existsByStockCodeAndTradeDate(eq(stockCode), any()))
-            .willReturn(false);
+        given(priceCacheStore.findAll(anyList())).willReturn(Map.of(
+            stockCode, new PriceSnapshot(stockCode, 71200.0, 1.2, "2026-08-17T15:32:00+09:00")));
+        given(domesticRegularClosePriceRepository.findStockCodeByTradeDate(any())).willReturn(List.of());
 
         // when: 15:32는 안전 시간대(15:30~15:35) 안
         scheduler.captureIfWithinStartupSafeWindow(LocalTime.of(15, 32));
 
         // then
-        verify(domesticRegularClosePriceRepository).save(any());
+        verify(domesticRegularClosePriceRepository).saveAll(any());
     }
 
     @Test
@@ -156,8 +158,8 @@ class DomesticRegularCloseCaptureSchedulerTest {
 
         // then
         verify(domesticMarketCalendarCache, never()).isTradingDayToday();
-        verify(priceCacheStore, never()).find(any());
-        verify(domesticRegularClosePriceRepository, never()).save(any());
+        verify(priceCacheStore, never()).findAll(any());
+        verify(domesticRegularClosePriceRepository, never()).saveAll(any());
     }
 
     @Test
@@ -168,6 +170,6 @@ class DomesticRegularCloseCaptureSchedulerTest {
 
         // then
         verify(domesticMarketCalendarCache, never()).isTradingDayToday();
-        verify(domesticRegularClosePriceRepository, never()).save(any());
+        verify(domesticRegularClosePriceRepository, never()).saveAll(any());
     }
 }
