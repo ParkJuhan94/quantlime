@@ -6,7 +6,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDate;
@@ -30,11 +29,13 @@ import static lombok.AccessLevel.PROTECTED;
     uniqueConstraints = @UniqueConstraint(
         name = "uk_overseas_daily_price_stock_date",
         columnNames = {"stock_code", "trade_date"}
-    ),
-    indexes = @Index(
-        name = "idx_overseas_daily_price_stock_date",
-        columnList = "stock_code, trade_date DESC"
     )
+    // idx_overseas_daily_price_stock_date(stock_code, trade_date DESC)는
+    // uk_overseas_daily_price_stock_date와 컬럼 구성이 완전히 같아 제거했다
+    // (2026-09 성능 감사 - 72MB, 2.3일간 읽기 3회뿐). MySQL은 오름차순
+    // 인덱스를 역방향으로도 스캔할 수 있어(EXPLAIN상 "Index lookup ...
+    // (reverse)") findTopByStockCodeOrderByTradeDateDesc류 최신행 조회는
+    // UK만으로 그대로 커버된다.
 )
 @Getter
 @NoArgsConstructor(access = PROTECTED)

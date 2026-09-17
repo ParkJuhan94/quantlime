@@ -9,7 +9,6 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDate;
@@ -38,11 +37,12 @@ import static lombok.AccessLevel.PROTECTED;
     uniqueConstraints = @UniqueConstraint(
         name = "uk_investor_trading_market_interval_date",
         columnNames = {"market_code", "aggregation_interval", "base_date"}
-    ),
-    indexes = @Index(
-        name = "idx_investor_trading_market_interval_date",
-        columnList = "market_code, aggregation_interval, base_date DESC"
     )
+    // idx_investor_trading_market_interval_date(market_code,
+    // aggregation_interval, base_date DESC)는
+    // uk_investor_trading_market_interval_date와 컬럼 구성이 완전히 같아
+    // 제거했다(2026-09 성능 감사). MySQL은 오름차순 인덱스를 역방향으로도
+    // 스캔할 수 있어 마지막 컬럼 DESC 정렬만으로는 별도 인덱스가 필요 없다.
 )
 @Getter
 @NoArgsConstructor(access = PROTECTED)
