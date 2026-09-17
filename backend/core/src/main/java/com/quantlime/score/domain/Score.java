@@ -26,11 +26,14 @@ import static lombok.AccessLevel.PROTECTED;
         name = "uk_score_stock_date",
         columnNames = {"stock_code", "score_date"}
     ),
+    // uk_score_stock_date(stock_code, score_date)와 컬럼 구성이 완전히 같던
+    // idx_score_stock_date(stock_code, score_date DESC)는 제거했다(2026-09
+    // 성능 감사 - 117MB, performance_schema 기준 2.3일간 읽기 0회). MySQL은
+    // 오름차순 인덱스를 역방향으로도 스캔할 수 있어(EXPLAIN상 "Index lookup
+    // ... (reverse)") 단일 컬럼 정렬만으로는 별도 DESC 인덱스가 필요 없다 -
+    // findTopByStockCodeOrderByTradeDateDesc류 최신행 조회는 UK로 그대로
+    // 커버된다.
     indexes = {
-        @Index(
-            name = "idx_score_stock_date",
-            columnList = "stock_code, score_date DESC"
-        ),
         // /api/dashboard/scores(전체 랭킹) 쿼리가 튜플 IN 서브쿼리로
         // "종목별 최신 score_date"만 걸러낸 뒤 ORDER BY composite_score DESC
         // LIMIT 50을 도는데, 이 인덱스가 없으면 옵티마이저가 전체 후보를
@@ -50,6 +53,19 @@ import static lombok.AccessLevel.PROTECTED;
         @Index(
             name = "idx_score_composite_percentile",
             columnList = "composite_percentile DESC"
+        ),
+        // /api/dashboard/scores(watchlistOnly=false) 전체 랭킹 쿼리가
+        // 2026-09 성능 감사로 "종목별 최신일" 튜플 IN 서브쿼리 대신 "전
+        // 배치 최신 score_date 하나"로 필터링하도록 바뀌면서(ScoreQueryRepositoryImpl
+        // 참고) score_date 등치 조건 + composite_percentile 정렬을 함께
+        // 만족하는 복합 인덱스가 유효해졌다 - MySQL이 score_date로 범위를
+        // 좁힌 뒤 그 안에서 이미 percentile 내림차순으로 정렬된 상태로
+        // LIMIT까지만 훑을 수 있다. 위 단일 컬럼 idx_score_composite_percentile은
+        // 이 인덱스 도입 후 실사용을 performance_schema로 재확인해 읽기
+        // 0이면 별도로 제거할 것(다른 호출부가 없다면 완전히 중복이 된다).
+        @Index(
+            name = "idx_score_date_composite_percentile",
+            columnList = "score_date, composite_percentile DESC"
         )
     }
 )

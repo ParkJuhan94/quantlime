@@ -2,7 +2,9 @@ package com.quantlime.score.repository;
 
 import com.quantlime.score.domain.Score;
 import com.quantlime.stock.domain.MarketType;
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 public interface ScoreQueryRepository {
 
@@ -32,4 +34,16 @@ public interface ScoreQueryRepository {
      * 쓰인다({@link com.quantlime.score.service.ScoreService#normalizeCrossSection}).
      */
     List<Score> findLatestScoresForNormalization(List<MarketType> marketTypes);
+
+    /**
+     * 전 종목의 "종목코드 → 최신 스코어 산출일" 맵을 한 번에 반환한다.
+     * {@code MarketDataRefreshService}가 전종목 갱신 루프에서 종목마다
+     * {@code scoreRepository.findTopByStockCodeOrderByScoreDateDesc}를
+     * 개별 호출하던 것(하루 2회 × 국내+해외 약 9,000회 왕복)을 이 배치
+     * 조회 하나로 대체한다(2026-09 성능 감사) - 루프 시작 전에 한 번만
+     * 호출하고, 루프 안에서는 이 메서드가 반환한 맵을 참조만 하므로
+     * 루프 도중 스코어 테이블에 쓰는 코드가 없는 한 안전하다(스코어
+     * 재계산은 이 루프가 끝난 뒤에 실행됨).
+     */
+    Map<String, LocalDate> findLatestScoreDateByStockCode();
 }

@@ -11,7 +11,10 @@ import com.quantlime.score.domain.Score;
 import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.QStock;
+import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
@@ -44,10 +47,13 @@ public class ScoreQueryRepositoryImpl implements ScoreQueryRepository {
     @Override
     public List<Score> findTopScoresOrderByCompositeScoreDesc(int limit, List<MarketType> marketTypes) {
         QScore score = QScore.score;
-        QScore latest = new QScore("latest");
 
         List<String> eligibleStockCodes = eligibleStockCodes(marketTypes);
         if (eligibleStockCodes.isEmpty()) {
+            return List.of();
+        }
+        LocalDate latestBatchDate = latestBatchScoreDate();
+        if (latestBatchDate == null) {
             return List.of();
         }
 
@@ -55,7 +61,7 @@ public class ScoreQueryRepositoryImpl implements ScoreQueryRepository {
             .selectFrom(score)
             .where(
                 score.stockCode.in(eligibleStockCodes),
-                latestScoreDateTuple(latest, null))
+                score.scoreDate.eq(latestBatchDate))
             .orderBy(score.compositePercentile.desc().nullsLast())
             .limit(limit)
             .fetch();
@@ -64,10 +70,13 @@ public class ScoreQueryRepositoryImpl implements ScoreQueryRepository {
     @Override
     public List<Score> findLatestScoresForNormalization(List<MarketType> marketTypes) {
         QScore score = QScore.score;
-        QScore latest = new QScore("latest");
 
         List<String> eligibleStockCodes = eligibleStockCodes(marketTypes);
         if (eligibleStockCodes.isEmpty()) {
+            return List.of();
+        }
+        LocalDate latestBatchDate = latestBatchScoreDate();
+        if (latestBatchDate == null) {
             return List.of();
         }
 
@@ -75,7 +84,7 @@ public class ScoreQueryRepositoryImpl implements ScoreQueryRepository {
             .selectFrom(score)
             .where(
                 score.stockCode.in(eligibleStockCodes),
-                latestScoreDateTuple(latest, null))
+                score.scoreDate.eq(latestBatchDate))
             .fetch();
     }
 
@@ -114,6 +123,13 @@ public class ScoreQueryRepositoryImpl implements ScoreQueryRepository {
      * 단축된다(약 90배). JPQL은 FROM 절에 서브쿼리(파생 테이블)를 허용하지
      * 않아 raw SQL로 검증한 파생 테이블 조인(0.82초)만큼은 못 줄이지만,
      * 기존 QueryDSL 컨벤션을 벗어나지 않고 얻을 수 있는 최선이다.
+     *
+     * <p>{@link #findLatestScoresByStockCodesOrderByCompositeScoreDesc}(관심종목
+     * 경로, 종목 수가 작음)에서만 쓴다. 전체 랭킹/정규화 경로는 {@link
+     * #latestBatchScoreDate()}로 대체했다(2026-09 성능 감사) - 배치가 전
+     * 종목을 같은 날짜로 갱신하므로 종목별로 따로 구할 이유가 없었고, 이
+     * 튜플 IN도 요청마다 9,156개 종목-날짜 그룹을 다시 materialize하는
+     * 비용이 있었다.
      */
     private BooleanExpression latestScoreDateTuple(QScore latest, List<String> stockCodes) {
         JPAQuery<Tuple> latestDates = queryFactory
@@ -124,5 +140,35 @@ public class ScoreQueryRepositoryImpl implements ScoreQueryRepository {
             latestDates.where(latest.stockCode.in(stockCodes));
         }
         return Expressions.list(QScore.score.stockCode, QScore.score.scoreDate).in(latestDates);
+    }
+
+    @Override
+    public Map<String, LocalDate> findLatestScoreDateByStockCode() {
+        QScore score = QScore.score;
+        List<Tuple> rows = queryFactory
+            .select(score.stockCode, score.scoreDate.max())
+            .from(score)
+            .groupBy(score.stockCode)
+            .fetch();
+
+        Map<String, LocalDate> result = new HashMap<>();
+        for (Tuple row : rows) {
+            result.put(row.get(0, String.class), row.get(1, LocalDate.class));
+        }
+        return result;
+    }
+
+    /**
+     * 전 종목 배치의 최신 산출일 하나(스코어 배치가 종목마다 다른 날짜로
+     * 끝나는 경우는 없다 - {@link
+     * com.quantlime.score.service.ScoreService#recalculateDomesticScores}가
+     * 같은 실행 안에서 국내/해외 전체를 같은 {@code LocalDate.now()} 기준으로
+     * 저장). 스코어 행이 하나도 없으면(최초 기동 등) {@code null}.
+     */
+    private LocalDate latestBatchScoreDate() {
+        return queryFactory
+            .select(QScore.score.scoreDate.max())
+            .from(QScore.score)
+            .fetchOne();
     }
 }
