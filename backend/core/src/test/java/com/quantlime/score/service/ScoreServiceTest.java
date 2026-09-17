@@ -12,6 +12,7 @@ import com.quantlime.infra.python.exception.PythonEngineErrorCode;
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.repository.StockLiquidityRepository;
 import com.quantlime.price.service.DomesticDailyPriceService;
+import com.quantlime.score.cache.ScoreRankingCacheStore;
 import com.quantlime.score.domain.Divergence;
 import com.quantlime.score.domain.Quadrant;
 import com.quantlime.score.domain.Score;
@@ -72,6 +73,9 @@ class ScoreServiceTest {
 
     @Mock
     private StockMasterService stockMasterService;
+
+    @Mock
+    private ScoreRankingCacheStore scoreRankingCacheStore;
 
     @Spy
     private MeterRegistry meterRegistry = new SimpleMeterRegistry();
@@ -264,7 +268,11 @@ class ScoreServiceTest {
         Score score = Score.of(STOCK_CODE, LocalDate.now(), 80.0, 40.0, 90.0,
             null, null, Divergence.of(false, null), false);
         Stock stock = StockFixture.createStock(STOCK_CODE, "삼성전자");
-        given(scoreRepository.findTopScoresOrderByCompositeScoreDesc(10, null)).willReturn(List.of(score));
+        given(scoreRankingCacheStore.find("all")).willReturn(Optional.empty());
+        // 캐시 미스면 limit과 무관하게 항상 캐시 상한(50건, ScoreController의
+        // @Max(50)과 맞춘 값)만큼 조회해 캐싱한 뒤 요청받은 limit만큼 자른다
+        // (2026-09 성능 감사 - ScoreRankingCacheStore 참고).
+        given(scoreRepository.findTopScoresOrderByCompositeScoreDesc(50, null)).willReturn(List.of(score));
         given(stockMasterService.getStocksByCodesInOrder(List.of(STOCK_CODE))).willReturn(List.of(stock));
 
         // when
@@ -275,6 +283,7 @@ class ScoreServiceTest {
         assertThat(result.get(0).stockCode()).isEqualTo(STOCK_CODE);
         assertThat(result.get(0).stockName()).isEqualTo("삼성전자");
         assertThat(result.get(0).compositeScore()).isEqualTo(90.0);
+        verify(scoreRankingCacheStore).save("all", result);
     }
 
     private DomesticDailyPrice domesticDailyPrice(LocalDate tradeDate) {

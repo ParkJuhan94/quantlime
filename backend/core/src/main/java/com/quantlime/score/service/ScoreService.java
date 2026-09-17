@@ -13,6 +13,7 @@ import com.quantlime.price.domain.StockLiquidity;
 import com.quantlime.price.repository.OverseasDailyPriceRepository;
 import com.quantlime.price.repository.StockLiquidityRepository;
 import com.quantlime.price.service.DomesticDailyPriceService;
+import com.quantlime.score.cache.ScoreRankingCacheStore;
 import com.quantlime.score.domain.PeerGroup;
 import com.quantlime.score.domain.Score;
 import com.quantlime.score.dto.mapper.ScoreMapper;
@@ -59,6 +60,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class ScoreService {
 
     private static final int OHLCV_LOOKBACK_DAYS = 730;
+    // ScoreController.getDashboardScores의 @Max(50) limit 상한과 반드시
+    // 같은 값이어야 한다 - 이보다 작으면 그 값을 넘는 limit 요청이 캐시된
+    // 것보다 더 많은 행을 요구해 항상 미스가 나고, 클 필요는 없다(그 이상
+    // 요청 자체가 컨트롤러에서 막힘).
+    private static final int MAX_CACHEABLE_RANKING_SIZE = 50;
     private static final String METRIC_MISSING_FROM_RESPONSE = "score.batch.missing-from-response";
     // 전종목(약 2,700개)을 한 요청에 다 넣으면 퀀트 엔진에 보내는 JSON
     // 페이로드가 지나치게 커진다(종목당 최대 730일 OHLCV) - 청크로 나눠
@@ -74,6 +80,7 @@ public class ScoreService {
     private final StockLiquidityRepository stockLiquidityRepository;
     private final WatchlistRepository watchlistRepository;
     private final StockMasterService stockMasterService;
+    private final ScoreRankingCacheStore scoreRankingCacheStore;
     private final MeterRegistry meterRegistry;
 
     public void recalculateDomesticScore(String stockCode) {
@@ -222,8 +229,25 @@ public class ScoreService {
     // "실시간 랭킹" 스코어 탭의 "전체" 토글 - 관심종목 여부와 무관하게 전
     // 상장종목 중 상위 N개(2026-07-18, 관심종목만/전체 토글로 /dashboard
     // 별도 페이지를 대체).
+    //
+    // 2026-09 성능 감사부터 Redis에 scope별 상위 MAX_CACHEABLE_RANKING_SIZE건을
+    // 통째로 캐싱한다(ScoreRankingCacheStore 참고) - 배치가 하루 2회만
+    // 데이터를 바꾸는데 매 요청마다 eligibleStockCodes 조인 + 전종목 IN절
+    // 정렬 쿼리를 다시 도는 게 낭비였다. 캐시 미스일 때만 DB를 조회하고,
+    // limit과 무관하게 항상 상한만큼 계산해 캐싱한 뒤 요청받은 limit만큼
+    // 잘라 반환한다(그래야 limit이 다른 후속 요청도 캐시를 재사용한다).
     @Transactional(readOnly = true)
     public List<ScoreRankingResponse> getAllStocksScoreRanking(int limit, String scope) {
+        List<ScoreRankingResponse> ranking = scoreRankingCacheStore.find(scope)
+            .orElseGet(() -> {
+                List<ScoreRankingResponse> computed = queryAllStocksScoreRanking(MAX_CACHEABLE_RANKING_SIZE, scope);
+                scoreRankingCacheStore.save(scope, computed);
+                return computed;
+            });
+        return ranking.size() > limit ? ranking.subList(0, limit) : ranking;
+    }
+
+    private List<ScoreRankingResponse> queryAllStocksScoreRanking(int limit, String scope) {
         List<Score> latestScores = scoreRepository
             .findTopScoresOrderByCompositeScoreDesc(limit, scopeToMarketTypes(scope));
         List<String> stockCodes = latestScores.stream().map(Score::getStockCode).toList();

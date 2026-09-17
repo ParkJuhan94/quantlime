@@ -9,6 +9,7 @@ import com.quantlime.price.repository.DomesticDailyPriceRepository;
 import com.quantlime.price.repository.OverseasDailyPriceRepository;
 import com.quantlime.price.service.PriceGapFillService;
 import com.quantlime.price.service.StockLiquidityService;
+import com.quantlime.score.cache.ScoreRankingCacheStore;
 import com.quantlime.score.domain.PeerGroup;
 import com.quantlime.score.repository.ScoreRepository;
 import com.quantlime.score.service.ScoreService;
@@ -79,6 +80,7 @@ public class MarketDataRefreshService {
     private final PriceGapFillService priceGapFillService;
     private final StockLiquidityService stockLiquidityService;
     private final ScoreService scoreService;
+    private final ScoreRankingCacheStore scoreRankingCacheStore;
     private final BenchmarkIndexBackfillService benchmarkIndexBackfillService;
     private final InvestorTradingBackfillService investorTradingBackfillService;
     private final RedisLockService redisLockService;
@@ -133,13 +135,32 @@ public class MarketDataRefreshService {
                 .toList(),
             overseasDailyPriceRepository.findStockCodesOrderedByTradingValueDesc(tradingValueSince));
 
+        // 종목별 "스코어 재계산 필요 여부" 판단에 쓰는 최신 스코어 산출일을
+        // 루프 시작 전에 배치로 한 번만 가져온다(2026-09 성능 감사) - 이전엔
+        // needsScoreRefresh가 종목마다 scoreRepository를 개별 호출해 국내+
+        // 해외 약 9,000회 왕복이 났다. 국내/해외 스레드가 같은 맵을 읽기만
+        // 하므로(쓰기는 이 루프들이 모두 끝난 뒤 recalculate*Scores에서 발생)
+        // 스냅샷 하나를 공유해도 안전하다.
+        Map<String, LocalDate> latestScoreDateByStockCode = scoreRepository.findLatestScoreDateByStockCode();
+
         AtomicInteger domesticFailures = new AtomicInteger();
         AtomicInteger overseasFailures = new AtomicInteger();
         CompletableFuture<Void> domesticDone = CompletableFuture.runAsync(
-            () -> refreshDomestic(domestic, domesticFailures), domesticMarketDataRefreshTaskExecutor);
+            () -> refreshDomestic(domestic, domesticFailures, latestScoreDateByStockCode),
+            domesticMarketDataRefreshTaskExecutor);
         CompletableFuture<Void> overseasDone = CompletableFuture.runAsync(
-            () -> refreshOverseas(overseas, overseasFailures), overseasMarketDataRefreshTaskExecutor);
+            () -> refreshOverseas(overseas, overseasFailures, latestScoreDateByStockCode),
+            overseasMarketDataRefreshTaskExecutor);
         CompletableFuture.allOf(domesticDone, overseasDone).join();
+
+        // 국내·해외 횡단면 정규화(refreshDomestic/refreshOverseas 내부의
+        // scoreService.normalizeCrossSection)가 이 시점에 둘 다 끝나 있다 -
+        // /api/dashboard/scores(watchlistOnly=false) 랭킹 캐시(ScoreRankingCacheStore)를
+        // 여기서 무효화해야 다음 요청이 이번에 갱신된 최신 스코어로 다시
+        // 캐싱한다(2026-09 성능 감사). 개별 peer group이 끝날 때마다 지우면
+        // "국내만 끝난 상태"에서 scope=all/overseas 키가 갱신 전 상태로 남는
+        // 애매한 창이 생겨, 둘 다 끝난 뒤 한 번에 지운다.
+        SafeExecutor.runSafely("스코어 랭킹 캐시 무효화", scoreRankingCacheStore::evictAll);
 
         // 국내 지수(코스피/코스닥) 일봉 갭필 + 투자자별 매매대금(주/월)을 같은
         // 트리거에 편입한다(2026-07-29, 사용자 요청) - MarketIndexCache의 지수
@@ -159,21 +180,36 @@ public class MarketDataRefreshService {
 
     public void refreshStock(String stockCode) {
         Stock stock = stockMasterService.getStockByCode(stockCode);
+        // 단건 갱신(관심종목 등록 트리거)이라 배치 프리페치의 이점은 없지만,
+        // refreshDomestic/refreshOverseas의 시그니처를 하나로 유지하려고
+        // 동일하게 맵을 조회해 넘긴다 - 이 경로는 고빈도가 아니라 이
+        // 여분의 조회(~10ms) 비용이 무시할 만하다.
+        Map<String, LocalDate> latestScoreDateByStockCode = scoreRepository.findLatestScoreDateByStockCode();
         if (stock.getMarketType().isDomestic()) {
-            refreshDomestic(List.of(stock), new AtomicInteger());
+            refreshDomestic(List.of(stock), new AtomicInteger(), latestScoreDateByStockCode);
         } else {
-            refreshOverseas(List.of(stock), new AtomicInteger());
+            refreshOverseas(List.of(stock), new AtomicInteger(), latestScoreDateByStockCode);
         }
     }
 
-    private void refreshDomestic(List<Stock> stocks, AtomicInteger failures) {
+    private void refreshDomestic(List<Stock> stocks, AtomicInteger failures,
+        Map<String, LocalDate> latestScoreDateByStockCode) {
         List<String> needsScoreRefresh = new ArrayList<>();
         int processed = 0;
         for (Stock stock : stocks) {
             String stockCode = stock.getStockCode();
+            // gap-fill이 API를 부르지 않았다면(이미 최신) 그 안에서 이미
+            // 읽은 최신 저장일을 그대로 재사용하고, API를 불렀다면(값이
+            // 바뀌었을 수 있음) 다시 조회한다(2026-09 성능 감사 - 이전엔
+            // 매 종목 이 조회를 무조건 두 번 했다: fillDomesticGap 내부에서
+            // 한 번, latestPriceDate(stockCode)로 또 한 번).
+            Optional<LocalDate> latestPriceDate = Optional.empty();
             try {
-                boolean calledApi = priceGapFillService.fillDomesticGap(stockCode);
-                if (calledApi && !sleepBetweenStocks()) {
+                PriceGapFillService.GapFillOutcome outcome = priceGapFillService.fillDomesticGap(stockCode);
+                latestPriceDate = outcome.calledApi()
+                    ? latestPriceDate(stockCode)
+                    : Optional.ofNullable(outcome.latestTradeDate());
+                if (outcome.calledApi() && !sleepBetweenStocks()) {
                     // 인터럽트로 중단되면 이후 종목(거래대금순 정렬 기준
                     // 처리 못 한 나머지)이 이번 실행에서 아예 반영되지 않는다
                     // - 다음에 같은 절단이 재발해도 로그만 보고 즉시 규모를
@@ -184,8 +220,12 @@ public class MarketDataRefreshService {
                 }
             } catch (Exception e) {
                 handleDomesticFailure(stockCode, e, failures);
+                // gap-fill이 예외로 중단됐으면 GapFillOutcome을 못 받으므로
+                // 재사용할 값이 없다 - 실패는 드문 경로라 기존과 동일하게
+                // 안전하게 다시 조회한다.
+                latestPriceDate = latestPriceDate(stockCode);
             }
-            if (needsScoreRefresh(stockCode, latestPriceDate(stockCode))) {
+            if (needsScoreRefresh(stockCode, latestPriceDate, latestScoreDateByStockCode)) {
                 needsScoreRefresh.add(stockCode);
             }
             processed++;
@@ -204,21 +244,29 @@ public class MarketDataRefreshService {
             () -> scoreService.normalizeCrossSection(PeerGroup.DOMESTIC));
     }
 
-    private void refreshOverseas(List<Stock> stocks, AtomicInteger failures) {
+    private void refreshOverseas(List<Stock> stocks, AtomicInteger failures,
+        Map<String, LocalDate> latestScoreDateByStockCode) {
         List<String> needsScoreRefresh = new ArrayList<>();
         int processed = 0;
         for (Stock stock : stocks) {
             String stockCode = stock.getStockCode();
+            // 국내(refreshDomestic)와 동일한 이유로 GapFillOutcome을 재사용한다
+            // (2026-09 성능 감사).
+            Optional<LocalDate> latestPriceDate = Optional.empty();
             try {
-                boolean calledApi = priceGapFillService.fillOverseasGap(stockCode);
-                if (calledApi && !sleepBetweenStocks()) {
+                PriceGapFillService.GapFillOutcome outcome = priceGapFillService.fillOverseasGap(stockCode);
+                latestPriceDate = outcome.calledApi()
+                    ? latestOverseasPriceDate(stockCode)
+                    : Optional.ofNullable(outcome.latestTradeDate());
+                if (outcome.calledApi() && !sleepBetweenStocks()) {
                     log.warn("해외 가격 갱신 중단(인터럽트): 처리={}/{}", processed, stocks.size());
                     break;
                 }
             } catch (Exception e) {
                 handleOverseasFailure(stockCode, e, failures);
+                latestPriceDate = latestOverseasPriceDate(stockCode);
             }
-            if (needsScoreRefresh(stockCode, latestOverseasPriceDate(stockCode))) {
+            if (needsScoreRefresh(stockCode, latestPriceDate, latestScoreDateByStockCode)) {
                 needsScoreRefresh.add(stockCode);
             }
             processed++;
@@ -326,14 +374,18 @@ public class MarketDataRefreshService {
      * gap-fill과 달리 스코어 계산 자체는 외부 레이트리밋 대상이 아니지만,
      * 이미 최신인 종목까지 매번 청크에 실어 퀀트 엔진을 부르는 왕복을
      * 아끼기 위한 최소한의 필터다.
+     *
+     * <p>{@code latestScoreDateByStockCode}는 루프 시작 전 배치로 한 번만
+     * 조회한 스냅샷({@link ScoreRepository#findLatestScoreDateByStockCode})
+     * 이다 - 이전엔 종목마다 개별 쿼리를 날렸다(2026-09 성능 감사).
      */
-    private boolean needsScoreRefresh(String stockCode, Optional<LocalDate> latestPriceDate) {
+    private boolean needsScoreRefresh(String stockCode, Optional<LocalDate> latestPriceDate,
+        Map<String, LocalDate> latestScoreDateByStockCode) {
         if (latestPriceDate.isEmpty()) {
             return false;
         }
-        return scoreRepository.findTopByStockCodeOrderByScoreDateDesc(stockCode)
-            .map(score -> score.getScoreDate().isBefore(latestPriceDate.get()))
-            .orElse(true);
+        LocalDate latestScoreDate = latestScoreDateByStockCode.get(stockCode);
+        return latestScoreDate == null || latestScoreDate.isBefore(latestPriceDate.get());
     }
 
     /**

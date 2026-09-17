@@ -10,13 +10,11 @@ import static org.mockito.Mockito.verify;
 import com.quantlime.common.exception.ExternalApiException;
 import com.quantlime.common.lock.RedisLockService;
 import com.quantlime.infra.toss.exception.TossApiErrorCode;
-import com.quantlime.price.domain.DomesticDailyPrice;
-import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.price.repository.DomesticDailyPriceRepository;
 import com.quantlime.price.repository.OverseasDailyPriceRepository;
 import com.quantlime.price.service.PriceGapFillService;
 import com.quantlime.price.service.StockLiquidityService;
-import com.quantlime.score.domain.Score;
+import com.quantlime.score.cache.ScoreRankingCacheStore;
 import com.quantlime.score.repository.ScoreRepository;
 import com.quantlime.score.service.ScoreService;
 import com.quantlime.stock.domain.ListingStatus;
@@ -27,6 +25,7 @@ import com.quantlime.stock.service.StockMasterService;
 import com.quantlime.stock.service.DomesticStockMasterSyncService;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
@@ -77,6 +76,9 @@ class MarketDataRefreshServiceTest {
     private ScoreService scoreService;
 
     @Mock
+    private ScoreRankingCacheStore scoreRankingCacheStore;
+
+    @Mock
     private BenchmarkIndexBackfillService benchmarkIndexBackfillService;
 
     @Mock
@@ -102,8 +104,8 @@ class MarketDataRefreshServiceTest {
             stockMasterService, domesticStockMasterSyncService, overseasStockMasterSyncService,
             domesticDailyPriceRepository, overseasDailyPriceRepository,
             scoreRepository, priceGapFillService, stockLiquidityService, scoreService,
-            benchmarkIndexBackfillService, investorTradingBackfillService, redisLockService,
-            domesticMarketDataRefreshTaskExecutor, overseasMarketDataRefreshTaskExecutor);
+            scoreRankingCacheStore, benchmarkIndexBackfillService, investorTradingBackfillService,
+            redisLockService, domesticMarketDataRefreshTaskExecutor, overseasMarketDataRefreshTaskExecutor);
     }
 
     /**
@@ -146,15 +148,18 @@ class MarketDataRefreshServiceTest {
         given(stockMasterService.getAllListedStocks()).willReturn(List.of(domestic, overseas));
 
         LocalDate today = LocalDate.now();
-        given(domesticDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(DOMESTIC_CODE))
-            .willReturn(Optional.of(domesticDailyPrice(today)));
-        given(overseasDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(OVERSEAS_CODE))
-            .willReturn(Optional.of(overseasDailyPrice(today)));
-        // 국내는 스코어가 가격 최신일보다 뒤처져 재계산 대상, 해외는 이미 최신이라 제외
-        given(scoreRepository.findTopByStockCodeOrderByScoreDateDesc(DOMESTIC_CODE))
-            .willReturn(Optional.of(score(today.minusDays(1))));
-        given(scoreRepository.findTopByStockCodeOrderByScoreDateDesc(OVERSEAS_CODE))
-            .willReturn(Optional.of(score(today)));
+        // calledApi=false(gap 없음)로 응답해, gap-fill이 이미 읽은 최신
+        // 저장일을 그대로 재사용하는 경로를 태운다(2026-09 성능 감사 -
+        // MarketDataRefreshService가 이 경우 domestic/overseasDailyPriceRepository를
+        // 다시 조회하지 않는지도 이 테스트가 함께 검증한다).
+        given(priceGapFillService.fillDomesticGap(DOMESTIC_CODE))
+            .willReturn(PriceGapFillService.GapFillOutcome.apiSkipped(today));
+        given(priceGapFillService.fillOverseasGap(OVERSEAS_CODE))
+            .willReturn(PriceGapFillService.GapFillOutcome.apiSkipped(today));
+        // 국내는 스코어가 가격 최신일보다 뒤처져 재계산 대상, 해외는 이미
+        // 최신이라 제외 - 종목별 개별 조회가 아니라 배치 맵 하나로 판단한다.
+        given(scoreRepository.findLatestScoreDateByStockCode())
+            .willReturn(Map.of(DOMESTIC_CODE, today.minusDays(1), OVERSEAS_CODE, today));
 
         // when
         marketDataRefreshService.refreshAll();
@@ -164,6 +169,10 @@ class MarketDataRefreshServiceTest {
         verify(overseasStockMasterSyncService).syncAll();
         verify(priceGapFillService).fillDomesticGap(DOMESTIC_CODE);
         verify(priceGapFillService).fillOverseasGap(OVERSEAS_CODE);
+        // gap이 없어 calledApi=false였으므로 최신 저장일을 다시 조회할
+        // 필요가 없다(2026-09 성능 감사의 핵심 검증 포인트).
+        verify(domesticDailyPriceRepository, never()).findTopByStockCodeOrderByTradeDateDesc(any());
+        verify(overseasDailyPriceRepository, never()).findTopByStockCodeOrderByTradeDateDesc(any());
 
         // 국내는 국내 전용 스코어 재계산에 삼성전자만 포함
         ArgumentCaptor<List<String>> domesticScoreCaptor = ArgumentCaptor.forClass(List.class);
@@ -218,8 +227,8 @@ class MarketDataRefreshServiceTest {
         // given
         Stock domestic = Stock.of(DOMESTIC_CODE, "삼성전자", MarketType.KOSPI, ListingStatus.LISTED, "전기전자");
         given(stockMasterService.getStockByCode(DOMESTIC_CODE)).willReturn(domestic);
-        given(domesticDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(DOMESTIC_CODE))
-            .willReturn(Optional.empty());
+        given(priceGapFillService.fillDomesticGap(DOMESTIC_CODE))
+            .willReturn(PriceGapFillService.GapFillOutcome.apiSkipped(LocalDate.now()));
 
         // when
         marketDataRefreshService.refreshStock(DOMESTIC_CODE);
@@ -316,17 +325,5 @@ class MarketDataRefreshServiceTest {
         org.assertj.core.api.Assertions.assertThat(result).isEmpty();
         verify(domesticStockMasterSyncService, never()).syncStockMaster();
         verify(stockMasterService, never()).getAllListedStocks();
-    }
-
-    private DomesticDailyPrice domesticDailyPrice(LocalDate tradeDate) {
-        return DomesticDailyPrice.of(DOMESTIC_CODE, tradeDate, 70000L, 71000L, 69000L, 70500L, 1000000L);
-    }
-
-    private OverseasDailyPrice overseasDailyPrice(LocalDate tradeDate) {
-        return OverseasDailyPrice.of(OVERSEAS_CODE, tradeDate, 150.0, 152.0, 148.0, 151.0, 1000000L);
-    }
-
-    private Score score(LocalDate scoreDate) {
-        return Score.of(DOMESTIC_CODE, scoreDate, 50.0, 50.0, 50.0, null, null, null, false);
     }
 }
