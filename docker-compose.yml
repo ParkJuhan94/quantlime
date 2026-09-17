@@ -29,6 +29,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 20s
+    # slow-query-log: 2026-09 성능 감사에서 슬로우 쿼리 로그가 계속
+    # OFF였던 걸 발견(long_query_time 기본 10초, 로그 자체가 안 남음) -
+    # 1초 기준으로 켜서 이후 회귀를 조기에 발견할 수 있게 한다.
+    # --log-queries-not-using-indexes는 의도적으로 안 켠다 - 소형 테이블
+    # 풀스캔까지 다 찍혀 정작 중요한 느린 쿼리를 로그 노이즈에 묻히게 함.
     command: >
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_unicode_ci
@@ -36,6 +41,9 @@ services:
       --server-id=1
       --gtid-mode=ON
       --enforce-gtid-consistency=ON
+      --slow-query-log=ON
+      --slow-query-log-file=/var/lib/mysql/slow.log
+      --long-query-time=1
 
   redis:
     image: redis:7-alpine
