@@ -77,10 +77,10 @@ class PriceGapFillServiceTest {
             .willReturn(Optional.of(domesticDailyPrice(LocalDate.now())));
 
         // when
-        boolean calledApi = priceGapFillService.fillDomesticGap(STOCK_CODE);
+        PriceGapFillService.GapFillOutcome outcome = priceGapFillService.fillDomesticGap(STOCK_CODE);
 
         // then: 갭 0일 + 버퍼 5일 = 5일치를 재조회한다
-        assertThat(calledApi).isTrue();
+        assertThat(outcome.calledApi()).isTrue();
         verify(domesticDailyPriceService).refreshRecent(STOCK_CODE, 5);
         verify(domesticDailyPriceService, never()).backfillHistoryIfNeeded(any(), anyInt());
     }
@@ -96,11 +96,13 @@ class PriceGapFillServiceTest {
             .willReturn(Optional.of(settled));
 
         // when
-        boolean calledApi = priceGapFillService.fillDomesticGap(STOCK_CODE);
+        PriceGapFillService.GapFillOutcome outcome = priceGapFillService.fillDomesticGap(STOCK_CODE);
 
         // then: API 호출이 없었으므로 호출측(MarketDataRefreshService)이 종목 간
-        // 딜레이를 걸지 않아도 되도록 false를 반환한다
-        assertThat(calledApi).isFalse();
+        // 딜레이를 걸지 않아도 되도록 false를 반환하고, 이미 읽은 최신
+        // 저장일(오늘)을 함께 돌려준다(재조회 생략용, 2026-09 성능 감사)
+        assertThat(outcome.calledApi()).isFalse();
+        assertThat(outcome.latestTradeDate()).isEqualTo(LocalDate.now());
         verify(domesticDailyPriceService, never()).refreshRecent(any(), anyInt());
         verify(domesticDailyPriceService, never()).backfillHistoryIfNeeded(any(), anyInt());
     }
@@ -116,10 +118,10 @@ class PriceGapFillServiceTest {
             .willReturn(Optional.of(recentlyRefreshed));
 
         // when
-        boolean calledApi = priceGapFillService.fillDomesticGap(STOCK_CODE);
+        PriceGapFillService.GapFillOutcome outcome = priceGapFillService.fillDomesticGap(STOCK_CODE);
 
         // then
-        assertThat(calledApi).isFalse();
+        assertThat(outcome.calledApi()).isFalse();
         verify(domesticDailyPriceService, never()).refreshRecent(any(), anyInt());
     }
 

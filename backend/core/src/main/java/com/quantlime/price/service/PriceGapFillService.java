@@ -47,16 +47,25 @@ public class PriceGapFillService {
     private final OverseasDailyPriceBackfillService overseasDailyPriceBackfillService;
 
     /**
-     * @return 실제로 외부 API 호출이 발생했는지 여부 - 호출측(MarketDataRefreshService)이
-     * 종목 간 레이트리밋 딜레이를 API를 실제로 부른 경우에만 주도록 판단하는 데 쓴다
-     * (이미 최신이라 스킵된 종목까지 매번 딜레이를 걸면 전종목 스윕이 불필요하게 느려진다).
+     * @return 실제로 외부 API 호출이 발생했는지 여부와, API를 호출하지
+     * 않은 경우(gap 없음)에 한해 이 메서드가 이미 읽은 최신 저장일. 두
+     * 용도로 쓰인다 - (1) 호출측(MarketDataRefreshService)이 종목 간
+     * 레이트리밋 딜레이를 API를 실제로 부른 경우에만 주도록 판단하는 것
+     * (2) 같은 호출측이 스코어 재계산 필요 여부를 판단하려고 "최신
+     * 저장일"을 다시 조회하던 것 - calledApi가 false면 이 메서드가 이미
+     * 읽은 값과 DB 상태가 달라질 이유가 없으므로 {@link
+     * GapFillOutcome#latestTradeDate()}를 그대로 재사용하면 되고(2026-09
+     * 성능 감사), calledApi가 true면 이 메서드 실행 중 실제로 행이
+     * 추가/갱신됐을 수 있어 호출측이 반드시 다시 조회해야 한다(이 경우
+     * latestTradeDate는 갱신 전 값이라 신뢰할 수 없음을 명시하기 위해
+     * null로 둔다).
      */
-    public boolean fillDomesticGap(String stockCode) {
+    public GapFillOutcome fillDomesticGap(String stockCode) {
         Optional<DomesticDailyPrice> latest = domesticDailyPriceRepository
             .findTopByStockCodeOrderByTradeDateDesc(stockCode);
         if (latest.isEmpty()) {
             domesticDailyPriceService.backfillHistoryIfNeeded(stockCode, DEEP_BACKFILL_TARGET_DAYS);
-            return true;
+            return GapFillOutcome.apiCalled();
         }
 
         // "갭이 없다(오늘 행이 있다)"와 "확정됐다(NXT 애프터마켓 종료인 20:00
@@ -71,7 +80,7 @@ public class PriceGapFillService {
         if (isSettledToday(latestPrice) || isRecentlyRefreshedToday(latestPrice)) {
             log.debug("가격 재확정 불필요(오늘 확정분 보유 또는 최근 갱신됨): stockCode={}, 최신저장일={}",
                 stockCode, latestPrice.getTradeDate());
-            return false;
+            return GapFillOutcome.apiSkipped(latestPrice.getTradeDate());
         }
 
         long rawGapDays = ChronoUnit.DAYS.between(latestPrice.getTradeDate(), LocalDate.now());
@@ -80,10 +89,24 @@ public class PriceGapFillService {
             log.info("가격 갭이 단일 호출 한도 초과, 깊은 백필로 대체: stockCode={}, 갭={}일",
                 stockCode, rawGapDays);
             domesticDailyPriceService.backfillHistoryIfNeeded(stockCode, DEEP_BACKFILL_TARGET_DAYS);
-            return true;
+            return GapFillOutcome.apiCalled();
         }
         domesticDailyPriceService.refreshRecent(stockCode, lookbackDays);
-        return true;
+        return GapFillOutcome.apiCalled();
+    }
+
+    /**
+     * @see #fillDomesticGap(String) 동일한 계약 - calledApi=false일 때만
+     * latestTradeDate가 유효하다.
+     */
+    public record GapFillOutcome(boolean calledApi, LocalDate latestTradeDate) {
+        public static GapFillOutcome apiCalled() {
+            return new GapFillOutcome(true, null);
+        }
+
+        public static GapFillOutcome apiSkipped(LocalDate latestTradeDate) {
+            return new GapFillOutcome(false, latestTradeDate);
+        }
     }
 
     private boolean isSettledToday(DomesticDailyPrice latest) {
@@ -98,28 +121,29 @@ public class PriceGapFillService {
             && DailyPriceSettlementPolicy.isRecentlyRefreshed(latest.getUpdatedAt(), LocalDateTime.now());
     }
 
-    public boolean fillOverseasGap(String stockCode) {
+    /** @see #fillDomesticGap(String) 국내와 동일한 계약(calledApi/latestTradeDate). */
+    public GapFillOutcome fillOverseasGap(String stockCode) {
         Optional<LocalDate> latestTradeDate = overseasDailyPriceRepository
             .findTopByStockCodeOrderByTradeDateDesc(stockCode)
             .map(OverseasDailyPrice::getTradeDate);
         if (latestTradeDate.isEmpty()) {
             overseasDailyPriceBackfillService.backfillHistoryIfNeeded(stockCode, DEEP_BACKFILL_TARGET_DAYS);
-            return true;
+            return GapFillOutcome.apiCalled();
         }
 
         long rawGapDays = ChronoUnit.DAYS.between(latestTradeDate.get(), LocalDate.now());
         if (rawGapDays <= 0) {
             log.debug("해외 가격 갭 없음(이미 최신): stockCode={}, 최신저장일={}", stockCode, latestTradeDate.get());
-            return false;
+            return GapFillOutcome.apiSkipped(latestTradeDate.get());
         }
         int lookbackDays = (int) rawGapDays + GAP_BUFFER_DAYS;
         if (lookbackDays > SINGLE_CALL_CAP_DAYS) {
             log.info("해외 가격 갭이 단일 호출 한도 초과, 깊은 백필로 대체: stockCode={}, 갭={}일",
                 stockCode, rawGapDays);
             overseasDailyPriceBackfillService.backfillHistoryIfNeeded(stockCode, DEEP_BACKFILL_TARGET_DAYS);
-            return true;
+            return GapFillOutcome.apiCalled();
         }
         overseasDailyPriceBackfillService.refreshRecent(stockCode, lookbackDays);
-        return true;
+        return GapFillOutcome.apiCalled();
     }
 }
