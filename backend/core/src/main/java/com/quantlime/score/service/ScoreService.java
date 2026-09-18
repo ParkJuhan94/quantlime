@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -82,6 +83,18 @@ public class ScoreService {
     private final StockMasterService stockMasterService;
     private final ScoreRankingCacheStore scoreRankingCacheStore;
     private final MeterRegistry meterRegistry;
+    // getAllStocksScoreRanking의 캐시 미스 시 scope별 단일 비행(single-flight)
+    // 락 - 2026-09 성능 감사 중 k6 없이 curl 동시 호출로 재현: 배치가 캐시
+    // 3개 키를 한꺼번에 비우는 순간 동시 접속자 수만큼 DB 쿼리가 같이
+    // 발사돼(20개 동시 요청 중 9개가 캐시 미스로 동시 진입, HikariCP
+    // active가 풀 전체(10/10)까지 차고 pending도 발생하는 걸 실측으로
+    // 확인) 캐싱을 도입한 취지 자체가 무너지는 구조였다. scope는
+    // all/domestic/overseas 3종으로 고정돼 있어 맵이 무한정 커질 위험은
+    // 없다. StockSearchCache.ensureWarm()과 동일한 더블체크 락 패턴 -
+    // 인스턴스가 1대뿐인 현재 배포 구성(SRE.md "4. 수평 확장" 참고)을
+    // 전제로 JVM 로컬 락만으로 충분하다고 판단했다(여러 인스턴스로
+    // 늘어나면 RedisLockService 기반으로 재검토 필요).
+    private final ConcurrentHashMap<String, Object> rankingCacheLoadLocks = new ConcurrentHashMap<>();
 
     public void recalculateDomesticScore(String stockCode) {
         recalculateDomesticScoresChunk(List.of(stockCode));
@@ -238,12 +251,20 @@ public class ScoreService {
     // 잘라 반환한다(그래야 limit이 다른 후속 요청도 캐시를 재사용한다).
     @Transactional(readOnly = true)
     public List<ScoreRankingResponse> getAllStocksScoreRanking(int limit, String scope) {
-        List<ScoreRankingResponse> ranking = scoreRankingCacheStore.find(scope)
-            .orElseGet(() -> {
-                List<ScoreRankingResponse> computed = queryAllStocksScoreRanking(MAX_CACHEABLE_RANKING_SIZE, scope);
-                scoreRankingCacheStore.save(scope, computed);
-                return computed;
-            });
+        List<ScoreRankingResponse> ranking = scoreRankingCacheStore.find(scope).orElse(null);
+        if (ranking == null) {
+            // 캐시 히트 경로는 락을 타지 않는다(대다수 요청이 여기서 끝남) -
+            // 미스일 때만 scope별 락으로 단일 비행을 강제한다.
+            Object lock = rankingCacheLoadLocks.computeIfAbsent(scope, key -> new Object());
+            synchronized (lock) {
+                // 락 대기 중 다른 스레드가 이미 채웠을 수 있다(더블체크).
+                ranking = scoreRankingCacheStore.find(scope).orElse(null);
+                if (ranking == null) {
+                    ranking = queryAllStocksScoreRanking(MAX_CACHEABLE_RANKING_SIZE, scope);
+                    scoreRankingCacheStore.save(scope, ranking);
+                }
+            }
+        }
         return ranking.size() > limit ? ranking.subList(0, limit) : ranking;
     }
 

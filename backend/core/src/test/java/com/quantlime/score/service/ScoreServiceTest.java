@@ -16,6 +16,7 @@ import com.quantlime.score.cache.ScoreRankingCacheStore;
 import com.quantlime.score.domain.Divergence;
 import com.quantlime.score.domain.Quadrant;
 import com.quantlime.score.domain.Score;
+import com.quantlime.score.dto.response.ScoreRankingResponse;
 import com.quantlime.score.dto.response.ScoreResponse;
 import com.quantlime.score.repository.ScoreRepository;
 import com.quantlime.stock.StockFixture;
@@ -28,6 +29,12 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -42,7 +49,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -284,6 +293,63 @@ class ScoreServiceTest {
         assertThat(result.get(0).stockName()).isEqualTo("삼성전자");
         assertThat(result.get(0).compositeScore()).isEqualTo(90.0);
         verify(scoreRankingCacheStore).save("all", result);
+    }
+
+    // 2026-09 성능 감사 중 curl로 20개 동시 요청을 캐시 비운 직후 쏴서
+    // 재현한 캐시 스탬피드(9개가 동시에 DB를 때려 HikariCP active가
+    // 풀 전체(10/10)까지 참) - rankingCacheLoadLocks 단일 비행 락으로
+    // 수정한 회귀 방지 테스트. Mockito 목은 상태가 없어 save() 호출을
+    // AtomicReference에 반영하도록 스텁해야 더블체크 락 안에서 "이미
+    // 채워짐"을 실제로 관찰할 수 있다.
+    @Test
+    @DisplayName("[캐시 미스가 동시에 여러 건 들어와도 DB 조회는 한 번만 실행한다(단일 비행)]")
+    void getAllStocksScoreRanking_concurrentCacheMiss_queriesOnlyOnce() throws Exception {
+        // given
+        Score score = Score.of(STOCK_CODE, LocalDate.now(), 80.0, 40.0, 90.0,
+            null, null, Divergence.of(false, null), false);
+        Stock stock = StockFixture.createStock(STOCK_CODE, "삼성전자");
+        AtomicReference<List<ScoreRankingResponse>> cached = new AtomicReference<>();
+        given(scoreRankingCacheStore.find("all"))
+            .willAnswer(invocation -> Optional.ofNullable(cached.get()));
+        willAnswer(invocation -> {
+            cached.set(invocation.getArgument(1));
+            return null;
+        }).given(scoreRankingCacheStore).save(eq("all"), any());
+        given(scoreRepository.findTopScoresOrderByCompositeScoreDesc(50, null)).willReturn(List.of(score));
+        given(stockMasterService.getStocksByCodesInOrder(List.of(STOCK_CODE))).willReturn(List.of(stock));
+
+        int concurrency = 20;
+        ExecutorService executor = Executors.newFixedThreadPool(concurrency);
+        CountDownLatch ready = new CountDownLatch(concurrency);
+        CountDownLatch start = new CountDownLatch(1);
+        try {
+            // when: concurrency개 스레드가 전부 준비될 때까지 기다렸다가
+            // 동시에 출발시켜 실제 동시 요청을 재현한다.
+            List<Future<?>> futures = new ArrayList<>();
+            for (int i = 0; i < concurrency; i++) {
+                futures.add(executor.submit(() -> {
+                    ready.countDown();
+                    try {
+                        start.await();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    scoreService.getAllStocksScoreRanking(10, "all");
+                }));
+            }
+            ready.await();
+            start.countDown();
+            for (Future<?> future : futures) {
+                future.get(5, TimeUnit.SECONDS);
+            }
+        } finally {
+            executor.shutdownNow();
+        }
+
+        // then: 20개 스레드가 동시에 캐시 미스로 진입해도 실제 DB 조회·
+        // 캐시 저장은 각각 정확히 1회뿐이다.
+        verify(scoreRepository, times(1)).findTopScoresOrderByCompositeScoreDesc(50, null);
+        verify(scoreRankingCacheStore, times(1)).save(eq("all"), any());
     }
 
     private DomesticDailyPrice domesticDailyPrice(LocalDate tradeDate) {
