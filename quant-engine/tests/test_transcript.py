@@ -1,3 +1,4 @@
+import time
 from unittest.mock import patch
 
 import pytest
@@ -72,6 +73,22 @@ class TestFetchTranscript:
 
             with pytest.raises(IpBlocked):
                 fetch_transcript("v1")
+
+    def test_raises_timeout_error_when_fetch_hangs_past_wall_clock_limit(self):
+        # requests 세션 타임아웃 자체가 우회되는 경로(예: DNS hang)를 재현 -
+        # fetch()가 wall-clock 상한보다 오래 걸리면 무한 대기 대신 TimeoutError로
+        # 빠르게 실패해야 한다(2026-09-21 hang 장애 대응, fetcher.py 모듈 docstring 참고).
+        # 실제 hang을 흉내내되 프로세스 종료 시 스레드 조인 대기가 길어지지 않도록
+        # sleep은 짧게 잡는다.
+        def _slow_fetch(*args, **kwargs):
+            time.sleep(0.2)
+            return None
+
+        with patch("transcript.fetcher.YouTubeTranscriptApi") as mock_api_cls:
+            mock_api_cls.return_value.fetch.side_effect = _slow_fetch
+
+            with pytest.raises(TimeoutError):
+                fetch_transcript("v1", timeout_seconds=0.02)
 
 
 class TestChunkText:
