@@ -8,6 +8,10 @@ google-genai==2.14.0
 python-dotenv==1.0.1
 prometheus-fastapi-instrumentator==7.0.0
 youtube-transcript-api==1.2.4
+# youtube-transcript-api의 전이 의존성으로 이미 설치돼 있었지만, transcript/fetcher.py가
+# 세션 타임아웃 설정을 위해 requests.Session을 직접 서브클래싱하면서(2026-09-21) 직접
+# 의존성으로 승격 - 전이 의존성 버전 변경에 조용히 깨지지 않도록 명시 고정
+requests==2.34.2
 
 pytest==8.3.4
 httpx==0.28.1
