@@ -56,7 +56,12 @@ services:
     deploy:
       resources:
         limits:
-          memory: 128M
+          # maxmemory(200mb)보다 커야 한다 - 기존 128M은 이보다 작아
+          # Redis 자체 eviction이 작동하기 전에 컨테이너 cgroup 한도에서
+          # 먼저 OOM-kill될 수 있는 정합 버그였다(2026-09-21 발견,
+          # docker-compose.prod.yml은 처음부터 mem_limit 256m로 올바르게
+          # 여유를 두고 있었음 - 로컬만 안 맞춰져 있었다).
+          memory: 256M
     # maxmemory/maxmemory-policy 미지정 시 기본 noeviction이라, 캐시
     # 활용도를 높이면 컨테이너 메모리 한도에서 OOM-kill되거나 쓰기가
     # 실패한다(2026-08-19 감사). volatile-lru는 TTL이 있는 키(캐시+
@@ -65,7 +70,20 @@ services:
     # 축출 대상으로 좁히려면 별도 컨테이너가 필요하다(이번엔 비용 대비
     # 과함으로 판단해 채택 안 함). TTL 없는 키가 새로 생기면 그건 절대
     # 축출되지 않는 안전망으로만 동작한다.
-    command: redis-server --maxmemory 200mb --maxmemory-policy volatile-lru
+    # --save "": 기본 RDB 저장 정책(3600 1/300 100/60 10000)을 끈다 -
+    # 이 인스턴스는 PriceCacheStore(TTL 5분 시세 캐시)·RefreshTokenStore·
+    # RedisLockService 전부 TTL 있는 휘발성 데이터라 재기동 시 유실돼도
+    # 무방하다(캐시는 다음 스윕 틱이, 락은 만료로 자연 복구). 반면
+    # DomesticMarketPriceSweepScheduler가 100ms마다 최대 2,700종목을
+    # 파이프라인 SETEX하는 워크로드는 "60초/1만건 변경" 저장 조건을
+    # 거의 즉시 넘겨 BGSAVE가 활성 시간대엔 사실상 60초마다 상시로
+    # 돌았다 - redis-cli slowlog로 실제 SETEX 한 건이 최대 1.13초까지
+    # 걸린 기록을 확인했고(2026-09-21), 이게 Lettuce 2초 커맨드
+    # 타임아웃(RedisCommandTimeoutException)의 유력 원인이었다. 이
+    # 워크로드엔 애초에 내구성이 불필요하므로 저장 자체를 끄는 게
+    # 근본 해결책 - 운영(docker-compose.prod.yml)은 세션/사용자 데이터
+    # 성격이 달라 이번 변경 대상에서 제외했다.
+    command: redis-server --maxmemory 200mb --maxmemory-policy volatile-lru --save ""
 
   # 로컬 dev 전용 구성 - 기존 Dockerfile로 의존성만 이미지에 굽고, 소스는
   # 볼륨 마운트로 덮어써서 --reload 핫리로드를 유지한다(코드 수정마다
