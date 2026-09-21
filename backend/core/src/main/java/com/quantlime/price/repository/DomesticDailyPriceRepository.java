@@ -21,6 +21,14 @@ public interface DomesticDailyPriceRepository
     boolean existsByStockCodeAndTradeDate(
         String stockCode, LocalDate tradeDate);
 
+    /**
+     * {@code DomesticRegularCloseCaptureScheduler}가 정규장 종가 캡처 대상
+     * 종목 전체(~2,700개)의 "오늘 행 존재 여부"를 배치 조회할 때 쓴다 - 종목당
+     * 개별 조회 대신 한 번의 IN 쿼리로 왕복을 줄인다.
+     */
+    List<DomesticDailyPrice> findByStockCodeInAndTradeDate(
+        List<String> stockCodes, LocalDate tradeDate);
+
     long countByStockCode(String stockCode);
 
     Optional<DomesticDailyPrice> findTopByStockCodeOrderByTradeDateDesc(String stockCode);

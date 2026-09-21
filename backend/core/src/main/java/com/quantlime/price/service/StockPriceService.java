@@ -29,7 +29,6 @@ public class StockPriceService {
     private final StockMasterService stockMasterService;
     private final DomesticDailyPriceService domesticDailyPriceService;
     private final DomesticDailyPriceRepository domesticDailyPriceRepository;
-    private final DomesticPreviousCloseResolver domesticPreviousCloseResolver;
     private final OverseasDailyPriceRepository overseasDailyPriceRepository;
     private final PriceCacheStore priceCacheStore;
 
@@ -82,15 +81,20 @@ public class StockPriceService {
     // 등락률이 통째로 사라짐) - 실시간 스윕/릴레이 경로는 isMarketOpenNow()
     // 가드가 있어 "오늘=거래일"이 항상 성립하므로 이 문제가 없었다.
     //
-    // 전일종가 조회 자체는 DomesticPreviousCloseResolver에 위임한다 -
-    // domesticDailyPriceRepository를 직접 쓰면 NXT 애프터마켓까지 반영된
-    // 종가를 그대로 전일종가로 써서 등락률이 어긋난다(클래스 javadoc 참고).
+    // close_price가 정규장 종가로 직접 확정되므로(2026-09-21,
+    // DomesticRegularCloseCaptureScheduler 참고) 해외와 동일하게
+    // domesticDailyPriceRepository를 바로 조회하면 된다 - 예전엔 NXT
+    // 애프터마켓까지 반영된 값을 그대로 전일종가로 쓰면 등락률이 어긋나
+    // 별도 리졸버(DomesticPreviousCloseResolver, 삭제됨)가 필요했다.
     private CurrentPriceResponse domesticFallback(String stockCode) {
         return domesticDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(stockCode)
             .map(latestClose -> {
-                Double previousClose = domesticPreviousCloseResolver
-                    .resolve(List.of(stockCode), latestClose.getTradeDate())
-                    .get(stockCode);
+                Double previousClose = domesticDailyPriceRepository
+                    .findLatestBeforeDate(List.of(stockCode), latestClose.getTradeDate())
+                    .stream()
+                    .findFirst()
+                    .map(price -> price.getClosePrice().doubleValue())
+                    .orElse(null);
                 return PriceMapper.toCurrentPriceResponse(latestClose, previousClose);
             })
             .orElseGet(() -> {

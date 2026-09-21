@@ -2,6 +2,7 @@ package com.quantlime.common.startup;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.willAnswer;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -111,6 +112,27 @@ class StartupCatchUpRunnerTest {
         verify(telegramCollectionFacade).runAllExclusively();
         verify(telegramDigestGenerationFacade).runAllExclusively();
         verify(telegramPostRetentionService).runExclusively();
+    }
+
+    @Test
+    @DisplayName("[정규장 종가 캡처를 가격/스코어 갭필보다 먼저 실행한다]")
+    void run_capturesRegularCloseBeforeMarketDataGapFill() {
+        // given: 갭필(refreshAllExclusively)이 오래 걸리는 경우 그 뒤에 캡처를 실행하면
+        // 15:30~15:35 안전 시간대를 갭필이 통째로 잡아먹어 넘겨버리는 문제가 있었다
+        // (2026-09-21 발견) - 순서가 역전되지 않도록 고정하는 회귀 테스트.
+        willAnswer(invocation -> {
+            Runnable task = invocation.getArgument(0);
+            task.run();
+            return null;
+        }).given(marketDataCatchUpTaskExecutor).execute(any());
+
+        // when
+        startupCatchUpRunner.run(null);
+
+        // then
+        var order = inOrder(domesticRegularCloseCaptureScheduler, marketDataRefreshService);
+        order.verify(domesticRegularCloseCaptureScheduler).captureIfWithinStartupSafeWindow();
+        order.verify(marketDataRefreshService).refreshAllExclusively();
     }
 
     @Test
