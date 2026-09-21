@@ -12,8 +12,10 @@ import com.quantlime.backtest.service.CrossSectionalBacktestService;
 import com.quantlime.infra.oauth.dto.OAuthUserInfo;
 import com.quantlime.market.service.MarketDataRefreshService;
 import com.quantlime.price.dto.PriceJumpReport;
+import com.quantlime.price.dto.RegularCloseBackfillResult;
 import com.quantlime.price.service.DailyPriceIntegrityService;
 import com.quantlime.price.service.DailyPriceResettlementService;
+import com.quantlime.price.service.RegularCloseBackfillService;
 import com.quantlime.score.service.ScoreService;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.dto.StockMasterSyncResult;
@@ -56,6 +58,7 @@ public class DevController {
     private final CrossSectionalBacktestService crossSectionalBacktestService;
     private final DailyPriceResettlementService dailyPriceResettlementService;
     private final DailyPriceIntegrityService dailyPriceIntegrityService;
+    private final RegularCloseBackfillService regularCloseBackfillService;
     private final ScoreService scoreService;
     private final UserService userService;
     private final JwtTokenProvider jwtTokenProvider;
@@ -142,6 +145,22 @@ public class DevController {
         List<PriceJumpReport> jumps = dailyPriceIntegrityService.repairDomesticAdjusted(fromDate, dryRun);
         log.info("[dev] 수정주가 재조정 복구 수동 트리거 완료: 발견={}건, dryRun={}", jumps.size(), dryRun);
         return ResponseEntity.ok(jumps);
+    }
+
+    @PostMapping("/prices/backfill-regular-close")
+    @Operation(summary = "[개발용/1회성 마이그레이션] close_price를 정규장 종가로 전환(2026-09-21)하기 전 "
+        + "저장된 최근 거래일 행들을 1분봉 API로 소급 확정한다. stockCodes 생략 시 국내 전종목, days 생략 시 "
+        + "재확정 윈도우(20일). 이미 확정된 행은 건너뛰므로 멱등 - 중단됐다 재호출해도 이어서 진행된다. "
+        + "전종목×20일은 종목당 150ms 페이싱 기준 약 2시간 이상 걸릴 수 있어, 관심종목 등 소규모로 먼저 "
+        + "검증 후 전체를 실행할 것.")
+    public ResponseEntity<RegularCloseBackfillResult> triggerRegularCloseBackfill(
+            @RequestParam(required = false) List<String> stockCodes,
+            @RequestParam(required = false) Integer days) {
+        log.info("[dev] 정규장 종가 백필 수동 트리거 시작: 종목수={}, days={}",
+            stockCodes == null ? "전체" : stockCodes.size(), days);
+        RegularCloseBackfillResult result = regularCloseBackfillService.backfill(stockCodes, days);
+        log.info("[dev] 정규장 종가 백필 수동 트리거 완료: {}", result);
+        return ResponseEntity.ok(result);
     }
 
     @PostMapping("/scores/rebuild")
