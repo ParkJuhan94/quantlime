@@ -14,12 +14,30 @@ youtube-transcript-api 1.x는 인스턴스 기반 API로 재설계됐다(0.x의
 없음을 404가 아니라 200+null로 응답하는 것과 동일한 컨벤션). 반면
 IP 차단(IpBlocked/RequestBlocked)이나 그 외 네트워크 오류는 호출부가
 재시도할 수 있어야 하므로 예외를 그대로 전파한다.
+
+2026-09-21 hang 장애 대응 - youtube_transcript_api가 내부적으로 쓰는
+requests.Session에는 기본 timeout이 없다. YouTube가 IP 차단 시 HTTP
+429/403 대신 패킷을 그냥 drop하는 경우 이 호출이 OS 타임아웃(수 분)까지
+그대로 멈추는데, FastAPI가 동기 핸들러(/health 포함)를 전부 같은 스레드풀로
+돌리는 구조라 이런 hang 몇 건만으로 /health까지 응답 불가 상태가 될 수
+있다(실제로 며칠간 이 상태로 방치됐던 사고 - docs/CHANGELOG.md 참고).
+아래 타임아웃 두 겹은 서로 다른 hang 경로를 잡기 위한 것으로 어느 한쪽만
+있어도 되는 중복이 아니다:
+  1) _TimeoutSession - 정상적인 connect/read 단계의 hang을 잡음(가장 흔한 케이스)
+  2) _EXECUTOR + future.result(timeout=...) - DNS 조회 hang처럼 requests의
+     timeout 파라미터가 커버 못 하는 경로까지 wall-clock으로 강제 회수하는
+     2차 방어선. 이 타임아웃이 발동해도 내부 스레드 자체는 즉시 죽지 않고
+     계속 돌 수 있어(Python은 스레드를 강제 종료할 수 없음) 자원이 새는
+     결로 처리한다 - 그래도 hang 하나가 앱 전체를 죽이는 것보단 훨씬 낫다.
 """
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from dataclasses import dataclass
 
+import requests
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import (
     NoTranscriptFound,
@@ -34,6 +52,30 @@ _DEFAULT_LANGUAGES = ("ko", "en")
 # 네트워크/차단 문제일 수 있어 여기 포함하지 않고 그대로 전파한다.
 _NO_TRANSCRIPT_EXCEPTIONS = (TranscriptsDisabled, NoTranscriptFound, VideoUnavailable)
 
+_CONNECT_TIMEOUT_SECONDS = 5
+_READ_TIMEOUT_SECONDS = 10
+_WALL_CLOCK_TIMEOUT_SECONDS = 30
+
+# 호출마다 스레드풀을 새로 만들지 않고 프로세스 전역 1개를 재사용한다 - 크기를
+# 작게(4) 제한해, 2차 방어선(wall-clock)까지 뚫려 스레드가 새는 최악의 경우에도
+# 낭비되는 스레드 수 자체를 낮게 묶어둔다. 풀이 꽉 차면 새 요청은 즉시 큐에
+# 걸리고 동일한 timeout으로 빠르게 실패하므로(무한 대기 아님) 안전하다.
+_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="transcript-fetch")
+
+
+class _TimeoutSession(requests.Session):
+    """requests.Session은 세션 레벨 기본 timeout을 지원하지 않아(호출마다 넘겨야
+    함) - request()를 오버라이드해 모든 호출에 자동 적용한다."""
+
+    def request(self, *args, **kwargs):
+        kwargs.setdefault("timeout", (_CONNECT_TIMEOUT_SECONDS, _READ_TIMEOUT_SECONDS))
+        return super().request(*args, **kwargs)
+
+
+def _fetch(video_id: str, languages: tuple[str, ...]):
+    api = YouTubeTranscriptApi(http_client=_TimeoutSession())
+    return api.fetch(video_id, languages=list(languages))
+
 
 @dataclass(frozen=True)
 class TranscriptResult:
@@ -45,12 +87,20 @@ class TranscriptResult:
     reason: str | None = None
 
 
-def fetch_transcript(video_id: str, languages: tuple[str, ...] = _DEFAULT_LANGUAGES) -> TranscriptResult:
-    api = YouTubeTranscriptApi()
+def fetch_transcript(
+    video_id: str,
+    languages: tuple[str, ...] = _DEFAULT_LANGUAGES,
+    timeout_seconds: float = _WALL_CLOCK_TIMEOUT_SECONDS,
+) -> TranscriptResult:
+    future = _EXECUTOR.submit(_fetch, video_id, languages)
     try:
-        fetched = api.fetch(video_id, languages=list(languages))
+        fetched = future.result(timeout=timeout_seconds)
     except _NO_TRANSCRIPT_EXCEPTIONS as e:
         return TranscriptResult(available=False, reason=type(e).__name__)
+    except FutureTimeoutError as e:
+        raise TimeoutError(
+            f"자막 조회가 {timeout_seconds}초 내에 끝나지 않았습니다: video_id={video_id}"
+        ) from e
 
     content = " ".join(snippet.text.strip() for snippet in fetched.snippets if snippet.text.strip())
     source = "youtube_auto_caption" if fetched.is_generated else "youtube_caption"
