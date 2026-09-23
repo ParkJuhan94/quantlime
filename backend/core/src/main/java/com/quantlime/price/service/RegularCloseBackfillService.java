@@ -1,6 +1,5 @@
 package com.quantlime.price.service;
 
-import com.quantlime.common.util.SleepUtil;
 import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.toss.dto.TossCandleResponse;
 import com.quantlime.market.cache.DomesticListedStockCache;
@@ -36,12 +35,6 @@ import org.springframework.stereotype.Service;
 public class RegularCloseBackfillService {
 
     private static final int DEFAULT_BACKFILL_DAYS = DailyPriceSettlementPolicy.RESETTLEMENT_WINDOW_DAYS;
-    // TossApiClient.get1MinuteCandleBefore도 같은 MARKET_DATA_CHART 레이트리밋
-    // 그룹(전역 페이싱은 TossApiClient.awaitCandleRateLimit)을 쓰지만, 종목×거래일
-    // 조합이 많아(최대 ~2,600종목 × 20일) 호출 사이에도 기존 백필 서비스들과
-    // 동일한 관례(DomesticDailyPriceService.BACKFILL_API_DELAY_MS 등)로 딜레이를
-    // 둔다.
-    private static final long API_DELAY_MS = 150;
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final LocalTime REGULAR_CLOSE_TIME = LocalTime.of(15, 30);
 
@@ -69,16 +62,18 @@ public class RegularCloseBackfillService {
                 .filter(price -> !price.isRegularCloseConfirmed())
                 .toList();
 
+            // 호출 사이 페이싱은 여기서 따로 sleep하지 않는다 - TossApiClient
+            // .get1MinuteCandleBefore가 내부적으로 awaitCandleRateLimit()을 거쳐
+            // 이미 전역으로 최소 간격을 강제하므로(단일 스레드 순차 호출이라 그
+            // 간격이 곧 이 루프의 실제 간격이 된다), 여기서 추가로 sleep하면
+            // "네트워크 왕복시간 + 페이싱 간격"이 중복으로 더해져 그만큼
+            // 느려지기만 한다(2026-09-22 발견 - 제거로 왕복시간만큼 단축).
             for (DomesticDailyPrice price : candidates) {
                 BackfillOutcome outcome = backfillOne(stockCode, price);
                 switch (outcome) {
                     case CONFIRMED -> confirmed++;
                     case SKIPPED -> skipped++;
                     case FAILED -> failed++;
-                }
-                if (!SleepUtil.sleepMillis(API_DELAY_MS)) {
-                    log.warn("정규장 종가 백필 중단: 인터럽트 발생, stockCode={}", stockCode);
-                    return RegularCloseBackfillResult.of(confirmed, skipped, failed);
                 }
             }
         }
