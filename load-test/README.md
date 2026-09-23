@@ -1,7 +1,8 @@
 # QuantLime 부하테스트 (k6)
 
-전체 가이드는 `docs/00-sre/SRE.md` 부록 A(k6 하네스 실행 가이드) 참고 (2026-08-20에 구 `LOAD_TESTING.md`를, 2026-09-09에 구 `PERFORMANCE.md`·`RELIABILITY.md`를
-차례로 병합 - 그 문서는 로컬 전용이라 여기서 링크할 수 없다). 이 파일은 디렉터리 구조만 요약한다.
+전체 가이드는 `docs/DEVELOPMENT.md` "4. k6 부하테스트 하네스 실행 가이드" 참고(2026-09-21 - 구 `docs/00-sre/SRE.md` 부록 A에서 이전. 그 전 이력은
+2026-08-20에 구 `LOAD_TESTING.md`를, 2026-09-09에 구 `PERFORMANCE.md`·`RELIABILITY.md`를 SRE.md로 병합 - 두 문서 모두 로컬 전용이라 여기서 링크할 수
+없다). 이 파일은 디렉터리 구조만 요약한다.
 
 ```
 load-test/
