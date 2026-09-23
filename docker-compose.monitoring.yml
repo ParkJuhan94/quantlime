@@ -123,11 +123,28 @@ services:
   # MySQL 자체 상태(mysql_up)를 Prometheus가 직접 볼 수 있게 한다 - 이전엔
   # backend의 /api/health가 의존성을 안 보는 정적 200이라(application.yml
   # 주석 참고) "MySQL만 죽은 상태"가 무알림으로 남았다(2026-08-17 감사).
+  #
+  # DATA_SOURCE_NAME 환경변수가 아니라 --config.my-cnf를 쓴다(2026-09-24
+  # 수정) - v0.15.1부터 DATA_SOURCE_NAME 지원 자체가 제거됐다(자격증명이
+  # `docker inspect`/`ps`로 평문 노출되는 걸 막기 위한 upstream의 의도적
+  # breaking change, `docker run --rm prom/mysqld-exporter:v0.15.1 --help`로
+  # 실측 확인 - --mysqld.password 플래그가 아예 없고 .my.cnf만 지원). 즉 이
+  # 컨테이너는 그동안 계속 기동 직후 크래시루프에 빠져 MysqlDown 알림이
+  # 무알림으로 방치됐을 가능성이 있다 - docker-compose.monitoring.local.yml로
+  # 로컬 알림 연습 스택을 만들다가 동일 증상을 실측 재현해 발견했다
+  # (docs/DEVELOPMENT.md §3 참고). 비밀번호를 담은 .my.cnf는 파일로
+  # 커밋하지 않고 entrypoint가 기동 시점에 환경변수로부터 생성한다.
   mysqld-exporter:
     image: prom/mysqld-exporter:v0.15.1
     container_name: quantlime-prod-mysqld-exporter
     environment:
-      DATA_SOURCE_NAME: "root:${DB_PASSWORD}@(mysql:3306)/"
+      DB_PASSWORD: ${DB_PASSWORD}
+    entrypoint:
+      - sh
+      - -c
+      - |
+        printf '[client]\nuser=root\npassword=%s\n' "$$DB_PASSWORD" > /tmp/.my.cnf
+        exec /bin/mysqld_exporter --config.my-cnf=/tmp/.my.cnf --mysqld.address=mysql:3306
     depends_on:
       mysql:
         condition: service_healthy

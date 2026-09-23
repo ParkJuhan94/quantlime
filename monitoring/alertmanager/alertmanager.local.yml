@@ -1,0 +1,32 @@
+# 로컬 전용 Alertmanager 설정 템플릿. monitoring/alertmanager/alertmanager.yml
+# (운영용)과 동일한 이유로 환경변수 치환을 여기서 직접 못 하니(Alertmanager
+# 자체가 ${VAR} 확장을 지원 안 함) 플레이스홀더를 남기고
+# docker-compose.monitoring.local.yml의 entrypoint가 기동 시점에 sed로
+# 실제 값을 채운 사본을 만든다 - 운영과 동일 패턴, 상세 이유는 그 파일
+# 상단 주석 참고.
+#
+# 운영 알림(#quantlime-alerts)과 절대 같은 채널/웹훅을 쓰지 않는다 - 로컬
+# 테스트 중 임의로 유발한 알림(예: 로컬 MySQL 컨테이너를 일부러 내려
+# MysqlDown 테스트)이 운영 알림 채널에 그대로 섞여 노이즈가 되는 걸
+# 막기 위함(2026-09-24, 사용자 결정). 채널명/웹훅은 Slack에서 이 목적의
+# 새 채널(예: #quantlime-alerts-local)을 만들고 Incoming Webhook 앱을
+# 추가해 발급받은 뒤 .env.monitoring.local(gitignore 대상)의
+# SLACK_ALERT_WEBHOOK_URL_LOCAL에 채워 넣을 것 - 이 파일 자체엔 시크릿이
+# 없어 커밋해도 안전하다.
+route:
+  receiver: slack-local
+  group_by: ["alertname"]
+  group_wait: 30s
+  group_interval: 5m
+  # 운영은 4h(repeat_interval)인데, 로컬은 알림 발화 여부를 짧은 주기로
+  # 반복 확인하며 연습하는 용도라 1h로 줄였다.
+  repeat_interval: 1h
+
+receivers:
+  - name: slack-local
+    slack_configs:
+      - api_url: "__SLACK_ALERT_WEBHOOK_URL_LOCAL__"
+        channel: "#quantlime-alerts-local"
+        send_resolved: true
+        title: "[LOCAL] {{ .CommonAnnotations.summary }}"
+        text: "{{ range .Alerts }}{{ .Annotations.description }}\n{{ end }}"

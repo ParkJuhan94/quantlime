@@ -10,11 +10,23 @@
 # job="backend" 라벨만 보므로 손댈 필요가 없다(quantlime-loadtest.json 등
 # 기존 대시보드 그대로 재사용).
 #
-# alerting/rule_files는 의도적으로 뺐다 - 이 파일은 로컬 1회성 진단용이라
-# Alertmanager 컨테이너가 없다(운영용 alerts.yml과는 무관).
+# alerting/rule_files 추가(2026-09-24) - docker-compose.monitoring.local.yml에
+# mysqld-exporter/redis-exporter/alertmanager를 추가하면서 운영용
+# monitoring/prometheus/rules/*.yml을 별도 사본 없이 그대로 재사용한다.
+# 이 파일이 스크랩하지 않는 지표(node-exporter/cadvisor/백업 크론 - 호스트
+# EC2 전용 개념이라 로컬엔 대응물이 없음)를 참조하는 규칙은 그냥 데이터
+# 없음으로 평가돼 발화하지 않을 뿐 에러가 나지 않는다 - 안전하게 그대로 둔다.
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
 
 scrape_configs:
   - job_name: prometheus
@@ -27,3 +39,20 @@ scrape_configs:
       - targets:
           - host.docker.internal:8080
           - host.docker.internal:8081
+
+  # docker-compose.yml(로컬 인프라)로 이미 떠 있는 quant-engine 컨테이너
+  # (8000 포트) - 별도 서비스 추가 없이 기존 컨테이너를 그대로 스크랩.
+  - job_name: quant-engine
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:8000"]
+
+  # mysqld-exporter/redis-exporter는 이 컴포즈 프로젝트 안에서 직접 뜨므로
+  # 서비스명으로 바로 스크랩(호스트를 거칠 필요 없음).
+  - job_name: mysqld-exporter
+    static_configs:
+      - targets: ["mysqld-exporter:9104"]
+
+  - job_name: redis-exporter
+    static_configs:
+      - targets: ["redis-exporter:9121"]
