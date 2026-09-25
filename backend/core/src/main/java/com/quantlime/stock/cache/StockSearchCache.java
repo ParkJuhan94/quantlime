@@ -53,13 +53,18 @@ public class StockSearchCache {
 
     public Slice<Stock> search(String keyword, Pageable pageable) {
         ensureWarm();
+        // 백그라운드 갱신을 트리거하기 전에 스냅샷을 먼저 캡처한다 - trigger 이후에
+        // cachedStocks를 다시 읽으면, 비동기 refresh()가 그 사이 끝나 필드를 새 값으로
+        // 덮어썼을 때 "이번 호출은 stale 값을 반환한다"는 계약이 깨진다(레이스 컨디션,
+        // MarketIndexCache와 동일 패턴).
+        List<Stock> snapshot = cachedStocks;
         if (isStale()) {
             triggerBackgroundRefresh();
         }
 
         String rawKeyword = keyword.trim();
         String normalizedKeyword = rawKeyword.toLowerCase(Locale.ROOT);
-        List<Stock> matched = cachedStocks.stream()
+        List<Stock> matched = snapshot.stream()
             .filter(stock -> matches(stock, rawKeyword, normalizedKeyword))
             .toList();
 
