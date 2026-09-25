@@ -40,7 +40,9 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class OverseasWatchlistPriceScheduler {
 
-    private static final String PRICE_TOPIC_PREFIX = "/topic/price/";
+    // 점(.) 구분자 채택 이유는 DomesticWatchlistPriceRelayScheduler의 동일
+    // 상수 주석 참고(RabbitMQ STOMP relay 제약, 2026-09-25).
+    private static final String PRICE_TOPIC_PREFIX = "/topic/price.";
     private static final int TOSS_BATCH_SIZE = 200;
 
     private final OverseasMarketCalendarCache overseasMarketCalendarCache;

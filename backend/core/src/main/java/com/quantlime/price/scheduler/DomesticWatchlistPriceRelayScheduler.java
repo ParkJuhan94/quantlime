@@ -28,7 +28,11 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class DomesticWatchlistPriceRelayScheduler {
 
-    private static final String PRICE_TOPIC_PREFIX = "/topic/price/";
+    // RabbitMQ STOMP relay는 /topic/<name>의 name에 슬래시가 있으면 "not a
+    // valid topic destination"으로 거부한다(SimpleBroker는 문제없었음) -
+    // relay 도입에 맞춰 점(.) 구분자로 변경(2026-09-25, WebSocketConfig
+    // 참고). 프론트(stompClient.ts)/load-test(ws-stocks.js)도 함께 맞춤.
+    private static final String PRICE_TOPIC_PREFIX = "/topic/price.";
 
     private final DomesticMarketCalendarCache domesticMarketCalendarCache;
     // 필드명이 PriceCacheConfig의 @Bean 메서드명(domesticWatchlistedStockCodeCache)과

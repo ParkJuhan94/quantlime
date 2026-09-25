@@ -109,7 +109,7 @@ class OverseasWatchlistPriceSchedulerTest {
         assertThat(saved.stockCode()).isEqualTo(STOCK_CODE);
         assertThat(saved.currentPrice()).isCloseTo(341.43, offset(0.001));
         assertThat(saved.changeRate()).isCloseTo(0.4206, offset(0.001));
-        verify(messagingTemplate).convertAndSend(eq("/topic/price/" + STOCK_CODE), eq(saved));
+        verify(messagingTemplate).convertAndSend(eq("/topic/price." + STOCK_CODE), eq(saved));
     }
 
     @Test

@@ -86,7 +86,7 @@ class DomesticWatchlistPriceRelaySchedulerTest {
         domesticWatchlistPriceRelayScheduler.broadcastCurrentPrices();
 
         // then
-        verify(messagingTemplate).convertAndSend("/topic/price/" + STOCK_CODE, cached);
+        verify(messagingTemplate).convertAndSend("/topic/price." + STOCK_CODE, cached);
     }
 
     @Test
