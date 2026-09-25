@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.stream.IntStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -35,8 +36,14 @@ import org.springframework.util.StringUtils;
  * 실제 라이브 호출로 확인했다({@code TossApiClient.getCurrentPrices}
  * 재사용, 새 외부 연동 불필요).
  */
+// 로컬 scale-out 검증(SyntheticPriceFeedScheduler, price-feed.mode=synthetic)
+// 에서는 이 클래스 전체를 끈다 - 해외는 스윕/릴레이가 이 클래스 하나에
+// 묶여 있어(위 javadoc 참고), synthetic 모드에서는 SyntheticPriceFeedScheduler가
+// 시세 저장+브로드캐스트+랭킹 갱신을 전부 대신한다(2026-09-25). 기본값
+// (미지정)은 기존 그대로 Toss를 호출.
 @Slf4j
 @Component
+@ConditionalOnProperty(name = "price-feed.mode", havingValue = "toss", matchIfMissing = true)
 @RequiredArgsConstructor
 public class OverseasWatchlistPriceScheduler {
 

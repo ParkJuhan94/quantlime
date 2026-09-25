@@ -316,6 +316,15 @@ python-engine:
 realtime-price:
   poll-interval-ms: ${REALTIME_PRICE_POLL_INTERVAL_MS:3000}
 
+# 시세 소스 - 기본 toss(실제 Toss 폴링). synthetic은 로컬 scale-out
+# 검증(docker-compose.scaleout.yml) 전용 - Toss 대신 랜덤워크 시세를
+# 주입하고 장중 게이트도 우회한다(SyntheticPriceFeedScheduler,
+# DomesticMarketCalendarCache/OverseasMarketCalendarCache 참고,
+# feat/realtime-fanout-scaleout, 2026-09-25). 운영/평소 로컬 개발은
+# 이 키 자체를 건드리지 않아 기본값 그대로.
+price-feed:
+  mode: ${PRICE_FEED_MODE:toss}
+
 market-ranking:
   poll-interval-ms: ${MARKET_RANKING_POLL_INTERVAL_MS:100}
 

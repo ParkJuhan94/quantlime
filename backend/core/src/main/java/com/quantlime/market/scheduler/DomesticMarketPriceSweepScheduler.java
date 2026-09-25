@@ -24,6 +24,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -55,8 +56,12 @@ import org.springframework.util.StringUtils;
  * 건너뛴다 - 다음 틱에 다시 시도되므로 일부 종목의 순위/시세가 한 틱만큼
  * 지연되는 정도로 그친다.
  */
+// 로컬 scale-out 검증(SyntheticPriceFeedScheduler, price-feed.mode=synthetic)
+// 에서는 이 클래스 전체를 끈다 - Toss를 호출하지 않고 합성 시세로
+// 대체하기 위함(2026-09-25). 기본값(미지정)은 기존 그대로 Toss를 호출.
 @Slf4j
 @Component
+@ConditionalOnProperty(name = "price-feed.mode", havingValue = "toss", matchIfMissing = true)
 @RequiredArgsConstructor
 public class DomesticMarketPriceSweepScheduler {
 
