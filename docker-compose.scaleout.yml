@@ -22,7 +22,16 @@
 # `git worktree`로 분리한 디렉터리에서 작업 중이라면 원본 체크아웃의
 # backend/.env를 복사해와야 한다(gitignore 파일은 워크트리 간 자동
 # 공유되지 않음).
-name: quantlime-scaleout
+#
+# 이 파일에 별도 name:을 주면 안 된다 - compose는 여러 -f 파일을 합칠 때
+# "마지막에 나온 name:"을 프로젝트명으로 쓰는데, 여기 별도 이름을 주면
+# base 파일(docker-compose.yml, name: quantlime)과 다른 프로젝트로
+# 취급돼 mysql/redis/quant-engine/redpanda를 "재사용"하는 게 아니라
+# 새로 만들려고 시도한다 - 그런데 그 서비스들의 container_name은 base
+# 파일에 이미 고정돼 있어(quantlime-redis 등) 실행 중인 quantlime
+# 프로젝트의 컨테이너와 이름이 충돌해 즉시 실패한다(실제로 겪음,
+# 2026-09-25). name:을 생략해야 base 파일의 quantlime 프로젝트에
+# 그대로 합류한다.
 
 services:
   # STOMP 플러그인만 얹은 RabbitMQ - 브라우저가 붙는 rabbitmq_web_stomp이
@@ -68,8 +77,11 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      # redis는 base 파일(docker-compose.yml)에 healthcheck가 없다(mysql/
+      # quant-engine/redpanda와 다름) - service_healthy를 쓰면 "no
+      # healthcheck configured"로 즉시 실패한다(실제로 겪음, 2026-09-25).
       redis:
-        condition: service_healthy
+        condition: service_started
       quant-engine:
         condition: service_healthy
       redpanda:
@@ -95,8 +107,11 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      # redis는 base 파일(docker-compose.yml)에 healthcheck가 없다(mysql/
+      # quant-engine/redpanda와 다름) - service_healthy를 쓰면 "no
+      # healthcheck configured"로 즉시 실패한다(실제로 겪음, 2026-09-25).
       redis:
-        condition: service_healthy
+        condition: service_started
       quant-engine:
         condition: service_healthy
       redpanda:
@@ -121,8 +136,11 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      # redis는 base 파일(docker-compose.yml)에 healthcheck가 없다(mysql/
+      # quant-engine/redpanda와 다름) - service_healthy를 쓰면 "no
+      # healthcheck configured"로 즉시 실패한다(실제로 겪음, 2026-09-25).
       redis:
-        condition: service_healthy
+        condition: service_started
       quant-engine:
         condition: service_healthy
       redpanda:
