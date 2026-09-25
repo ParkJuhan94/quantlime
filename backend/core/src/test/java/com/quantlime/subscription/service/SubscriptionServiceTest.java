@@ -2,6 +2,8 @@ package com.quantlime.subscription.service;
 
 import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.common.exception.ValidationException;
+import com.quantlime.notification.domain.NotificationType;
+import com.quantlime.notification.service.FcmPushService;
 import com.quantlime.subscription.SubscriptionFixture;
 import com.quantlime.subscription.SubscriptionPlanFixture;
 import com.quantlime.subscription.domain.Subscription;
@@ -25,7 +27,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
@@ -36,6 +41,9 @@ class SubscriptionServiceTest {
 
     @Mock
     private UserService userService;
+
+    @Mock
+    private FcmPushService fcmPushService;
 
     @InjectMocks
     private SubscriptionService subscriptionService;
@@ -89,7 +97,7 @@ class SubscriptionServiceTest {
     }
 
     @Test
-    @DisplayName("[해지 후 기간이 끝난 구독을 만료 처리한다]")
+    @DisplayName("[해지 후 기간이 끝난 구독을 만료 처리하고 재구독을 안내한다]")
     void expireLapsedSubscriptions_expiresEligibleSubscriptions() {
         // given
         Subscription subscription = SubscriptionFixture.createSubscription(user, plan);
@@ -103,6 +111,8 @@ class SubscriptionServiceTest {
         // then
         assertThat(subscription.getStatus()).isEqualTo(SubscriptionStatus.EXPIRED);
         assertThat(subscription.isAutoRenew()).isFalse();
+        verify(fcmPushService).sendToUser(eq(user.getId()), eq(NotificationType.SUBSCRIPTION_EXPIRED),
+            anyString(), anyString(), eq("/subscribe"));
     }
 
     @Test

@@ -248,6 +248,13 @@ subscription:
   # 미설정 시 평문 저장(로컬 개발 전용) - BillingKeyConverter 참고.
   billing-key-encryption-key: ${SUBSCRIPTION_BILLING_KEY_ENCRYPTION_KEY:}
 
+# 알림 기능(Web Push, 2026-09) - Firebase 콘솔에서 발급받은 서비스 계정
+# JSON 키 파일 경로. 미설정 시 FirebaseConfig가 경고만 남기고 FirebaseApp
+# 초기화를 건너뛴다 - 이 경우 인앱 알림 저장은 계속 동작하고 푸시 발송만
+# 생략된다(FcmPushService 참고).
+fcm:
+  service-account-path: ${FCM_SERVICE_ACCOUNT_PATH:}
+
 # 해외 전종목 마스터파일(.mst.cod.zip) 다운로드 전용(2026-07-29 - 시세 조회는
 # Toss로 전량 이관, 인증 불필요한 정적 파일 CDN이라 앱키/시크릿 없음).
 kis:
