@@ -30,7 +30,7 @@ export function FundamentalsRow({ fundamentals }: { fundamentals: StockFundament
   if (items.length === 0) return null
 
   return (
-    <div className="grid grid-cols-3 gap-1.5">
+    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
       {items.map((item) => (
         <div
           key={item.label}

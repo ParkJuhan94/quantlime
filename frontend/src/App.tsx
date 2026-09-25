@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AppHeader } from './components/layout/AppHeader'
 import { AppSidePanel } from './components/layout/AppSidePanel'
+import { useMediaQuery } from './hooks/useMediaQuery'
 import { Toast } from './components/common/Toast'
 import { ErrorBoundary } from './components/common/ErrorBoundary'
 import { OAuthCallbackPage } from './pages/OAuthCallbackPage'
@@ -25,9 +26,12 @@ function App() {
   const [panelWidth, setPanelWidth] = useState(0)
   const [showLogoutToast, setShowLogoutToast] = useState(false)
   const location = useLocation()
-  const showSidePanel = !ROUTE_PREFIXES_WITHOUT_SIDE_PANEL.some((prefix) =>
-    location.pathname.startsWith(prefix),
-  )
+  // lg(1024px) 미만에서는 관심종목 사이드바를 아예 마운트하지 않는다 - 모바일
+  // 화면 폭이 좁아 상시 노출할 공간이 없다(2026-09 모바일 반응형 대응).
+  const isDesktop = useMediaQuery('(min-width: 1024px)')
+  const showSidePanel =
+    isDesktop &&
+    !ROUTE_PREFIXES_WITHOUT_SIDE_PANEL.some((prefix) => location.pathname.startsWith(prefix))
 
   // 세션 만료로 인한 강제 로그아웃(api/client.ts)은 React 상태 밖에서
   // window.location.assign으로 풀 페이지 이동을 하므로 sessionStorage

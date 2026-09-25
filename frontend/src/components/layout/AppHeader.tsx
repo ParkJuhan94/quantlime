@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
 import { logout as logoutRequest } from '../../api/auth'
@@ -25,8 +25,22 @@ export function AppHeader({ onLoggedOut }: AppHeaderProps) {
   const navigate = useNavigate()
   const [searchOpen, setSearchOpen] = useState(false)
   const [loginModalOpen, setLoginModalOpen] = useState(false)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const mobileNavRef = useRef<HTMLDivElement>(null)
 
   useFcmRegistration()
+
+  // 햄버거 메뉴 바깥을 클릭하면 닫는다 (ProfileMenu와 동일한 패턴).
+  useEffect(() => {
+    if (!mobileNavOpen) return
+    function handleClickOutside(event: MouseEvent) {
+      if (!mobileNavRef.current?.contains(event.target as Node)) {
+        setMobileNavOpen(false)
+      }
+    }
+    window.addEventListener('mousedown', handleClickOutside)
+    return () => window.removeEventListener('mousedown', handleClickOutside)
+  }, [mobileNavOpen])
 
   // 검색창 클릭 없이도 "/" 키 한 번으로 열 수 있게 한다 - 다른 입력 요소에
   // 포커스가 있을 땐(예: 텍스트 입력 중 "/") 가로채지 않는다.
@@ -72,6 +86,44 @@ export function AppHeader({ onLoggedOut }: AppHeaderProps) {
   return (
     <header className="border-b border-gray-200 bg-white">
       <div className="mx-auto flex max-w-7xl items-center gap-6 px-4 py-3">
+        <div ref={mobileNavRef} className="relative lg:hidden">
+          <button
+            type="button"
+            onClick={() => setMobileNavOpen((prev) => !prev)}
+            aria-label="메뉴 열기"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-600 transition hover:bg-gray-100"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M3 6h18M3 12h18M3 18h18" strokeLinecap="round" />
+            </svg>
+          </button>
+
+          {mobileNavOpen && (
+            <div className="absolute left-0 top-11 z-50 w-56 rounded-2xl border border-gray-100 bg-white p-2 shadow-lg">
+              <nav className="flex flex-col gap-1">
+                <NavLink to="/" end className={navLinkClassName} onClick={() => setMobileNavOpen(false)}>
+                  홈
+                </NavLink>
+                <NavLink to="/feed" className={navLinkClassName} onClick={() => setMobileNavOpen(false)}>
+                  피드
+                </NavLink>
+                <NavLink to="/videos" className={navLinkClassName} onClick={() => setMobileNavOpen(false)}>
+                  <span className="flex items-center gap-1.5">
+                    <PlatformLogo platform="youtube" className="h-4 w-5" />
+                    유튜브 요약
+                  </span>
+                </NavLink>
+                <NavLink to="/telegram" className={navLinkClassName} onClick={() => setMobileNavOpen(false)}>
+                  <span className="flex items-center gap-1.5">
+                    <PlatformLogo platform="telegram" className="h-4 w-4" />
+                    텔레그램 요약
+                  </span>
+                </NavLink>
+              </nav>
+            </div>
+          )}
+        </div>
+
         <NavLink to="/" className="flex items-center gap-2">
           <svg
             width="26"
@@ -110,7 +162,7 @@ export function AppHeader({ onLoggedOut }: AppHeaderProps) {
           <span className="font-logo text-lg font-bold tracking-tight text-gray-900">퀀트라임</span>
         </NavLink>
 
-        <nav className="flex items-center gap-1">
+        <nav className="hidden items-center gap-1 lg:flex">
           <NavLink to="/" end className={navLinkClassName}>
             홈
           </NavLink>
@@ -136,13 +188,14 @@ export function AppHeader({ onLoggedOut }: AppHeaderProps) {
         <button
           type="button"
           onClick={() => setSearchOpen(true)}
-          className="flex h-9 w-56 items-center gap-2 rounded-lg bg-gray-200 px-3.5 text-sm text-gray-500 transition hover:bg-gray-300"
+          aria-label="검색"
+          className="flex h-9 w-9 items-center justify-center gap-2 rounded-lg bg-gray-200 text-sm text-gray-500 transition hover:bg-gray-300 lg:w-56 lg:justify-start lg:px-3.5"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0">
             <circle cx="11" cy="11" r="7" />
             <path d="m21 21-4.3-4.3" />
           </svg>
-          <span className="flex items-center gap-1.5">
+          <span className="hidden items-center gap-1.5 lg:flex">
             <kbd className="rounded bg-gray-300 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-gray-600">
               /
             </kbd>
