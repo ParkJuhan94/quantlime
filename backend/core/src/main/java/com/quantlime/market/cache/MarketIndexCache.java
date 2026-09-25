@@ -97,13 +97,17 @@ public class MarketIndexCache {
 
     public MarketIndexResponse get() {
         ensureWarm();
+        // 백그라운드 갱신을 트리거하기 전에 스냅샷을 먼저 캡처한다 - trigger 이후에
+        // cached를 다시 읽으면, 비동기 refresh()가 그 사이 끝나 cached를 새 값으로
+        // 덮어썼을 때 "이번 호출은 stale 값을 반환한다"는 계약이 깨진다(레이스 컨디션).
+        MarketIndexResponse snapshot = cached;
         if (isStale()) {
             meterRegistry.counter(METRIC_ACCESS, "result", "miss").increment();
             triggerBackgroundRefresh();
         } else {
             meterRegistry.counter(METRIC_ACCESS, "result", "hit").increment();
         }
-        return cached;
+        return snapshot;
     }
 
     // stale-while-revalidate는 "서빙할 이전 값이 있을 때"만 성립한다 -
