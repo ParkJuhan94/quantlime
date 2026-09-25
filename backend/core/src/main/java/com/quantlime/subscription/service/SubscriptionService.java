@@ -2,6 +2,8 @@ package com.quantlime.subscription.service;
 
 import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.common.exception.ValidationException;
+import com.quantlime.notification.domain.NotificationType;
+import com.quantlime.notification.service.FcmPushService;
 import com.quantlime.subscription.domain.Subscription;
 import com.quantlime.subscription.domain.SubscriptionPlan;
 import com.quantlime.subscription.domain.SubscriptionStatus;
@@ -24,6 +26,7 @@ public class SubscriptionService {
 
     private final SubscriptionRepository subscriptionRepository;
     private final UserService userService;
+    private final FcmPushService fcmPushService;
 
     @Transactional(readOnly = true)
     public Optional<Subscription> findByUserId(Long userId) {
@@ -97,6 +100,10 @@ public class SubscriptionService {
         lapsed.forEach(Subscription::expire);
         if (!lapsed.isEmpty()) {
             log.info("자동갱신 해지 후 기간 만료 처리: count={}", lapsed.size());
+            lapsed.forEach(subscription -> fcmPushService.sendToUser(
+                subscription.getUser().getId(), NotificationType.SUBSCRIPTION_EXPIRED,
+                "구독이 만료됐어요", "구독 기간이 끝나 프리미엄 기능 이용이 제한돼요. 다시 구독하고 계속 이용해보세요.",
+                "/subscribe"));
         }
     }
 }
