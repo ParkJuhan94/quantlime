@@ -18,7 +18,7 @@ LOAD_TEST_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 SCENARIO="${1:-}"
 if [[ -z "$SCENARIO" ]]; then
   echo "사용법: $0 <scenario> [KEY=VALUE ...]" >&2
-  echo "가능한 시나리오: smoke, endpoint-ramp, journey, premium-scores, ws-stocks, soak" >&2
+  echo "가능한 시나리오: smoke, endpoint-ramp, journey, premium-scores, ws-stocks, ws-fanout-check, soak" >&2
   exit 1
 fi
 shift || true
