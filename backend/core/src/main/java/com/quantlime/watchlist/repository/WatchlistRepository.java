@@ -50,7 +50,7 @@ public interface WatchlistRepository extends JpaRepository<Watchlist, Long> {
     List<String> findStockCodesOrderByWatcherCountDesc(Pageable pageable);
 
     // 실시간 랭킹의 "관심종목만 보기" 토글용 - 한 사용자의 관심종목
-    // 코드만 뽑아 DomesticMarketRankingCache 필터링에 쓴다.
+    // 코드만 뽑아 MarketRankingCache 필터링에 쓴다.
     @Query("select w.stock.stockCode from Watchlist w where w.user.id = :userId")
     List<String> findStockCodesByUserId(@Param("userId") Long userId);
 }

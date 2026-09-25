@@ -6,7 +6,7 @@ import com.quantlime.common.util.SafeExecutor;
 import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.toss.dto.TossPriceResponse;
 import com.quantlime.market.cache.DomesticListedStockCache;
-import com.quantlime.market.cache.DomesticMarketRankingCache;
+import com.quantlime.market.cache.MarketRankingCache;
 import com.quantlime.market.dto.response.MarketRankingResponse;
 import com.quantlime.price.cache.DomesticMarketCalendarCache;
 import com.quantlime.price.cache.PreviousCloseCache;
@@ -81,7 +81,10 @@ public class DomesticMarketPriceSweepScheduler {
     // 고른다(By-Name 디스앰비규에이션 - MarketDataRefreshTaskExecutorConfig와
     // 동일 관례). 이 스케줄러는 국내 전용이라 domestic 쪽만 주입받는다.
     private final PreviousCloseCache domesticPreviousCloseCache;
-    private final DomesticMarketRankingCache domesticMarketRankingCache;
+    // 필드명이 MarketRankingCacheConfig의 @Bean 메서드명(domesticMarketRankingCache)과
+    // 일치해야 Spring이 같은 타입(MarketRankingCache)의 두 Bean 중 이걸
+    // 고른다(By-Name 디스앰비규에이션 - PreviousCloseCache 필드와 동일 관례).
+    private final MarketRankingCache domesticMarketRankingCache;
     private final TossApiClient tossApiClient;
     private final PriceCacheStore priceCacheStore;
     private final MeterRegistry meterRegistry;
@@ -93,8 +96,9 @@ public class DomesticMarketPriceSweepScheduler {
     //
     // 리더 인스턴스에서만 돈다(2026-09-25, PriceRelayLeaderGate 참고) -
     // 그 전엔 인스턴스마다 각자 Toss를 호출해 인스턴스 수만큼 호출량이
-    // 늘고(docs/00-sre/SRE.md §5-2 #4), DomesticMarketRankingCache가
-    // JVM 로컬이라 follower 인스턴스에서는 항상 비어 있는 문제가 있었다.
+    // 늘고(docs/00-sre/SRE.md §5-2 #4), 랭킹 캐시가 당시 JVM 로컬
+    // 메모리뿐이라 follower 인스턴스에서는 항상 비어 있는 문제가 있었다
+    // (그 캐시 자체도 같은 세션에 Redis로 옮겼다 - MarketRankingCache 참고).
     @Scheduled(fixedDelayString = "${market-ranking.poll-interval-ms:100}",
         scheduler = "priceSweepTaskScheduler")
     public void refreshRanking() {
@@ -218,7 +222,7 @@ public class DomesticMarketPriceSweepScheduler {
             return new CachedPrice(snapshot, null);
         }
         // 거래량/거래대금/통화는 이 자체 계산 경로(국내 관심종목만 보기 전용,
-        // DomesticMarketRankingCache)에서 다루지 않는 값이라 null - Toss `prices`가
+        // MarketRankingCache)에서 다루지 않는 값이라 null - Toss `prices`가
         // 애초에 거래량을 안 주고(PriceSnapshot 주석 참고), 통화는 국내
         // 전용 경로라 항상 KRW이므로 프론트에서 굳이 표시할 필요가 없다.
         MarketRankingResponse ranking = new MarketRankingResponse(stock.getStockCode(), stock.getStockName(),

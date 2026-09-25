@@ -5,11 +5,17 @@ import com.quantlime.common.lock.PriceRelayLeaderGate;
 import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.toss.dto.TossPriceResponse;
 import com.quantlime.infra.toss.exception.TossApiErrorCode;
+import com.quantlime.market.cache.MarketRankingCache;
+import com.quantlime.market.dto.response.MarketRankingResponse;
 import com.quantlime.price.cache.PreviousCloseCache;
 import com.quantlime.price.cache.PriceCacheStore;
 import com.quantlime.price.cache.OverseasMarketCalendarCache;
 import com.quantlime.price.cache.WatchlistedStockCodeCache;
 import com.quantlime.price.dto.response.PriceSnapshot;
+import com.quantlime.stock.domain.ListingStatus;
+import com.quantlime.stock.domain.MarketType;
+import com.quantlime.stock.domain.Stock;
+import com.quantlime.stock.repository.StockRepository;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,10 +55,16 @@ class OverseasWatchlistPriceSchedulerTest {
     private PreviousCloseCache overseasPreviousCloseCache;
 
     @Mock
+    private MarketRankingCache overseasMarketRankingCache;
+
+    @Mock
     private TossApiClient tossApiClient;
 
     @Mock
     private PriceCacheStore priceCacheStore;
+
+    @Mock
+    private StockRepository stockRepository;
 
     @Mock
     private SimpMessagingTemplate messagingTemplate;
@@ -173,5 +185,74 @@ class OverseasWatchlistPriceSchedulerTest {
         assertThatCode(() -> overseasWatchlistPriceScheduler.refreshAndBroadcast())
             .doesNotThrowAnyException();
         verify(priceCacheStore, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("[등락률을 계산할 수 있고 로컬 stock 테이블에 있는 종목만 랭킹 캐시에 쓴다]")
+    void refresh_success_updatesRankingCacheWithChangeRateAndStockMeta() {
+        // given: 340 -> 341.43은 약 +0.42%
+        given(overseasMarketCalendarCache.isMarketOpenNow()).willReturn(true);
+        given(overseasWatchlistedStockCodeCache.get()).willReturn(List.of(STOCK_CODE));
+        given(overseasPreviousCloseCache.get(List.of(STOCK_CODE))).willReturn(Map.of(STOCK_CODE, 340.0));
+        given(stockRepository.findByStockCodeIn(List.of(STOCK_CODE)))
+            .willReturn(List.of(overseasStock(STOCK_CODE, "Apple")));
+        given(tossApiClient.getCurrentPrices(STOCK_CODE)).willReturn(
+            new TossPriceResponse(List.of(
+                new TossPriceResponse.TossPrice(STOCK_CODE, "2026-07-29T17:43:12+09:00", "341.43", "USD"))));
+
+        // when
+        overseasWatchlistPriceScheduler.refreshAndBroadcast();
+
+        // then
+        ArgumentCaptor<List<MarketRankingResponse>> rankingCaptor = ArgumentCaptor.forClass(List.class);
+        verify(overseasMarketRankingCache).update(rankingCaptor.capture());
+        assertThat(rankingCaptor.getValue()).hasSize(1);
+        MarketRankingResponse ranked = rankingCaptor.getValue().get(0);
+        assertThat(ranked.stockCode()).isEqualTo(STOCK_CODE);
+        assertThat(ranked.changeRate()).isCloseTo(0.4206, offset(0.001));
+        assertThat(ranked.currency()).isEqualTo("USD");
+    }
+
+    @Test
+    @DisplayName("[전일종가가 없어 등락률을 계산할 수 없는 종목은 랭킹 캐시에서 제외한다]")
+    void refresh_noPreviousClose_excludesFromRankingCache() {
+        // given
+        given(overseasMarketCalendarCache.isMarketOpenNow()).willReturn(true);
+        given(overseasWatchlistedStockCodeCache.get()).willReturn(List.of(STOCK_CODE));
+        given(overseasPreviousCloseCache.get(List.of(STOCK_CODE))).willReturn(Map.of());
+        given(stockRepository.findByStockCodeIn(List.of(STOCK_CODE)))
+            .willReturn(List.of(overseasStock(STOCK_CODE, "Apple")));
+        given(tossApiClient.getCurrentPrices(STOCK_CODE)).willReturn(
+            new TossPriceResponse(List.of(
+                new TossPriceResponse.TossPrice(STOCK_CODE, "2026-07-29T17:43:12+09:00", "341.43", "USD"))));
+
+        // when
+        overseasWatchlistPriceScheduler.refreshAndBroadcast();
+
+        // then
+        verify(overseasMarketRankingCache).update(List.of());
+    }
+
+    @Test
+    @DisplayName("[로컬 stock 테이블에 없는 종목은 등락률이 있어도 랭킹 캐시에서 제외한다]")
+    void refresh_stockNotInLocalTable_excludesFromRankingCache() {
+        // given
+        given(overseasMarketCalendarCache.isMarketOpenNow()).willReturn(true);
+        given(overseasWatchlistedStockCodeCache.get()).willReturn(List.of(STOCK_CODE));
+        given(overseasPreviousCloseCache.get(List.of(STOCK_CODE))).willReturn(Map.of(STOCK_CODE, 340.0));
+        given(stockRepository.findByStockCodeIn(List.of(STOCK_CODE))).willReturn(List.of());
+        given(tossApiClient.getCurrentPrices(STOCK_CODE)).willReturn(
+            new TossPriceResponse(List.of(
+                new TossPriceResponse.TossPrice(STOCK_CODE, "2026-07-29T17:43:12+09:00", "341.43", "USD"))));
+
+        // when
+        overseasWatchlistPriceScheduler.refreshAndBroadcast();
+
+        // then: 시세 자체는 여전히 캐시·브로드캐스트되지만(위 다른 테스트 참고) 랭킹만 빠진다
+        verify(overseasMarketRankingCache).update(List.of());
+    }
+
+    private Stock overseasStock(String stockCode, String stockName) {
+        return Stock.of(stockCode, stockName, MarketType.NASDAQ, ListingStatus.LISTED, null);
     }
 }

@@ -5,7 +5,7 @@ import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.toss.dto.TossPriceResponse;
 import com.quantlime.infra.toss.dto.TossPriceResponse.TossPrice;
 import com.quantlime.market.cache.DomesticListedStockCache;
-import com.quantlime.market.cache.DomesticMarketRankingCache;
+import com.quantlime.market.cache.MarketRankingCache;
 import com.quantlime.market.dto.response.MarketRankingResponse;
 import com.quantlime.price.cache.DomesticMarketCalendarCache;
 import com.quantlime.price.cache.PreviousCloseCache;
@@ -53,7 +53,7 @@ class DomesticMarketPriceSweepSchedulerTest {
     private PreviousCloseCache domesticPreviousCloseCache;
 
     @Mock
-    private DomesticMarketRankingCache domesticMarketRankingCache;
+    private MarketRankingCache domesticMarketRankingCache;
 
     @Mock
     private TossApiClient tossApiClient;
