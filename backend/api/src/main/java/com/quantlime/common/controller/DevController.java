@@ -11,6 +11,7 @@ import com.quantlime.backtest.service.BacktestUniverseService;
 import com.quantlime.backtest.service.CrossSectionalBacktestService;
 import com.quantlime.infra.oauth.dto.OAuthUserInfo;
 import com.quantlime.market.service.MarketDataRefreshService;
+import com.quantlime.notification.scheduler.ScoreRankingNotificationScheduler;
 import com.quantlime.price.dto.PriceJumpReport;
 import com.quantlime.price.service.DailyPriceIntegrityService;
 import com.quantlime.price.service.DailyPriceResettlementService;
@@ -19,6 +20,7 @@ import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.dto.StockMasterSyncResult;
 import com.quantlime.stock.service.OverseasStockMasterSyncService;
 import com.quantlime.stock.service.DomesticStockMasterSyncService;
+import com.quantlime.subscription.service.SubscriptionService;
 import com.quantlime.user.domain.OAuthProvider;
 import com.quantlime.user.domain.User;
 import com.quantlime.user.service.UserService;
@@ -61,6 +63,8 @@ public class DevController {
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenStore refreshTokenStore;
     private final RefreshTokenCookieProvider refreshTokenCookieProvider;
+    private final ScoreRankingNotificationScheduler scoreRankingNotificationScheduler;
+    private final SubscriptionService subscriptionService;
 
     @PostMapping("/stock-master/sync")
     @Operation(summary = "[개발용] 종목마스터 동기화(신규상장/상장폐지 반영) 수동 트리거")
@@ -240,5 +244,25 @@ public class DevController {
         return ResponseEntity.ok()
             .header(HttpHeaders.SET_COOKIE, cookie.toString())
             .body(AuthMapper.toTokenResponse(accessToken, jwtTokenProvider.getAccessTokenValidity()));
+    }
+
+    @PostMapping("/notifications/score-ranking")
+    @Operation(summary = "[개발용] 스코어 랭킹 알림 수동 발송 - 정규 스케줄(평일 20:20/08:30)을 "
+        + "기다리지 않고 구독중인 사용자에게 전체 Top N + 관심종목 Top N 알림을 즉시 보낸다")
+    public ResponseEntity<String> triggerScoreRankingNotification() {
+        log.info("[dev] 스코어 랭킹 알림 수동 트리거 시작");
+        scoreRankingNotificationScheduler.notifyAfterMarketClose();
+        log.info("[dev] 스코어 랭킹 알림 수동 트리거 완료");
+        return ResponseEntity.ok("스코어 랭킹 알림 발송 완료");
+    }
+
+    @PostMapping("/subscriptions/expire-lapsed")
+    @Operation(summary = "[개발용] 해지 후 기간이 끝난 구독 만료 처리 수동 실행 - 정규 실행은 "
+        + "매일 04:00 SubscriptionRenewalScheduler. 만료된 구독마다 SUBSCRIPTION_EXPIRED 알림 발송")
+    public ResponseEntity<String> triggerExpireLapsedSubscriptions() {
+        log.info("[dev] 구독 만료 처리 수동 트리거 시작");
+        subscriptionService.expireLapsedSubscriptions();
+        log.info("[dev] 구독 만료 처리 수동 트리거 완료");
+        return ResponseEntity.ok("구독 만료 처리 완료");
     }
 }
