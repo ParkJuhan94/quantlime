@@ -12,6 +12,16 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'io.micrometer:micrometer-registry-prometheus'
 
+    // RabbitStompRelayConfig(websocket.broker.relay-enabled=true일 때만
+    // 실제로 쓰임)의 enableStompBrokerRelay가 런타임에 브로커로 TCP 연결을
+    // 맺는 데 필요 - Spring 공식 문서가 명시하는 필수 의존성. 컴파일 타임엔
+    // enableStompBrokerRelay 자체가 spring-websocket API라 이 의존성이
+    // 없어도 컴파일되지만, 플래그를 켠 순간 런타임에서 클래스를 못 찾아
+    // 터진다. flag가 false(기본값)인 환경에서는 그냥 안 쓰일 뿐이라 상시
+    // 포함해도 안전(2026-09-25).
+    implementation 'io.projectreactor.netty:reactor-netty'
+    implementation 'io.netty:netty-all'
+
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
 
     // Hibernate 자체 SQL 로거(show-sql)는 파라미터가 ?로 남고 실행시간이
