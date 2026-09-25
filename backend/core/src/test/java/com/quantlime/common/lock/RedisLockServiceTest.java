@@ -113,6 +113,68 @@ class RedisLockServiceTest extends DataJpaTestSupport {
         assertThat(redisTemplate.opsForValue().get(key)).isEqualTo("b-token");
     }
 
+    @Test
+    @DisplayName("[비어있는 key는 tryAcquireOrRenew로 처음 부른 토큰이 획득한다]")
+    void tryAcquireOrRenew_acquires_whenKeyEmpty() {
+        // given
+        String key = "lock:test:" + System.nanoTime();
+
+        // when
+        boolean acquired = redisLockService.tryAcquireOrRenew(key, Duration.ofSeconds(10), "token-a");
+
+        // then
+        assertThat(acquired).isTrue();
+        assertThat(redisTemplate.opsForValue().get(key)).isEqualTo("token-a");
+    }
+
+    @Test
+    @DisplayName("[내가 이미 리더면(같은 토큰) 다시 불러도 성공하고 TTL이 연장된다]")
+    void tryAcquireOrRenew_renewsTtl_whenSameTokenAlreadyOwnsKey() {
+        // given
+        String key = "lock:test:" + System.nanoTime();
+        redisLockService.tryAcquireOrRenew(key, Duration.ofMillis(300), "token-a");
+
+        // when: TTL(300ms)이 지나기 전에 같은 토큰으로 다시 연장
+        sleepQuietly(Duration.ofMillis(150));
+        boolean renewed = redisLockService.tryAcquireOrRenew(key, Duration.ofSeconds(10), "token-a");
+
+        // then: 연장 성공 + 새 TTL(10s)이 적용돼 원래 TTL(300ms)이 지나도 살아있다
+        assertThat(renewed).isTrue();
+        sleepQuietly(Duration.ofMillis(300));
+        assertThat(redisTemplate.opsForValue().get(key)).isEqualTo("token-a");
+    }
+
+    @Test
+    @DisplayName("[남이 이미 리더면(다른 토큰) 실패하고 기존 리더의 값을 건드리지 않는다]")
+    void tryAcquireOrRenew_fails_whenAnotherTokenAlreadyOwnsKey() {
+        // given
+        String key = "lock:test:" + System.nanoTime();
+        redisLockService.tryAcquireOrRenew(key, Duration.ofSeconds(30), "token-a");
+
+        // when
+        boolean acquiredByB = redisLockService.tryAcquireOrRenew(key, Duration.ofSeconds(30), "token-b");
+
+        // then
+        assertThat(acquiredByB).isFalse();
+        assertThat(redisTemplate.opsForValue().get(key)).isEqualTo("token-a");
+    }
+
+    @Test
+    @DisplayName("[리더의 TTL이 자연 만료되면 다른 토큰이 다음 시도에서 리더가 된다]")
+    void tryAcquireOrRenew_letsAnotherTokenTakeOver_afterTtlExpires() {
+        // given
+        String key = "lock:test:" + System.nanoTime();
+        redisLockService.tryAcquireOrRenew(key, Duration.ofMillis(300), "token-a");
+
+        // when: A가 더 이상 연장을 안 부르고(=죽었다고 가정) TTL이 지난 뒤 B가 시도
+        sleepQuietly(Duration.ofMillis(500));
+        boolean acquiredByB = redisLockService.tryAcquireOrRenew(key, Duration.ofSeconds(30), "token-b");
+
+        // then
+        assertThat(acquiredByB).isTrue();
+        assertThat(redisTemplate.opsForValue().get(key)).isEqualTo("token-b");
+    }
+
     private void sleepQuietly(Duration duration) {
         try {
             Thread.sleep(duration.toMillis());

@@ -1,6 +1,7 @@
 package com.quantlime.price.scheduler;
 
 import com.quantlime.common.exception.ExternalApiException;
+import com.quantlime.common.lock.PriceRelayLeaderGate;
 import com.quantlime.common.util.SafeExecutor;
 import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.toss.dto.TossPriceResponse;
@@ -65,12 +66,19 @@ public class OverseasWatchlistPriceScheduler {
     private final TossApiClient tossApiClient;
     private final PriceCacheStore priceCacheStore;
     private final SimpMessagingTemplate messagingTemplate;
+    private final PriceRelayLeaderGate priceRelayLeaderGate;
 
     // 전용 풀(SchedulerConfig.priceSweepTaskScheduler)에서 실행 - 사유는
     // DomesticMarketPriceSweepScheduler 참고(2026-08-17).
+    //
+    // 리더 인스턴스에서만 돈다(2026-09-25, PriceRelayLeaderGate 참고 -
+    // DomesticWatchlistPriceRelayScheduler와 동일 이유).
     @Scheduled(fixedDelayString = "${realtime-price.poll-interval-ms:3000}",
         scheduler = "priceSweepTaskScheduler")
     public void refreshAndBroadcast() {
+        if (!priceRelayLeaderGate.isLeader()) {
+            return;
+        }
         SafeExecutor.runSafely("해외 관심종목 실시간가 갱신", this::refreshOnce);
     }
 

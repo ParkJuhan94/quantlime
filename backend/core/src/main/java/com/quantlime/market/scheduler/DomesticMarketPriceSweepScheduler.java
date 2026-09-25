@@ -1,6 +1,7 @@
 package com.quantlime.market.scheduler;
 
 import com.quantlime.common.exception.ExternalApiException;
+import com.quantlime.common.lock.PriceRelayLeaderGate;
 import com.quantlime.common.util.SafeExecutor;
 import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.toss.dto.TossPriceResponse;
@@ -84,13 +85,22 @@ public class DomesticMarketPriceSweepScheduler {
     private final TossApiClient tossApiClient;
     private final PriceCacheStore priceCacheStore;
     private final MeterRegistry meterRegistry;
+    private final PriceRelayLeaderGate priceRelayLeaderGate;
 
     // 전용 풀(SchedulerConfig.priceSweepTaskScheduler)에서 실행 - 공용
     // 스케줄러 풀과 분리해 초당 여러 번 도는 이 틱이 cron 배치들을 뒤로
     // 밀어내지 않게 한다(2026-08-17).
+    //
+    // 리더 인스턴스에서만 돈다(2026-09-25, PriceRelayLeaderGate 참고) -
+    // 그 전엔 인스턴스마다 각자 Toss를 호출해 인스턴스 수만큼 호출량이
+    // 늘고(docs/00-sre/SRE.md §5-2 #4), DomesticMarketRankingCache가
+    // JVM 로컬이라 follower 인스턴스에서는 항상 비어 있는 문제가 있었다.
     @Scheduled(fixedDelayString = "${market-ranking.poll-interval-ms:100}",
         scheduler = "priceSweepTaskScheduler")
     public void refreshRanking() {
+        if (!priceRelayLeaderGate.isLeader()) {
+            return;
+        }
         SafeExecutor.runSafely("전종목 시세/랭킹 갱신", this::refreshOnce);
     }
 

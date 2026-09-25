@@ -1,6 +1,7 @@
 package com.quantlime.price.scheduler;
 
 import com.quantlime.common.exception.ExternalApiException;
+import com.quantlime.common.lock.PriceRelayLeaderGate;
 import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.toss.dto.TossPriceResponse;
 import com.quantlime.infra.toss.exception.TossApiErrorCode;
@@ -11,6 +12,7 @@ import com.quantlime.price.cache.WatchlistedStockCodeCache;
 import com.quantlime.price.dto.response.PriceSnapshot;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -55,8 +57,32 @@ class OverseasWatchlistPriceSchedulerTest {
     @Mock
     private SimpMessagingTemplate messagingTemplate;
 
+    @Mock
+    private PriceRelayLeaderGate priceRelayLeaderGate;
+
     @InjectMocks
     private OverseasWatchlistPriceScheduler overseasWatchlistPriceScheduler;
+
+    // DomesticWatchlistPriceRelaySchedulerTest와 동일 이유 - 이 클래스의
+    // 시나리오는 "리더일 때" 이후 분기를 검증하는 목적.
+    @BeforeEach
+    void setUpLeader() {
+        given(priceRelayLeaderGate.isLeader()).willReturn(true);
+    }
+
+    @Test
+    @DisplayName("[리더가 아니면 아무것도 조회·발행하지 않고 스킵한다]")
+    void refresh_notLeader_skipsEntirely() {
+        // given
+        given(priceRelayLeaderGate.isLeader()).willReturn(false);
+
+        // when
+        overseasWatchlistPriceScheduler.refreshAndBroadcast();
+
+        // then
+        verify(overseasMarketCalendarCache, never()).isMarketOpenNow();
+        verify(overseasWatchlistedStockCodeCache, never()).get();
+    }
 
     @Test
     @DisplayName("[미국장이 닫혀 있으면 관심종목 조회도 하지 않고 스킵한다]")

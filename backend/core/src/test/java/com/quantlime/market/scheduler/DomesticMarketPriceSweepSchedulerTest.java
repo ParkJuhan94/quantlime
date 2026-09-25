@@ -1,5 +1,6 @@
 package com.quantlime.market.scheduler;
 
+import com.quantlime.common.lock.PriceRelayLeaderGate;
 import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.toss.dto.TossPriceResponse;
 import com.quantlime.infra.toss.dto.TossPriceResponse.TossPrice;
@@ -16,6 +17,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -64,8 +66,33 @@ class DomesticMarketPriceSweepSchedulerTest {
     @Spy
     private MeterRegistry meterRegistry = new SimpleMeterRegistry();
 
+    @Mock
+    private PriceRelayLeaderGate priceRelayLeaderGate;
+
     @InjectMocks
     private DomesticMarketPriceSweepScheduler domesticMarketPriceSweepScheduler;
+
+    // 이 클래스의 나머지 시나리오는 "리더일 때" 이후 분기를 검증하는
+    // 목적(비-리더 스킵은 별도 테스트) - DomesticWatchlistPriceRelaySchedulerTest와
+    // 동일 패턴.
+    @BeforeEach
+    void setUpLeader() {
+        given(priceRelayLeaderGate.isLeader()).willReturn(true);
+    }
+
+    @Test
+    @DisplayName("[리더가 아니면 아무것도 조회·발행하지 않고 스킵한다]")
+    void refresh_notLeader_skipsEntirely() {
+        // given
+        given(priceRelayLeaderGate.isLeader()).willReturn(false);
+
+        // when
+        domesticMarketPriceSweepScheduler.refreshRanking();
+
+        // then
+        verify(domesticMarketCalendarCache, never()).isMarketOpenNow();
+        verify(domesticListedStockCache, never()).get();
+    }
 
     @Test
     @DisplayName("[장이 닫혀 있으면 종목 목록 조회도 하지 않고 스킵한다]")

@@ -1,11 +1,13 @@
 package com.quantlime.price.scheduler;
 
+import com.quantlime.common.lock.PriceRelayLeaderGate;
 import com.quantlime.price.cache.DomesticMarketCalendarCache;
 import com.quantlime.price.cache.PriceCacheStore;
 import com.quantlime.price.cache.WatchlistedStockCodeCache;
 import com.quantlime.price.dto.response.PriceSnapshot;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -41,8 +43,32 @@ class DomesticWatchlistPriceRelaySchedulerTest {
     @Mock
     private SimpMessagingTemplate messagingTemplate;
 
+    @Mock
+    private PriceRelayLeaderGate priceRelayLeaderGate;
+
     @InjectMocks
     private DomesticWatchlistPriceRelayScheduler domesticWatchlistPriceRelayScheduler;
+
+    // 이 클래스의 모든 시나리오는 "리더일 때" 이후의 분기를 검증하는
+    // 목적이라(비-리더 스킵은 별도 테스트로 검증) 공통 기본값으로 둔다.
+    @BeforeEach
+    void setUpLeader() {
+        given(priceRelayLeaderGate.isLeader()).willReturn(true);
+    }
+
+    @Test
+    @DisplayName("[리더가 아니면 아무것도 조회·발행하지 않고 스킵한다]")
+    void broadcast_notLeader_skipsEntirely() {
+        // given
+        given(priceRelayLeaderGate.isLeader()).willReturn(false);
+
+        // when
+        domesticWatchlistPriceRelayScheduler.broadcastCurrentPrices();
+
+        // then
+        verify(domesticMarketCalendarCache, never()).isMarketOpenNow();
+        verify(domesticWatchlistedStockCodeCache, never()).get();
+    }
 
     @Test
     @DisplayName("[장이 닫혀 있으면 관심종목 조회도 하지 않고 스킵한다]")

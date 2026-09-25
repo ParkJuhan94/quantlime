@@ -1,5 +1,6 @@
 package com.quantlime.price.scheduler;
 
+import com.quantlime.common.lock.PriceRelayLeaderGate;
 import com.quantlime.common.util.SafeExecutor;
 import com.quantlime.price.cache.DomesticMarketCalendarCache;
 import com.quantlime.price.cache.PriceCacheStore;
@@ -41,12 +42,22 @@ public class DomesticWatchlistPriceRelayScheduler {
     private final WatchlistedStockCodeCache domesticWatchlistedStockCodeCache;
     private final PriceCacheStore priceCacheStore;
     private final SimpMessagingTemplate messagingTemplate;
+    private final PriceRelayLeaderGate priceRelayLeaderGate;
 
     // 전용 풀(SchedulerConfig.priceSweepTaskScheduler)에서 실행 - 사유는
     // DomesticMarketPriceSweepScheduler 참고(2026-08-17).
+    //
+    // 리더 인스턴스에서만 돈다(2026-09-25, PriceRelayLeaderGate 참고) -
+    // 그 전엔 인스턴스마다 각자 이 틱이 돌아, 관심종목 하나당 인스턴스
+    // 수만큼 convertAndSend가 중복 발행됐다(RabbitMQ relay처럼 발행이
+    // 전역 공유되는 브로커에서만 겉으로 드러나는 문제 - SimpleBroker는
+    // 인스턴스별로 격리돼 있어 이 중복이 우연히 안 보였을 뿐).
     @Scheduled(fixedDelayString = "${realtime-price.poll-interval-ms:3000}",
         scheduler = "priceSweepTaskScheduler")
     public void broadcastCurrentPrices() {
+        if (!priceRelayLeaderGate.isLeader()) {
+            return;
+        }
         SafeExecutor.runSafely("실시간 시세 브로드캐스트", this::broadcastOnce);
     }
 

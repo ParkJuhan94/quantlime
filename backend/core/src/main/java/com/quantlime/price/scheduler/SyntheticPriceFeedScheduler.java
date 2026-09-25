@@ -1,5 +1,6 @@
 package com.quantlime.price.scheduler;
 
+import com.quantlime.common.lock.PriceRelayLeaderGate;
 import com.quantlime.common.util.SafeExecutor;
 import com.quantlime.price.cache.PreviousCloseCache;
 import com.quantlime.price.cache.PriceCacheStore;
@@ -48,12 +49,12 @@ import org.springframework.stereotype.Component;
  * {@link PriceCacheStore}를 직접 읽으므로 이 스케줄러가 저장만 해도
  * 자동으로 맞는다.
  *
- * <p>인스턴스별 랜덤워크 상태({@link #lastPriceByCode})는 JVM 로컬이라
- * 여러 인스턴스가 동시에 이 스케줄러를 돌리면 저장되는 값 자체는
- * 인스턴스마다 다를 수 있다 - 그러나 이 검증에서 재는 건 "발행 횟수(중복
- * 배수)"와 "수신 성공 여부"지 가격 값의 정합성이 아니므로 무해하다.
- * 리더 선출(별도 커밋)이 붙으면 항상 리더 하나만 이 스케줄러를 돌게 되어
- * 이 비결정성 자체가 사라진다.
+ * <p>인스턴스별 랜덤워크 상태({@link #lastPriceByCode})는 JVM 로컬이다 -
+ * {@link PriceRelayLeaderGate}로 항상 리더 하나만 이 스케줄러를 돌게
+ * 되므로(feat/realtime-fanout-scaleout, 2026-09-25) 실제로는 이 상태가
+ * 여러 인스턴스에 흩어질 일이 없지만, 설령 리더 전환이 일어나도(이전
+ * 리더 크래시 등) 새 리더가 그 시점의 {@link PreviousCloseCache} 기준으로
+ * 다시 시드하고 이어서 랜덤워크할 뿐이라 별도 마이그레이션이 필요 없다.
  */
 @Slf4j
 @Component
@@ -79,14 +80,23 @@ public class SyntheticPriceFeedScheduler {
     private final PreviousCloseCache overseasPreviousCloseCache;
     private final PriceCacheStore priceCacheStore;
     private final SimpMessagingTemplate messagingTemplate;
+    private final PriceRelayLeaderGate priceRelayLeaderGate;
 
     private final Map<String, Double> lastPriceByCode = new ConcurrentHashMap<>();
 
     // 실제 Toss 스윕/릴레이와 동일한 주기(REALTIME_PRICE_POLL_INTERVAL_MS)
     // + 전용 풀(SchedulerConfig.priceSweepTaskScheduler) 재사용.
+    //
+    // 리더 인스턴스에서만 돈다(2026-09-25, PriceRelayLeaderGate 참고) -
+    // 이 스케줄러도 실제 Toss 스윕/릴레이와 동일한 "인스턴스마다 각자
+    // 돌면 안 되는" 생산자이므로 같은 게이트를 공유한다(클래스 javadoc의
+    // "인스턴스별 랜덤워크 상태" 비결정성도 이걸로 사라진다).
     @Scheduled(fixedDelayString = "${realtime-price.poll-interval-ms:3000}",
         scheduler = "priceSweepTaskScheduler")
     public void feedOnce() {
+        if (!priceRelayLeaderGate.isLeader()) {
+            return;
+        }
         SafeExecutor.runSafely("로컬 scale-out 합성 시세 피딩",
             () -> {
                 feedDomestic();
