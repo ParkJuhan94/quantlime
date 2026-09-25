@@ -17,8 +17,11 @@ import pandas as pd
 # 스코어링 로직(임계값/가중치)이 바뀔 때마다 올린다. 백테스트 결과를
 # score_version으로 태깅해 튜닝 전후 비교가 가능하게 한다(Phase E/G,
 # CLAUDE.md 백테스트 계획 참고) - v1(초기 균등가중) -> v2(추세추종/평균회귀
-# 분리) -> v2.1(거래량 배율 대칭화 + 사분면 도입, 이번 값).
-SCORE_VERSION = "v2.1"
+# 분리) -> v2.1(거래량 배율 대칭화 + 사분면 도입) -> v3.0(단일축 종합점수
+# 금지 + MACD 분모 상대 하한 + 장기하락추세 평균회귀 게이트 + 등급을 절대
+# 점수가 아닌 횡단면 백분위 기준으로 재정의 - 2026-09 잡주 상위 독식 감사
+# 세션. 근거는 quant-engine/docs/SCORING_DESIGN.md 참고).
+SCORE_VERSION = "v3.0"
 
 # TODO: 초기값. 실데이터 분포 확인 후 튜닝 필요. (SCORING_DESIGN.md 참고)
 VOLUME_MULTIPLIER_COEF = 0.3
@@ -26,14 +29,46 @@ VOLUME_RATIO_CLAMP_MIN = -0.5
 VOLUME_RATIO_CLAMP_MAX = 1.0
 DIVERGENCE_THRESHOLD = 40.0
 
-# TODO: 초기값. 0~100을 5등분한 균등 컷오프 - 실데이터 분포 확인 후 조정 필요.
-# 투자의견 컨센서스(강력매도~강력매수)와 같은 5단계로 통일해 화면에서
-# 5개 박스 중 하나로 표시한다(예전엔 7단계였음).
+# TODO: 초기값. 종가 대비 상대 비율로 두는 이유는 주가 수준이 종목마다
+# 3자리 이상 차이 나서 절대값 하한은 고가주에 무력하고 저가주에 과하기
+# 때문이다. std60이 이 값보다 작으면(초저변동성 SPAC 등) MACD z-score가
+# tanh에서 즉시 포화해 미세한 드리프트만으로 100점이 나오는 문제가 있었다
+# (2026-09 실측 - 해외 랭킹 상위를 차지한 SPAC 여럿의 60일 종가 표준편차가
+# 종가의 0.1%대에 불과했다. 정확한 MACD 히스토그램 값 자체는 별도 검증
+# 안 됨 - 표준편차가 이 정도로 작으면 미세한 히스토그램만으로도 이 경로가
+# 포화된다는 구조적 문제만 확인된 것).
+MACD_MIN_RELATIVE_STD = 0.002
+
+# TODO: 초기값. 장기 하락추세(종가<120일선, 60일선<120일선) 종목의
+# 평균회귀 원점수를 중심(50) 쪽으로 당기는 배율 - 1.0이면 게이트 없음,
+# 0이면 무조건 50으로 수렴. RSI/%B가 "많이 빠질수록 100점"이라 구조적
+# 하락주가 낙폭과대와 구분 없이 자동 만점을 받는 문제를 완화한다(2026-09
+# 실측 - 거래정지 직전 국내 잡주들이 이 축만으로 랭킹 상위 독식).
+DOWNTREND_GATE_FACTOR = 0.5
+
+# TODO: 임시값 - Phase 4(v3.0 백테스트 재검증) 때 실데이터로 재보정 필요.
+# 한때 이 컷오프를 raw composite_score 대신 횡단면 백분위(같은 날 모집단
+# 대비 순위)에 적용해본 적이 있었으나 되돌렸다 - 등급이 "이 종목이 절대
+# 기준으로 매수할 만한가"를 뜻해야 하는데, 백분위 기준이면 시장 전체가
+# 나쁜 날에도 상위 10%는 기계적으로 항상 STRONG_BUY가 된다(2026-09 재검토
+# - "등급=상대 순위"가 되어버리는 설계 결함으로 판단). 등급은 다시
+# raw composite_score(절대점수)를 기준으로 매기고, 횡단면 백분위는
+# `composite_percentile`이라는 별도 필드로 랭킹 정렬에만 쓴다(둘의 역할이
+# 분리됨 - normalization.py 참고).
+#
+# 다만 v2.1의 절대 컷오프(80/60/40/20)를 그대로 되돌리면 원래 문제(2026-09
+# 실측, 국내 600종목 중 89.5%가 40~60구간, 최고점 69.5)가 재현될 가능성이
+# 높다 - Phase 1의 가드 3종(단일축 종합점수 금지/MACD 분모 하한/하락추세
+# 게이트)은 전부 "가짜로 튀어 오르던 상단값을 깎는" 방향이지 정상 종목의
+# 원점수를 끌어올리는 방향이 아니기 때문이다. 아래 값은 그 실측 분포(최고점
+# 69.5, 50 중심 밀집)에 기반한 잠정 추정치일 뿐, v3.0 공식 적용 후 실제
+# 분포를 다시 재보기 전까지는 근거가 약하다 - STRONG_BUY가 특정 날짜에
+# 0개인 것은 버그가 아니라 절대 기준 등급의 정상적인 동작이다.
 GRADE_CUTOFFS: list[tuple[str, float]] = [
-    ("STRONG_BUY", 80.0),
-    ("BUY", 60.0),
-    ("NEUTRAL", 40.0),
-    ("SELL", 20.0),
+    ("STRONG_BUY", 65.0),
+    ("BUY", 55.0),
+    ("NEUTRAL", 45.0),
+    ("SELL", 35.0),
 ]
 DEFAULT_GRADE = "STRONG_SELL"
 
@@ -71,10 +106,14 @@ def _rsi_score(rsi: float | None) -> float | None:
     return 100.0 - (rsi - 30) / 40.0 * 100.0
 
 
-def _macd_score(histogram: float | None, std60: float | None) -> float | None:
-    if _is_missing(histogram) or _is_missing(std60) or std60 == 0:
+def _macd_score(histogram: float | None, std60: float | None, close: float | None) -> float | None:
+    if _is_missing(histogram) or _is_missing(std60) or _is_missing(close):
         return None
-    z = histogram / std60
+    floor = abs(close) * MACD_MIN_RELATIVE_STD
+    effective_std = max(std60, floor)
+    if effective_std == 0:
+        return None
+    z = histogram / effective_std
     return 50.0 + 50.0 * float(np.tanh(z))
 
 
@@ -98,6 +137,25 @@ def _average_available(scores: list[float | None]) -> float | None:
     if not available:
         return None
     return sum(available) / len(available)
+
+
+def _apply_downtrend_gate(
+    mean_reversion_raw: float | None, close: float, ma_60: float | None, ma_120: float | None,
+) -> float | None:
+    """장기 하락추세(종가<120일선 및 60일선<120일선)에서는 평균회귀 원점수를
+    중심(50) 쪽으로 당겨 억제한다.
+
+    이산 캡(50 초과 금지) 대신 중심 기준 편차를 축소하는 연속형을 쓴 이유는
+    `_apply_volume_multiplier`와 같은 패턴(dev = score - 50 스케일링)을
+    재사용해 ma_120 경계에서 점수가 튀지 않게 하기 위함이다. ma_60/ma_120
+    중 하나라도 계산 불가(신규상장 등)면 게이트를 적용하지 않는다 - 판단
+    근거 자체가 없기 때문.
+    """
+    if mean_reversion_raw is None or _is_missing(ma_60) or _is_missing(ma_120):
+        return mean_reversion_raw
+    if close < ma_120 and ma_60 < ma_120:
+        return 50.0 + (mean_reversion_raw - 50.0) * DOWNTREND_GATE_FACTOR
+    return mean_reversion_raw
 
 
 def _volume_multiplier(volume_ratio: float | None) -> float:
@@ -178,8 +236,11 @@ def calculate_score(latest: dict) -> ScoreResult:
     rsi_score = _rsi_score(latest.get("rsi"))
     bb_score = _bb_score(latest.get("bollinger_percent_b"))
     mean_reversion_raw = _average_available([rsi_score, bb_score])
+    mean_reversion_raw = _apply_downtrend_gate(
+        mean_reversion_raw, close, latest.get("ma_60"), latest.get("ma_120")
+    )
 
-    macd_score = _macd_score(latest.get("macd_histogram"), latest.get("macd_histogram_std60"))
+    macd_score = _macd_score(latest.get("macd_histogram"), latest.get("macd_histogram_std60"), close)
     ma_values = {p: latest.get(f"ma_{p}") for p in MA_PERIODS}
     ma_score = _ma_score(close, ma_values)
     trend_raw = _average_available([macd_score, ma_score])
@@ -188,7 +249,16 @@ def calculate_score(latest: dict) -> ScoreResult:
     trend_final = _apply_volume_multiplier(trend_raw, multiplier)
     mean_reversion_final = _apply_volume_multiplier(mean_reversion_raw, multiplier)
 
-    composite = _average_available([trend_final, mean_reversion_final])
+    # v3.0부터 두 축 중 하나라도 None이면 종합점수를 내지 않는다(단일축
+    # 종합점수 금지) - 이전엔 한 축만으로 100점이 나와 SPAC 등 상장 초기라
+    # 평균회귀 축이 아직 계산 안 되는 종목이 추세추종 단독 100점으로 랭킹
+    # 최상위를 차지했다(2026-09 실측).
+    composite = None
+    if trend_final is not None and mean_reversion_final is not None:
+        composite = (trend_final + mean_reversion_final) / 2.0
+    # 등급은 raw composite(절대점수) 기준 - 위 GRADE_CUTOFFS 주석 참고.
+    # composite가 None이면 _grade(None)도 None을 반환해 자연히 등급 없음으로
+    # 남는다.
     grade = _grade(composite)
     divergence = _divergence(trend_final, mean_reversion_final)
     insufficient = trend_final is None and mean_reversion_final is None

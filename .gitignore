@@ -23,6 +23,9 @@ venv/
 .env
 *.env.local
 .env.prod
+# 로컬 전용 Alertmanager Slack 웹훅(docker-compose.monitoring.local.yml
+# --env-file 대상) - 운영 .env.prod와 분리된 별도 시크릿이라 이름도 분리
+.env.monitoring.local
 
 # 스코어링 상세 설계 (공개 저장소 노출 방지, 로컬 전용)
 quant-engine/docs/SCORING_DESIGN.md

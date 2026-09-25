@@ -2,6 +2,7 @@ package com.quantlime.price.cache;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.quantlime.price.dto.response.PriceSnapshot;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
@@ -46,7 +47,7 @@ class PriceCacheStoreTest {
 
     @BeforeEach
     void setUp() {
-        priceCacheStore = new PriceCacheStore(redisTemplate, new ObjectMapper());
+        priceCacheStore = new PriceCacheStore(redisTemplate, new ObjectMapper(), new SimpleMeterRegistry());
     }
 
     @Test

@@ -5,6 +5,7 @@ import com.quantlime.market.cache.TossMarketRankingCache;
 import com.quantlime.market.dto.response.MarketRankingResponse;
 import com.quantlime.price.cache.PreviousCloseCache;
 import com.quantlime.price.cache.PriceCacheStore;
+import com.quantlime.price.dto.response.PriceSnapshot;
 import com.quantlime.price.util.ChangeRateCalculator;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.dto.mapper.StockMapper;
@@ -85,18 +86,25 @@ public class MarketRankingService {
 
         List<String> codes = overseasStocks.stream().map(Stock::getStockCode).toList();
         Map<String, Double> previousCloseByCode = overseasPreviousCloseCache.get(codes);
+        // 관심종목 수만큼 개별 GET을 반복하던 것을 파이프라인 한 번으로
+        // 묶는다(2026-09 성능 감사 - 바로 위에서 이미 만들어둔 codes를
+        // 재사용, PriceCacheStore.saveAll/findAll이 이미 갖고 있던
+        // executePipelined 구현을 그대로 적용).
+        Map<String, PriceSnapshot> snapshotByCode = priceCacheStore.findAll(codes);
 
         List<MarketRankingResponse> items = new ArrayList<>();
         for (Stock stock : overseasStocks) {
-            priceCacheStore.find(stock.getStockCode()).ifPresent(snapshot -> {
-                Double previousClose = previousCloseByCode.get(stock.getStockCode());
-                Double changeRate = ChangeRateCalculator.calculate(snapshot.currentPrice(), previousClose);
-                if (changeRate != null) {
-                    items.add(new MarketRankingResponse(stock.getStockCode(), stock.getDisplayName(), stock.getSector(),
-                        snapshot.currentPrice(), changeRate, CURRENCY_USD, null, null, StockMapper.toLogoUrl(stock),
-                        true));
-                }
-            });
+            PriceSnapshot snapshot = snapshotByCode.get(stock.getStockCode());
+            if (snapshot == null) {
+                continue;
+            }
+            Double previousClose = previousCloseByCode.get(stock.getStockCode());
+            Double changeRate = ChangeRateCalculator.calculate(snapshot.currentPrice(), previousClose);
+            if (changeRate != null) {
+                items.add(new MarketRankingResponse(stock.getStockCode(), stock.getDisplayName(), stock.getSector(),
+                    snapshot.currentPrice(), changeRate, CURRENCY_USD, null, null, StockMapper.toLogoUrl(stock),
+                    true));
+            }
         }
 
         Comparator<MarketRankingResponse> comparator = Comparator.comparingDouble(MarketRankingResponse::changeRate);

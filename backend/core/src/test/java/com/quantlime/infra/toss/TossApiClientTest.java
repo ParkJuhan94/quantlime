@@ -277,4 +277,32 @@ class TossApiClientTest {
         assertThat(response.result().candles()).isEmpty();
         mockServer.verify();
     }
+
+    @Test
+    @DisplayName("[get1MinuteCandleBefore는 interval=1m/count=1로 before 직전 1분봉 하나만 조회한다 - "
+        + "RegularCloseBackfillService가 과거 정규장(15:30) 종가를 복원하는 유일한 방법. "
+        + "before 값을 그대로 통과시킬 뿐 어떤 URL 인코딩도 하지 않는다(실측 확인 - 그래서 호출측이 "
+        + "+09:00 대신 +가 없는 UTC(Z) 표기를 써서 인코딩 문제 자체를 피해야 한다, 클래스 javadoc 참고)]")
+    void get1MinuteCandleBefore_requestsSingleMinuteCandleAtCutoff() {
+        // given
+        when(tokenManager.getAccessToken()).thenReturn("token");
+        String uri = BASE_URL + "/api/v1/candles?symbol=005930&interval=1m&count=1"
+            + "&before=2026-09-01T06:30:00Z";
+        String body = "{\"result\":{\"candles\":["
+            + "{\"timestamp\":\"2026-09-01T15:29:00+09:00\",\"openPrice\":\"70000\","
+            + "\"highPrice\":\"70200\",\"lowPrice\":\"69900\",\"closePrice\":\"70100\","
+            + "\"volume\":\"12000\",\"currency\":\"KRW\"}],\"nextBefore\":null}}";
+        mockServer.expect(requestTo(uri))
+            .andExpect(method(GET))
+            .andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+
+        // when
+        TossCandleResponse response = tossApiClient.get1MinuteCandleBefore(
+            "005930", "2026-09-01T06:30:00Z");
+
+        // then
+        assertThat(response.result().candles()).hasSize(1);
+        assertThat(response.result().candles().get(0).closePrice()).isEqualTo("70100");
+        mockServer.verify();
+    }
 }

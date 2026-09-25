@@ -231,6 +231,55 @@ class DomesticDailyPriceServiceTest {
     }
 
     @Test
+    @DisplayName("[정규장 종가가 확정된 행은 close를 유지하고 O/H/L/V만 최신화한다]")
+    void refreshRecent_regularCloseConfirmed_keepsCloseButUpdatesOhlv() {
+        // given: 15:35 정규장 캡처로 종가가 이미 확정된 행(DomesticRegularCloseCaptureScheduler)에
+        // 16:00 일봉 배치가 NXT 포함 캔들을 들고 온 상황 - close(72300)는 보호되고
+        // O/H/L/V만 그 캔들 값으로 최신화돼야 한다.
+        LocalDate today = LocalDate.now();
+        DomesticDailyPrice confirmed = DomesticDailyPrice.of(
+            STOCK_CODE, today, 71000L, 71500L, 70500L, 71000L, 0L);
+        confirmed.confirmRegularClose(71000L);
+        TossCandleResponse page = candlePage(1, today, null,
+            "71000", "72500", "70800", "72300", "1500000");
+        given(tossApiClient.getDailyCandles(eq(STOCK_CODE), eq(MIN_LOOKBACK_CANDLES), any())).willReturn(page);
+        given(domesticDailyPriceRepository.findByStockCodeAndTradeDate(STOCK_CODE, today))
+            .willReturn(Optional.of(confirmed));
+
+        // when
+        domesticDailyPriceService.refreshRecent(STOCK_CODE);
+
+        // then
+        verify(domesticDailyPriceRepository, times(1)).save(confirmed);
+        assertThat(confirmed.getClosePrice()).isEqualTo(71000L);
+        assertThat(confirmed.getHighPrice()).isEqualTo(72500L);
+        assertThat(confirmed.getVolume()).isEqualTo(1_500_000L);
+        assertThat(confirmed.isRegularCloseConfirmed()).isTrue();
+    }
+
+    @Test
+    @DisplayName("[정규장 종가가 확정된 행은 O/H/L/V도 동일하면 close가 달라도 저장을 스킵한다]")
+    void refreshRecent_regularCloseConfirmedAndOhlvUnchanged_skipsSave() {
+        // given: O/H/L/V가 캔들과 동일하면(close 차이는 보호 대상이라 비교에서 제외)
+        // 불필요한 UPDATE를 반복하지 않는다.
+        LocalDate today = LocalDate.now();
+        DomesticDailyPrice confirmed = DomesticDailyPrice.of(
+            STOCK_CODE, today, 70000L, 71000L, 69000L, 70500L, 1_000_000L);
+        confirmed.confirmRegularClose(70500L);
+        TossCandleResponse page = candlePage(1, today, null,
+            "70000", "71000", "69000", "99999", "1000000");
+        given(tossApiClient.getDailyCandles(eq(STOCK_CODE), eq(MIN_LOOKBACK_CANDLES), any())).willReturn(page);
+        given(domesticDailyPriceRepository.findByStockCodeAndTradeDate(STOCK_CODE, today))
+            .willReturn(Optional.of(confirmed));
+
+        // when
+        domesticDailyPriceService.refreshRecent(STOCK_CODE);
+
+        // then
+        verify(domesticDailyPriceRepository, never()).save(any(DomesticDailyPrice.class));
+    }
+
+    @Test
     @DisplayName("[과거 거래일 종가가 가격제한폭을 넘게 바뀌면 전 구간 재백필을 1회 트리거한다]")
     void refreshRecent_closeJumpsBeyondThreshold_triggersRebackfillOnce() {
         // given: 2026-08-03 실측 사례(액면분할 미반영) 재현 - 224원 저장돼 있는데
@@ -299,6 +348,31 @@ class DomesticDailyPriceServiceTest {
         // then: getDailyCandles가 정확히 1번만 호출됐다 - 재귀적으로 또 재백필을
         // 트리거했다면 count=200 호출이 추가로 발생했을 것이다
         verify(tossApiClient, times(1)).getDailyCandles(anyString(), anyInt(), any());
+    }
+
+    @Test
+    @DisplayName("[재백필(overwriteAll)은 정규장 종가 보호를 무시하고 전체 덮어쓰며 보호 플래그를 해제한다]")
+    void rebackfillAdjustedHistory_ignoresRegularCloseProtectionAndResetsFlag() {
+        // given: 액면분할처럼 과거 전체 가격이 비율로 바뀌는 사건은 정규장 종가로
+        // 보호돼 있던 값도 그 시점엔 이미 틀린 값이다 - 재백필은 보호를 무시하고
+        // 수정주가 반영 캔들로 완전히 덮어써야 하고, 다음날 15:35 캡처가 보호
+        // 상태를 다시 세울 수 있도록 플래그도 함께 해제해야 한다.
+        LocalDate d1 = LocalDate.now().minusDays(1);
+        TossCandleResponse page = new TossCandleResponse(new TossCandleResponse.TossCandlePageResult(
+            List.of(candle(d1, "2200", "2300", "2180", "2240", "500000")), null));
+        DomesticDailyPrice protectedPrice = DomesticDailyPrice.of(STOCK_CODE, d1, 220L, 230L, 218L, 224L, 0L);
+        protectedPrice.confirmRegularClose(224L);
+        given(tossApiClient.getDailyCandles(eq(STOCK_CODE), eq(200), eq(null))).willReturn(page);
+        given(domesticDailyPriceRepository.findByStockCodeAndTradeDate(STOCK_CODE, d1))
+            .willReturn(Optional.of(protectedPrice));
+
+        // when
+        domesticDailyPriceService.rebackfillAdjustedHistory(STOCK_CODE);
+
+        // then
+        verify(domesticDailyPriceRepository, times(1)).save(protectedPrice);
+        assertThat(protectedPrice.getClosePrice()).isEqualTo(2240L);
+        assertThat(protectedPrice.isRegularCloseConfirmed()).isFalse();
     }
 
     // Rate Limit(429) 재시도는 2026-08-01부터 TossApiClient.getDailyCandles

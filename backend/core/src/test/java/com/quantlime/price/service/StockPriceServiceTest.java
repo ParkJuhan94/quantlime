@@ -15,7 +15,6 @@ import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.StockMasterService;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -45,9 +44,6 @@ class StockPriceServiceTest {
     private DomesticDailyPriceRepository domesticDailyPriceRepository;
 
     @Mock
-    private DomesticPreviousCloseResolver domesticPreviousCloseResolver;
-
-    @Mock
     private OverseasDailyPriceRepository overseasDailyPriceRepository;
 
     @Mock
@@ -60,7 +56,7 @@ class StockPriceServiceTest {
     @BeforeEach
     void setUp() {
         stockPriceService = new StockPriceService(stockMasterService, domesticDailyPriceService, domesticDailyPriceRepository,
-            domesticPreviousCloseResolver, overseasDailyPriceRepository, priceCacheStore);
+            overseasDailyPriceRepository, priceCacheStore);
     }
 
     @Test
@@ -103,8 +99,8 @@ class StockPriceServiceTest {
         given(priceCacheStore.find(stockCode)).willReturn(Optional.empty());
         given(domesticDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(stockCode))
             .willReturn(Optional.of(latestClose));
-        given(domesticPreviousCloseResolver.resolve(List.of(stockCode), latestTradeDate))
-            .willReturn(Map.of(stockCode, previousClose.getClosePrice().doubleValue()));
+        given(domesticDailyPriceRepository.findLatestBeforeDate(List.of(stockCode), latestTradeDate))
+            .willReturn(List.of(previousClose));
 
         // when
         CurrentPriceResponse response = stockPriceService.getCurrentPrice(stockCode);

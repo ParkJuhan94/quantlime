@@ -9,6 +9,11 @@ public record ScoreResponse(
     Double trendScore,
     Double meanReversionScore,
     Double compositeScore,
+    // ScoreRankingResponse와 동일한 이유(v3.0 백분위 도입) - 상세 화면은
+    // 원점수·백분위를 함께 보여준다.
+    Double trendPercentile,
+    Double meanReversionPercentile,
+    Double compositePercentile,
     String grade,
     String quadrant,
     Boolean divergenceFlag,

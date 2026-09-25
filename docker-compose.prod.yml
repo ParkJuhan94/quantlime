@@ -50,6 +50,13 @@ services:
       --default-time-zone=+09:00
       --innodb-buffer-pool-size=512M
       --innodb-buffer-pool-instances=1
+      --slow-query-log=ON
+      --slow-query-log-file=/var/lib/mysql/slow.log
+      --long-query-time=1
+    # slow-query-log: 2026-09 성능 감사에서 슬로우 쿼리 로그가 운영에서도
+    # 계속 OFF였던 걸 발견 - 1초 기준으로 켜서 이후 회귀를 조기 발견한다.
+    # --log-queries-not-using-indexes는 의도적으로 안 켠다(로컬과 동일한
+    # 이유 - docker-compose.yml 주석 참고).
     # innodb_buffer_pool_size: 기본값 128MB로 방치돼 있었다(2026-08-19 실측
     # - score/domestic_daily_price/overseas_daily_price 등 hot 테이블 합산
     # ~1.1GB, 기본 버퍼풀 대비 9배). 512MB로 올린 근거: mem_limit이 1g라

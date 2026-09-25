@@ -239,7 +239,7 @@ public class DomesticDailyPriceService {
         for (TossCandleResponse.TossCandle candle : candles) {
             LocalDate tradeDate = TossPriceMapper.toLocalDate(candle.timestamp());
             if (overwriteAll || DailyPriceSettlementPolicy.isWithinWindow(tradeDate, today)) {
-                UpsertOutcome outcome = upsertCandle(stockCode, tradeDate, candle, !overwriteAll);
+                UpsertOutcome outcome = upsertCandle(stockCode, tradeDate, candle, overwriteAll);
                 if (outcome.created()) {
                     saved++;
                 }
@@ -269,7 +269,7 @@ public class DomesticDailyPriceService {
      *     overwriteAll(재백필) 경로에서 무한 재귀를 막기 위함.
      */
     private UpsertOutcome upsertCandle(String stockCode, LocalDate tradeDate,
-                                        TossCandleResponse.TossCandle candle, boolean detectRestatement) {
+                                        TossCandleResponse.TossCandle candle, boolean overwriteAll) {
         return domesticDailyPriceRepository.findByStockCodeAndTradeDate(stockCode, tradeDate)
             .map(existing -> {
                 long open = Long.parseLong(candle.openPrice());
@@ -277,6 +277,21 @@ public class DomesticDailyPriceService {
                 long low = Long.parseLong(candle.lowPrice());
                 long close = Long.parseLong(candle.closePrice());
                 long volume = Long.parseLong(candle.volume());
+
+                // 정규장 종가가 이미 확정된 행은 close를 NXT 포함 캔들로 덮어쓰지
+                // 않는다 - O/H/L/V만 최신화한다. overwriteAll(수정주가 재백필)은
+                // 예외 - 분할/병합은 과거 전체 가격을 비율로 바꾸는 사건이라
+                // 보호된 값도 그 시점엔 이미 틀렸으므로 아래 일반 경로로 전체
+                // 덮어쓴다(DomesticDailyPrice#updateOhlcv가 보호 플래그도 해제).
+                if (!overwriteAll && existing.isRegularCloseConfirmed()) {
+                    if (isUnchangedIgnoringClose(existing, open, high, low, volume)) {
+                        return UpsertOutcome.unchanged();
+                    }
+                    existing.updateOhlcvKeepingClose(open, high, low, volume);
+                    domesticDailyPriceRepository.save(existing);
+                    return UpsertOutcome.updated(false);
+                }
+
                 // 값이 동일하면 save() 자체를 생략한다 - 재확정 윈도우 도입으로
                 // 종목당 MIN_LOOKBACK_CANDLES개씩 매 스윕 재조회되는데, 이미
                 // 확정된 과거 거래일은 대부분 값이 그대로라 불필요한 UPDATE가
@@ -284,6 +299,7 @@ public class DomesticDailyPriceService {
                 if (isUnchanged(existing, open, high, low, close, volume)) {
                     return UpsertOutcome.unchanged();
                 }
+                boolean detectRestatement = !overwriteAll;
                 boolean restated = detectRestatement && DailyPriceSettlementPolicy.isRestatement(
                     existing.getClosePrice(), close, DailyPriceSettlementPolicy.DOMESTIC_RESTATEMENT_THRESHOLD);
                 existing.updateOhlcv(open, high, low, close, volume);
@@ -305,6 +321,11 @@ public class DomesticDailyPriceService {
         return existing.getOpenPrice() == open && existing.getHighPrice() == high
             && existing.getLowPrice() == low && existing.getClosePrice() == close
             && existing.getVolume() == volume;
+    }
+
+    private boolean isUnchangedIgnoringClose(DomesticDailyPrice existing, long open, long high, long low, long volume) {
+        return existing.getOpenPrice() == open && existing.getHighPrice() == high
+            && existing.getLowPrice() == low && existing.getVolume() == volume;
     }
 
     private record UpsertOutcome(boolean created, boolean restatementDetected) {

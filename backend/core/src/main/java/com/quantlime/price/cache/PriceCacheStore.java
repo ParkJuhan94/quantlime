@@ -3,6 +3,7 @@ package com.quantlime.price.cache;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.quantlime.price.dto.response.PriceSnapshot;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -32,9 +33,15 @@ public class PriceCacheStore {
 
     private static final String KEY_PREFIX = "price:current:";
     private static final Duration TTL = Duration.ofMinutes(5);
+    // 이 프로젝트는 Spring Cache 추상화를 안 써서 cache_* 메트릭이 구조적으로
+    // 0건이다(직접 만든 캐시 클래스라 Micrometer CacheMetrics가 자동으로 안
+    // 붙음) - 2026-09 성능 감사에서 파이프라인 전환(findAll) 효과를 실측으로
+    // 확인하기 위해 히트율 카운터를 직접 추가했다.
+    private static final String METRIC_ACCESS = "price.cache.access";
 
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
+    private final MeterRegistry meterRegistry;
 
     public void save(PriceSnapshot snapshot) {
         try {
@@ -100,15 +107,20 @@ public class PriceCacheStore {
             // Toss 직접 호출 경로 자체는 이 클래스 책임 밖이라 그만큼 느려질
             // 수는 있음, 2026-08-17).
             log.warn("시세 캐시 조회 실패(Redis 연결): stockCode={}, error={}", stockCode, e.getMessage());
+            recordAccess(false);
             return Optional.empty();
         }
         if (json == null) {
+            recordAccess(false);
             return Optional.empty();
         }
         try {
-            return Optional.of(objectMapper.readValue(json, PriceSnapshot.class));
+            Optional<PriceSnapshot> snapshot = Optional.of(objectMapper.readValue(json, PriceSnapshot.class));
+            recordAccess(true);
+            return snapshot;
         } catch (JsonProcessingException e) {
             log.warn("시세 캐시 파싱 실패: stockCode={}, error={}", stockCode, e.getMessage(), e);
+            recordAccess(false);
             return Optional.empty();
         }
     }
@@ -156,7 +168,13 @@ public class PriceCacheStore {
                     stockCode, e.getMessage(), e);
             }
         }
+        meterRegistry.counter(METRIC_ACCESS, "result", "hit").increment(result.size());
+        meterRegistry.counter(METRIC_ACCESS, "result", "miss").increment(stockCodes.size() - result.size());
         return result;
+    }
+
+    private void recordAccess(boolean hit) {
+        meterRegistry.counter(METRIC_ACCESS, "result", hit ? "hit" : "miss").increment();
     }
 
     private String key(String stockCode) {

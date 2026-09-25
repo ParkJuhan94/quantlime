@@ -2,12 +2,15 @@ package com.quantlime.price.repository;
 
 import com.querydsl.core.Tuple;
 import com.querydsl.core.types.Projections;
+import com.querydsl.core.types.dsl.CaseBuilder;
 import com.querydsl.core.types.dsl.Expressions;
+import com.querydsl.core.types.dsl.NumberExpression;
 import com.querydsl.jpa.impl.JPAQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.QDomesticDailyPrice;
 import com.quantlime.price.dto.DomesticStockTradingValue;
+import com.quantlime.price.dto.LiquiditySnapshot;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +35,36 @@ public class DomesticDailyPriceQueryRepositoryImpl implements DomesticDailyPrice
             .groupBy(domesticDailyPrice.stockCode)
             .orderBy(domesticDailyPrice.closePrice.multiply(domesticDailyPrice.volume).sum().desc())
             .limit(limit)
+            .fetch();
+    }
+
+    @Override
+    public List<String> findStockCodesOrderedByTradingValueDesc(LocalDate since) {
+        QDomesticDailyPrice domesticDailyPrice = QDomesticDailyPrice.domesticDailyPrice;
+
+        return queryFactory
+            .select(domesticDailyPrice.stockCode)
+            .from(domesticDailyPrice)
+            .where(domesticDailyPrice.tradeDate.goe(since))
+            .groupBy(domesticDailyPrice.stockCode)
+            .orderBy(domesticDailyPrice.closePrice.multiply(domesticDailyPrice.volume).sum().desc())
+            .fetch();
+    }
+
+    @Override
+    public List<LiquiditySnapshot> findLiquiditySnapshot(LocalDate since) {
+        QDomesticDailyPrice domesticDailyPrice = QDomesticDailyPrice.domesticDailyPrice;
+        NumberExpression<Long> isZeroVolume = new CaseBuilder()
+            .when(domesticDailyPrice.volume.eq(0L)).then(1L).otherwise(0L);
+
+        return queryFactory
+            .select(Projections.constructor(LiquiditySnapshot.class,
+                domesticDailyPrice.stockCode,
+                domesticDailyPrice.closePrice.multiply(domesticDailyPrice.volume).avg(),
+                isZeroVolume.sum()))
+            .from(domesticDailyPrice)
+            .where(domesticDailyPrice.tradeDate.goe(since))
+            .groupBy(domesticDailyPrice.stockCode)
             .fetch();
     }
 

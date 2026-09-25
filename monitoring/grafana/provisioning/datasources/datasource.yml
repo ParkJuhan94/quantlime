@@ -11,3 +11,16 @@ datasources:
     url: http://prometheus:9090
     isDefault: true
     editable: false
+
+  # Grafana Alerting > Alertmanagers 화면에서 발화된 알림을 바로 볼 수 있게
+  # 등록(2026-09-24) - 운영/로컬 두 컴포즈 프로젝트 모두 서비스명이
+  # "alertmanager"라 이 provisioning 파일 하나를 공유해도 각자의 네트워크
+  # 안에서 올바르게 resolve된다. Alertmanager 자체가 알림 발화/라우팅을
+  # 전담하므로 Grafana 쪽 자체 alert rule은 만들지 않는다(이중 관리 방지).
+  - name: Alertmanager
+    type: alertmanager
+    access: proxy
+    url: http://alertmanager:9093
+    jsonData:
+      implementation: prometheus
+    editable: false

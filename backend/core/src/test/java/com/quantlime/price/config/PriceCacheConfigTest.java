@@ -1,9 +1,10 @@
 package com.quantlime.price.config;
 
 import com.quantlime.price.cache.PreviousCloseCache;
+import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
+import com.quantlime.price.repository.DomesticDailyPriceRepository;
 import com.quantlime.price.repository.OverseasDailyPriceRepository;
-import com.quantlime.price.service.DomesticPreviousCloseResolver;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -32,7 +33,7 @@ class PriceCacheConfigTest {
     private static final String STOCK_CODE = "005930";
 
     @Mock
-    private DomesticPreviousCloseResolver domesticPreviousCloseResolver;
+    private DomesticDailyPriceRepository domesticDailyPriceRepository;
 
     @Mock
     private OverseasDailyPriceRepository overseasDailyPriceRepository;
@@ -40,14 +41,15 @@ class PriceCacheConfigTest {
     private final PriceCacheConfig priceCacheConfig = new PriceCacheConfig();
 
     @Test
-    @DisplayName("[국내 fetcher는 DomesticPreviousCloseResolver에 그대로 위임한다]")
-    void domesticPreviousCloseCache_delegatesToResolver() {
-        // given: 정규장 종가/일봉 폴백 조합 로직 자체는 DomesticPreviousCloseResolverTest가
-        // 다루므로, 여기서는 fetcher 람다가 그 resolver를 그대로 호출하는지만 확인한다
-        // (NXT 애프터마켓 종가 오염 문제로 국내만 resolver를 거치게 된 배경은
-        // DomesticRegularClosePrice 클래스 javadoc 참고).
-        given(domesticPreviousCloseResolver.resolve(anyList(), any())).willReturn(Map.of(STOCK_CODE, 70000.0));
-        PreviousCloseCache cache = priceCacheConfig.domesticPreviousCloseCache(domesticPreviousCloseResolver);
+    @DisplayName("[국내 fetcher는 원화 종가(Long)를 Double로 변환해 반환한다]")
+    void domesticPreviousCloseCache_convertsLongToDouble() {
+        // given: close_price가 정규장 종가로 직접 확정되므로(2026-09-21,
+        // DomesticRegularCloseCaptureScheduler 참고) 해외와 동일하게
+        // domestic_daily_price를 바로 조회한다.
+        given(domesticDailyPriceRepository.findLatestBeforeDate(anyList(), any())).willReturn(
+            List.of(DomesticDailyPrice.of(
+                STOCK_CODE, LocalDate.now().minusDays(1), 70000L, 70000L, 70000L, 70000L, 0L)));
+        PreviousCloseCache cache = priceCacheConfig.domesticPreviousCloseCache(domesticDailyPriceRepository);
 
         // when
         Map<String, Double> result = cache.get(List.of(STOCK_CODE));

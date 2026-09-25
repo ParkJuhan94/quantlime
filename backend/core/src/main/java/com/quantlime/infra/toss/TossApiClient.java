@@ -19,6 +19,7 @@ import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
@@ -97,9 +98,44 @@ public class TossApiClient {
     @CircuitBreaker(name = "toss")
     @Bulkhead(name = "toss")
     public TossCandleResponse getDailyCandles(String symbol, int count, String before) {
+        return fetchCandlesWithRateLimitRetry(symbol, () -> fetchDailyCandles(symbol, count, before));
+    }
+
+    /**
+     * 정규장 종가 백필(RegularCloseBackfillService) 전용 - {@code before} 직전
+     * 1분봉 1개만 조회한다. {@code interval=1d} 캔들은 NXT 프리/애프터마켓까지
+     * 섞여 있어 과거 특정 날짜의 "정규장(15:30) 마감가"를 복원할 방법이 이것뿐이다
+     * (토스 API에 세션 구분 파라미터가 없음, ~/.claude/plans/dynamic-prancing-lerdorf.md
+     * 참고).
+     *
+     * <p><b>{@code before}에 {@code +09:00} 같은 {@code +} 타임존 오프셋을 쓰지
+     * 말 것</b> - 토스 서버는 쿼리스트링의 리터럴 {@code +}를 공백으로 해석해
+     * 타임스탬프 파싱이 깨지는데(toss-openapi.json의 {@code before} 파라미터
+     * 설명에 명시된 경고, "%2B로 인코딩해야 함"), 이 메서드가 쓰는
+     * {@code uriBuilder...build()}(인자 없음)는 값을 그대로 통과시키기만 할 뿐
+     * {@code +}를 {@code %2B}로 자동 인코딩하지 않고, 반대로 호출측이 미리
+     * {@code %2B}를 넣어도 그 안의 {@code %}까지 다시 인코딩해 {@code %252B}로
+     * 이중 인코딩되는 걸 실측으로 확인했다(둘 다 {@code TossApiClientTest
+     * #get1MinuteCandleBefore_requestsSingleMinuteCandleAtCutoff} 참고). 이
+     * 클라이언트로는 그 무엇도 리터럴 {@code %2B}를 만들 방법이 없으므로,
+     * 호출측이 아예 {@code +} 없는 UTC {@code Z} 표기(예: {@code
+     * "2026-09-01T06:30:00Z"})로 넘겨 문제 자체를 피해야 한다.
+     */
+    @CircuitBreaker(name = "toss")
+    @Bulkhead(name = "toss")
+    public TossCandleResponse get1MinuteCandleBefore(String symbol, String before) {
+        return fetchCandlesWithRateLimitRetry(symbol, () -> fetchMinuteCandle(symbol, before));
+    }
+
+    /**
+     * getDailyCandles/get1MinuteCandleBefore가 공유하는 429 재시도 루프 -
+     * 두 엔드포인트 모두 같은 {@code /api/v1/candles} 경로·레이트리밋 그룹
+     * (MARKET_DATA_CHART)을 쓴다.
+     */
+    private TossCandleResponse fetchCandlesWithRateLimitRetry(String symbol, Supplier<TossCandleResponse> fetcher) {
         for (int attempt = 0; ; attempt++) {
             try {
-                return fetchDailyCandles(symbol, count, before);
+                return fetcher.get();
             } catch (ExternalApiException e) {
                 boolean rateLimited = TossApiErrorCode.RATE_LIMIT_EXCEEDED.getCode().equals(e.getCode());
                 if (!rateLimited || attempt >= MAX_RATE_LIMIT_RETRIES) {
@@ -170,6 +206,25 @@ public class TossApiClient {
                     }
                     return builder.build();
                 })
+                .header("authorization", "Bearer " + token)
+                .retrieve()
+                .body(TossCandleResponse.class),
+            HttpClientErrorException.TooManyRequests.class,
+            TossApiErrorCode.RATE_LIMIT_EXCEEDED));
+    }
+
+    private TossCandleResponse fetchMinuteCandle(String symbol, String before) {
+        awaitCandleRateLimit();
+        return withTokenRetry("candles-1m", token -> ExternalApiInvoker.call(
+            TossApiErrorCode.CANDLE_INQUIRY_FAILED,
+            () -> tossRestClient.get()
+                .uri(uriBuilder -> uriBuilder
+                    .path("/api/v1/candles")
+                    .queryParam("symbol", symbol)
+                    .queryParam("interval", "1m")
+                    .queryParam("count", 1)
+                    .queryParam("before", before)
+                    .build())
                 .header("authorization", "Bearer " + token)
                 .retrieve()
                 .body(TossCandleResponse.class),

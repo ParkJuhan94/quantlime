@@ -2,13 +2,19 @@ package com.quantlime.score.service;
 
 import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.infra.python.PythonEngineClient;
+import com.quantlime.infra.python.dto.CrossSectionNormalizeApiRequest;
+import com.quantlime.infra.python.dto.CrossSectionNormalizeApiResponse;
 import com.quantlime.infra.python.dto.ScoreBatchApiRequest;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.StockScoreSeriesApiResponse;
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
+import com.quantlime.price.domain.StockLiquidity;
 import com.quantlime.price.repository.OverseasDailyPriceRepository;
+import com.quantlime.price.repository.StockLiquidityRepository;
 import com.quantlime.price.service.DomesticDailyPriceService;
+import com.quantlime.score.cache.ScoreRankingCacheStore;
+import com.quantlime.score.domain.PeerGroup;
 import com.quantlime.score.domain.Score;
 import com.quantlime.score.dto.mapper.ScoreMapper;
 import com.quantlime.score.dto.mapper.ScoreRequestMapper;
@@ -25,9 +31,12 @@ import com.quantlime.watchlist.repository.WatchlistRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -52,6 +61,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class ScoreService {
 
     private static final int OHLCV_LOOKBACK_DAYS = 730;
+    // ScoreController.getDashboardScores의 @Max(50) limit 상한과 반드시
+    // 같은 값이어야 한다 - 이보다 작으면 그 값을 넘는 limit 요청이 캐시된
+    // 것보다 더 많은 행을 요구해 항상 미스가 나고, 클 필요는 없다(그 이상
+    // 요청 자체가 컨트롤러에서 막힘).
+    private static final int MAX_CACHEABLE_RANKING_SIZE = 50;
     private static final String METRIC_MISSING_FROM_RESPONSE = "score.batch.missing-from-response";
     // 전종목(약 2,700개)을 한 요청에 다 넣으면 퀀트 엔진에 보내는 JSON
     // 페이로드가 지나치게 커진다(종목당 최대 730일 OHLCV) - 청크로 나눠
@@ -64,9 +78,23 @@ public class ScoreService {
     private final PythonEngineClient pythonEngineClient;
     private final ScorePersistenceService scorePersistenceService;
     private final ScoreRepository scoreRepository;
+    private final StockLiquidityRepository stockLiquidityRepository;
     private final WatchlistRepository watchlistRepository;
     private final StockMasterService stockMasterService;
+    private final ScoreRankingCacheStore scoreRankingCacheStore;
     private final MeterRegistry meterRegistry;
+    // getAllStocksScoreRanking의 캐시 미스 시 scope별 단일 비행(single-flight)
+    // 락 - 2026-09 성능 감사 중 k6 없이 curl 동시 호출로 재현: 배치가 캐시
+    // 3개 키를 한꺼번에 비우는 순간 동시 접속자 수만큼 DB 쿼리가 같이
+    // 발사돼(20개 동시 요청 중 9개가 캐시 미스로 동시 진입, HikariCP
+    // active가 풀 전체(10/10)까지 차고 pending도 발생하는 걸 실측으로
+    // 확인) 캐싱을 도입한 취지 자체가 무너지는 구조였다. scope는
+    // all/domestic/overseas 3종으로 고정돼 있어 맵이 무한정 커질 위험은
+    // 없다. StockSearchCache.ensureWarm()과 동일한 더블체크 락 패턴 -
+    // 인스턴스가 1대뿐인 현재 배포 구성(SRE.md "4. 수평 확장" 참고)을
+    // 전제로 JVM 로컬 락만으로 충분하다고 판단했다(여러 인스턴스로
+    // 늘어나면 RedisLockService 기반으로 재검토 필요).
+    private final ConcurrentHashMap<String, Object> rankingCacheLoadLocks = new ConcurrentHashMap<>();
 
     public void recalculateDomesticScore(String stockCode) {
         recalculateDomesticScoresChunk(List.of(stockCode));
@@ -198,13 +226,15 @@ public class ScoreService {
         List<Score> latestScores = scoreRepository
             .findLatestScoresByStockCodesOrderByCompositeScoreDesc(
                 stockByCode.keySet().stream().toList());
+        Map<String, Double> avgTradingValueByCode = avgTradingValueByStockCode(stockByCode.keySet());
 
         return latestScores.stream()
             .map(score -> {
                 Stock stock = stockByCode.get(score.getStockCode());
                 return ScoreMapper.toScoreRankingResponse(
                     score, stock.getDisplayName(), stock.getSector(), StockMapper.toLogoUrl(stock),
-                    !stock.getMarketType().isDomestic());
+                    !stock.getMarketType().isDomestic(),
+                    avgTradingValueByCode.get(score.getStockCode()));
             })
             .toList();
     }
@@ -212,22 +242,113 @@ public class ScoreService {
     // "실시간 랭킹" 스코어 탭의 "전체" 토글 - 관심종목 여부와 무관하게 전
     // 상장종목 중 상위 N개(2026-07-18, 관심종목만/전체 토글로 /dashboard
     // 별도 페이지를 대체).
+    //
+    // 2026-09 성능 감사부터 Redis에 scope별 상위 MAX_CACHEABLE_RANKING_SIZE건을
+    // 통째로 캐싱한다(ScoreRankingCacheStore 참고) - 배치가 하루 2회만
+    // 데이터를 바꾸는데 매 요청마다 eligibleStockCodes 조인 + 전종목 IN절
+    // 정렬 쿼리를 다시 도는 게 낭비였다. 캐시 미스일 때만 DB를 조회하고,
+    // limit과 무관하게 항상 상한만큼 계산해 캐싱한 뒤 요청받은 limit만큼
+    // 잘라 반환한다(그래야 limit이 다른 후속 요청도 캐시를 재사용한다).
     @Transactional(readOnly = true)
     public List<ScoreRankingResponse> getAllStocksScoreRanking(int limit, String scope) {
+        List<ScoreRankingResponse> ranking = scoreRankingCacheStore.find(scope).orElse(null);
+        if (ranking == null) {
+            // 캐시 히트 경로는 락을 타지 않는다(대다수 요청이 여기서 끝남) -
+            // 미스일 때만 scope별 락으로 단일 비행을 강제한다.
+            Object lock = rankingCacheLoadLocks.computeIfAbsent(scope, key -> new Object());
+            synchronized (lock) {
+                // 락 대기 중 다른 스레드가 이미 채웠을 수 있다(더블체크).
+                ranking = scoreRankingCacheStore.find(scope).orElse(null);
+                if (ranking == null) {
+                    ranking = queryAllStocksScoreRanking(MAX_CACHEABLE_RANKING_SIZE, scope);
+                    scoreRankingCacheStore.save(scope, ranking);
+                }
+            }
+        }
+        return ranking.size() > limit ? ranking.subList(0, limit) : ranking;
+    }
+
+    private List<ScoreRankingResponse> queryAllStocksScoreRanking(int limit, String scope) {
         List<Score> latestScores = scoreRepository
             .findTopScoresOrderByCompositeScoreDesc(limit, scopeToMarketTypes(scope));
         List<String> stockCodes = latestScores.stream().map(Score::getStockCode).toList();
         Map<String, Stock> stockByCode = stockMasterService.getStocksByCodesInOrder(stockCodes).stream()
             .collect(Collectors.toMap(Stock::getStockCode, stock -> stock));
+        Map<String, Double> avgTradingValueByCode = avgTradingValueByStockCode(stockByCode.keySet());
 
+        // getStocksByCodesInOrder는 stock 테이블에 없는 코드를 조용히 버린다
+        // (StockMasterService 주석 참고) - 쿼리 자체가 이제 stock을 이너
+        // 조인해 걸러진 코드만 반환하므로 실제로는 항상 채워져 있어야
+        // 하지만, 그 전제가 깨지는 경우(레이스 컨디션 등)에 대비해 방어적으로
+        // null을 건너뛴다(2026-09 감사 세션 - 예전엔 stock이 null이면
+        // getDisplayName() 호출에서 그대로 NPE가 났다).
         return latestScores.stream()
             .map(score -> {
                 Stock stock = stockByCode.get(score.getStockCode());
+                if (stock == null) {
+                    log.warn("스코어 랭킹 종목 조회 실패(stock 테이블에 없음), 건너뜀: stockCode={}",
+                        score.getStockCode());
+                    return null;
+                }
                 return ScoreMapper.toScoreRankingResponse(
                     score, stock.getDisplayName(), stock.getSector(), StockMapper.toLogoUrl(stock),
-                    !stock.getMarketType().isDomestic());
+                    !stock.getMarketType().isDomestic(),
+                    avgTradingValueByCode.get(score.getStockCode()));
             })
+            .filter(Objects::nonNull)
             .toList();
+    }
+
+    private Map<String, Double> avgTradingValueByStockCode(Collection<String> stockCodes) {
+        return stockLiquidityRepository.findAllByStockCodeIn(List.copyOf(stockCodes)).stream()
+            .collect(Collectors.toMap(StockLiquidity::getStockCode, StockLiquidity::getAvgTradingValue20d));
+    }
+
+    /**
+     * {@code peerGroup}(국내 또는 해외) 안에서 상장·가격지원·유동성 조건을
+     * 만족하는 종목들의 최신 절대 서브스코어를 quant-engine에 넘겨 횡단면
+     * 백분위(랭킹 정렬 전용)를 받고, 각 종목의 최신 {@link Score} 행에
+     * 반영한다. 등급(grade)은 이 경로와 무관하다 - 원점수 계산
+     * ({@link #recalculateDomesticScores}/{@link #recalculateOverseasScores})
+     * 시점에 quant-engine이 절대점수 기준으로 이미 매겨 저장했으므로, 이
+     * 메서드가 실행되지 않거나 늦어져도 등급은 항상 최신 상태다.
+     *
+     * <p>표본이 quant-engine의 최소 기준(MIN_STOCKS_PER_DATE) 미만이면
+     * {@code minSampleMet=false}로 아무것도 반영하지 않는다 - 그 날짜의
+     * 횡단면 순위 자체가 불안정하기 때문(calculator/normalization.py 참고).
+     */
+    @Transactional
+    public void normalizeCrossSection(PeerGroup peerGroup) {
+        List<MarketType> marketTypes = peerGroup == PeerGroup.DOMESTIC
+            ? MarketType.domesticValues() : MarketType.overseasValues();
+        List<Score> latestScores = scoreRepository.findLatestScoresForNormalization(marketTypes);
+        if (latestScores.isEmpty()) {
+            log.debug("횡단면 정규화 스킵: 대상 종목 없음, peerGroup={}", peerGroup);
+            return;
+        }
+
+        Map<String, Score> scoreByStockCode = latestScores.stream()
+            .collect(Collectors.toMap(Score::getStockCode, score -> score));
+        CrossSectionNormalizeApiRequest request = ScoreRequestMapper.toNormalizeRequest(
+            LocalDate.now(), peerGroup, latestScores);
+        CrossSectionNormalizeApiResponse response = pythonEngineClient.normalizeCrossSection(request);
+
+        if (!response.minSampleMet()) {
+            log.info("횡단면 정규화 스킵: 표본 부족, peerGroup={}, 대상종목수={}",
+                peerGroup, latestScores.size());
+            return;
+        }
+
+        for (CrossSectionNormalizeApiResponse.NormalizedItemApiResponse item : response.items()) {
+            Score score = scoreByStockCode.get(item.stockCode());
+            if (score == null) {
+                continue;
+            }
+            score.applyNormalization(
+                item.trendPercentile(), item.meanReversionPercentile(),
+                item.compositePercentile(), peerGroup);
+        }
+        log.info("횡단면 정규화 완료: peerGroup={}, 대상종목수={}", peerGroup, latestScores.size());
     }
 
     /**

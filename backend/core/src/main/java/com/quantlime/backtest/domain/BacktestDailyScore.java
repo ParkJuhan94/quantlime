@@ -10,7 +10,6 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDate;
@@ -35,11 +34,10 @@ import static lombok.AccessLevel.PROTECTED;
     uniqueConstraints = @UniqueConstraint(
         name = "uk_backtest_daily_score_stock_version_date",
         columnNames = {"stock_code", "score_version", "trade_date"}
-    ),
-    indexes = @Index(
-        name = "idx_backtest_daily_score_stock_version",
-        columnList = "stock_code, score_version, trade_date"
     )
+    // idx_backtest_daily_score_stock_version(stock_code, score_version,
+    // trade_date)는 uk_backtest_daily_score_stock_version_date와 컬럼 구성이
+    // 완전히 같아 제거했다(2026-09 성능 감사 - 21MB, 2.3일간 읽기 0회).
 )
 @Getter
 @NoArgsConstructor(access = PROTECTED)

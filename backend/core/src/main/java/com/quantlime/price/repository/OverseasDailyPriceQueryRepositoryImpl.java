@@ -2,11 +2,14 @@ package com.quantlime.price.repository;
 
 import com.querydsl.core.Tuple;
 import com.querydsl.core.types.Projections;
+import com.querydsl.core.types.dsl.CaseBuilder;
 import com.querydsl.core.types.dsl.Expressions;
+import com.querydsl.core.types.dsl.NumberExpression;
 import com.querydsl.jpa.impl.JPAQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.price.domain.QOverseasDailyPrice;
+import com.quantlime.price.dto.LiquiditySnapshot;
 import com.quantlime.price.dto.OverseasStockTradingValue;
 import java.time.LocalDate;
 import java.util.List;
@@ -32,6 +35,36 @@ public class OverseasDailyPriceQueryRepositoryImpl implements OverseasDailyPrice
             .groupBy(overseasDailyPrice.stockCode)
             .orderBy(overseasDailyPrice.closePrice.multiply(overseasDailyPrice.volume).sum().desc())
             .limit(limit)
+            .fetch();
+    }
+
+    @Override
+    public List<String> findStockCodesOrderedByTradingValueDesc(LocalDate since) {
+        QOverseasDailyPrice overseasDailyPrice = QOverseasDailyPrice.overseasDailyPrice;
+
+        return queryFactory
+            .select(overseasDailyPrice.stockCode)
+            .from(overseasDailyPrice)
+            .where(overseasDailyPrice.tradeDate.goe(since))
+            .groupBy(overseasDailyPrice.stockCode)
+            .orderBy(overseasDailyPrice.closePrice.multiply(overseasDailyPrice.volume).sum().desc())
+            .fetch();
+    }
+
+    @Override
+    public List<LiquiditySnapshot> findLiquiditySnapshot(LocalDate since) {
+        QOverseasDailyPrice overseasDailyPrice = QOverseasDailyPrice.overseasDailyPrice;
+        NumberExpression<Long> isZeroVolume = new CaseBuilder()
+            .when(overseasDailyPrice.volume.eq(0L)).then(1L).otherwise(0L);
+
+        return queryFactory
+            .select(Projections.constructor(LiquiditySnapshot.class,
+                overseasDailyPrice.stockCode,
+                overseasDailyPrice.closePrice.multiply(overseasDailyPrice.volume).avg(),
+                isZeroVolume.sum()))
+            .from(overseasDailyPrice)
+            .where(overseasDailyPrice.tradeDate.goe(since))
+            .groupBy(overseasDailyPrice.stockCode)
             .fetch();
     }
 

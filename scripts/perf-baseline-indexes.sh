@@ -11,10 +11,16 @@
 #   ./scripts/perf-baseline-indexes.sh drop
 #   ./scripts/perf-baseline-indexes.sh restore
 #
-# 대상 4개는 backend/core/.../{score/domain/Score,stock/domain/Stock,
+# 대상은 backend/core/.../{score/domain/Score,stock/domain/Stock,
 # telegramfeed/domain/{TelegramDigest,TelegramPost}}.java의 @Table(indexes=...)와
 # 정확히 일치시켰다 - 그 엔티티의 인덱스 선언이 나중에 바뀌면 이 스크립트도
 # 같이 갱신해야 drop/restore가 실제 스키마와 어긋나지 않는다.
+#
+# 2026-09 성능 감사에서 idx_score_composite_percentile(v3.0에서 신설,
+# Score.java 참고)이 누락돼 있던 걸 발견해 추가했다 - /api/dashboard/scores
+# 랭킹 정렬 기준이 composite_score에서 composite_percentile로 바뀐 뒤에도
+# 이 배열이 갱신되지 않아, before 재현 시 실제 운영 중인 정렬 인덱스가
+# drop되지 않는 상태였다.
 set -euo pipefail
 
 DB_HOST="${DB_HOST:-127.0.0.1}"
@@ -36,6 +42,7 @@ mysql_exec() {
 # table|index_name|columns(ADD INDEX용, DROP엔 안 씀)
 INDEXES=(
   "score|idx_score_composite_score|composite_score DESC"
+  "score|idx_score_composite_percentile|composite_percentile DESC"
   "stock|idx_stock_listing_status_market_type|listing_status, market_type"
   "telegram_digest|idx_telegram_digest_date|digest_date DESC"
   "telegram_post|idx_telegram_post_channel_status_published|channel_id, status, published_at"

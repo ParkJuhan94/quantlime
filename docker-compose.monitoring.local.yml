@@ -1,16 +1,29 @@
 # 로컬 bare 프로세스(gradlew bootRun) 대상 애플리케이션 관측 스택(Prometheus
-# + Grafana) - 8080/8081 어느 포트로 띄우든 잡는다(prometheus.local.yml 참고).
+# + Grafana + Alertmanager) - 8080/8081 어느 포트로 띄우든 잡는다
+# (prometheus.local.yml 참고). 2026-09-24부로 mysqld-exporter/redis-exporter/
+# alertmanager를 추가해 운영 alerts.yml의 알림 규칙 대부분을 로컬에서도
+# 그대로 재현·연습할 수 있게 확장했다(DB/Redis 다운, HikariCP 포화, 슬로우
+# 쿼리, Redis eviction 등) - node-exporter/cadvisor(호스트/컨테이너 자원)와
+# 백업 크론 관련 알림은 EC2 전용 개념이라 로컬엔 대응물이 없어 의도적으로
+# 제외했다(해당 규칙은 데이터 없음으로 평가돼 조용히 안 켜질 뿐 무해함).
 #
 # docker-compose.monitoring.yml과 별도 파일인 이유: 그건 docker-compose.prod.yml과
 # 반드시 함께 -f로 얹어야 하고(컨테이너화된 backend/mysql/redis를 스크랩,
-# job="backend" 타겟이 컨테이너 이름 backend:8080) 알림(Alertmanager)까지
-# 포함한 운영 스택이다. 이 파일은 반대로 그 컨테이너들과 완전히 무관하게
-# 호스트에서 직접 실행 중인 bare 프로세스만 보는 로컬 1회성 진단용이라 -
-# 같은 job명 "backend"가 서로 다른 타겟을 가리키게 되므로 두 스택을 동시에
-# 띄우면 안 된다(port 3002/9090이 어차피 겹쳐서 물리적으로도 동시 기동 불가).
-# 기존 Grafana 프로비저닝(대시보드 4종, 데이터소스)은 그대로 재사용한다.
+# job="backend" 타겟이 컨테이너 이름 backend:8080) 운영 Slack 채널로 알림이
+# 나가는 운영 스택이다. 이 파일은 반대로 호스트에서 직접 실행 중인 bare
+# 프로세스+로컬 docker-compose.yml 인프라(mysql/redis/quant-engine, 호스트
+# 포트 경유)를 보는 로컬 전용 스택이라 - 같은 job명 "backend"가 서로 다른
+# 타겟을 가리키게 되므로 두 스택을 동시에 띄우면 안 된다(port 3002/9090이
+# 어차피 겹쳐서 물리적으로도 동시 기동 불가). 기존 Grafana 프로비저닝
+# (대시보드 4종, 데이터소스)은 그대로 재사용한다.
 #
-#   docker compose -f docker-compose.monitoring.local.yml up -d
+# Slack 알림을 받으려면 먼저 .env.monitoring.local(gitignore 대상, 없으면
+# 새로 생성)에 SLACK_ALERT_WEBHOOK_URL_LOCAL=<로컬 전용 채널 웹훅>을 채워둘 것
+# (monitoring/alertmanager/alertmanager.local.yml 상단 주석 참고 - 운영
+# 채널과 분리하는 이유가 적혀 있음). 안 채워도 스택 자체는 정상 기동하고
+# Alertmanager 웹 UI(localhost:9093)에서는 그대로 확인 가능하다.
+#
+#   docker compose -f docker-compose.monitoring.local.yml --env-file .env.monitoring.local up -d
 #   docker compose -f docker-compose.monitoring.local.yml down
 name: quantlime-monitoring-local
 
@@ -20,6 +33,7 @@ services:
     container_name: quantlime-local-prometheus
     volumes:
       - ./monitoring/prometheus/prometheus.local.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
       - prometheus_local_data:/prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yml
@@ -32,6 +46,79 @@ services:
     ports:
       - "9090:9090"
     restart: unless-stopped
+    # 실측(2026-09-21, 유휴 145.7MiB) 기준 여유를 둔 상한 - 운영과 동일 값.
+    mem_limit: 512m
+
+  # 로컬 docker-compose.yml의 mysql 컨테이너(호스트 포트 3308)를 그대로
+  # 스크랩 - 별도 네트워크 조인 없이 운영과 동일하게 host.docker.internal
+  # 경유. 자격증명은 로컬 기본값(docker-compose.yml의 DB_PASSWORD 기본값과
+  # 동일) - 로컬 전용이라 시크릿 취급하지 않는다.
+  #
+  # DATA_SOURCE_NAME 환경변수가 아니라 --config.my-cnf를 쓴다 - v0.15.1부터
+  # DATA_SOURCE_NAME 지원이 제거돼(자격증명이 `docker inspect`/`ps`로
+  # 노출되는 걸 막기 위한 상류 프로젝트의 의도적 breaking change) 운영과
+  # 동일한 DATA_SOURCE_NAME 방식은 실제로 기동 직후 크래시루프에 빠진다는
+  # 걸 로컬에서 실측으로 발견했다(2026-09-24) - monitoring/prometheus/
+  # rules/alerts.yml의 MysqlDown이 운영에서도 이 문제로 동작 안 하고 있을
+  # 가능성이 있다는 뜻이라 별도로 확인이 필요하다(이번 로컬 셋업 스코프
+  # 밖이라 운영 파일은 고치지 않았음).
+  mysqld-exporter:
+    image: prom/mysqld-exporter:v0.15.1
+    container_name: quantlime-local-mysqld-exporter
+    environment:
+      DB_PASSWORD: ${DB_PASSWORD:-quantlime}
+    entrypoint:
+      - sh
+      - -c
+      - |
+        printf '[client]\nuser=root\npassword=%s\n' "$$DB_PASSWORD" > /tmp/.my.cnf
+        exec /bin/mysqld_exporter --config.my-cnf=/tmp/.my.cnf --mysqld.address=host.docker.internal:3308
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    mem_limit: 64m
+
+  # 로컬 docker-compose.yml의 redis 컨테이너(호스트 포트 6381) - 인증 없음.
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.62.0
+    container_name: quantlime-local-redis-exporter
+    environment:
+      REDIS_ADDR: "redis://host.docker.internal:6381"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    mem_limit: 64m
+
+  # 운영과 동일한 sed 치환 패턴(alertmanager.local.yml 상단 주석 참고) -
+  # 채널/웹훅만 로컬 전용으로 분리.
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: quantlime-local-alertmanager
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.local.yml:/etc/alertmanager/alertmanager.yml.template:ro
+      - alertmanager_local_data:/alertmanager
+    environment:
+      SLACK_ALERT_WEBHOOK_URL_LOCAL: ${SLACK_ALERT_WEBHOOK_URL_LOCAL:-}
+    # 웹훅이 비어 있으면(.env.monitoring.local 미설정) slack_configs.api_url이
+    # 빈 문자열이 되어 Alertmanager가 "unsupported scheme" 에러로 기동
+    # 자체를 거부하고 크래시루프에 빠지는 걸 실측으로 발견했다(2026-09-24) -
+    # 이 경우엔 슬랙 연동 없는 null receiver로 대체해 최소한 컨테이너는
+    # 뜨고 웹 UI(localhost:9093)에서는 확인 가능하게 한다.
+    entrypoint:
+      - sh
+      - -c
+      - |
+        if [ -z "$$SLACK_ALERT_WEBHOOK_URL_LOCAL" ]; then
+          printf 'route:\n  receiver: "null"\nreceivers:\n  - name: "null"\n' > /etc/alertmanager/alertmanager.yml
+        else
+          sed "s#__SLACK_ALERT_WEBHOOK_URL_LOCAL__#$$SLACK_ALERT_WEBHOOK_URL_LOCAL#" \
+            /etc/alertmanager/alertmanager.yml.template > /etc/alertmanager/alertmanager.yml
+        fi
+        exec /bin/alertmanager --config.file=/etc/alertmanager/alertmanager.yml --storage.path=/alertmanager
+    ports:
+      - "9093:9093"
+    restart: unless-stopped
+    mem_limit: 128m
 
   grafana:
     image: grafana/grafana:11.3.1
@@ -49,7 +136,10 @@ services:
     depends_on:
       - prometheus
     restart: unless-stopped
+    # 실측(2026-09-21, 유휴 199.1MiB) 기준 여유를 둔 상한 - 운영과 동일 값.
+    mem_limit: 256m
 
 volumes:
   prometheus_local_data:
   grafana_local_data:
+  alertmanager_local_data:

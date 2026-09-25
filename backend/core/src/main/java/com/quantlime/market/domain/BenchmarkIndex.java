@@ -6,7 +6,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDate;
@@ -28,11 +27,12 @@ import static lombok.AccessLevel.PROTECTED;
     uniqueConstraints = @UniqueConstraint(
         name = "uk_benchmark_index_code_date",
         columnNames = {"index_code", "trade_date"}
-    ),
-    indexes = @Index(
-        name = "idx_benchmark_index_code_date",
-        columnList = "index_code, trade_date DESC"
     )
+    // idx_benchmark_index_code_date(index_code, trade_date DESC)는
+    // uk_benchmark_index_code_date와 컬럼 구성이 완전히 같아 제거했다
+    // (2026-09 성능 감사). MySQL은 오름차순 인덱스를 역방향으로도 스캔할
+    // 수 있어(EXPLAIN상 "Index lookup ... (reverse)") 단일 컬럼 정렬만
+    // 으로는 별도 DESC 인덱스가 필요 없다.
 )
 @Getter
 @NoArgsConstructor(access = PROTECTED)

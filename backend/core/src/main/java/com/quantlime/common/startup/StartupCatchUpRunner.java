@@ -64,8 +64,11 @@ import org.springframework.stereotype.Component;
  * javadoc 참고). 그래서 다른 캐치업과 달리 무조건 재시도가 아니라 15:30~15:35
  * 안전 시간대 안에서만 동작하고, 창을 넘긴 날은 스스로 스킵해 기존 폴백에
  * 맡긴다. 별도 실행기 없이 가격/스코어 갭필과 같은
- * {@code marketDataCatchUpTaskExecutor}에서 순차 실행한다(같은 가격 도메인,
- * Redis 조회 위주라 가볍다).
+ * {@code marketDataCatchUpTaskExecutor}에서 순차 실행하되, **갭필보다 먼저**
+ * 실행한다(2026-09-21 순서 변경) - 갭필(대량 백필)이 좁은 안전 시간대를
+ * 통째로 잡아먹어 캡처가 넘어가버리는 문제가 실사용 중 발견됐다. 캡처는
+ * Redis 조회 위주라 가벼워 먼저 실행해도 갭필 시작을 유의미하게 지연시키지
+ * 않는다.
  *
  * <p>{@code ChannelSeedInitializer}(채널 시딩)와의 실행 순서는 Spring이
  * 보장해주지 않는다 - 만약 채널 시딩보다 먼저 이 캐치업이 돌면 이번 기동에서는
@@ -96,10 +99,17 @@ public class StartupCatchUpRunner implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         log.info("기동 시 가격/스코어 갭필 및 영상 피드 캐치업(수집→자막→요약→보존기간 정리)을 비동기로 트리거합니다");
         marketDataCatchUpTaskExecutor.execute(() -> {
-            SafeExecutor.runSafely("기동 시 가격/스코어 갭필",
-                () -> marketDataRefreshService.refreshAllExclusively());
+            // 정규장 종가 캡처를 갭필보다 먼저 시도한다(2026-09-21 순서 변경) - 갭필
+            // (refreshAllExclusively)은 서버가 오래 꺼져있었을수록(로컬 개발 등)
+            // 전종목 순회에 수 분 이상 걸릴 수 있는데, 캡처가 그 뒤에 실행되면
+            // 정작 필요한 순간(오랜만의 재기동, 밀린 캡처를 따라잡아야 할 때)에
+            // 15:30~15:35 안전 시간대를 갭필이 통째로 잡아먹어 넘겨버린다(실사용
+            // 중 발견). 캡처는 PriceCacheStore/DomesticListedStockCache만 읽어
+            // refreshAllExclusively와 데이터 의존성이 없으므로 순서를 바꿔도 안전하다.
             SafeExecutor.runSafely("기동 시 정규장 종가 캡처(안전 시간대 한정)",
                 domesticRegularCloseCaptureScheduler::captureIfWithinStartupSafeWindow);
+            SafeExecutor.runSafely("기동 시 가격/스코어 갭필",
+                () -> marketDataRefreshService.refreshAllExclusively());
         });
         videoFeedCatchUpTaskExecutor.execute(() ->
             SafeExecutor.runSafely("기동 시 영상 피드 캐치업", this::catchUpVideoFeed));

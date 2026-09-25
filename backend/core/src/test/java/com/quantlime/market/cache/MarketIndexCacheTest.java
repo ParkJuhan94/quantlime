@@ -17,6 +17,8 @@ import com.quantlime.market.domain.BenchmarkIndex;
 import com.quantlime.market.dto.response.MarketIndexResponse;
 import com.quantlime.market.repository.BenchmarkIndexRepository;
 import com.quantlime.price.cache.DomesticMarketCalendarCache;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -27,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -37,6 +40,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 
 @Tag("unit")
@@ -60,6 +64,12 @@ class MarketIndexCacheTest {
 
     @Mock
     private DomesticMarketCalendarCache domesticMarketCalendarCache;
+
+    // ScoreServiceTest와 동일한 이유(실제 카운터 증가 동작이 필요, Mockito
+    // 목이면 counter()가 null을 반환해 increment() 호출 시 NPE) - Spy로
+    // 실제 SimpleMeterRegistry를 감싼다.
+    @Spy
+    private MeterRegistry meterRegistry = new SimpleMeterRegistry();
 
     @InjectMocks
     private MarketIndexCache marketIndexCache;
@@ -109,21 +119,24 @@ class MarketIndexCacheTest {
     }
 
     @Test
-    @DisplayName("[TTL이 지나면 다시 조회한다]")
-    void get_afterTtlExpired_refetches() {
+    @DisplayName("[TTL이 지나면 기존 값을 즉시 반환하면서 백그라운드로 갱신한다(stale-while-revalidate)]")
+    void get_afterTtlExpired_servesStaleAndRefreshesInBackground() {
         // given
         given(tossApiClient.getExchangeRate("USD", "KRW")).willReturn(
             new TossExchangeRateResponse(new ExchangeRateResult("USD", "KRW", "1380.5", "UP")));
         given(upbitApiClient.getTicker("KRW-BTC")).willReturn(
             List.of(new UpbitTicker("KRW-BTC", 132000000L, 0.0345)));
-        marketIndexCache.get();
+        MarketIndexResponse first = marketIndexCache.get();
 
         // when: 마지막 갱신 시각을 TTL 밖으로 되돌려 만료 상태를 재현
         ReflectionTestUtils.setField(marketIndexCache, "cachedAt", Instant.now().minusSeconds(21));
-        marketIndexCache.get();
+        MarketIndexResponse second = marketIndexCache.get();
 
-        // then
-        verify(tossApiClient, times(2)).getExchangeRate(anyString(), anyString());
+        // then: 이 호출 자체는 갱신을 기다리지 않고 기존(stale) 값을 즉시 반환
+        assertThat(second).isSameAs(first);
+        // 백그라운드 갱신은 비동기라 즉시 검증할 수 없으므로 짧은 타임아웃 안에서 확인
+        // (StockSearchCacheTest의 동일 패턴 참고)
+        verify(tossApiClient, timeout(1000).times(2)).getExchangeRate(anyString(), anyString());
     }
 
     @Test

@@ -319,6 +319,14 @@ realtime-price:
 market-ranking:
   poll-interval-ms: ${MARKET_RANKING_POLL_INTERVAL_MS:100}
 
+# 스코어 랭킹의 유동성/거래정지 필터 임계값(StockLiquidityService 참고,
+# 2026-09 잡주 상위 독식 감사 세션) - 재배포 없이 조정할 수 있게 환경변수로
+# 뺐다. 국내(원)/해외(달러) 통화 단위가 달라 따로 둔다.
+score-liquidity:
+  min-avg-trading-value-domestic: ${SCORE_LIQUIDITY_MIN_TRADING_VALUE_DOMESTIC:1000000000}
+  min-avg-trading-value-overseas: ${SCORE_LIQUIDITY_MIN_TRADING_VALUE_OVERSEAS:1000000}
+  max-zero-volume-days: ${SCORE_LIQUIDITY_MAX_ZERO_VOLUME_DAYS:5}
+
 jwt:
   secret: ${JWT_SECRET:}
   access-token-validity: ${JWT_ACCESS_TOKEN_VALIDITY:1800000}

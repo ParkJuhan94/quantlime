@@ -80,9 +80,22 @@ export function ScoreSummaryRow(props: ScoreSummaryRowProps) {
             >
               <span className="text-xs font-medium">{tier.label}</span>
               {isActive && (
-                <span className="flex items-baseline gap-1">
-                  <span className="text-lg font-bold">{formatScore(score.compositeScore)}</span>
-                  <span className="text-[10px] font-medium opacity-70">/100</span>
+                <span className="flex flex-col items-center gap-1">
+                  {/* 등급(타일)은 원점수 기준으로 매겨진다 - 백분위(같은 날
+                      국내/해외 종목 대비 상대 순위)는 척도가 달라 등급과
+                      어긋나 보일 수 있으므로(예: 시장 전체가 약세인 날
+                      원점수는 낮아도 순위는 높을 수 있음) 둘 다 라벨을 붙여
+                      동등하게 병기한다. */}
+                  <span className="flex items-baseline gap-1">
+                    <span className="text-base font-bold">{formatScore(score.compositeScore)}</span>
+                    <span className="text-[10px] font-medium opacity-70">원점수</span>
+                  </span>
+                  {score.compositePercentile != null && (
+                    <span className="flex items-baseline gap-1">
+                      <span className="text-base font-bold">{formatScore(100 - score.compositePercentile)}</span>
+                      <span className="text-[10px] font-medium opacity-70">상위 %</span>
+                    </span>
+                  )}
                 </span>
               )}
             </div>
@@ -91,9 +104,9 @@ export function ScoreSummaryRow(props: ScoreSummaryRowProps) {
       </div>
 
       <div className="mt-3 flex items-center gap-3 border-t border-gray-100 pt-3">
-        <ScoreStat label="추세추종" value={score.trendScore} />
+        <ScoreStat label="추세추종" value={score.trendScore} percentile={score.trendPercentile} />
         <span className="h-6 w-px bg-gray-200" />
-        <ScoreStat label="평균회귀" value={score.meanReversionScore} />
+        <ScoreStat label="평균회귀" value={score.meanReversionScore} percentile={score.meanReversionPercentile} />
         <div className="group relative">
           <svg
             width="15"
@@ -121,11 +134,14 @@ export function ScoreSummaryRow(props: ScoreSummaryRowProps) {
   )
 }
 
-function ScoreStat({ label, value }: { label: string; value: number | null }) {
+function ScoreStat({ label, value, percentile }: { label: string; value: number | null; percentile: number | null }) {
   return (
     <div className="text-left">
       <p className="text-[10px] text-gray-400">{label}</p>
-      <p className="text-xs font-semibold text-gray-900">{formatScore(value)}</p>
+      <p className="text-xs font-semibold text-gray-900">
+        {formatScore(value)}
+        {percentile != null && <span className="ml-1 font-normal text-gray-400">(상위 {formatScore(100 - percentile)}%)</span>}
+      </p>
     </div>
   )
 }

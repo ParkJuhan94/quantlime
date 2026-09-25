@@ -1,6 +1,5 @@
 package com.quantlime.price.service;
 
-import com.quantlime.common.util.SleepUtil;
 import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.toss.dto.TossCandleResponse;
 import com.quantlime.infra.toss.dto.TossPriceMapper;
@@ -34,7 +33,6 @@ public class OverseasDailyPriceBackfillService {
 
     private static final int BACKFILL_TARGET_DAYS = 200;
     private static final int BACKFILL_PAGE_SIZE = 200;
-    private static final long API_DELAY_MS = 150;
     // DomesticDailyPriceService.REBACKFILL_BUFFER_DAYS와 동일한 의도.
     private static final int REBACKFILL_BUFFER_DAYS = 5;
     // DomesticDailyPriceService.FULL_REBACKFILL_TARGET_DAYS와 동일한 이유
@@ -106,12 +104,11 @@ public class OverseasDailyPriceBackfillService {
             if (noMoreHistory) {
                 break;
             }
+            // 페이지 사이 별도 sleep 없음 - TossApiClient.getDailyCandles가
+            // awaitCandleRateLimit()으로 이미 전역 최소 간격을 강제한다
+            // (2026-09-22 제거, RegularCloseBackfillService와 동일한 이유 -
+            // 중복 대기가 페이지 수만큼 왕복시간을 낭비시켰다).
             cursor = response.result().nextBefore();
-
-            if (!SleepUtil.sleepMillis(API_DELAY_MS)) {
-                log.warn("해외 이력 백필 중단: 인터럽트 발생, stockCode={}", stockCode);
-                return;
-            }
         }
 
         log.info("해외 이력 백필 완료: stockCode={}, 신규저장={}건", stockCode, savedCount);
@@ -151,11 +148,6 @@ public class OverseasDailyPriceBackfillService {
                 break;
             }
             cursor = response.result().nextBefore();
-
-            if (!SleepUtil.sleepMillis(API_DELAY_MS)) {
-                log.warn("해외 수정주가 재백필 중단: 인터럽트 발생, stockCode={}", stockCode);
-                return created;
-            }
         }
 
         log.info("해외 수정주가 재백필 완료: stockCode={}, 처리={}건, 신규={}건", stockCode, processed, created);

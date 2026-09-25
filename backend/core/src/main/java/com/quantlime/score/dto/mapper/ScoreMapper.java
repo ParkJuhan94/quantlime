@@ -50,6 +50,9 @@ public final class ScoreMapper {
             score.getTrendScore(),
             score.getMeanReversionScore(),
             score.getCompositeScore(),
+            score.getTrendPercentile(),
+            score.getMeanReversionPercentile(),
+            score.getCompositePercentile(),
             gradeLabel(score.getGrade()),
             quadrantLabel(score.getQuadrant()),
             divergenceFlag(score.getDivergence()),
@@ -59,7 +62,8 @@ public final class ScoreMapper {
     }
 
     public static ScoreRankingResponse toScoreRankingResponse(
-        Score score, String stockName, String sector, String logoUrl, boolean overseas) {
+        Score score, String stockName, String sector, String logoUrl, boolean overseas,
+        Double avgTradingValue) {
         return new ScoreRankingResponse(
             score.getStockCode(),
             stockName,
@@ -68,10 +72,14 @@ public final class ScoreMapper {
             score.getTrendScore(),
             score.getMeanReversionScore(),
             score.getCompositeScore(),
+            score.getTrendPercentile(),
+            score.getMeanReversionPercentile(),
+            score.getCompositePercentile(),
             gradeLabel(score.getGrade()),
             score.isInsufficientData(),
             logoUrl,
-            overseas
+            overseas,
+            avgTradingValue
         );
     }
 
