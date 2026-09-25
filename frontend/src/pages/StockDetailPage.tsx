@@ -118,7 +118,7 @@ export function StockDetailPage() {
 
   return (
     <div className="space-y-6">
-      <section className="flex items-start justify-between gap-6">
+      <section className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between md:gap-6">
         {/* 로고는 종목명 행 옆에 나란히(top-align) - 예전엔 items-center로
             전체 열(시총 등 부가정보 박스까지 포함)에 맞춰 세로 중앙정렬
             하다 보니 부가정보 줄이 늘어날 때마다 로고가 아래로 처지는
@@ -187,7 +187,7 @@ export function StockDetailPage() {
       )}
 
       <section className="rounded-xl border border-gray-200 bg-white p-4">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <OverlayIndicatorLegend
             indicators={indicators}
             onItemClick={(key) => candleChartRef.current?.highlightSeries(key)}
