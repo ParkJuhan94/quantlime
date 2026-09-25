@@ -8,6 +8,8 @@ import com.quantlime.infra.tosspayments.TossPaymentsProperties;
 import com.quantlime.infra.tosspayments.TossWebhookVerifier;
 import com.quantlime.infra.tosspayments.dto.TossBillingKeyResponse;
 import com.quantlime.infra.tosspayments.dto.TossPaymentApprovalResponse;
+import com.quantlime.notification.domain.NotificationType;
+import com.quantlime.notification.service.FcmPushService;
 import com.quantlime.payment.domain.Payment;
 import com.quantlime.payment.exception.PaymentErrorCode;
 import com.quantlime.payment.repository.PaymentRepository;
@@ -62,6 +64,7 @@ public class PaymentService {
     private final TossWebhookVerifier tossWebhookVerifier;
     private final TossPaymentsProperties tossPaymentsProperties;
     private final StringRedisTemplate redisTemplate;
+    private final FcmPushService fcmPushService;
 
     // 카드 등록(빌링키 발급) 위젯 성공 콜백에서 호출한다 - 빌링키 발급과
     // 즉시 첫 결제를 한 번에 처리한다. Toss API 호출 자체는 트랜잭션
@@ -123,6 +126,8 @@ public class PaymentService {
                 approval.paymentKey(), false));
 
             log.info("구독 시작 완료: userId={}, planCode={}, orderId={}", userId, planCode, orderId);
+            fcmPushService.sendToUser(userId, NotificationType.PAYMENT_SUCCESS,
+                "구독이 시작되었습니다", plan.getName() + " 플랜 결제가 완료됐어요.", "/subscribe");
             return subscription;
         } finally {
             redisTemplate.delete(lockKey);
@@ -161,12 +166,20 @@ public class PaymentService {
                 log.warn("구독 자동 갱신 최종 실패(재시도 소진), PAST_DUE 전환: "
                         + "userId={}, subscriptionId={}, orderId={}, error={}",
                     user.getId(), subscriptionId, orderId, e.getMessage());
+                fcmPushService.sendToUser(user.getId(), NotificationType.PAYMENT_FAILED,
+                    "결제에 실패했어요", "카드 결제가 계속 실패해 구독이 일시중지됐어요. 결제수단을 확인해주세요.",
+                    "/subscribe");
             } else {
                 subscription.scheduleRenewalRetry(LocalDate.now().plusDays(1));
                 log.warn("구독 자동 갱신 결제 실패, 내일 재시도: "
                         + "userId={}, subscriptionId={}, orderId={}, 시도횟수={}, error={}",
                     user.getId(), subscriptionId, orderId,
                     subscription.getRenewalFailureCount(), e.getMessage());
+                // 아직 ACTIVE(프리미엄 유지)인 이 시점에 알려야 끊기기 전에
+                // 결제수단을 바꿀 수 있다.
+                fcmPushService.sendToUser(user.getId(), NotificationType.PAYMENT_FAILED,
+                    "결제에 실패했어요", "내일 다시 결제를 시도해요. 구독은 유지 중이니 결제수단을 확인해주세요.",
+                    "/subscribe");
             }
         }
     }
