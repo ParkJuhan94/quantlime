@@ -2,8 +2,12 @@ import { useEffect, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
 import { logout as logoutRequest } from '../../api/auth'
+import { deleteFcmToken } from '../../api/notification'
+import { requestFcmToken } from '../../notification/firebaseClient'
+import { useFcmRegistration } from '../../notification/useFcmRegistration'
 import { SearchOverlay } from '../search/SearchOverlay'
 import { ProfileMenu } from './ProfileMenu'
+import { NotificationBell } from './NotificationBell'
 import { LoginModal } from '../auth/LoginModal'
 import { PlatformLogo } from '../common/PlatformLogo'
 
@@ -22,6 +26,8 @@ export function AppHeader({ onLoggedOut }: AppHeaderProps) {
   const [searchOpen, setSearchOpen] = useState(false)
   const [loginModalOpen, setLoginModalOpen] = useState(false)
 
+  useFcmRegistration()
+
   // 검색창 클릭 없이도 "/" 키 한 번으로 열 수 있게 한다 - 다른 입력 요소에
   // 포커스가 있을 땐(예: 텍스트 입력 중 "/") 가로채지 않는다.
   useEffect(() => {
@@ -38,6 +44,17 @@ export function AppHeader({ onLoggedOut }: AppHeaderProps) {
   }, [])
 
   async function handleLogout() {
+    try {
+      // 이 기기의 FCM 토큰을 먼저 해제한다 - 순서를 반대로 하면(로그아웃 후
+      // 시도) 인증이 이미 끊겨 401을 받는다. 권한 미허용/브라우저 미지원
+      // 등으로 토큰 자체가 없을 수 있어 실패해도 로그아웃 흐름은 계속한다.
+      const token = await requestFcmToken()
+      if (token) {
+        await deleteFcmToken(token)
+      }
+    } catch {
+      // 토큰 조회/삭제 실패는 무시 - 아래 리프레시 토큰 무효화가 핵심.
+    }
     try {
       await logoutRequest()
     } catch {
@@ -134,7 +151,10 @@ export function AppHeader({ onLoggedOut }: AppHeaderProps) {
         </button>
 
         {isAuthenticated ? (
-          <ProfileMenu onLogout={() => void handleLogout()} />
+          <div className="flex items-center gap-1">
+            <NotificationBell />
+            <ProfileMenu onLogout={() => void handleLogout()} />
+          </div>
         ) : (
           <div className="relative">
             <button

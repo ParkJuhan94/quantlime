@@ -39,4 +39,9 @@ export const queryKeys = {
   subscriptionPlans: ['subscription', 'plans'] as const,
   subscriptionMe: ['subscription', 'me'] as const,
   subscriptionPayments: ['subscription', 'payments'] as const,
+  // 읽음 처리 후 페이지 무관하게 전부 무효화해야 해 접두 키를 따로 둔다
+  // (dashboardScoresAll과 동일한 이유).
+  notificationsAll: ['notifications'] as const,
+  notifications: (page: number) => ['notifications', page] as const,
+  notificationsUnreadCount: ['notifications', 'unread-count'] as const,
 }
