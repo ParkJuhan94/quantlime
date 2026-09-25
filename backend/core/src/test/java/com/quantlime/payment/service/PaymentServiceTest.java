@@ -8,6 +8,8 @@ import com.quantlime.infra.tosspayments.TossWebhookVerifier;
 import com.quantlime.infra.tosspayments.dto.TossBillingKeyResponse;
 import com.quantlime.infra.tosspayments.dto.TossPaymentApprovalResponse;
 import com.quantlime.infra.tosspayments.exception.TossPaymentsErrorCode;
+import com.quantlime.notification.domain.NotificationType;
+import com.quantlime.notification.service.FcmPushService;
 import com.quantlime.payment.domain.Payment;
 import com.quantlime.payment.repository.PaymentRepository;
 import com.quantlime.subscription.SubscriptionFixture;
@@ -38,6 +40,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
@@ -73,6 +76,9 @@ class PaymentServiceTest {
 
     @Mock
     private ValueOperations<String, String> valueOperations;
+
+    @Mock
+    private FcmPushService fcmPushService;
 
     @InjectMocks
     private PaymentService paymentService;
@@ -113,6 +119,8 @@ class PaymentServiceTest {
         assertThat(result).isEqualTo(activated);
         verify(paymentRepository).save(any(Payment.class));
         verify(redisTemplate).delete(lockKey);
+        verify(fcmPushService).sendToUser(
+            eq(userId), eq(NotificationType.PAYMENT_SUCCESS), anyString(), anyString(), eq("/subscribe"));
     }
 
     @Test
@@ -180,6 +188,7 @@ class PaymentServiceTest {
             .isInstanceOf(ExternalApiException.class);
         verify(subscriptionService, never()).activateOrResubscribe(any(), any(), any(), anyInt());
         verify(paymentRepository, never()).save(any());
+        verify(fcmPushService, never()).sendToUser(any(), any(), any(), any(), any());
         // 결제 실패로 예외가 나도 finally에서 락은 반드시 풀린다.
         verify(redisTemplate).delete(lockKey);
     }
@@ -207,7 +216,7 @@ class PaymentServiceTest {
     }
 
     @Test
-    @DisplayName("[자동 갱신 결제가 실패하면 내일로 재시도를 예약한다(3회 미만)]")
+    @DisplayName("[자동 갱신 결제가 실패하면 내일로 재시도를 예약하고 결제수단 확인을 알린다(3회 미만)]")
     void chargeRenewal_failureBelowThreshold_schedulesRetryTomorrow() {
         // given
         Subscription subscription = SubscriptionFixture.createSubscription(user, plan);
@@ -224,10 +233,12 @@ class PaymentServiceTest {
         assertThat(subscription.getRenewalFailureCount()).isEqualTo(1);
         assertThat(subscription.getStatus()).isEqualTo(SubscriptionStatus.ACTIVE);
         assertThat(subscription.getNextBillingAt()).isEqualTo(LocalDate.now().plusDays(1));
+        verify(fcmPushService).sendToUser(eq(user.getId()), eq(NotificationType.PAYMENT_FAILED),
+            anyString(), contains("내일 다시"), eq("/subscribe"));
     }
 
     @Test
-    @DisplayName("[자동 갱신 재시도를 3회 모두 소진하면 PAST_DUE로 전환한다]")
+    @DisplayName("[자동 갱신 재시도를 3회 모두 소진하면 PAST_DUE로 전환하고 일시중지를 알린다]")
     void chargeRenewal_failureAtThreshold_marksPastDue() {
         // given
         Subscription subscription = SubscriptionFixture.createSubscription(user, plan);
@@ -245,6 +256,8 @@ class PaymentServiceTest {
         // then
         assertThat(subscription.getRenewalFailureCount()).isEqualTo(3);
         assertThat(subscription.getStatus()).isEqualTo(SubscriptionStatus.PAST_DUE);
+        verify(fcmPushService).sendToUser(eq(user.getId()), eq(NotificationType.PAYMENT_FAILED),
+            anyString(), contains("일시중지"), eq("/subscribe"));
     }
 
     @Test
