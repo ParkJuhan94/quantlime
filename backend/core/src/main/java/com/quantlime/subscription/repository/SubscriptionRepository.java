@@ -27,4 +27,10 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, Long
         + "and s.status = :status and s.currentPeriodEnd < :today")
     List<Subscription> findAllExpiredWithoutAutoRenew(
         @Param("status") SubscriptionStatus status, @Param("today") LocalDate today);
+
+    // 스코어 랭킹 알림(ScoreRankingNotificationScheduler) 대상 선정용 -
+    // 스코어는 구독자 전용 기능(ScoreController)이라 알림도 구독중인
+    // 사용자만 대상으로 한다.
+    @Query("select s.user.id from Subscription s where s.status = :status")
+    List<Long> findAllUserIdsByStatus(@Param("status") SubscriptionStatus status);
 }
