@@ -144,7 +144,7 @@ export function StockDetailPage() {
                 type="button"
                 aria-label={isWatched ? '관심종목에서 삭제' : '관심종목에 추가'}
                 onClick={toggleWatch}
-                className={`shrink-0 rounded-lg border p-1.5 transition ${
+                className={`shrink-0 self-center rounded-lg border p-1.5 transition ${
                   isWatched
                     ? 'border-red-200 bg-red-50 hover:bg-red-100'
                     : 'border-gray-200 hover:bg-gray-50'
