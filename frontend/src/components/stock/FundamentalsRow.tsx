@@ -10,11 +10,10 @@ function formatRatio(value: number | null, suffix = ''): string | null {
   return `${value.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}${suffix}`
 }
 
-// 시총/PER/포워드PER/PBR/PSR/부채비율을 무채색 박스 6개(2줄×3)로 나열한다.
-// 박스 안은 라벨+값을 한 줄로 압축(2026-07-17 - 이전엔 라벨/값이 두 줄로
-// 나뉘어 있었는데, 한 줄로 합치면서 6개를 1줄에 다 넣기엔 박스가 너무
-// 좁아져 3열×2줄로 되돌림). 값이 없는 항목(네이버 비공식 API 특성상
-// 파싱 실패 가능)은 조용히 숨긴다 - 남은 항목들로 그리드를 다시 채운다.
+// 한 줄 나열(`라벨 값 · 라벨 값 · ...`)로 압축한다(frontend/CLAUDE.md
+// "부가 정보는 카드로 만들지 말 것" 컨벤션 - 예전엔 박스 6개였음, 2026-07-17
+// 이력 참고). flex-wrap이라 좁은 화면에서도 줄바꿈만 될 뿐 잘리지 않는다.
+// 값 없는 항목(네이버 비공식 API 파싱 실패 가능)은 조용히 숨긴다.
 export function FundamentalsRow({ fundamentals }: { fundamentals: StockFundamentalsResponse | undefined }) {
   if (!fundamentals) return null
 
@@ -30,15 +29,12 @@ export function FundamentalsRow({ fundamentals }: { fundamentals: StockFundament
   if (items.length === 0) return null
 
   return (
-    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-      {items.map((item) => (
-        <div
-          key={item.label}
-          className="truncate rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-xs"
-        >
-          <span className="text-gray-400">{item.label}</span>{' '}
-          <span className="font-semibold text-gray-900">{item.value}</span>
-        </div>
+    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-gray-500">
+      {items.map((item, index) => (
+        <span key={item.label} className="whitespace-nowrap">
+          {index > 0 && <span className="mr-1.5 text-gray-300">·</span>}
+          {item.label} <span className="font-semibold text-gray-900">{item.value}</span>
+        </span>
       ))}
     </div>
   )
