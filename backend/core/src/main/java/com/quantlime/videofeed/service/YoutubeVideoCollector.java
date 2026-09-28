@@ -111,8 +111,16 @@ public class YoutubeVideoCollector {
     }
 
     private CollectedVideo toCollectedVideo(PlaylistItemRef ref, YoutubeVideosResponse.Item details) {
-        Integer durationSec = details != null && details.contentDetails() != null
-            ? (int) Duration.parse(details.contentDetails().duration()).toSeconds()
+        // 라이브 방송 중이거나 예정된 프리미어처럼 아직 러닝타임이 확정되지
+        // 않은 영상은 contentDetails.duration 자체가 비어 온다(Duration.parse가
+        // null을 그대로 던지면 스트림 처리 중 예외가 터져 그 배치 전체가
+        // 실패한다 - 2026-09-28 실제 발생, 한국경제TV 채널 수집 전체가
+        // 이 한 영상 때문에 통째로 실패했음).
+        String duration = details != null && details.contentDetails() != null
+            ? details.contentDetails().duration()
+            : null;
+        Integer durationSec = duration != null && !duration.isBlank()
+            ? (int) Duration.parse(duration).toSeconds()
             : null;
         Long viewCount = details != null && details.statistics() != null && details.statistics().viewCount() != null
             ? Long.parseLong(details.statistics().viewCount())

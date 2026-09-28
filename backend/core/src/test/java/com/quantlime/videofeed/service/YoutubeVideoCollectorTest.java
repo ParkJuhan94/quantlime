@@ -64,4 +64,31 @@ class YoutubeVideoCollectorTest {
         assertThat(collected.durationSec()).isEqualTo(933);
         assertThat(collected.viewCount()).isEqualTo(1234L);
     }
+
+    @Test
+    @DisplayName("[라이브 방송 중이라 duration이 비어 온 영상도 예외 없이 durationSec=null로 수집한다]")
+    void collect_toleratesMissingDurationForLiveVideo() {
+        // given
+        Channel channel = Channel.of(Platform.YOUTUBE, "UCtest", "UUtest", "테스트 채널", 10,
+            new ChannelFilterConfig(180, 0.0, 5, List.of(), List.of()));
+
+        YoutubePlaylistItemsResponse response = new YoutubePlaylistItemsResponse(null, List.of(
+            new YoutubePlaylistItemsResponse.Item(new YoutubePlaylistItemsResponse.Snippet(
+                "라이브 방송 중", "2026-07-22T00:00:00Z",
+                new YoutubePlaylistItemsResponse.ResourceId("video-live")))
+        ));
+        given(youtubeApiClient.getPlaylistItems("UUtest", null)).willReturn(response);
+        given(youtubeApiClient.getVideos(anyList())).willReturn(new YoutubeVideosResponse(List.of(
+            new YoutubeVideosResponse.Item("video-live",
+                new YoutubeVideosResponse.ContentDetails(null),
+                new YoutubeVideosResponse.Statistics("1234"))
+        )));
+
+        // when
+        List<CollectedVideo> result = youtubeVideoCollector.collect(channel);
+
+        // then
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).durationSec()).isNull();
+    }
 }
