@@ -1,5 +1,13 @@
 dependencies {
     implementation project(':common')
+    // HttpClientFactorySupport/ExternalApiInvoker/ExternalApiException은
+    // 2026-09-28부로 client-support 모듈로 분리됐다(패키지명은 그대로
+    // com.quantlime.common.*이라 이 모듈의 다른 파일들은 import 변경이
+    // 필요 없다 - common 모듈의 ErrorCode와 동일한 split-package 패턴)
+    implementation project(':client-support')
+    // 토스페이먼츠(결제) 연동 - 2026-09-28 별도 모듈로 분리(패키지명은
+    // com.quantlime.infra.tosspayments.*로 동일하게 유지)
+    implementation project(':tosspayments')
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
