@@ -5,7 +5,7 @@ import com.quantlime.market.cache.BitcoinChartCache;
 import com.quantlime.market.cache.ExchangeRateChartCache;
 import com.quantlime.market.cache.DomesticIndexMinuteChartCache;
 import com.quantlime.market.cache.MarketIndexCache;
-import com.quantlime.market.cache.DomesticMarketRankingCache;
+import com.quantlime.market.cache.MarketRankingCache;
 import com.quantlime.market.cache.TossMarketRankingCache;
 import com.quantlime.market.cache.OverseasIndexChartCache;
 import com.quantlime.market.domain.BenchmarkIndex;
@@ -35,17 +35,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * MarketIndexCache/DomesticMarketRankingCache/TossMarketRankingCache/DomesticIndexChartCache는
+ * MarketIndexCache/MarketRankingCache/TossMarketRankingCache/DomesticIndexChartCache는
  * 짧은 TTL을 가진 상태 저장 빈이라(같은 스프링 컨텍스트를 공유하는 다른
  * 테스트가 채워둔 값이 남아있을 수 있음) 직접 목으로 대체한다 -
  * PriceControllerTest가 PriceCacheStore를 목으로 대체하는 것과 동일한
  * 이유. 캐시 자체의 갱신/TTL 로직은
- * MarketIndexCacheTest/DomesticMarketRankingCacheTest/TossMarketRankingCacheTest에서
+ * MarketIndexCacheTest/MarketRankingCacheTest/TossMarketRankingCacheTest에서
  * 이미 검증한다.
  *
  * <p>랭킹 조회는 두 경로로 갈린다(MarketRankingService 참고): 관심종목만
- * 보기+등락률 정렬은 국내는 {@code domesticMarketRankingCache}, 해외는 자체 계산
- * (여기선 시세 캐시 미스 처리만 검증), 그 외는 전부
+ * 보기+등락률 정렬은 국내/해외 둘 다 {@code MarketRankingCache}(2026-09-25부로
+ * 통일 - 이 파일은 국내 시나리오만 다루고, 국내/해외 라우팅 자체는
+ * MarketRankingServiceTest에서 이미 검증한다), 그 외는 전부
  * {@code tossMarketRankingCache}.
  */
 @Tag("integration")
@@ -54,8 +55,10 @@ class MarketControllerTest extends ApiTestSupport {
     @MockBean
     private MarketIndexCache marketIndexCache;
 
-    @MockBean
-    private DomesticMarketRankingCache domesticMarketRankingCache;
+    // MarketRankingCache가 국내/해외 두 Bean으로 등록돼 있어(같은 타입) 타입만으로는
+    // 어느 걸 대체할지 모호하다 - name으로 명시(2026-09-25).
+    @MockBean(name = "domesticMarketRankingCache")
+    private MarketRankingCache domesticMarketRankingCache;
 
     @MockBean
     private TossMarketRankingCache tossMarketRankingCache;

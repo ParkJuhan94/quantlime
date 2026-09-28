@@ -11,6 +11,7 @@ import java.util.Objects;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -41,14 +42,26 @@ import org.springframework.stereotype.Component;
 public class DomesticMarketCalendarCache {
 
     private static final long FAILURE_BACKOFF_SECONDS = 3;
+    private static final String SYNTHETIC_MODE = "synthetic";
 
     private final TossApiClient tossApiClient;
+
+    // 로컬 scale-out 검증 전용(SyntheticPriceFeedScheduler 참고,
+    // 2026-09-25) - price-feed.mode=synthetic이면 Toss 장 운영 캘린더를
+    // 아예 호출하지 않고 항상 "장중"으로 취급한다. 실제 Toss 데이터를 받는
+    // 기본 경로(price-feed.mode=toss, 미지정 시 기본값)는 이 필드가
+    // 아무 영향을 주지 않는다.
+    @Value("${price-feed.mode:toss}")
+    private String priceFeedMode;
 
     private volatile LocalDate cachedDate = LocalDate.MIN;
     private volatile List<TossMarketCalendarResponse.MarketSession> tradingSessions = List.of();
     private volatile Instant retryNotBefore = Instant.MIN;
 
     public boolean isMarketOpenNow() {
+        if (SYNTHETIC_MODE.equals(priceFeedMode)) {
+            return true;
+        }
         LocalDate today = LocalDate.now();
         if (!cachedDate.equals(today)) {
             refresh(today);

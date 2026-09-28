@@ -1,55 +1,54 @@
 package com.quantlime.market.service;
 
-import com.quantlime.market.cache.DomesticMarketRankingCache;
+import com.quantlime.market.cache.MarketRankingCache;
 import com.quantlime.market.cache.TossMarketRankingCache;
 import com.quantlime.market.dto.response.MarketRankingResponse;
-import com.quantlime.price.cache.PreviousCloseCache;
-import com.quantlime.price.cache.PriceCacheStore;
-import com.quantlime.price.dto.response.PriceSnapshot;
-import com.quantlime.stock.domain.ListingStatus;
-import com.quantlime.stock.domain.MarketType;
-import com.quantlime.stock.domain.Stock;
-import com.quantlime.stock.repository.StockRepository;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+// 국내/해외 둘 다 MarketRankingCache로 통일된 뒤(2026-09-25) 이 서비스는
+// "어느 캐시로 라우팅하는가"만 남았다 - 실제 랭킹 계산(Stock 조회/등락률
+// 산출)은 DomesticMarketPriceSweepScheduler(국내)/
+// OverseasWatchlistPriceScheduler(해외)로 옮겨갔다.
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
 class MarketRankingServiceTest {
 
     @Mock
-    private DomesticMarketRankingCache domesticMarketRankingCache;
+    private MarketRankingCache domesticMarketRankingCache;
+
+    @Mock
+    private MarketRankingCache overseasMarketRankingCache;
 
     @Mock
     private TossMarketRankingCache tossMarketRankingCache;
 
-    @Mock
-    private StockRepository stockRepository;
-
-    @Mock
-    private PriceCacheStore priceCacheStore;
-
-    @Mock
-    private PreviousCloseCache overseasPreviousCloseCache;
-
-    @InjectMocks
     private MarketRankingService marketRankingService;
+
+    // domesticMarketRankingCache/overseasMarketRankingCache가 정확히 같은
+    // 타입(MarketRankingCache)이라 @InjectMocks의 리플렉션 기반 생성자
+    // 매칭이 파라미터 이름을 보고 안전하게 구분한다는 보장이 없다(실제로
+    // 두 목이 뒤바뀌어 주입되는 걸 확인함) - 생성자를 직접 호출해 어떤 목이
+    // 어느 자리에 들어가는지 명시적으로 고정한다.
+    @BeforeEach
+    void setUp() {
+        marketRankingService =
+            new MarketRankingService(domesticMarketRankingCache, overseasMarketRankingCache, tossMarketRankingCache);
+    }
 
     @Test
     @DisplayName("[관심종목만 보기가 아니면 국내/해외 모두 Toss 랭킹 캐시를 쓴다]")
@@ -67,8 +66,8 @@ class MarketRankingServiceTest {
     }
 
     @Test
-    @DisplayName("[국내 + 관심종목만 보기 + gainers는 기존 자체 계산 캐시를 쓴다]")
-    void getRanking_domesticWatchlistOnlyGainers_usesMarketRankingCache() {
+    @DisplayName("[국내 + 관심종목만 보기 + gainers는 domesticMarketRankingCache를 쓴다]")
+    void getRanking_domesticWatchlistOnlyGainers_usesDomesticCache() {
         // given
         Set<String> watchlistCodes = Set.of("005930");
         given(domesticMarketRankingCache.getGainers(10, watchlistCodes)).willReturn(
@@ -81,11 +80,12 @@ class MarketRankingServiceTest {
         // then
         assertThat(result).extracting(MarketRankingResponse::stockCode).containsExactly("005930");
         verify(tossMarketRankingCache, never()).get(any(), any());
+        verify(overseasMarketRankingCache, never()).getGainers(anyInt(), any());
     }
 
     @Test
-    @DisplayName("[국내 + 관심종목만 보기 + losers는 기존 자체 계산 캐시(losers)를 쓴다]")
-    void getRanking_domesticWatchlistOnlyLosers_usesMarketRankingCacheLosers() {
+    @DisplayName("[국내 + 관심종목만 보기 + losers는 domesticMarketRankingCache의 losers를 쓴다]")
+    void getRanking_domesticWatchlistOnlyLosers_usesDomesticCacheLosers() {
         // given
         Set<String> watchlistCodes = Set.of("035420");
         given(domesticMarketRankingCache.getLosers(10, watchlistCodes)).willReturn(
@@ -97,6 +97,23 @@ class MarketRankingServiceTest {
 
         // then
         assertThat(result).extracting(MarketRankingResponse::stockCode).containsExactly("035420");
+    }
+
+    @Test
+    @DisplayName("[해외 + 관심종목만 보기 + gainers는 overseasMarketRankingCache를 쓴다]")
+    void getRanking_overseasWatchlistOnlyGainers_usesOverseasCache() {
+        // given
+        Set<String> watchlistCodes = Set.of("AAPL");
+        given(overseasMarketRankingCache.getGainers(10, watchlistCodes)).willReturn(
+            List.of(ranking("AAPL", 1.5)));
+
+        // when
+        List<MarketRankingResponse> result =
+            marketRankingService.getRanking("overseas", "gainers", 10, watchlistCodes);
+
+        // then
+        assertThat(result).extracting(MarketRankingResponse::stockCode).containsExactly("AAPL");
+        verify(domesticMarketRankingCache, never()).getGainers(anyInt(), any());
     }
 
     @Test
@@ -115,53 +132,8 @@ class MarketRankingServiceTest {
         assertThat(result).extracting(MarketRankingResponse::stockCode).containsExactly("005930");
     }
 
-    @Test
-    @DisplayName("[해외 + 관심종목만 보기 + gainers는 캐시된 시세로 자체 계산해 등락률 내림차순 정렬한다]")
-    void getRanking_overseasWatchlistOnlyGainers_computesFromPriceCacheDescending() {
-        // given
-        Set<String> watchlistCodes = Set.of("AAPL", "MSFT");
-        Stock aapl = overseasStock("AAPL", "Apple");
-        Stock msft = overseasStock("MSFT", "Microsoft");
-        given(stockRepository.findByStockCodeIn(anyList())).willReturn(List.of(aapl, msft));
-        given(overseasPreviousCloseCache.get(anyList())).willReturn(
-            Map.of("AAPL", 340.0, "MSFT", 400.0));
-        given(priceCacheStore.findAll(anyList())).willReturn(Map.of(
-            "AAPL", new PriceSnapshot("AAPL", 341.43, null, "t"),
-            "MSFT", new PriceSnapshot("MSFT", 397.0, null, "t"))); // MSFT는 하락
-
-        // when
-        List<MarketRankingResponse> result =
-            marketRankingService.getRanking("overseas", "gainers", 10, watchlistCodes);
-
-        // then: AAPL은 상승(+), MSFT는 하락(-) - 상승 먼저
-        assertThat(result).extracting(MarketRankingResponse::stockCode).containsExactly("AAPL", "MSFT");
-        assertThat(result.get(0).currency()).isEqualTo("USD");
-    }
-
-    @Test
-    @DisplayName("[해외 관심종목 중 시세 캐시가 없는 종목(스케줄러 미도달/장마감)은 결과에서 제외한다]")
-    void getRanking_overseasWatchlistOnly_excludesCacheMiss() {
-        // given
-        Set<String> watchlistCodes = Set.of("AAPL");
-        Stock aapl = overseasStock("AAPL", "Apple");
-        given(stockRepository.findByStockCodeIn(anyList())).willReturn(List.of(aapl));
-        given(overseasPreviousCloseCache.get(anyList())).willReturn(Map.of("AAPL", 340.0));
-        given(priceCacheStore.findAll(anyList())).willReturn(Map.of());
-
-        // when
-        List<MarketRankingResponse> result =
-            marketRankingService.getRanking("overseas", "gainers", 10, watchlistCodes);
-
-        // then
-        assertThat(result).isEmpty();
-    }
-
     private MarketRankingResponse ranking(String stockCode, double changeRate) {
         return new MarketRankingResponse(stockCode, stockCode + "-name", "전기전자",
             10000.0, changeRate, "KRW", null, null, null, true);
-    }
-
-    private Stock overseasStock(String stockCode, String stockName) {
-        return Stock.of(stockCode, stockName, MarketType.NASDAQ, ListingStatus.LISTED, null);
     }
 }

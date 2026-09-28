@@ -38,6 +38,25 @@ public class RedisLockService {
             + "else return 0 end",
         Long.class);
 
+    // "없으면 내가 잡는다, 이미 내가 잡고 있으면 TTL만 연장한다, 남이
+    // 잡고 있으면 실패" 를 원자적으로 처리 - runExclusively(잡고 즉시 실행
+    // 후 바로 해제)와 달리, 이건 호출자가 계속 살아있는 동안 리더 지위를
+    // "유지"하는 용도(2026-09-25, PriceRelayLeaderGate 참고). 매 틱마다
+    // 이 메서드만 부르면 되고, 별도 release는 없다 - 리더가 죽으면(재기동/
+    // 크래시) TTL 만료로 자연히 다음 틱에 다른 인스턴스가 이어받는다.
+    private static final DefaultRedisScript<Long> ACQUIRE_OR_RENEW_SCRIPT = new DefaultRedisScript<>(
+        "local current = redis.call('get', KEYS[1]) "
+            + "if current == false then "
+            + "  redis.call('set', KEYS[1], ARGV[1], 'PX', ARGV[2]) "
+            + "  return 1 "
+            + "elseif current == ARGV[1] then "
+            + "  redis.call('pexpire', KEYS[1], ARGV[2]) "
+            + "  return 1 "
+            + "else "
+            + "  return 0 "
+            + "end",
+        Long.class);
+
     private final StringRedisTemplate redisTemplate;
 
     /**
@@ -65,5 +84,19 @@ public class RedisLockService {
 
     private void releaseIfOwned(String key, String token) {
         redisTemplate.execute(RELEASE_SCRIPT, List.of(key), token);
+    }
+
+    /**
+     * key에 대한 리더 지위를 "획득 또는 연장"한다. token이 고정값(호출자가
+     * 매번 같은 값을 넘김)이라는 게 {@link #runExclusively}와의 핵심
+     * 차이 - 매 호출이 새 UUID를 발급하는 runExclusively와 달리, 이
+     * 메서드는 "나(=token)"라는 정체성이 호출 간에 유지돼야 "내가 이미
+     * 잡고 있으니 연장"을 Redis가 판별할 수 있다. 호출자는 보통 JVM
+     * 기동 시 한 번 발급한 고정 token을 계속 재사용한다.
+     */
+    public boolean tryAcquireOrRenew(String key, Duration ttl, String token) {
+        Long result = redisTemplate.execute(
+            ACQUIRE_OR_RENEW_SCRIPT, List.of(key), token, String.valueOf(ttl.toMillis()));
+        return result != null && result == 1L;
     }
 }

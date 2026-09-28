@@ -30,7 +30,9 @@ const client = new Client({
 })
 
 function subscribeStomp(stockCode: string, entry: TopicEntry): StompSubscription {
-  return client.subscribe(`/topic/price/${stockCode}`, (frame: IMessage) => {
+  // 점(.) 구분자 - RabbitMQ STOMP relay는 /topic/<name>의 name에 슬래시가
+  // 있으면 거부한다(백엔드 PRICE_TOPIC_PREFIX 주석 참고, 2026-09-25).
+  return client.subscribe(`/topic/price.${stockCode}`, (frame: IMessage) => {
     const message = JSON.parse(frame.body) as PriceBroadcastMessage
     entry.listeners.forEach((listener) => listener(message))
   })

@@ -323,8 +323,37 @@ python-engine:
 realtime-price:
   poll-interval-ms: ${REALTIME_PRICE_POLL_INTERVAL_MS:3000}
 
+# 시세 소스 - 기본 toss(실제 Toss 폴링). synthetic은 로컬 scale-out
+# 검증(docker-compose.scaleout.yml) 전용 - Toss 대신 랜덤워크 시세를
+# 주입하고 장중 게이트도 우회한다(SyntheticPriceFeedScheduler,
+# DomesticMarketCalendarCache/OverseasMarketCalendarCache 참고,
+# feat/realtime-fanout-scaleout, 2026-09-25). 운영/평소 로컬 개발은
+# 이 키 자체를 건드리지 않아 기본값 그대로.
+price-feed:
+  mode: ${PRICE_FEED_MODE:toss}
+
 market-ranking:
   poll-interval-ms: ${MARKET_RANKING_POLL_INTERVAL_MS:100}
+
+# 실시간 시세 WebSocket 브로커 - 기본은 in-memory SimpleBroker(단일
+# 인스턴스 전제). backend를 2대 이상으로 스케일아웃하는 환경(로컬
+# docker-compose.scaleout.yml, 향후 운영 이중화)에서만 true로 켜
+# RabbitMQ STOMP relay로 전환한다(WebSocketConfig 참고,
+# docs/00-sre/SRE.md §5 - feat/realtime-fanout-scaleout, 2026-09-25).
+websocket:
+  broker:
+    relay-enabled: ${WEBSOCKET_BROKER_RELAY_ENABLED:false}
+
+# relay-enabled=true일 때만 쓰인다. rabbitmq_stomp 플러그인(TCP,
+# 기본 61613) 대상 - 브라우저가 붙는 rabbitmq_web_stomp이 아니라,
+# 이 서버가 브로커에 붙는 일반 STOMP다.
+rabbitmq-stomp:
+  host: ${RABBITMQ_STOMP_HOST:localhost}
+  port: ${RABBITMQ_STOMP_PORT:61613}
+  client-login: ${RABBITMQ_STOMP_CLIENT_LOGIN:guest}
+  client-passcode: ${RABBITMQ_STOMP_CLIENT_PASSCODE:guest}
+  system-login: ${RABBITMQ_STOMP_SYSTEM_LOGIN:guest}
+  system-passcode: ${RABBITMQ_STOMP_SYSTEM_PASSCODE:guest}
 
 # 스코어 랭킹의 유동성/거래정지 필터 임계값(StockLiquidityService 참고,
 # 2026-09 잡주 상위 독식 감사 세션) - 재배포 없이 조정할 수 있게 환경변수로

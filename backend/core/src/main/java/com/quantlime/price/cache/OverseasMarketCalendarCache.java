@@ -11,6 +11,7 @@ import java.util.Objects;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -36,14 +37,23 @@ import org.springframework.stereotype.Component;
 public class OverseasMarketCalendarCache {
 
     private static final long FAILURE_BACKOFF_SECONDS = 3;
+    private static final String SYNTHETIC_MODE = "synthetic";
 
     private final TossApiClient tossApiClient;
+
+    // DomesticMarketCalendarCache의 동일 필드 주석 참고(로컬 scale-out
+    // 검증 전용, 2026-09-25).
+    @Value("${price-feed.mode:toss}")
+    private String priceFeedMode;
 
     private volatile LocalDate cachedDate = LocalDate.MIN;
     private volatile List<TossMarketCalendarResponse.MarketSession> regularMarketSessions = List.of();
     private volatile Instant retryNotBefore = Instant.MIN;
 
     public boolean isMarketOpenNow() {
+        if (SYNTHETIC_MODE.equals(priceFeedMode)) {
+            return true;
+        }
         LocalDate today = LocalDate.now();
         if (!cachedDate.equals(today)) {
             refresh(today);

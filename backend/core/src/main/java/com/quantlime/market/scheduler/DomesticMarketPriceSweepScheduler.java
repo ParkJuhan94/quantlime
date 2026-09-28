@@ -1,11 +1,12 @@
 package com.quantlime.market.scheduler;
 
 import com.quantlime.common.exception.ExternalApiException;
+import com.quantlime.common.lock.PriceRelayLeaderGate;
 import com.quantlime.common.util.SafeExecutor;
 import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.toss.dto.TossPriceResponse;
 import com.quantlime.market.cache.DomesticListedStockCache;
-import com.quantlime.market.cache.DomesticMarketRankingCache;
+import com.quantlime.market.cache.MarketRankingCache;
 import com.quantlime.market.dto.response.MarketRankingResponse;
 import com.quantlime.price.cache.DomesticMarketCalendarCache;
 import com.quantlime.price.cache.PreviousCloseCache;
@@ -24,6 +25,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -55,8 +57,12 @@ import org.springframework.util.StringUtils;
  * 건너뛴다 - 다음 틱에 다시 시도되므로 일부 종목의 순위/시세가 한 틱만큼
  * 지연되는 정도로 그친다.
  */
+// 로컬 scale-out 검증(SyntheticPriceFeedScheduler, price-feed.mode=synthetic)
+// 에서는 이 클래스 전체를 끈다 - Toss를 호출하지 않고 합성 시세로
+// 대체하기 위함(2026-09-25). 기본값(미지정)은 기존 그대로 Toss를 호출.
 @Slf4j
 @Component
+@ConditionalOnProperty(name = "price-feed.mode", havingValue = "toss", matchIfMissing = true)
 @RequiredArgsConstructor
 public class DomesticMarketPriceSweepScheduler {
 
@@ -75,17 +81,30 @@ public class DomesticMarketPriceSweepScheduler {
     // 고른다(By-Name 디스앰비규에이션 - MarketDataRefreshTaskExecutorConfig와
     // 동일 관례). 이 스케줄러는 국내 전용이라 domestic 쪽만 주입받는다.
     private final PreviousCloseCache domesticPreviousCloseCache;
-    private final DomesticMarketRankingCache domesticMarketRankingCache;
+    // 필드명이 MarketRankingCacheConfig의 @Bean 메서드명(domesticMarketRankingCache)과
+    // 일치해야 Spring이 같은 타입(MarketRankingCache)의 두 Bean 중 이걸
+    // 고른다(By-Name 디스앰비규에이션 - PreviousCloseCache 필드와 동일 관례).
+    private final MarketRankingCache domesticMarketRankingCache;
     private final TossApiClient tossApiClient;
     private final PriceCacheStore priceCacheStore;
     private final MeterRegistry meterRegistry;
+    private final PriceRelayLeaderGate priceRelayLeaderGate;
 
     // 전용 풀(SchedulerConfig.priceSweepTaskScheduler)에서 실행 - 공용
     // 스케줄러 풀과 분리해 초당 여러 번 도는 이 틱이 cron 배치들을 뒤로
     // 밀어내지 않게 한다(2026-08-17).
+    //
+    // 리더 인스턴스에서만 돈다(2026-09-25, PriceRelayLeaderGate 참고) -
+    // 그 전엔 인스턴스마다 각자 Toss를 호출해 인스턴스 수만큼 호출량이
+    // 늘고(docs/00-sre/SRE.md §5-2 #4), 랭킹 캐시가 당시 JVM 로컬
+    // 메모리뿐이라 follower 인스턴스에서는 항상 비어 있는 문제가 있었다
+    // (그 캐시 자체도 같은 세션에 Redis로 옮겼다 - MarketRankingCache 참고).
     @Scheduled(fixedDelayString = "${market-ranking.poll-interval-ms:100}",
         scheduler = "priceSweepTaskScheduler")
     public void refreshRanking() {
+        if (!priceRelayLeaderGate.isLeader()) {
+            return;
+        }
         SafeExecutor.runSafely("전종목 시세/랭킹 갱신", this::refreshOnce);
     }
 
@@ -203,7 +222,7 @@ public class DomesticMarketPriceSweepScheduler {
             return new CachedPrice(snapshot, null);
         }
         // 거래량/거래대금/통화는 이 자체 계산 경로(국내 관심종목만 보기 전용,
-        // DomesticMarketRankingCache)에서 다루지 않는 값이라 null - Toss `prices`가
+        // MarketRankingCache)에서 다루지 않는 값이라 null - Toss `prices`가
         // 애초에 거래량을 안 주고(PriceSnapshot 주석 참고), 통화는 국내
         // 전용 경로라 항상 KRW이므로 프론트에서 굳이 표시할 필요가 없다.
         MarketRankingResponse ranking = new MarketRankingResponse(stock.getStockCode(), stock.getStockName(),
