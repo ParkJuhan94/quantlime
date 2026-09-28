@@ -165,6 +165,13 @@ resilience4j:
         base-config: default
       naver-finance:
         base-config: default
+      # 사용자 피드백 알림과 Kafka DLT 운영 알림이 같은 인스턴스를 공유한다 -
+      # 두 웹훅 다 같은 Slack 인프라라 장애 시 같이 죽는 게 자연스럽고,
+      # 굳이 나눌 실익이 없다. 오히려 실제 시스템 장애(DLT 폭주) 중에 Slack
+      # 자체가 느려지면 운영 알림 호출이 쌓여 컨슈머 스레드를 붙드는 걸
+      # 막는 게 이 인스턴스의 존재 이유.
+      slack:
+        base-config: default
   bulkhead:
     configs:
       default:
@@ -194,6 +201,8 @@ resilience4j:
       naver-finance:
         base-config: default
         max-concurrent-calls: 5
+      slack:
+        base-config: default
   # 요약 생성(2026-09-14) - Gemini 무료 티어 분당 한도(RPM=15, gemini-3.5-flash-lite
   # 실측)에 여유를 둔 값. 이 인스턴스도 PythonEngineClient.summarize() 하나에 걸려
   # 있어 유튜브/텔레그램 두 경로가 함께 보호받는다(위 quant-engine-summarize
