@@ -91,6 +91,12 @@ export function TelegramFeedCard({ digest }: { digest: TelegramFeedDigest }) {
                     </ul>
                   </div>
                 )}
+                {detailQuery.data.caveat && (
+                  <div className="mt-3">
+                    <p className="text-xs font-medium text-gray-500">유의사항</p>
+                    <p className="mt-1 text-xs text-gray-400">{detailQuery.data.caveat}</p>
+                  </div>
+                )}
                 {detailQuery.data.sourcePostUrls.length > 0 && (
                   <div className="mt-3">
                     <p className="text-xs font-medium text-gray-500">원문 보기</p>

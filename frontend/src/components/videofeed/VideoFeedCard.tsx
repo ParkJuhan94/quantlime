@@ -100,6 +100,12 @@ export function VideoFeedCard({ video }: { video: VideoFeedItem }) {
                     </ul>
                   </div>
                 )}
+                {detailQuery.data.caveat && (
+                  <div className="mt-3">
+                    <p className="text-xs font-medium text-gray-500">유의사항</p>
+                    <p className="mt-1 text-xs text-gray-400">{detailQuery.data.caveat}</p>
+                  </div>
+                )}
                 {video.videoUrl && (
                   <div className="mt-3">
                     <p className="text-xs font-medium text-gray-500">원문 보기</p>
