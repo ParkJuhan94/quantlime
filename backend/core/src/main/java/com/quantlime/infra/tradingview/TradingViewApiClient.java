@@ -3,6 +3,8 @@ package com.quantlime.infra.tradingview;
 import com.quantlime.common.util.ExternalApiInvoker;
 import com.quantlime.infra.tradingview.dto.TradingViewSymbolResponse;
 import com.quantlime.infra.tradingview.exception.TradingViewApiErrorCode;
+import io.github.resilience4j.bulkhead.annotation.Bulkhead;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -14,6 +16,12 @@ import org.springframework.web.client.RestClient;
  * 판단 - StockMapper, NaverFinanceApiClient 참고). 인베스팅닷컴은 Cloudflare
  * 봇 차단이 걸려 있어 서버 간 호출 자체가 불가능함을 확인, 대안으로
  * TradingView를 채택했다.
+ *
+ * <p>진입점에 {@code @CircuitBreaker}/{@code @Bulkhead}("tradingview" 인스턴스)
+ * 적용(2026-09-24) - naver-finance/upbit와 동일한 패턴. 별도 폴백 메서드는
+ * 두지 않는다 - 유일한 호출측인 MarketIndexCache가 이미 모든 예외를
+ * {@code catch (Exception e)}로 넓게 잡아 이전 캐시값으로 stale-serve하므로,
+ * 서킷 open 시 던져지는 CallNotPermittedException도 그대로 흡수된다.
  */
 @Component
 @RequiredArgsConstructor
@@ -21,6 +29,8 @@ public class TradingViewApiClient {
 
     private final RestClient tradingViewRestClient;
 
+    @CircuitBreaker(name = "tradingview")
+    @Bulkhead(name = "tradingview")
     public TradingViewSymbolResponse getSymbolQuote(String symbol) {
         return ExternalApiInvoker.call(
             TradingViewApiErrorCode.SYMBOL_QUOTE_INQUIRY_FAILED,

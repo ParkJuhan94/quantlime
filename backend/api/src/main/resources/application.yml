@@ -165,12 +165,29 @@ resilience4j:
         base-config: default
       naver-finance:
         base-config: default
+      # 2026-09-24 서킷브레이커 확장 검토 - 결제(tosspayments)는 §결제 도메인
+      # 정합성(멱등성 키 부재·웹훅 미처리 등, SRE.md 부록 B)이 먼저 해결돼야
+      # CB를 얹는 의미가 있어 이번 범위에서 제외. dart/kis/youtube/telegram/
+      # sync는 전부 배치 전용·저빈도라 SafeExecutor로 이미 충분히 격리돼 있고
+      # 실제 장애 사례도 없어 보류. 아래 5개만 추가한다.
+      oauth-google:
+        base-config: default
+      oauth-kakao:
+        base-config: default
+      # 구글/카카오/네이버가 RestClient 빈 하나(oAuthRestClient)를 공유하지만
+      # 인스턴스는 프로바이더별로 분리한다 - 공유 인스턴스 하나였다면 카카오
+      # OAuth 서버 장애 하나가 서킷을 열어 구글/네이버 로그인까지 막는
+      # 교차 영향이 생긴다.
+      oauth-naver:
+        base-config: default
       # 사용자 피드백 알림과 Kafka DLT 운영 알림이 같은 인스턴스를 공유한다 -
       # 두 웹훅 다 같은 Slack 인프라라 장애 시 같이 죽는 게 자연스럽고,
       # 굳이 나눌 실익이 없다. 오히려 실제 시스템 장애(DLT 폭주) 중에 Slack
       # 자체가 느려지면 운영 알림 호출이 쌓여 컨슈머 스레드를 붙드는 걸
       # 막는 게 이 인스턴스의 존재 이유.
       slack:
+        base-config: default
+      tradingview:
         base-config: default
   bulkhead:
     configs:
@@ -201,7 +218,15 @@ resilience4j:
       naver-finance:
         base-config: default
         max-concurrent-calls: 5
+      oauth-google:
+        base-config: default
+      oauth-kakao:
+        base-config: default
+      oauth-naver:
+        base-config: default
       slack:
+        base-config: default
+      tradingview:
         base-config: default
   # 요약 생성(2026-09-14) - Gemini 무료 티어 분당 한도(RPM=15, gemini-3.5-flash-lite
   # 실측)에 여유를 둔 값. 이 인스턴스도 PythonEngineClient.summarize() 하나에 걸려
