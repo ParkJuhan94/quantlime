@@ -3,8 +3,13 @@ package com.quantlime.market.service;
 import com.quantlime.market.cache.MarketRankingCache;
 import com.quantlime.market.cache.TossMarketRankingCache;
 import com.quantlime.market.dto.response.MarketRankingResponse;
+import com.quantlime.score.domain.Score;
+import com.quantlime.score.repository.ScoreRepository;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -40,18 +45,19 @@ public class MarketRankingService {
     private final MarketRankingCache domesticMarketRankingCache;
     private final MarketRankingCache overseasMarketRankingCache;
     private final TossMarketRankingCache tossMarketRankingCache;
+    private final ScoreRepository scoreRepository;
 
     public List<MarketRankingResponse> getRanking(String scope, String sort, int limit, Set<String> watchlistCodes) {
         boolean isGainersOrLosers = SORT_GAINERS.equals(sort) || SORT_LOSERS.equals(sort);
         if (watchlistCodes != null && isGainersOrLosers) {
-            return watchlistRanking(scope, sort, limit, watchlistCodes);
+            return enrichWithScore(watchlistRanking(scope, sort, limit, watchlistCodes));
         }
 
         List<MarketRankingResponse> ranked = tossMarketRankingCache.get(scope, sort);
         if (watchlistCodes != null) {
             ranked = ranked.stream().filter(item -> watchlistCodes.contains(item.stockCode())).toList();
         }
-        return ranked.stream().limit(limit).toList();
+        return enrichWithScore(ranked.stream().limit(limit).toList());
     }
 
     private List<MarketRankingResponse> watchlistRanking(
@@ -60,5 +66,39 @@ public class MarketRankingService {
         return SORT_LOSERS.equals(sort)
             ? cache.getLosers(limit, watchlistCodes)
             : cache.getGainers(limit, watchlistCodes);
+    }
+
+    /**
+     * 이미 상위 N개로 제한된 최종 결과에만 스코어를 조인한다 - 호출부가
+     * (Toss 랭킹 캐시/관심종목 자체계산 캐시) 어느 경로로 만들어졌든 이
+     * 한 곳에서만 스코어 DB를 조회한다. 스코어는 하루 2회만 갱신되는
+     * 배치 데이터라 MarketRankingCache의 1초 로컬 TTL/100ms 스윕 안에서
+     * 매번 재조회하면 낭비이므로 응답 직전에만 수행한다(MarketRankingResponse
+     * 주석 참고). 구독 여부는 판별하지 않는다 - `/api/market/**`는 이미
+     * 전체 공개 엔드포인트이고, 이 탭들의 스코어는 구독자 전용 기능
+     * (스코어 탭, `/api/dashboard/scores`)과 별개로 모두에게 노출하기로
+     * 결정했다(2026-09-24).
+     */
+    private List<MarketRankingResponse> enrichWithScore(List<MarketRankingResponse> rows) {
+        if (rows.isEmpty()) {
+            return rows;
+        }
+        List<String> codes = rows.stream().map(MarketRankingResponse::stockCode).toList();
+        Map<String, Score> scoreByCode = scoreRepository
+            .findLatestScoresByStockCodesOrderByCompositeScoreDesc(codes)
+            .stream()
+            .collect(Collectors.toMap(Score::getStockCode, Function.identity(), (a, b) -> a));
+
+        return rows.stream().map(row -> withScore(row, scoreByCode.get(row.stockCode()))).toList();
+    }
+
+    private MarketRankingResponse withScore(MarketRankingResponse row, Score score) {
+        if (score == null) {
+            return row;
+        }
+        return new MarketRankingResponse(row.stockCode(), row.stockName(), row.sector(), row.currentPrice(),
+            row.changeRate(), row.currency(), row.tradingVolume(), row.tradingAmount(), row.logoUrl(),
+            row.detailAvailable(), score.getCompositeScore(), score.getCompositePercentile(),
+            score.getGrade() != null ? score.getGrade().getLabel() : null);
     }
 }
