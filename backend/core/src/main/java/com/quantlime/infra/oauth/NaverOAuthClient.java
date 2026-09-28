@@ -6,6 +6,8 @@ import com.quantlime.infra.oauth.dto.NaverTokenResponse;
 import com.quantlime.infra.oauth.dto.NaverUserInfoResponse;
 import com.quantlime.infra.oauth.dto.OAuthUserInfo;
 import com.quantlime.user.domain.OAuthProvider;
+import io.github.resilience4j.bulkhead.annotation.Bulkhead;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -14,6 +16,11 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 
+/**
+ * {@code fetch}에 {@code @CircuitBreaker}/{@code @Bulkhead}("oauth-naver" 인스턴스)
+ * 적용(2026-09-24) - 프로바이더별 분리 이유는 {@link GoogleOAuthClient} 클래스
+ * 주석 참고.
+ */
 @Component
 @RequiredArgsConstructor
 public class NaverOAuthClient implements OAuthClient {
@@ -29,6 +36,8 @@ public class NaverOAuthClient implements OAuthClient {
     }
 
     @Override
+    @CircuitBreaker(name = "oauth-naver", fallbackMethod = "fetchFallback")
+    @Bulkhead(name = "oauth-naver")
     public OAuthUserInfo fetch(String code, String redirectUri) {
         try {
             OAuthProperties.Provider naver = properties.getNaver();
@@ -71,5 +80,15 @@ public class NaverOAuthClient implements OAuthClient {
         } catch (Exception e) {
             throw new ExternalApiException(AuthErrorCode.OAUTH_USERINFO_FAILED, e);
         }
+    }
+
+    // GoogleOAuthClient.fetchFallback와 동일한 이유 - 서킷 open 시 위 try/catch를
+    // 건너뛰고 곧장 CallNotPermittedException이 던져지므로 여기서 통일한다.
+    @SuppressWarnings("unused")
+    private OAuthUserInfo fetchFallback(String code, String redirectUri, Throwable t) {
+        if (t instanceof ExternalApiException e) {
+            throw e;
+        }
+        throw new ExternalApiException(AuthErrorCode.OAUTH_USERINFO_FAILED, t);
     }
 }
