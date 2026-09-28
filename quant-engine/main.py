@@ -10,6 +10,9 @@ AI 코멘트 생성(calculator/commentary.py)은 날짜별 스코어 이력 도�
 
 from __future__ import annotations
 
+import logging
+import os
+
 import pandas as pd
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -49,6 +52,16 @@ from summary.generator import generate_summary
 from transcript.fetcher import fetch_transcript
 
 load_dotenv()
+
+# 2026-09-27 - GEMINI_API_KEY 누락이 기동 시점엔 드러나지 않고 첫 /summarize
+# 호출에서야 500으로 조용히 실패해, 몇 시간 뒤 CircuitBreaker가 열리고 나서야
+# 알아채는 일이 실제로 있었다. 스코어/백테스트/자막 조회는 이 키와 무관하므로
+# 기동 자체를 막지는 않고, 로그만 즉시 눈에 띄게 남긴다.
+if not os.getenv("GEMINI_API_KEY"):
+    logging.error(
+        "[STARTUP] GEMINI_API_KEY가 설정되지 않았습니다 - quant-engine/.env를 확인할 것. "
+        "/summarize 호출은 전부 500으로 실패한다(스코어/백테스트/자막 조회는 이 키와 무관해 영향 없음)."
+    )
 
 app = FastAPI(title="QuantLime Quant Engine", version="0.1.0")
 

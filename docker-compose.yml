@@ -101,6 +101,15 @@ services:
       - "8000:8000"
     volumes:
       - ./quant-engine:/app
+    # GEMINI_API_KEY 등을 python-dotenv(런타임에 바인드마운트된 .env를 직접
+    # 읽는 방식)에만 의존하지 않고 여기서도 명시적으로 주입한다 - 2026-09-27
+    # 장시간 기동된 컨테이너에서 바인드마운트가 유독 .env 파일 하나만 안 보이는
+    # 현상(다른 dotfile은 정상 노출)을 실제로 겪었는데, restart로는 안 고쳐지고
+    # 컨테이너 재생성(--force-recreate)이 있어야 복구됐다. env_file은 컨테이너
+    # 생성 시점에 Docker가 값을 컨테이너 환경변수로 직접 박아넣어, 이후 바인드
+    # 마운트가 이 파일을 보여주는지 여부와 완전히 무관해진다.
+    env_file:
+      - ./quant-engine/.env
     command: uvicorn main:app --reload --host 0.0.0.0 --port 8000
     restart: unless-stopped
     deploy:
