@@ -11,6 +11,7 @@ import com.quantlime.infra.tosspayments.dto.TossPaymentApprovalResponse;
 import com.quantlime.notification.domain.NotificationType;
 import com.quantlime.notification.service.FcmPushService;
 import com.quantlime.payment.domain.Payment;
+import com.quantlime.payment.domain.PaymentStatus;
 import com.quantlime.payment.exception.PaymentErrorCode;
 import com.quantlime.payment.repository.PaymentRepository;
 import com.quantlime.subscription.domain.Subscription;
@@ -30,6 +31,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.HttpClientErrorException;
 
 @Slf4j
 @Service
@@ -134,9 +136,22 @@ public class PaymentService {
         }
     }
 
-    // 자동 갱신 스케줄러가 건별로 호출한다. 실패해도 예외를 던지지 않고
-    // 내부에서 흡수한다(SubscriptionRenewalScheduler가 개별 실패로 배치
-    // 전체를 멈추지 않도록).
+    // Kafka 컨슈머(SubscriptionRenewalConsumer, event 모듈)가 건별로
+    // 호출한다(2026-09-24, 카프카 다도메인 확장 Phase 2 - 예전에는
+    // 스케줄러가 직접 호출했다). orderId를 결정론적으로 만들고(같은 과금
+    // 주기의 재시도는 항상 같은 값) 사전에 이미 성공한 결제인지 먼저
+    // 확인하는 이유 - 토스 결제승인 API가 orderId 재사용 시 자동으로
+    // 중복을 막아주는지 공식 문서에 명시돼 있지 않아(2026-09-24 조사),
+    // 우리 쪽에서 직접 멱등성을 보장해야 한다. payment.order_id의 DB
+    // 유니크 제약(uk_payment_order_id)이 그 마지막 안전망이다.
+    //
+    // <p>실패 시 예외 처리를 두 갈래로 나눈다(2026-09-24 확정) - 카드 거절
+    // 같은 업무적 거절(HTTP 4xx)은 몇 초~몇 분 뒤 재시도해도 결과가 똑같으므로
+    // 카프카 재시도로 넘기지 않고 기존 DB 컬럼 재시도(내일 재시도/PAST_DUE)
+    // 경로로 즉시 처리한다. 반대로 타임아웃·5xx 같은 일시 장애로 추정되는
+    // 경우만 예외를 다시 던져 @RetryableTopic(30s→90s→270s)이 받게 한다 -
+    // 재시도가 전부 소진되면 SubscriptionRenewalConsumer의 DLT 핸들러가
+    // handleRenewalRetriesExhausted()로 같은 DB 컬럼 경로에 합류시킨다.
     @Transactional
     public void chargeRenewal(Long subscriptionId) {
         Subscription subscription = subscriptionRepository.findById(subscriptionId)
@@ -144,7 +159,13 @@ public class PaymentService {
         User user = subscription.getUser();
         SubscriptionPlan plan = subscription.getPlan();
         String customerKey = toCustomerKey(user.getId());
-        String orderId = generateOrderId();
+        String orderId = renewalOrderId(subscriptionId, subscription.getCurrentPeriodEnd());
+
+        if (paymentRepository.existsByOrderIdAndStatus(orderId, PaymentStatus.DONE)) {
+            log.info("이미 처리된 구독 갱신 결제, 스킵(멱등): subscriptionId={}, orderId={}",
+                subscriptionId, orderId);
+            return;
+        }
 
         try {
             TossPaymentApprovalResponse approval = tossPaymentsApiClient.chargeWithBillingKey(
@@ -157,31 +178,66 @@ public class PaymentService {
             log.info("구독 자동 갱신 결제 성공: userId={}, subscriptionId={}, orderId={}",
                 user.getId(), subscriptionId, orderId);
         } catch (ExternalApiException e) {
-            paymentRepository.save(Payment.failure(
-                user, subscription, orderId, plan.getPriceWon(),
-                subscription.getInstallmentMonths(), true, e.getMessage()));
-            subscription.recordRenewalFailure();
-            if (subscription.getRenewalFailureCount() >= MAX_RENEWAL_RETRY) {
-                subscription.markPastDue();
-                log.warn("구독 자동 갱신 최종 실패(재시도 소진), PAST_DUE 전환: "
+            if (isBusinessDecline(e)) {
+                paymentRepository.save(Payment.failure(
+                    user, subscription, orderId, plan.getPriceWon(),
+                    subscription.getInstallmentMonths(), true, e.getMessage()));
+                handleRenewalFailure(subscription, e.getMessage());
+            } else {
+                log.warn("구독 자동 갱신 일시 실패(카프카 재시도 예정): "
                         + "userId={}, subscriptionId={}, orderId={}, error={}",
                     user.getId(), subscriptionId, orderId, e.getMessage());
-                fcmPushService.sendToUser(user.getId(), NotificationType.PAYMENT_FAILED,
-                    "결제에 실패했어요", "카드 결제가 계속 실패해 구독이 일시중지됐어요. 결제수단을 확인해주세요.",
-                    "/subscribe");
-            } else {
-                subscription.scheduleRenewalRetry(LocalDate.now().plusDays(1));
-                log.warn("구독 자동 갱신 결제 실패, 내일 재시도: "
-                        + "userId={}, subscriptionId={}, orderId={}, 시도횟수={}, error={}",
-                    user.getId(), subscriptionId, orderId,
-                    subscription.getRenewalFailureCount(), e.getMessage());
-                // 아직 ACTIVE(프리미엄 유지)인 이 시점에 알려야 끊기기 전에
-                // 결제수단을 바꿀 수 있다.
-                fcmPushService.sendToUser(user.getId(), NotificationType.PAYMENT_FAILED,
-                    "결제에 실패했어요", "내일 다시 결제를 시도해요. 구독은 유지 중이니 결제수단을 확인해주세요.",
-                    "/subscribe");
+                throw e;
             }
         }
+    }
+
+    /**
+     * 카프카 재시도(최대 6.5분)가 전부 소진된 뒤 {@code SubscriptionRenewalConsumer}의
+     * {@code @DltHandler}가 호출한다 - 일시 장애로 시작했더라도 그 시간
+     * 안에 회복 못 했으면 기존 DB 컬럼 재시도(내일 재시도/PAST_DUE) 경로로
+     * 합류시켜, 이 구독의 재시도 상태가 두 메커니즘 중 하나로만 관리되게 한다.
+     */
+    @Transactional
+    public void handleRenewalRetriesExhausted(Long subscriptionId, String errorMessage) {
+        Subscription subscription = subscriptionRepository.findById(subscriptionId)
+            .orElseThrow(() -> new NotFoundException(SubscriptionErrorCode.NOT_FOUND_SUBSCRIPTION));
+        handleRenewalFailure(subscription, errorMessage);
+    }
+
+    private void handleRenewalFailure(Subscription subscription, String errorMessage) {
+        Long userId = subscription.getUser().getId();
+        Long subscriptionId = subscription.getId();
+        subscription.recordRenewalFailure();
+        if (subscription.getRenewalFailureCount() >= MAX_RENEWAL_RETRY) {
+            subscription.markPastDue();
+            log.warn("구독 자동 갱신 최종 실패(재시도 소진), PAST_DUE 전환: "
+                    + "userId={}, subscriptionId={}, error={}",
+                userId, subscriptionId, errorMessage);
+            fcmPushService.sendToUser(userId, NotificationType.PAYMENT_FAILED,
+                "결제에 실패했어요", "카드 결제가 계속 실패해 구독이 일시중지됐어요. 결제수단을 확인해주세요.",
+                "/subscribe");
+        } else {
+            subscription.scheduleRenewalRetry(LocalDate.now().plusDays(1));
+            log.warn("구독 자동 갱신 결제 실패, 내일 재시도: "
+                    + "userId={}, subscriptionId={}, 시도횟수={}, error={}",
+                userId, subscriptionId, subscription.getRenewalFailureCount(), errorMessage);
+            // 아직 ACTIVE(프리미엄 유지)인 이 시점에 알려야 끊기기 전에
+            // 결제수단을 바꿀 수 있다. 일시 장애(타임아웃/5xx)는 카프카가 먼저
+            // 재시도하고 그게 다 실패해야 여기 오므로 알림이 폭주하진 않는다.
+            fcmPushService.sendToUser(userId, NotificationType.PAYMENT_FAILED,
+                "결제에 실패했어요", "내일 다시 결제를 시도해요. 구독은 유지 중이니 결제수단을 확인해주세요.",
+                "/subscribe");
+        }
+    }
+
+    /**
+     * HTTP 4xx(카드 거절 등 업무적 거절)인지 판단한다 - 5xx/타임아웃/연결
+     * 실패와 달리 몇 초~몇 분 뒤 재시도해도 같은 결과가 나오므로 카프카
+     * 재시도 대상에서 제외한다(클래스 상단 chargeRenewal 주석 참고).
+     */
+    private boolean isBusinessDecline(ExternalApiException e) {
+        return e.getCause() instanceof HttpClientErrorException;
     }
 
     @Transactional(readOnly = true)
@@ -218,5 +274,17 @@ public class PaymentService {
 
     private String generateOrderId() {
         return "SUB-" + UUID.randomUUID().toString().replace("-", "");
+    }
+
+    /**
+     * 구독 자동 갱신 전용 결정론적 orderId(2026-09-24) - 최초 결제
+     * ({@code generateOrderId})와 달리 매번 새 값을 쓰지 않는다.
+     * {@code currentPeriodEnd}는 이번 과금 주기의 갱신이 성공(renew())하기
+     * 전까지는 값이 바뀌지 않으므로, 같은 과금 주기에 대한 재시도(카프카
+     * 재시도든 다음날 DB 컬럼 재시도든)는 항상 같은 orderId를 만들어낸다 -
+     * chargeRenewal의 사전 확인(existsByOrderIdAndStatus)이 이 값을 키로 쓴다.
+     */
+    private String renewalOrderId(Long subscriptionId, LocalDate currentPeriodEnd) {
+        return "SUB-RENEWAL-" + subscriptionId + "-" + currentPeriodEnd;
     }
 }

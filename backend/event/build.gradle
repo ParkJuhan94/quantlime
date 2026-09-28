@@ -7,4 +7,8 @@ dependencies {
     // 이 모듈이 전담한다(모듈 표 "event: Kafka Producer/Consumer, 이벤트 설정" 참고).
     implementation 'org.springframework.kafka:spring-kafka'
     testImplementation 'org.springframework.kafka:spring-kafka-test'
+
+    // DLT 관측(2026-09-24) - @DltHandler에서 실패 카운터를 직접 등록한다
+    // (core의 PythonEngineClient 등과 동일한 MeterRegistry 직접 사용 패턴).
+    implementation 'io.micrometer:micrometer-core'
 }

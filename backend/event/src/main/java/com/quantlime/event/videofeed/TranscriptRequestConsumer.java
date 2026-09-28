@@ -1,5 +1,6 @@
 package com.quantlime.event.videofeed;
 
+import com.quantlime.event.observability.KafkaDltNotifier;
 import com.quantlime.videofeed.service.TranscriptProcessingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +26,7 @@ import org.springframework.stereotype.Component;
 public class TranscriptRequestConsumer {
 
     private final TranscriptProcessingService transcriptProcessingService;
+    private final KafkaDltNotifier dltNotifier;
 
     @RetryableTopic(attempts = "4", backoff = @Backoff(delay = 30_000, multiplier = 3.0, maxDelay = 270_000))
     @KafkaListener(topics = VideoFeedTopics.VIDEO_SELECTED, groupId = "transcript-collector")
@@ -36,5 +38,8 @@ public class TranscriptRequestConsumer {
     public void onDlt(VideoSelectedMessage message) {
         log.error("자막 수집 최종 실패(재시도 소진, DLT 이관) - Kafka UI에서 확인 후 필요시 수동 재발행할 것: videoId={}",
             message.videoId());
+        dltNotifier.notify("videofeed-transcript", VideoFeedTopics.VIDEO_SELECTED,
+            "videoId=" + message.videoId() + " - 자막 수집 최종 실패, 수동 재발행 필요"
+                + "(POST /api/admin/feed/transcribe)");
     }
 }

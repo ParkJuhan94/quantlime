@@ -100,6 +100,11 @@ public class ScoreService {
         recalculateDomesticScoresChunk(List.of(stockCode));
     }
 
+    /** {@link #recalculateDomesticScore} 해외 버전 - 가격 fan-out 컨슈머(2026-09-24) 전용 단건 진입점. */
+    public void recalculateOverseasScore(String stockCode) {
+        recalculateOverseasScoresChunk(List.of(stockCode));
+    }
+
     // 관심종목만이 아니라 전 상장종목을 대상으로 계산한다(2026-07-16 -
     // 이전엔 관심종목만 계산해 등록 안 한 종목은 스코어 자체가 없었음).
     // 일봉 마감 기준 지표라 매일 배치 한 번이면 충분하다(OhlcvCollectorScheduler

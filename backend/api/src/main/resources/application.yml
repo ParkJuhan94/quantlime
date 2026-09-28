@@ -52,7 +52,7 @@ spring:
       value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
       properties:
         spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
-        spring.json.trusted.packages: com.quantlime.event.videofeed
+        spring.json.trusted.packages: com.quantlime.event.videofeed,com.quantlime.event.market,com.quantlime.event.subscription
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -179,8 +179,9 @@ resilience4j:
         max-concurrent-calls: 30
       quant-engine:
         base-config: default
-        # MarketDataRefreshTaskExecutorConfig가 국내/해외 각각 core=1이라
-        # 실제 동시 호출은 많지 않다.
+        # 가격·스코어 fan-out(2026-09-24)의 PriceRefreshConsumer 리스너
+        # 동시성을 1로 고정해뒀으므로(클래스 주석 참고) 실제 동시 호출은
+        # 많지 않다.
         max-concurrent-calls: 6
       # circuitbreaker와 동일한 이유로 분리(위 참고). 2026-09-14 이벤트화 이후
       # 자막 조회는 Kafka 컨슈머(transcript-collector, 파티션 1개)가 순차
@@ -308,6 +309,12 @@ slack:
   # WEBHOOK_NOT_CONFIGURED 에러를 던진다(설정 누락과 실제 전송 실패를
   # 구분하기 위함).
   feedback-webhook-url: ${SLACK_FEEDBACK_WEBHOOK_URL:}
+  # Kafka DLT 알림 등 운영 신호 전용(2026-09-24) - 별도 웹훅을 새로 발급하지 않고
+  # Alertmanager가 이미 쓰는 SLACK_ALERT_WEBHOOK_URL(#quantlime-alerts)을 그대로
+  # 재사용한다. 앱에서 즉시 보내는 상세 알림과 Alertmanager의 집계 백스톱 알림이
+  # 같은 채널에 모이는 게 온콜 입장에서 오히려 자연스럽다 - 신호가 두 종류라고
+  # 채널까지 나눌 필요는 없음.
+  ops-webhook-url: ${SLACK_ALERT_WEBHOOK_URL:}
 
 python-engine:
   base-url: ${PYTHON_ENGINE_URL:http://localhost:8000}
