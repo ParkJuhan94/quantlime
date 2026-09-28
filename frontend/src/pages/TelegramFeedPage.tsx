@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react'
 import { TelegramFeedCard } from '../components/telegramfeed/TelegramFeedCard'
 import { LoadingSpinner } from '../components/common/LoadingSpinner'
 import { EmptyState } from '../components/common/EmptyState'
+import { ErrorState } from '../components/common/ErrorState'
 import { DateStepper } from '../components/common/DateStepper'
 import { FilterChipGroup } from '../components/common/FilterChipGroup'
 import { PlatformLogo } from '../components/common/PlatformLogo'
 import { useTelegramDigestsQuery, useTelegramFeedChannelsQuery } from '../hooks/queries/useTelegramFeed'
 import { useDateSkipNavigation } from '../hooks/useDateSkipNavigation'
+import { getErrorMessage } from '../api/errors'
 
 const DATE_STORAGE_KEY = 'telegramFeedDate'
 
@@ -26,12 +28,15 @@ export function TelegramFeedPage() {
 
   // 날짜별로 "다이제스트가 없어요" 빈 화면을 보여주는 대신, 조회 가능 범위
   // 안에서 콘텐츠가 있는 날짜를 찾을 때까지 자동으로 계속 넘어간다
-  // (VideoFeedPage와 동일 동작).
+  // (VideoFeedPage와 동일 동작). isError일 때는 건너뛰지 않는다 - 실패를
+  // "콘텐츠 없음"으로 착각해 14일치를 전부 건너뛰며 실패 요청을 반복하고
+  // 결국 빈 화면으로 오판하게 되는 걸 막는다.
   useEffect(() => {
-    if (telegramDigestsQuery.isLoading || digests.length > 0 || !dateNav.canSkipFurther) return
+    if (telegramDigestsQuery.isLoading || telegramDigestsQuery.isError || digests.length > 0 || !dateNav.canSkipFurther)
+      return
     dateNav.skipDate()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- dateNav.skipDate는 렌더마다 새 함수 참조라 deps에 넣으면 무한 루프
-  }, [telegramDigestsQuery.isLoading, digests.length, dateNav.canSkipFurther])
+  }, [telegramDigestsQuery.isLoading, telegramDigestsQuery.isError, digests.length, dateNav.canSkipFurther])
 
   return (
     <div className="mx-auto max-w-2xl space-y-4 px-2">
@@ -64,10 +69,15 @@ export function TelegramFeedPage() {
         />
       )}
 
-      {(telegramDigestsQuery.isLoading || (digests.length === 0 && dateNav.canSkipFurther)) && <LoadingSpinner />}
-      {!telegramDigestsQuery.isLoading && digests.length === 0 && !dateNav.canSkipFurther && (
-        <EmptyState message="아직 요약된 다이제스트가 없어요." />
+      {telegramDigestsQuery.isError && (
+        <ErrorState message={getErrorMessage(telegramDigestsQuery.error, '다이제스트를 불러오지 못했어요.')} />
       )}
+      {!telegramDigestsQuery.isError &&
+        (telegramDigestsQuery.isLoading || (digests.length === 0 && dateNav.canSkipFurther)) && <LoadingSpinner />}
+      {!telegramDigestsQuery.isError &&
+        !telegramDigestsQuery.isLoading &&
+        digests.length === 0 &&
+        !dateNav.canSkipFurther && <EmptyState message="아직 요약된 다이제스트가 없어요." />}
 
       <div className="space-y-3">
         {digests.map((digest) => (
