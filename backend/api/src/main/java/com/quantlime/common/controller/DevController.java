@@ -12,6 +12,7 @@ import com.quantlime.backtest.service.CrossSectionalBacktestService;
 import com.quantlime.infra.oauth.dto.OAuthUserInfo;
 import com.quantlime.market.service.MarketDataRefreshService;
 import com.quantlime.notification.scheduler.ScoreRankingNotificationScheduler;
+import com.quantlime.payment.service.PaymentService;
 import com.quantlime.price.dto.PriceJumpReport;
 import com.quantlime.price.dto.RegularCloseBackfillResult;
 import com.quantlime.price.service.DailyPriceIntegrityService;
@@ -36,6 +37,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -68,6 +70,7 @@ public class DevController {
     private final RefreshTokenCookieProvider refreshTokenCookieProvider;
     private final ScoreRankingNotificationScheduler scoreRankingNotificationScheduler;
     private final SubscriptionService subscriptionService;
+    private final PaymentService paymentService;
 
     @PostMapping("/stock-master/sync")
     @Operation(summary = "[개발용] 종목마스터 동기화(신규상장/상장폐지 반영) 수동 트리거")
@@ -283,5 +286,14 @@ public class DevController {
         subscriptionService.expireLapsedSubscriptions();
         log.info("[dev] 구독 만료 처리 수동 트리거 완료");
         return ResponseEntity.ok("구독 만료 처리 완료");
+    }
+
+    @PostMapping("/subscriptions/{subscriptionId}/renewal-retries-exhausted")
+    @Operation(summary = "[개발용] 자동갱신 결제 실패 1회 기록 - 카프카 재시도 소진(DLT) 경로와 동일하게 "
+        + "실패 횟수를 1 올리고, 3회에 도달하면 PAST_DUE 전환 + PAYMENT_FAILED 알림 발송")
+    public ResponseEntity<String> triggerRenewalRetriesExhausted(@PathVariable Long subscriptionId) {
+        log.info("[dev] 구독 갱신 실패 기록 수동 트리거: subscriptionId={}", subscriptionId);
+        paymentService.handleRenewalRetriesExhausted(subscriptionId, "[dev] 수동 트리거");
+        return ResponseEntity.ok("구독 갱신 실패 1회 기록 완료: subscriptionId=" + subscriptionId);
     }
 }

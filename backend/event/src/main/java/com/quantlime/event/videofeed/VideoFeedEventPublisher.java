@@ -31,14 +31,14 @@ public class VideoFeedEventPublisher {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onVideoSelected(VideoSelectedEvent event) {
         String key = String.valueOf(event.videoId());
-        kafkaTemplate.send(VideoFeedTopics.VIDEO_SELECTED, key, new VideoSelectedMessage(event.videoId()));
+        kafkaTemplate.send(VideoFeedTopics.VIDEO_SELECTED, key, VideoSelectedMessage.of(event.videoId()));
         log.debug("Kafka 발행: topic={}, videoId={}", VideoFeedTopics.VIDEO_SELECTED, event.videoId());
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onVideoTranscribed(VideoTranscribedEvent event) {
         String key = String.valueOf(event.videoId());
-        kafkaTemplate.send(VideoFeedTopics.VIDEO_TRANSCRIBED, key, new VideoTranscribedMessage(event.videoId()));
+        kafkaTemplate.send(VideoFeedTopics.VIDEO_TRANSCRIBED, key, VideoTranscribedMessage.of(event.videoId()));
         log.debug("Kafka 발행: topic={}, videoId={}", VideoFeedTopics.VIDEO_TRANSCRIBED, event.videoId());
     }
 }
