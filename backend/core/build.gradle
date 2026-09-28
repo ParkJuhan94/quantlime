@@ -55,7 +55,9 @@ dependencies {
 def generated = 'src/main/generated'
 
 tasks.withType(JavaCompile).configureEach {
-    options.getGeneratedSourceOutputDirectory().set(file(generated))
+    if (name == 'compileJava') {
+        options.getGeneratedSourceOutputDirectory().set(file(generated))
+    }
 }
 
 sourceSets {
