@@ -8,6 +8,7 @@ import com.quantlime.videofeed.domain.VideoStatus;
 import com.quantlime.videofeed.repository.VideoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 /**
@@ -46,6 +47,14 @@ public class TranscriptProcessingService {
             TranscribeApiResponse response = pythonEngineClient.fetchTranscript(
                 new TranscribeApiRequest(video.getExternalVideoId()));
             transcriptPersistService.persistResult(video.getId(), response);
+        } catch (DataIntegrityViolationException e) {
+            // 이 가드(상태 조회)와 실제 저장 사이에 재시도 토픽의 중복 배달 등으로
+            // 같은 영상이 먼저 처리돼버리는 경합이 실제로 있었다(2026-09-15
+            // TranscriptImportService에서 처음 발견한 것과 동일한 경합이
+            // 이 실시간 파이프라인에서도 재현됨, 2026-09-27). 이미 성공적으로
+            // 처리된 결과를 markFetchFailed로 덮어쓰면 TRANSCRIBED 상태가 다시
+            // FAILED로 되돌아가버리므로 조용히 스킵한다.
+            log.info("자막 수집: 저장 시점에 이미 처리됨(경합) - 스킵: videoId={}", video.getId());
         } catch (Exception e) {
             log.error("자막 수집 실패: videoId={}, title={}, reason={}",
                 video.getId(), video.getTitle(), e.getMessage(), e);

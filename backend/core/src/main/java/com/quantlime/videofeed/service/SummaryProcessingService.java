@@ -12,6 +12,7 @@ import com.quantlime.videofeed.repository.TranscriptRepository;
 import com.quantlime.videofeed.repository.VideoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 /**
@@ -46,6 +47,11 @@ public class SummaryProcessingService {
             SummarizeApiResponse response = pythonEngineClient.summarize(new SummarizeApiRequest(
                 video.getTitle(), video.getChannel().getName(), transcript.getContent()));
             summaryPersistService.persistResult(video.getId(), response);
+        } catch (DataIntegrityViolationException e) {
+            // TranscriptProcessingService와 동일한 이유(uk_summary 유니크 제약) -
+            // 재시도 경합으로 이미 성공한 결과를 markSummarizeFailed로 덮어써
+            // SUMMARIZED 상태를 FAILED로 되돌리지 않도록 조용히 스킵한다.
+            log.info("AI 요약: 저장 시점에 이미 처리됨(경합) - 스킵: videoId={}", video.getId());
         } catch (Exception e) {
             log.error("AI 요약 생성 실패: videoId={}, title={}, reason={}",
                 video.getId(), video.getTitle(), e.getMessage(), e);
