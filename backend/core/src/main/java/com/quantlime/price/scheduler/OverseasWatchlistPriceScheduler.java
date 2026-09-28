@@ -195,9 +195,11 @@ public class OverseasWatchlistPriceScheduler {
         if (stock == null) {
             return null;
         }
+        // 스코어는 MarketRankingService.enrichWithScore가 응답 직전에 한 번만
+        // 조인한다(DomesticMarketPriceSweepScheduler와 동일한 이유).
         return new MarketRankingResponse(stock.getStockCode(), stock.getDisplayName(), stock.getSector(),
             snapshot.currentPrice(), snapshot.changeRate(), CURRENCY_USD, null, null,
-            StockMapper.toLogoUrl(stock), true);
+            StockMapper.toLogoUrl(stock), true, null, null, null);
     }
 
     private Double parseLastPrice(String lastPrice) {

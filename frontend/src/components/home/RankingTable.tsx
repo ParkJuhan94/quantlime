@@ -223,7 +223,7 @@ function RankingRow({ row, index, isWatched, onToggleWatch }: {
 function ScoreRankingSkeletonTable() {
   return (
     <table className="w-full min-w-[640px] text-left">
-      <thead>
+      <thead className="sticky top-0 z-10 bg-white">
         <tr className="border-b border-gray-100 text-xs font-medium text-gray-400">
           <th className="w-14 pb-2">순위</th>
           <th className="pb-2">종목</th>
@@ -235,7 +235,7 @@ function ScoreRankingSkeletonTable() {
         </tr>
       </thead>
       <tbody>
-        {Array.from({ length: 30 }).map((_, i) => (
+        {Array.from({ length: 50 }).map((_, i) => (
           <tr key={i} className="border-b border-gray-50">
             <td className="py-2.5 text-xs font-semibold text-gray-300">{i + 1}</td>
             <td className="py-2.5">
@@ -309,16 +309,19 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
   const showWatchlistOnlyToggle = isAuthenticated
   const effectiveWatchlistOnly = showWatchlistOnlyToggle && watchlistOnly
 
+  // limit=50은 두 API 모두의 서버 측 상한(@Max(50), MarketController/
+  // ScoreController)과 동일하다 - 스크롤로 더 볼 수 있게 하면서(2026-09-24
+  // 요청) 백엔드 변경 없이 바로 올릴 수 있는 최대치라 이 값으로 맞췄다.
   const rankingQuery = useMarketRankingQuery(
     rankingScope,
     sortKey === 'gainers' || sortKey === 'losers' || sortKey === 'amount' ? sortKey : 'gainers',
-    30,
+    50,
     isRealMode,
     effectiveWatchlistOnly,
   )
   // 스코어 탭이 아니거나 구독자가 아니면 요청 자체를 보내지 않는다
   // (PremiumGate 참고 - 잠겨 있을 때 network 탭에 값이 안 남아야 한다).
-  const scoreQuery = useDashboardScoresQuery(effectiveWatchlistOnly, 30, scope, isScoreMode && isPremium)
+  const scoreQuery = useDashboardScoresQuery(effectiveWatchlistOnly, 50, scope, isScoreMode && isPremium)
   const scoreStockCodes = isScoreMode && isPremium ? (scoreQuery.data ?? []).map((item) => item.stockCode) : []
   // WebSocket 실시간 브로드캐스트는 장중에만 오므로 소켓만 쓰면 장마감엔
   // 현재가/등락률이 전부 "-"로 보인다(AppSidePanel에서 이미 한 번 겪은
@@ -360,6 +363,12 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
           price: row.currentPrice,
           changeRate: row.changeRate,
           detailAvailable: row.detailAvailable,
+          // 2026-09-24 - 급상승/급하락/거래대금 탭도 백엔드가 스코어를
+          // 조인해 내려주므로 스코어 탭과 동일하게 그대로 표시한다(값이
+          // 없으면 null - RankingRow가 이미 "-"로 처리).
+          compositeScore: row.compositeScore,
+          compositePercentile: row.compositePercentile,
+          grade: row.grade,
         }))
       : []
 
@@ -483,14 +492,17 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
 
       {showScoreGate ? (
         <PremiumGate>
-          <div className="overflow-x-auto">
+          <div className="max-h-[560px] overflow-x-auto overflow-y-auto">
             <ScoreRankingSkeletonTable />
           </div>
         </PremiumGate>
       ) : (
-        <div className="overflow-x-auto">
+        // limit이 50까지 늘어난 만큼 카드 자체가 한없이 길어지지 않도록
+        // 고정 높이(약 12행) 스크롤박스로 감싼다(2026-09-24 요청) - 헤더는
+        // sticky로 고정해 스크롤 중에도 컬럼이 뭔지 계속 보이게 한다.
+        <div className="max-h-[560px] overflow-x-auto overflow-y-auto">
           <table className="w-full min-w-[640px] text-left">
-            <thead>
+            <thead className="sticky top-0 z-10 bg-white">
               <tr className="border-b border-gray-100 text-xs font-medium text-gray-400">
                 <th className="w-14 pb-2">순위</th>
                 <th className="pb-2">종목</th>

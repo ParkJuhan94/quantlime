@@ -3,6 +3,12 @@ package com.quantlime.market.service;
 import com.quantlime.market.cache.MarketRankingCache;
 import com.quantlime.market.cache.TossMarketRankingCache;
 import com.quantlime.market.dto.response.MarketRankingResponse;
+import com.quantlime.score.domain.Divergence;
+import com.quantlime.score.domain.Grade;
+import com.quantlime.score.domain.Quadrant;
+import com.quantlime.score.domain.Score;
+import com.quantlime.score.repository.ScoreRepository;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,6 +43,9 @@ class MarketRankingServiceTest {
     @Mock
     private TossMarketRankingCache tossMarketRankingCache;
 
+    @Mock
+    private ScoreRepository scoreRepository;
+
     private MarketRankingService marketRankingService;
 
     // domesticMarketRankingCache/overseasMarketRankingCache가 정확히 같은
@@ -46,8 +55,8 @@ class MarketRankingServiceTest {
     // 어느 자리에 들어가는지 명시적으로 고정한다.
     @BeforeEach
     void setUp() {
-        marketRankingService =
-            new MarketRankingService(domesticMarketRankingCache, overseasMarketRankingCache, tossMarketRankingCache);
+        marketRankingService = new MarketRankingService(
+            domesticMarketRankingCache, overseasMarketRankingCache, tossMarketRankingCache, scoreRepository);
     }
 
     @Test
@@ -132,8 +141,45 @@ class MarketRankingServiceTest {
         assertThat(result).extracting(MarketRankingResponse::stockCode).containsExactly("005930");
     }
 
+    @Test
+    @DisplayName("[스코어가 있는 종목은 응답에 compositeScore/등급이 채워진다]")
+    void getRanking_enrichesWithScoreWhenAvailable() {
+        // given
+        given(tossMarketRankingCache.get("domestic", "gainers")).willReturn(
+            List.of(ranking("005930", 2.0)));
+        Score score = Score.of("005930", LocalDate.now(), 70.0, 60.0, 65.0,
+            Grade.BUY, Quadrant.TREND_UP_OVERSOLD, Divergence.of(false, null), false);
+        given(scoreRepository.findLatestScoresByStockCodesOrderByCompositeScoreDesc(List.of("005930")))
+            .willReturn(List.of(score));
+
+        // when
+        List<MarketRankingResponse> result = marketRankingService.getRanking("domestic", "gainers", 10, null);
+
+        // then
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).compositeScore()).isEqualTo(65.0);
+        assertThat(result.get(0).grade()).isEqualTo(Grade.BUY.getLabel());
+    }
+
+    @Test
+    @DisplayName("[스코어 배치가 아직 안 돈 종목은 compositeScore/등급이 null로 남는다]")
+    void getRanking_leavesScoreNullWhenNotFound() {
+        // given
+        given(tossMarketRankingCache.get("domestic", "gainers")).willReturn(
+            List.of(ranking("005930", 2.0)));
+        given(scoreRepository.findLatestScoresByStockCodesOrderByCompositeScoreDesc(List.of("005930")))
+            .willReturn(List.of());
+
+        // when
+        List<MarketRankingResponse> result = marketRankingService.getRanking("domestic", "gainers", 10, null);
+
+        // then
+        assertThat(result.get(0).compositeScore()).isNull();
+        assertThat(result.get(0).grade()).isNull();
+    }
+
     private MarketRankingResponse ranking(String stockCode, double changeRate) {
         return new MarketRankingResponse(stockCode, stockCode + "-name", "전기전자",
-            10000.0, changeRate, "KRW", null, null, null, true);
+            10000.0, changeRate, "KRW", null, null, null, true, null, null, null);
     }
 }

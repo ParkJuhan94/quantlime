@@ -225,9 +225,12 @@ public class DomesticMarketPriceSweepScheduler {
         // MarketRankingCache)에서 다루지 않는 값이라 null - Toss `prices`가
         // 애초에 거래량을 안 주고(PriceSnapshot 주석 참고), 통화는 국내
         // 전용 경로라 항상 KRW이므로 프론트에서 굳이 표시할 필요가 없다.
+        // 스코어는 이 100ms 스윕이 아니라 MarketRankingService.enrichWithScore가
+        // 응답 직전에 한 번만 조인한다(MarketRankingResponse 주석 참고) - 전종목을
+        // 매 틱마다 스코어 DB까지 조회하면 이 스케줄러의 핵심 성능 전제가 깨진다.
         MarketRankingResponse ranking = new MarketRankingResponse(stock.getStockCode(), stock.getStockName(),
             stock.getSector(), currentPrice.doubleValue(), changeRate, null, null, null,
-            StockMapper.toLogoUrl(stock), true);
+            StockMapper.toLogoUrl(stock), true, null, null, null);
         return new CachedPrice(snapshot, ranking);
     }
 

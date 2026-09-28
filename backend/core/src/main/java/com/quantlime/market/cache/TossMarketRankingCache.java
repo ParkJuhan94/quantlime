@@ -165,7 +165,8 @@ public class TossMarketRankingCache {
             parseDecimal(item.tradingVolume()),
             parseDecimal(item.tradingAmount()),
             logoUrl,
-            stock != null);
+            stock != null,
+            null, null, null);
     }
 
     /** Toss changeRate는 소수 비율(0.0125=1.25%) - 기존 자체 계산 등락률

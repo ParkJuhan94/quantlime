@@ -27,6 +27,14 @@ public record MarketRankingResponse(
     Double tradingVolume,
     Double tradingAmount,
     String logoUrl,
-    boolean detailAvailable
+    boolean detailAvailable,
+    // 2026-09-24 추가 - 급상승/급하락/거래대금 탭에서도 스코어 컬럼을 채우기
+    // 위해 MarketRankingService.enrichWithScore가 응답 직전에 조인한다.
+    // 스코어 배치가 아직 안 돈 신규 상장 종목 등은 null. 스코어 탭
+    // (/api/dashboard/scores, 구독자 전용)과 달리 이 필드들은 구독 여부와
+    // 무관하게 항상 채워진다.
+    Double compositeScore,
+    Double compositePercentile,
+    String grade
 ) {
 }

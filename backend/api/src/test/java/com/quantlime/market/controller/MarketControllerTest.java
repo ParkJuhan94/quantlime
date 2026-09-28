@@ -229,7 +229,7 @@ class MarketControllerTest extends ApiTestSupport {
         // given: watchlistOnly=false(기본)면 국내/해외 모두 TossMarketRankingCache 경로
         given(tossMarketRankingCache.get("domestic", "gainers")).willReturn(
             List.of(new MarketRankingResponse("005930", "삼성전자", "전기전자",
-                71400.0, 2.0, "KRW", 1000000.0, 71400000000.0, null, true)));
+                71400.0, 2.0, "KRW", 1000000.0, 71400000000.0, null, true, null, null, null)));
 
         // when & then
         mockMvc.perform(get("/api/market/ranking").param("sort", "gainers"))
@@ -245,7 +245,7 @@ class MarketControllerTest extends ApiTestSupport {
         // given
         given(tossMarketRankingCache.get("domestic", "losers")).willReturn(
             List.of(new MarketRankingResponse("035420", "NAVER", "서비스업",
-                100000.0, -4.5, "KRW", 500000.0, 50000000000.0, null, true)));
+                100000.0, -4.5, "KRW", 500000.0, 50000000000.0, null, true, null, null, null)));
 
         // when & then
         mockMvc.perform(get("/api/market/ranking")
@@ -261,7 +261,7 @@ class MarketControllerTest extends ApiTestSupport {
         // given
         given(tossMarketRankingCache.get("overseas", "amount")).willReturn(
             List.of(new MarketRankingResponse("AAPL", "AAPL", null,
-                341.43, 0.4, "USD", 51859042.0, 17631000000.0, null, false)));
+                341.43, 0.4, "USD", 51859042.0, 17631000000.0, null, false, null, null, null)));
 
         // when & then
         mockMvc.perform(get("/api/market/ranking")
@@ -301,7 +301,7 @@ class MarketControllerTest extends ApiTestSupport {
         String accessToken = jwtTokenProvider.createAccessToken(user.getId(), user.getRole());
         given(watchlistService.getWatchlistStockCodes(user.getId())).willReturn(Set.of("005930"));
         given(domesticMarketRankingCache.getGainers(10, Set.of("005930"))).willReturn(
-            List.of(new MarketRankingResponse("005930", "삼성전자", "전기전자", 71400.0, 2.0, null, null, null, null, true)));
+            List.of(new MarketRankingResponse("005930", "삼성전자", "전기전자", 71400.0, 2.0, null, null, null, null, true, null, null, null)));
 
         // when & then
         mockMvc.perform(get("/api/market/ranking")
