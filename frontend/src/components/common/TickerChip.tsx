@@ -24,6 +24,9 @@ export function TickerChip({ ticker }: { ticker: TickerChipData }) {
   return (
     <span className={`rounded-lg px-2 py-0.5 text-xs font-semibold ${style}`}>
       {ticker.tickerName ?? ticker.tickerCode}
+      {/* AI 태깅 신뢰도(0~1 소수, backend VideoTicker/TelegramDigestTicker.confidence 참고) -
+          퍼센트로 환산해 칩 안에 작게 덧붙인다(별도 배지로 분리하지 않음). */}
+      <span className="ml-1 font-normal opacity-70">{Math.round(ticker.confidence * 100)}%</span>
     </span>
   )
 }
