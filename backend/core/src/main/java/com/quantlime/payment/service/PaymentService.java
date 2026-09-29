@@ -6,11 +6,13 @@ import com.quantlime.common.lock.RedisLockService;
 import com.quantlime.infra.tosspayments.dto.TossBillingKeyResponse;
 import com.quantlime.infra.tosspayments.dto.TossPaymentApprovalResponse;
 import com.quantlime.payment.domain.Payment;
+import com.quantlime.payment.event.PaymentWebhookReceivedEvent;
 import com.quantlime.payment.exception.PaymentErrorCode;
 import com.quantlime.payment.implement.BillingProcessor;
 import com.quantlime.payment.implement.PaymentAppender;
 import com.quantlime.payment.implement.PaymentNotifier;
 import com.quantlime.payment.implement.PaymentReader;
+import com.quantlime.payment.implement.PaymentWebhookDedupStore;
 import com.quantlime.subscription.domain.Subscription;
 import com.quantlime.subscription.domain.SubscriptionPlan;
 import com.quantlime.subscription.domain.SubscriptionStatus;
@@ -19,12 +21,17 @@ import com.quantlime.subscription.implement.SubscriptionReader;
 import com.quantlime.subscription.service.SubscriptionPlanService;
 import com.quantlime.subscription.service.SubscriptionService;
 import com.quantlime.user.domain.User;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -72,6 +79,8 @@ public class PaymentService {
     private final BillingProcessor billingProcessor;
     private final PaymentNotifier paymentNotifier;
     private final RedisLockService redisLockService;
+    private final PaymentWebhookDedupStore paymentWebhookDedupStore;
+    private final ApplicationEventPublisher eventPublisher;
 
     // 카드 등록(빌링키 발급) 위젯 성공 콜백에서 호출한다 - 빌링키 발급과
     // 즉시 첫 결제를 한 번에 처리한다. Toss API 호출 자체는 트랜잭션
@@ -226,15 +235,44 @@ public class PaymentService {
         return paymentReader.getHistory(userId);
     }
 
-    // 최소 구현: 서명 검증 + 수신 로깅까지. 카드 자동결제는 승인이
-    // 동기(API 응답)로 오기 때문에 웹훅에 의존하는 상태 전이가 아직
-    // 없다 - 실제 페이로드를 받아보며 이벤트 타입별 처리를 확장한다.
+    // 서명 검증까지만 동기로 처리하고, 실제 처리는 카프카 컨슈머
+    // (PaymentWebhookConsumer, event 모듈)에 위임한다(2026-09-30, 카프카
+    // 다도메인 확장 Phase 3 - 이전엔 서명 검증+로깅을 컨트롤러 요청
+    // 스레드에서 그대로 처리했다). 컨트롤러가 Toss에 200을 최대한 빨리
+    // 돌려줘야 재전송을 피할 수 있고, 향후 이벤트 타입별 처리가 무거워져도
+    // 웹훅 수신 자체는 영향받지 않게 하기 위함(videofeed/market/subscription과
+    // 동일한 "수신과 처리 분리" 원칙).
     public void handleWebhook(String payload, String signatureHeader) {
         boolean valid = billingProcessor.verifyWebhookSignature(payload, signatureHeader);
         if (!valid) {
             throw new ValidationException(PaymentErrorCode.INVALID_WEBHOOK_SIGNATURE);
         }
-        log.info("토스페이먼츠 웹훅 수신: payload={}", payload);
+        eventPublisher.publishEvent(new PaymentWebhookReceivedEvent(sha256Hex(payload), payload));
+    }
+
+    /**
+     * {@code PaymentWebhookConsumer}가 호출한다. 멱등 체크 기준이
+     * payloadHash인 이유는 {@link PaymentWebhookReceivedEvent} 주석 참고 -
+     * 실제 이벤트 타입별 처리는 아직 없고(카드 자동결제 승인이 동기 API
+     * 응답으로 오기 때문에 웹훅에 의존하는 상태 전이가 아직 없음), 실제
+     * 페이로드를 받아보며 확장한다.
+     */
+    public void processWebhookEvent(String payloadHash, String payload) {
+        if (!paymentWebhookDedupStore.markProcessedIfAbsent(payloadHash)) {
+            log.info("이미 처리된 토스페이먼츠 웹훅, 스킵(멱등): payloadHash={}", payloadHash);
+            return;
+        }
+        log.info("토스페이먼츠 웹훅 처리: payloadHash={}, payload={}", payloadHash, payload);
+    }
+
+    private String sha256Hex(String payload) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(payload.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 알고리즘을 사용할 수 없습니다", e);
+        }
     }
 
     private void validateInstallmentMonths(int installmentMonths) {
