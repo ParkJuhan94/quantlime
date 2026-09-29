@@ -11,4 +11,11 @@ dependencies {
     // DLT 관측(2026-09-24) - @DltHandler에서 실패 카운터를 직접 등록한다
     // (core의 PythonEngineClient 등과 동일한 MeterRegistry 직접 사용 패턴).
     implementation 'io.micrometer:micrometer-core'
+
+    // PriceRefreshConsumer가 quant-engine 서킷 OPEN 시 던져지는
+    // CallNotPermittedException을 @RetryableTopic exclude에 참조하기 위함
+    // (2026-09-30) - core가 resilience4j-spring-boot3를 implementation으로만
+    // 선언해 이 모듈로 전이되지 않으므로 필요한 아티팩트만 직접 추가한다.
+    // 버전은 루트 build.gradle의 resilience4j-bom(2.2.0)이 관리한다.
+    implementation 'io.github.resilience4j:resilience4j-circuitbreaker'
 }
