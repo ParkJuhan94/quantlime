@@ -39,15 +39,24 @@ public class SubscriptionRenewalConsumer {
         paymentService.chargeRenewal(message.subscriptionId());
     }
 
+    // exceptionMessage 헤더는 반드시 required=false여야 한다(2026-09-30
+    // 실제 사고로 발견) - 이 핸들러 자신이 예외를 던지면(예: 헤더 파싱 실패)
+    // 그 실패가 "이 DLT 토픽 소비 중 발생한 새 실패"로 취급돼 같은 DLT
+    // 토픽에 다시 발행된다(다른 목적지가 없으므로). 헤더를 필수로 요구하면
+    // "헤더가 없다"는 이유로 던진 예외 자체가 헤더 없는 메시지를 다시
+    // 만들어내 무한 재발행 루프가 된다 - 로컬 실측으로 초당 100개 이상
+    // 증식하는 걸 확인했다. required=false로 두면 헤더가 없어도 메서드
+    // 자체는 정상 완료돼 이 루프가 원천 차단된다.
     @DltHandler
     public void onDlt(SubscriptionRenewalDueMessage message,
-        @Header(KafkaHeaders.DLT_EXCEPTION_MESSAGE) String exceptionMessage) {
+        @Header(value = KafkaHeaders.DLT_EXCEPTION_MESSAGE, required = false) String exceptionMessage) {
+        String reason = exceptionMessage != null ? exceptionMessage : "사유 미상(DLT 예외 헤더 없음)";
         log.error("구독 자동 갱신 카프카 재시도 소진(일시 장애 추정) - 기존 DB 재시도(내일/PAST_DUE) 경로로 합류: "
                 + "subscriptionId={}, error={}",
-            message.subscriptionId(), exceptionMessage);
-        paymentService.handleRenewalRetriesExhausted(message.subscriptionId(), exceptionMessage);
+            message.subscriptionId(), reason);
+        paymentService.handleRenewalRetriesExhausted(message.subscriptionId(), reason);
         dltNotifier.notify("subscription-renewal", SubscriptionTopics.SUBSCRIPTION_RENEWAL_DUE,
             "subscriptionId=" + message.subscriptionId() + " - 카프카 재시도(6.5분) 소진, "
-                + "기존 DB 재시도(내일/PAST_DUE) 경로로 처리함. error=" + exceptionMessage);
+                + "기존 DB 재시도(내일/PAST_DUE) 경로로 처리함. error=" + reason);
     }
 }

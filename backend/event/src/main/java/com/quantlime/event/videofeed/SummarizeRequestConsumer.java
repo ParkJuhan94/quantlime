@@ -31,12 +31,19 @@ public class SummarizeRequestConsumer {
         summaryProcessingService.processVideo(message.videoId());
     }
 
+    // 절대 예외를 던지면 안 된다 - TranscriptRequestConsumer.onDlt 주석 참고
+    // (2026-09-30, 무한 재발행 루프 실사고).
     @DltHandler
     public void onDlt(VideoTranscribedMessage message) {
-        log.error("AI 요약 최종 실패(재시도 소진, DLT 이관) - Kafka UI에서 확인 후 필요시 수동 재발행할 것: videoId={}",
-            message.videoId());
-        dltNotifier.notify("videofeed-summary", VideoFeedTopics.VIDEO_TRANSCRIBED,
-            "videoId=" + message.videoId() + " - AI 요약 최종 실패, 수동 재발행 필요"
-                + "(POST /api/admin/feed/summarize)");
+        try {
+            log.error("AI 요약 최종 실패(재시도 소진, DLT 이관) - Kafka UI에서 확인 후 필요시 수동 재발행할 것: videoId={}",
+                message.videoId());
+            dltNotifier.notify("videofeed-summary", VideoFeedTopics.VIDEO_TRANSCRIBED,
+                "videoId=" + message.videoId() + " - AI 요약 최종 실패, 수동 재발행 필요"
+                    + "(POST /api/admin/feed/summarize)");
+        } catch (Exception e) {
+            log.error("DLT 핸들러 자체 실패(무한 재발행 방지를 위해 예외를 삼킴): videoId={}",
+                message.videoId(), e);
+        }
     }
 }
