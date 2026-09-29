@@ -182,8 +182,14 @@ public class PythonEngineClient {
         }
     }
 
-    @CircuitBreaker(name = "quant-engine")
-    @Bulkhead(name = "quant-engine")
+    // fetchTranscript와 동일한 이유(2026-09-29)로 quant-engine과 분리 - 쿼터
+    // 소진(PYE_004/PYE_006)은 PythonEngineFailurePredicate가 실패 집계에서
+    // 제외해주지만, 그 외 summarize 자체의 진짜 장애(Gemini 5xx, 네트워크
+    // 오류 등)는 여전히 quant-engine CB를 열어 무관한 스코어/백테스트
+    // 호출까지 fail-fast로 막을 수 있었다(2026-09-13 자막 인시던트와 동일
+    // 클래스의 잠재 위험, videoId=5101/5117 재발 시점에 분리 결정).
+    @CircuitBreaker(name = "quant-engine-summarize")
+    @Bulkhead(name = "quant-engine-summarize")
     @RateLimiter(name = "quant-engine-summarize")
     public SummarizeApiResponse summarize(SummarizeApiRequest request) {
         Timer.Sample sample = Timer.start(meterRegistry);

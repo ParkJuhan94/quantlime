@@ -7,8 +7,11 @@ import com.quantlime.videofeed.domain.Video;
 import com.quantlime.videofeed.dto.request.TranscriptImportRequest;
 import com.quantlime.videofeed.repository.TranscriptRepository;
 import com.quantlime.videofeed.repository.VideoRepository;
+import java.net.ConnectException;
+import java.net.SocketTimeoutException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.NestedExceptionUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -51,8 +54,19 @@ public class LocalTranscriptSyncService {
                 transcript.getContent(), transcript.getCharCount()));
             log.info("자막 운영 동기화 완료: videoId={}, externalVideoId={}", videoId, video.getExternalVideoId());
         } catch (Exception e) {
-            log.warn("자막 운영 동기화 실패(다음 배치 스크립트가 보충함): videoId={}, reason={}",
-                videoId, e.getMessage());
+            log.warn("자막 운영 동기화 실패(다음 배치 스크립트가 보충함): videoId={}, reason={}{}",
+                videoId, e.getMessage(), connectionDownHint(e));
         }
+    }
+
+    // 연결 거부/타임아웃은 실제 장애보다 "운영 서버를 비용 절감 목적으로
+    // 꺼둔 상태"일 가능성이 커서(2026-09-15 도입 당시부터 상시 기동을
+    // 전제하지 않음) 원인 조사 시간을 아끼기 위해 로그에 바로 힌트를 남긴다.
+    private static String connectionDownHint(Throwable e) {
+        Throwable rootCause = NestedExceptionUtils.getRootCause(e);
+        if (rootCause instanceof ConnectException || rootCause instanceof SocketTimeoutException) {
+            return " (운영 서버가 비용 절감을 위해 꺼져 있을 수 있음 - 장애 아닐 가능성 높음)";
+        }
+        return "";
     }
 }

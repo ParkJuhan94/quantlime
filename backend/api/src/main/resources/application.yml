@@ -161,6 +161,15 @@ resilience4j:
         sliding-window-size: 10
         minimum-number-of-calls: 5
         wait-duration-in-open-state: 60s
+      # summarize도 위와 동일한 이유로 분리(2026-09-29, videoId=5101/5117
+      # 재발 검토 중 결정) - 쿼터 소진은 PythonEngineFailurePredicate가
+      # 실패 집계에서 걸러주지만, 그 외 진짜 장애는 여전히 quant-engine
+      # 인스턴스를 열어 스코어/백테스트까지 막을 수 있었다.
+      quant-engine-summarize:
+        base-config: default
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        wait-duration-in-open-state: 60s
       upbit:
         base-config: default
       naver-finance:
@@ -212,6 +221,10 @@ resilience4j:
       # 처리해 동시 호출이 사실상 없으므로 별도 상한 없이 기본값을 쓴다.
       quant-engine-transcript:
         base-config: default
+      # circuitbreaker와 동일한 이유로 분리(위 참고). summary-collector도
+      # 파티션 1개로 순차 처리해 동시 호출이 사실상 없다.
+      quant-engine-summarize:
+        base-config: default
       upbit:
         base-config: default
         max-concurrent-calls: 5
@@ -230,9 +243,9 @@ resilience4j:
         base-config: default
   # 요약 생성(2026-09-14) - Gemini 무료 티어 분당 한도(RPM=15, gemini-3.5-flash-lite
   # 실측)에 여유를 둔 값. 이 인스턴스도 PythonEngineClient.summarize() 하나에 걸려
-  # 있어 유튜브/텔레그램 두 경로가 함께 보호받는다(위 quant-engine-summarize
-  # circuitbreaker/bulkhead 없음에 유의 - 레이트리미터만 필요, 서킷은 quant-engine
-  # 인스턴스를 그대로 공유).
+  # 있어 유튜브/텔레그램 두 경로가 함께 보호받는다. circuitbreaker/bulkhead는
+  # 2026-09-29부로 위 quant-engine-summarize 인스턴스로 별도 분리됨(더 이상
+  # quant-engine과 공유하지 않음).
   ratelimiter:
     instances:
       quant-engine-summarize:
