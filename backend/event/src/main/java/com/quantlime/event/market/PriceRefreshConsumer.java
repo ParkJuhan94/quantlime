@@ -4,6 +4,7 @@ import com.quantlime.event.observability.KafkaDltNotifier;
 import com.quantlime.market.service.MarketDataRefreshService;
 import com.quantlime.market.service.PriceRefreshBatchGate;
 import com.quantlime.score.domain.PeerGroup;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.DltHandler;
@@ -31,6 +32,21 @@ import org.springframework.stereotype.Component;
  * 종목 하나가 재시도 소진 후 DLT로 가는데도 카운터를 안 줄이면, {@code
  * MarketDataRefreshService.refreshAll()}의 fan-in 대기가 이 배치에서
  * 영원히(타임아웃까지) 정규화를 못 하게 된다.
+ *
+ * <p><b>{@code exclude = CallNotPermittedException.class}인 이유</b>(2026-09-30,
+ * 9/24~25 국내 배치 0%-정체 조사 후속): quant-engine 서킷("quant-engine"
+ * 인스턴스)이 이미 OPEN이면 {@code calculateScoreSeries} 호출이 즉시
+ * {@link CallNotPermittedException}으로 실패한다 - 재시도해도 서킷이 다시
+ * 닫히기 전까지는 100% 같은 결과다. 이 경우까지 일반 재시도 사이클(4회,
+ * 30s→90s→270s, 최악 약 6분/종목)을 그대로 타면, concurrency=1인 이 리스너가
+ * 전 종목(국내 약 2,500개)을 순차 처리하는 구조상 quant-engine이 전면
+ * 장애일 때 배치 하나가 55분 타임아웃 내내 거의 진행되지 못하는 위험이
+ * 있었다(실측은 아니고 코드 추론 - 재현 시도 시점엔 quant-engine이 정상이라
+ * 재현 실패, `docs/CHANGELOG.md` 2026-09-29/30 항목 참고). 이 예외만 재시도
+ * 사이클을 건너뛰고 곧장 DLT로 보내 - 개별 종목의 일시적 실패는 기존과
+ * 동일하게 4회 재시도+DLT 알림을 그대로 받고, 서킷이 열릴 정도의 전면
+ * 장애일 때만 종목당 대기시간이 즉시 DLT 전환 수준으로 줄어 배치 전체
+ * 정체를 막는다.
  */
 @Slf4j
 @Component
@@ -41,7 +57,8 @@ public class PriceRefreshConsumer {
     private final PriceRefreshBatchGate priceRefreshBatchGate;
     private final KafkaDltNotifier dltNotifier;
 
-    @RetryableTopic(attempts = "4", backoff = @Backoff(delay = 30_000, multiplier = 3.0, maxDelay = 270_000))
+    @RetryableTopic(attempts = "4", backoff = @Backoff(delay = 30_000, multiplier = 3.0, maxDelay = 270_000),
+        exclude = CallNotPermittedException.class)
     @KafkaListener(topics = MarketTopics.PRICE_REFRESH_REQUESTED, groupId = "price-refresh-collector",
         concurrency = "1")
     public void onPriceRefreshRequested(PriceRefreshRequestedMessage message) {
