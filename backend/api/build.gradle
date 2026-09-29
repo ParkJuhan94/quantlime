@@ -36,6 +36,11 @@ dependencies {
     implementation 'com.github.gavlyukovskiy:datasource-proxy-spring-boot-starter:1.12.1'
 
     runtimeOnly 'me.paulschwarz:spring-dotenv:4.0.0'
+
+    // 카프카 통합 테스트(2026-09-30) - 발행→실브로커 전송→컨슈머 소비를
+    // 비동기로 검증할 때 폴링 대기가 필요. Thread.sleep 고정 대기 대신
+    // 표준 폴링 라이브러리 사용(PaymentWebhookKafkaIntegrationTest 최초 도입).
+    testImplementation 'org.awaitility:awaitility:4.2.2'
 }
 
 tasks.named('bootJar') { enabled = true }
