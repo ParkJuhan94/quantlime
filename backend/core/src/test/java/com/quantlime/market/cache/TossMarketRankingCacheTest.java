@@ -55,17 +55,17 @@ class TossMarketRankingCacheTest {
     }
 
     @Test
-    @DisplayName("[해외 거래대금은 marketCountry=US, type=MARKET_TRADING_AMOUNT, duration=realtime로 조회한다]")
-    void get_overseasAmount_callsRankingApiWithUsTradingAmountRealtime() {
+    @DisplayName("[해외 거래대금은 marketCountry=US, type=MARKET_TRADING_AMOUNT, duration=1d로 조회한다]")
+    void get_overseasAmount_callsRankingApiWithUsTradingAmount1d() {
         // given
-        given(tossApiClient.getRankings("MARKET_TRADING_AMOUNT", "US", "realtime", 100))
+        given(tossApiClient.getRankings("MARKET_TRADING_AMOUNT", "US", "1d", 100))
             .willReturn(emptyResponse());
 
         // when
         tossMarketRankingCache.get("overseas", "amount");
 
         // then
-        verify(tossApiClient, times(1)).getRankings("MARKET_TRADING_AMOUNT", "US", "realtime", 100);
+        verify(tossApiClient, times(1)).getRankings("MARKET_TRADING_AMOUNT", "US", "1d", 100);
     }
 
     @Test
@@ -139,7 +139,7 @@ class TossMarketRankingCacheTest {
         // given: 삼성전자(로컬 존재)와 ETF 코드(로컬 미존재)가 함께 응답됨
         Stock stock = StockFixture.createStock("005930", "삼성전자");
         given(stockRepository.findByStockCodeIn(anyList())).willReturn(List.of(stock));
-        given(tossApiClient.getRankings("MARKET_TRADING_AMOUNT", "KR", "realtime", 100)).willReturn(
+        given(tossApiClient.getRankings("MARKET_TRADING_AMOUNT", "KR", "1d", 100)).willReturn(
             responseOf(
                 new RankingItem(1, "005930", "KRW",
                     new RankingPrice("56500", "55800", "0.0125"), "18432100", "1041436650000"),
