@@ -140,7 +140,10 @@ def _average_available(scores: list[float | None]) -> float | None:
 
 
 def _apply_downtrend_gate(
-    mean_reversion_raw: float | None, close: float, ma_60: float | None, ma_120: float | None,
+    mean_reversion_raw: float | None,
+    close: float,
+    ma_60: float | None,
+    ma_120: float | None,
 ) -> float | None:
     """장기 하락추세(종가<120일선 및 60일선<120일선)에서는 평균회귀 원점수를
     중심(50) 쪽으로 당겨 억제한다.
@@ -161,9 +164,7 @@ def _apply_downtrend_gate(
 def _volume_multiplier(volume_ratio: float | None) -> float:
     if _is_missing(volume_ratio):
         return 1.0
-    scaled = min(
-        max((volume_ratio - 1.0) / 1.0, VOLUME_RATIO_CLAMP_MIN), VOLUME_RATIO_CLAMP_MAX
-    )
+    scaled = min(max((volume_ratio - 1.0) / 1.0, VOLUME_RATIO_CLAMP_MIN), VOLUME_RATIO_CLAMP_MAX)
     return 1.0 + VOLUME_MULTIPLIER_COEF * scaled
 
 
@@ -236,9 +237,7 @@ def calculate_score(latest: dict) -> ScoreResult:
     rsi_score = _rsi_score(latest.get("rsi"))
     bb_score = _bb_score(latest.get("bollinger_percent_b"))
     mean_reversion_raw = _average_available([rsi_score, bb_score])
-    mean_reversion_raw = _apply_downtrend_gate(
-        mean_reversion_raw, close, latest.get("ma_60"), latest.get("ma_120")
-    )
+    mean_reversion_raw = _apply_downtrend_gate(mean_reversion_raw, close, latest.get("ma_60"), latest.get("ma_120"))
 
     macd_score = _macd_score(latest.get("macd_histogram"), latest.get("macd_histogram_std60"), close)
     ma_values = {p: latest.get(f"ma_{p}") for p in MA_PERIODS}
@@ -290,16 +289,18 @@ def compute_scores(indicator_df: pd.DataFrame) -> pd.DataFrame:
     records = []
     for row in indicator_df.to_dict("records"):
         result = calculate_score(row)
-        records.append({
-            "date": row["date"],
-            "close": row["close"],
-            "trend_score": result.trend_score,
-            "mean_reversion_score": result.mean_reversion_score,
-            "composite_score": result.composite_score,
-            "grade": result.grade,
-            "quadrant": result.quadrant,
-            "insufficient_data": result.insufficient_data,
-            "divergence_flag": result.divergence.flag if result.divergence else None,
-            "divergence_message": result.divergence.message if result.divergence else None,
-        })
+        records.append(
+            {
+                "date": row["date"],
+                "close": row["close"],
+                "trend_score": result.trend_score,
+                "mean_reversion_score": result.mean_reversion_score,
+                "composite_score": result.composite_score,
+                "grade": result.grade,
+                "quadrant": result.quadrant,
+                "insufficient_data": result.insufficient_data,
+                "divergence_flag": result.divergence.flag if result.divergence else None,
+                "divergence_message": result.divergence.message if result.divergence else None,
+            }
+        )
     return pd.DataFrame.from_records(records)

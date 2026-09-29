@@ -62,8 +62,11 @@ class TestGenerateCommentFallback:
     def test_both_axes_missing_returns_full_insufficient_message(self):
         # given
         result = _result(
-            trend_score=None, mean_reversion_score=None,
-            composite_score=None, grade=None, divergence=None,
+            trend_score=None,
+            mean_reversion_score=None,
+            composite_score=None,
+            grade=None,
+            divergence=None,
             insufficient_data=True,
         )
 

@@ -16,12 +16,14 @@ from calculator.cross_sectional import (
 def _stock_scores_df(seed: int, n: int, start: str = "2026-01-01") -> pd.DataFrame:
     rng = np.random.default_rng(seed)
     dates = pd.date_range(start, periods=n, freq="B").strftime("%Y-%m-%d")
-    return pd.DataFrame({
-        "date": dates,
-        "close": 100 + np.cumsum(rng.normal(0, 1, size=n)),
-        "trend_score": rng.uniform(0, 100, size=n),
-        "mean_reversion_score": rng.uniform(0, 100, size=n),
-    })
+    return pd.DataFrame(
+        {
+            "date": dates,
+            "close": 100 + np.cumsum(rng.normal(0, 1, size=n)),
+            "trend_score": rng.uniform(0, 100, size=n),
+            "mean_reversion_score": rng.uniform(0, 100, size=n),
+        }
+    )
 
 
 def _benchmark_df(n: int, start: str = "2026-01-01") -> pd.DataFrame:
@@ -56,12 +58,14 @@ class TestBuildPanel:
 class TestDailyCrossSectionalIc:
     def test_below_min_stocks_per_date_is_excluded(self):
         dates = ["2026-01-01"] * 5
-        panel = pd.DataFrame({
-            "date": dates,
-            "score": [1, 2, 3, 4, 5],
-            "excess_return": [0.01, 0.02, 0.03, 0.04, 0.05],
-            "stock_code": ["a", "b", "c", "d", "e"],
-        })
+        panel = pd.DataFrame(
+            {
+                "date": dates,
+                "score": [1, 2, 3, 4, 5],
+                "excess_return": [0.01, 0.02, 0.03, 0.04, 0.05],
+                "stock_code": ["a", "b", "c", "d", "e"],
+            }
+        )
 
         result = _daily_cross_sectional_ic(panel)
 
@@ -70,12 +74,14 @@ class TestDailyCrossSectionalIc:
     def test_perfect_monotonic_relationship_yields_ic_near_one(self):
         n_stocks = MIN_STOCKS_PER_DATE
         dates = ["2026-01-01"] * n_stocks
-        panel = pd.DataFrame({
-            "date": dates,
-            "score": list(range(n_stocks)),
-            "excess_return": [i * 0.001 for i in range(n_stocks)],
-            "stock_code": [f"s{i}" for i in range(n_stocks)],
-        })
+        panel = pd.DataFrame(
+            {
+                "date": dates,
+                "score": list(range(n_stocks)),
+                "excess_return": [i * 0.001 for i in range(n_stocks)],
+                "stock_code": [f"s{i}" for i in range(n_stocks)],
+            }
+        )
 
         result = _daily_cross_sectional_ic(panel)
 
@@ -85,12 +91,16 @@ class TestDailyCrossSectionalIc:
         n_stocks = MIN_STOCKS_PER_DATE
         frames = []
         for date in ["2026-01-01", "2026-01-02"]:
-            frames.append(pd.DataFrame({
-                "date": [date] * n_stocks,
-                "score": list(range(n_stocks)),
-                "excess_return": [i * 0.001 for i in range(n_stocks)],
-                "stock_code": [f"s{i}" for i in range(n_stocks)],
-            }))
+            frames.append(
+                pd.DataFrame(
+                    {
+                        "date": [date] * n_stocks,
+                        "score": list(range(n_stocks)),
+                        "excess_return": [i * 0.001 for i in range(n_stocks)],
+                        "stock_code": [f"s{i}" for i in range(n_stocks)],
+                    }
+                )
+            )
         panel = pd.concat(frames, ignore_index=True)
 
         result = _daily_cross_sectional_ic(panel)
@@ -118,12 +128,16 @@ class TestCrossSectionalBuckets:
         n_stocks = 20
         frames = []
         for date in ["2026-01-01", "2026-01-02"]:
-            frames.append(pd.DataFrame({
-                "date": [date] * n_stocks,
-                "score": list(range(n_stocks)),
-                "excess_return": [i * 0.001 for i in range(n_stocks)],
-                "stock_code": [f"s{i}" for i in range(n_stocks)],
-            }))
+            frames.append(
+                pd.DataFrame(
+                    {
+                        "date": [date] * n_stocks,
+                        "score": list(range(n_stocks)),
+                        "excess_return": [i * 0.001 for i in range(n_stocks)],
+                        "stock_code": [f"s{i}" for i in range(n_stocks)],
+                    }
+                )
+            )
         panel = pd.concat(frames, ignore_index=True)
 
         buckets = _cross_sectional_buckets(panel)
@@ -139,12 +153,14 @@ class TestCrossSectionalBuckets:
 
 class TestCircularShiftPanel:
     def test_preserves_score_multiset_per_stock(self):
-        panel = pd.DataFrame({
-            "date": ["2026-01-01", "2026-01-02", "2026-01-03"] * 2,
-            "score": [10.0, 20.0, 30.0, 100.0, 200.0, 300.0],
-            "excess_return": [0.01, 0.02, 0.03, 0.04, 0.05, 0.06],
-            "stock_code": ["a", "a", "a", "b", "b", "b"],
-        })
+        panel = pd.DataFrame(
+            {
+                "date": ["2026-01-01", "2026-01-02", "2026-01-03"] * 2,
+                "score": [10.0, 20.0, 30.0, 100.0, 200.0, 300.0],
+                "excess_return": [0.01, 0.02, 0.03, 0.04, 0.05, 0.06],
+                "stock_code": ["a", "a", "a", "b", "b", "b"],
+            }
+        )
         rng = np.random.default_rng(0)
 
         shifted = _circular_shift_panel(panel, rng)
@@ -157,12 +173,14 @@ class TestCircularShiftPanel:
     def test_actually_changes_alignment_with_high_probability(self):
         # given: 회전 오프셋이 1..n-1 범위라 n>=2면 최소 한 번은 원본과
         # 달라야 한다(순열 정체성 방지)
-        panel = pd.DataFrame({
-            "date": [f"2026-01-{d:02d}" for d in range(1, 11)],
-            "score": list(range(10)),
-            "excess_return": [i * 0.001 for i in range(10)],
-            "stock_code": ["a"] * 10,
-        })
+        panel = pd.DataFrame(
+            {
+                "date": [f"2026-01-{d:02d}" for d in range(1, 11)],
+                "score": list(range(10)),
+                "excess_return": [i * 0.001 for i in range(10)],
+                "stock_code": ["a"] * 10,
+            }
+        )
         rng = np.random.default_rng(0)
 
         shifted = _circular_shift_panel(panel, rng)
@@ -188,7 +206,12 @@ class TestRunCrossSectionalBacktest:
         benchmark_df = _benchmark_df(n)
 
         stat = run_cross_sectional_backtest(
-            stocks, benchmark_df, axis="mean_reversion", horizon=5, null_test=True, null_repeats=10,
+            stocks,
+            benchmark_df,
+            axis="mean_reversion",
+            horizon=5,
+            null_test=True,
+            null_repeats=10,
         )
 
         if stat.mean_ic is not None:

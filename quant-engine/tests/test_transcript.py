@@ -13,13 +13,13 @@ from transcript.fetcher import chunk_text, fetch_transcript
 
 
 def _fetched(text_parts: list[str], is_generated: bool = True, language_code: str = "ko") -> FetchedTranscript:
-    snippets = [
-        FetchedTranscriptSnippet(text=text, start=float(i), duration=1.0)
-        for i, text in enumerate(text_parts)
-    ]
+    snippets = [FetchedTranscriptSnippet(text=text, start=float(i), duration=1.0) for i, text in enumerate(text_parts)]
     return FetchedTranscript(
-        snippets=snippets, video_id="v1", language="Korean",
-        language_code=language_code, is_generated=is_generated,
+        snippets=snippets,
+        video_id="v1",
+        language="Korean",
+        language_code=language_code,
+        is_generated=is_generated,
     )
 
 
@@ -52,10 +52,14 @@ class TestFetchTranscript:
 
             assert result.content == "첫줄 둘째줄"
 
-    @pytest.mark.parametrize("build_exception", [
-        lambda: TranscriptsDisabled("v1"),
-        lambda: NoTranscriptFound("v1", ["ko", "en"], None),
-    ], ids=["TranscriptsDisabled", "NoTranscriptFound"])
+    @pytest.mark.parametrize(
+        "build_exception",
+        [
+            lambda: TranscriptsDisabled("v1"),
+            lambda: NoTranscriptFound("v1", ["ko", "en"], None),
+        ],
+        ids=["TranscriptsDisabled", "NoTranscriptFound"],
+    )
     def test_returns_unavailable_when_no_captions_exist(self, build_exception):
         exception = build_exception()
         with patch("transcript.fetcher.YouTubeTranscriptApi") as mock_api_cls:

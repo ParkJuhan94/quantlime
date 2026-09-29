@@ -130,9 +130,7 @@ def _forward_return(close: pd.Series, entry_idx: int, horizon: int) -> float | N
     return float(exit_price / entry_price - 1.0)
 
 
-def _excess_returns_for_horizon(
-    merged: pd.DataFrame, score_col: str, horizon: int, warmup_days: int
-) -> pd.DataFrame:
+def _excess_returns_for_horizon(merged: pd.DataFrame, score_col: str, horizon: int, warmup_days: int) -> pd.DataFrame:
     """스코어가 나온 날(T)의 다음 날(T+1) 종가를 진입가로 삼아, horizon 뒤
     청산했을 때의 종목-벤치마크 초과수익률을 각 T마다 계산한다. 종목 자기
     이력 기준 워밍업 구간(`_score_row_index < warmup_days`)은 제외한다.
@@ -151,11 +149,13 @@ def _excess_returns_for_horizon(
         bench_ret = _forward_return(benchmark_close, entry_idx, horizon)
         if stock_ret is None or bench_ret is None:
             continue
-        rows.append({
-            "date": merged["date"].iloc[t],
-            "score": float(score),
-            "excess_return": stock_ret - bench_ret,
-        })
+        rows.append(
+            {
+                "date": merged["date"].iloc[t],
+                "score": float(score),
+                "excess_return": stock_ret - bench_ret,
+            }
+        )
     return pd.DataFrame(rows, columns=["date", "score", "excess_return"])
 
 
@@ -210,9 +210,7 @@ def _quantile_buckets(df: pd.DataFrame) -> list[BucketStat]:
         return []
     try:
         bucketed = df.copy()
-        bucketed["bucket"] = (
-            pd.qcut(bucketed["score"], QUANTILE_COUNT, labels=False, duplicates="drop") + 1
-        )
+        bucketed["bucket"] = pd.qcut(bucketed["score"], QUANTILE_COUNT, labels=False, duplicates="drop") + 1
     except ValueError:
         # 표본이 너무 적거나 스코어가 거의 동일해 5분위로 나눌 수 없는 경우
         # (pandas qcut이 ValueError를 던진다) - 버킷 없이 IC/샘플수만 보고한다.
@@ -230,13 +228,15 @@ def _quantile_buckets(df: pd.DataFrame) -> list[BucketStat]:
     result = []
     for bucket in bucket_labels:
         bucket_df = bucketed[bucketed["bucket"] == bucket]
-        result.append(BucketStat(
-            bucket=int(bucket),
-            mean_excess_return=float(bucket_df["excess_return"].mean()),
-            median_excess_return=float(bucket_df["excess_return"].median()),
-            hit_rate=float((bucket_df["excess_return"] > 0).mean()),
-            sample_size=len(bucket_df),
-        ))
+        result.append(
+            BucketStat(
+                bucket=int(bucket),
+                mean_excess_return=float(bucket_df["excess_return"].mean()),
+                median_excess_return=float(bucket_df["excess_return"].median()),
+                hit_rate=float((bucket_df["excess_return"] > 0).mean()),
+                sample_size=len(bucket_df),
+            )
+        )
     return result
 
 
@@ -267,14 +267,16 @@ def run_axis_backtest(merged: pd.DataFrame, axis: str) -> AxisBacktestResult:
         excess_df = _excess_returns_for_horizon(merged, score_col, horizon, warmup_days)
         block_size = max(2 * horizon, BLOCK_SIZE)
         ic, ci_low, ci_high = _rank_ic_with_bootstrap(excess_df, block_size=block_size, rng=rng)
-        horizon_stats.append(HorizonStat(
-            horizon=horizon,
-            rank_ic=ic,
-            rank_ic_ci_low=ci_low,
-            rank_ic_ci_high=ci_high,
-            sample_size=len(excess_df),
-            buckets=_quantile_buckets(excess_df),
-        ))
+        horizon_stats.append(
+            HorizonStat(
+                horizon=horizon,
+                rank_ic=ic,
+                rank_ic_ci_low=ci_low,
+                rank_ic_ci_high=ci_high,
+                sample_size=len(excess_df),
+                buckets=_quantile_buckets(excess_df),
+            )
+        )
     return AxisBacktestResult(
         axis=axis,
         horizons=horizon_stats,

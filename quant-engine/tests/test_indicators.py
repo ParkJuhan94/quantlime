@@ -122,19 +122,28 @@ class TestComputeVolumeRatio:
 class TestComputeAllIndicators:
     def test_adds_all_expected_columns(self):
         # given
-        df = pd.DataFrame({
-            "close": [100 + i for i in range(130)],
-            "volume": [1000.0] * 130,
-        })
+        df = pd.DataFrame(
+            {
+                "close": [100 + i for i in range(130)],
+                "volume": [1000.0] * 130,
+            }
+        )
 
         # when
         result = compute_all_indicators(df)
 
         # then
         expected_columns = {
-            "rsi", "macd_histogram", "macd_histogram_std60",
-            "bollinger_percent_b", "volume_ratio",
-            "ma_5", "ma_10", "ma_20", "ma_60", "ma_120",
+            "rsi",
+            "macd_histogram",
+            "macd_histogram_std60",
+            "bollinger_percent_b",
+            "volume_ratio",
+            "ma_5",
+            "ma_10",
+            "ma_20",
+            "ma_60",
+            "ma_120",
         }
         assert expected_columns.issubset(result.columns)
         # 130일치 데이터가 있으므로 마지막 행은 모든 지표가 계산 가능해야 함

@@ -66,8 +66,12 @@ class CrossSectionalHorizonStat:
 
 
 def _stock_panel(
-    stock_code: str, scores_df: pd.DataFrame, benchmark_df: pd.DataFrame,
-    score_col: str, horizon: int, warmup_days: int,
+    stock_code: str,
+    scores_df: pd.DataFrame,
+    benchmark_df: pd.DataFrame,
+    score_col: str,
+    horizon: int,
+    warmup_days: int,
 ) -> pd.DataFrame:
     """한 종목의 (날짜, 스코어, horizon일 뒤 초과수익률)을 df로 만든다.
     `_excess_returns_for_horizon`(backtest.py, 워밍업 제외 로직 포함)을
@@ -83,7 +87,10 @@ def _stock_panel(
 
 
 def build_panel(
-    stocks: list[tuple[str, pd.DataFrame]], benchmark_df: pd.DataFrame, axis: str, horizon: int,
+    stocks: list[tuple[str, pd.DataFrame]],
+    benchmark_df: pd.DataFrame,
+    axis: str,
+    horizon: int,
 ) -> pd.DataFrame:
     """여러 종목의 스코어 시계열을 받아 한 horizon·한 축에 대한 (날짜, 종목,
     스코어, 초과수익률) 통합 패널을 만든다. `stocks`는 (stock_code,
@@ -92,10 +99,7 @@ def build_panel(
     """
     score_col = "trend_score" if axis == "trend" else "mean_reversion_score"
     warmup_days = WARMUP_TRADING_DAYS[axis]
-    frames = [
-        _stock_panel(code, df, benchmark_df, score_col, horizon, warmup_days)
-        for code, df in stocks
-    ]
+    frames = [_stock_panel(code, df, benchmark_df, score_col, horizon, warmup_days) for code, df in stocks]
     frames = [f for f in frames if not f.empty]
     if not frames:
         return pd.DataFrame(columns=["date", "score", "excess_return", "stock_code"])
@@ -120,7 +124,9 @@ def _daily_cross_sectional_ic(panel: pd.DataFrame) -> pd.Series:
 
 
 def _bootstrap_daily_ic(
-    daily_ic: pd.Series, block_size: int = DATE_BLOCK_SIZE, rng: np.random.Generator | None = None,
+    daily_ic: pd.Series,
+    block_size: int = DATE_BLOCK_SIZE,
+    rng: np.random.Generator | None = None,
 ) -> tuple[float | None, float | None]:
     n = len(daily_ic)
     if n < block_size * 2:
@@ -167,13 +173,15 @@ def _cross_sectional_buckets(panel: pd.DataFrame) -> list[BucketStat]:
     result = []
     for bucket in sorted(bucketed["bucket"].unique()):
         rows = bucketed[bucketed["bucket"] == bucket]
-        result.append(BucketStat(
-            bucket=int(bucket),
-            mean_excess_return=float(rows["excess_return"].mean()),
-            median_excess_return=float(rows["excess_return"].median()),
-            hit_rate=float((rows["excess_return"] > 0).mean()),
-            sample_size=len(rows),
-        ))
+        result.append(
+            BucketStat(
+                bucket=int(bucket),
+                mean_excess_return=float(rows["excess_return"].mean()),
+                median_excess_return=float(rows["excess_return"].median()),
+                hit_rate=float((rows["excess_return"] > 0).mean()),
+                sample_size=len(rows),
+            )
+        )
     return result
 
 
@@ -182,6 +190,7 @@ def _circular_shift_panel(panel: pd.DataFrame, rng: np.random.Generator) -> pd.D
     각 종목의 스코어 자기상관·분포, 초과수익률 시계열은 그대로 보존하고
     "그 날짜의 진짜 스코어"만 다른 날의 스코어로 바꿔치기한다.
     """
+
     def _shift(group: pd.DataFrame) -> pd.DataFrame:
         n = len(group)
         shifted = group.sort_values("date").copy()
@@ -196,13 +205,15 @@ def _circular_shift_panel(panel: pd.DataFrame, rng: np.random.Generator) -> pd.D
 
 
 def _horizon_stat(
-    panel: pd.DataFrame, horizon: int, null_test: bool, null_repeats: int, rng: np.random.Generator,
+    panel: pd.DataFrame,
+    horizon: int,
+    null_test: bool,
+    null_repeats: int,
+    rng: np.random.Generator,
 ) -> CrossSectionalHorizonStat:
     daily_ic = _daily_cross_sectional_ic(panel)
     mean_ic = float(daily_ic.mean()) if len(daily_ic) > 0 else None
-    ci_low, ci_high = (
-        _bootstrap_daily_ic(daily_ic, rng=rng) if mean_ic is not None else (None, None)
-    )
+    ci_low, ci_high = _bootstrap_daily_ic(daily_ic, rng=rng) if mean_ic is not None else (None, None)
 
     stat = CrossSectionalHorizonStat(
         horizon=horizon,
