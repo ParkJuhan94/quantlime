@@ -67,15 +67,26 @@ public class PriceRefreshConsumer {
         priceRefreshBatchGate.completeOne(message.runId(), peerGroup);
     }
 
+    // 절대 예외를 던지면 안 된다(2026-09-30, SubscriptionRenewalConsumer에서
+    // 실제로 겪은 무한 재발행 루프 사고 - TranscriptRequestConsumer.onDlt 주석
+    // 참고). 특히 이 핸들러는 completeOne(Redis DECR)이 Redis 장애 시 던질 수
+    // 있는데, 그 경우에도 무한루프에 빠지면 안 되므로 try/catch가 더욱 중요하다 -
+    // 다만 카운터 감소 자체가 실패하면 배치 fan-in이 못 끝나는 문제는 여전히
+    // 남는다(별도 개선 과제, 일단 무한루프만 우선 차단).
     @DltHandler
     public void onDlt(PriceRefreshRequestedMessage message) {
-        priceRefreshBatchGate.completeOne(message.runId(), PeerGroup.of(message.peerGroup()));
-        log.error("가격 갱신 최종 실패(재시도 소진, DLT 이관) - 다음 정기 배치(16:00/20:10)에서 자동 재시도됨: "
-                + "stockCode={}, runId={}",
-            message.stockCode(), message.runId());
-        dltNotifier.notify("market-price-refresh", MarketTopics.PRICE_REFRESH_REQUESTED,
-            "stockCode=" + message.stockCode() + ", runId=" + message.runId()
-                + " - 가격/스코어 갱신 최종 실패. 이 종목만 이번 배치에서 갱신되지 않았고, "
-                + "다음 정기 배치(16:00/20:10)에서 자동 재시도됩니다.");
+        try {
+            priceRefreshBatchGate.completeOne(message.runId(), PeerGroup.of(message.peerGroup()));
+            log.error("가격 갱신 최종 실패(재시도 소진, DLT 이관) - 다음 정기 배치(16:00/20:10)에서 자동 재시도됨: "
+                    + "stockCode={}, runId={}",
+                message.stockCode(), message.runId());
+            dltNotifier.notify("market-price-refresh", MarketTopics.PRICE_REFRESH_REQUESTED,
+                "stockCode=" + message.stockCode() + ", runId=" + message.runId()
+                    + " - 가격/스코어 갱신 최종 실패. 이 종목만 이번 배치에서 갱신되지 않았고, "
+                    + "다음 정기 배치(16:00/20:10)에서 자동 재시도됩니다.");
+        } catch (Exception e) {
+            log.error("DLT 핸들러 자체 실패(무한 재발행 방지를 위해 예외를 삼킴): stockCode={}, runId={}",
+                message.stockCode(), message.runId(), e);
+        }
     }
 }
