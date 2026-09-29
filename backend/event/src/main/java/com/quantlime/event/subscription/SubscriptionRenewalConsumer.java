@@ -47,16 +47,26 @@ public class SubscriptionRenewalConsumer {
     // 만들어내 무한 재발행 루프가 된다 - 로컬 실측으로 초당 100개 이상
     // 증식하는 걸 확인했다. required=false로 두면 헤더가 없어도 메서드
     // 자체는 정상 완료돼 이 루프가 원천 차단된다.
+    // try/catch 방어(2026-09-30 테스트 보강 세션에서 발견) - 헤더 fallback만
+    // 적용돼 있고 이 메서드 자체가 실패할 경우(예: handleRenewalRetriesExhausted가
+    // 구독 조회/DB 제약 위반으로 예외를 던지는 경우)의 방어가 나머지 5개
+    // @DltHandler와 달리 빠져 있었다 - 다른 핸들러와 동일한 불변식(DltHandler는
+    // 절대 예외를 던지지 않는다)을 여기도 적용한다.
     @DltHandler
     public void onDlt(SubscriptionRenewalDueMessage message,
         @Header(value = KafkaHeaders.DLT_EXCEPTION_MESSAGE, required = false) String exceptionMessage) {
-        String reason = exceptionMessage != null ? exceptionMessage : "사유 미상(DLT 예외 헤더 없음)";
-        log.error("구독 자동 갱신 카프카 재시도 소진(일시 장애 추정) - 기존 DB 재시도(내일/PAST_DUE) 경로로 합류: "
-                + "subscriptionId={}, error={}",
-            message.subscriptionId(), reason);
-        paymentService.handleRenewalRetriesExhausted(message.subscriptionId(), reason);
-        dltNotifier.notify("subscription-renewal", SubscriptionTopics.SUBSCRIPTION_RENEWAL_DUE,
-            "subscriptionId=" + message.subscriptionId() + " - 카프카 재시도(6.5분) 소진, "
-                + "기존 DB 재시도(내일/PAST_DUE) 경로로 처리함. error=" + reason);
+        try {
+            String reason = exceptionMessage != null ? exceptionMessage : "사유 미상(DLT 예외 헤더 없음)";
+            log.error("구독 자동 갱신 카프카 재시도 소진(일시 장애 추정) - 기존 DB 재시도(내일/PAST_DUE) 경로로 합류: "
+                    + "subscriptionId={}, error={}",
+                message.subscriptionId(), reason);
+            paymentService.handleRenewalRetriesExhausted(message.subscriptionId(), reason);
+            dltNotifier.notify("subscription-renewal", SubscriptionTopics.SUBSCRIPTION_RENEWAL_DUE,
+                "subscriptionId=" + message.subscriptionId() + " - 카프카 재시도(6.5분) 소진, "
+                    + "기존 DB 재시도(내일/PAST_DUE) 경로로 처리함. error=" + reason);
+        } catch (Exception e) {
+            log.error("DLT 핸들러 자체 실패(무한 재발행 방지를 위해 예외를 삼킴): subscriptionId={}",
+                message.subscriptionId(), e);
+        }
     }
 }
