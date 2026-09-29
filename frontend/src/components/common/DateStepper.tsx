@@ -16,9 +16,7 @@ interface DateStepperProps {
 export function DateStepper({ selectedDate, canGoPrev, canGoNext, onPrev, onNext }: DateStepperProps) {
   return (
     <div className="flex items-center gap-2">
-      <span className="min-w-[104px] text-right text-xs font-medium text-gray-700">
-        {formatDayLabel(selectedDate)}
-      </span>
+      <span className="min-w-[104px] text-right text-xs font-medium text-gray-700">{formatDayLabel(selectedDate)}</span>
 
       <div className="flex items-center overflow-hidden rounded-lg border border-gray-200">
         <button

@@ -220,7 +220,10 @@ export const CandleChart = forwardRef<CandleChartHandle, CandleChartProps>(funct
 
     if (indicators.bollingerBands) {
       const { upper, middle, lower } = calculateBollingerBands(
-        closes, indicators.bollingerBandsParams.period, indicators.bollingerBandsParams.multiplier)
+        closes,
+        indicators.bollingerBandsParams.period,
+        indicators.bollingerBandsParams.multiplier,
+      )
       const bands: Array<{ key: string; values: Array<number | null>; line: LineStyleSettings }> = [
         { key: 'bb-upper', values: upper, line: indicators.bollingerBandsLines.upper },
         { key: 'bb-middle', values: middle, line: indicators.bollingerBandsLines.middle },
@@ -256,9 +259,20 @@ export const CandleChart = forwardRef<CandleChartHandle, CandleChartProps>(funct
     if (indicators.ichimoku) {
       const { tenkanPeriod, kijunPeriod, senkouBPeriod } = indicators.ichimokuParams
       const { tenkan, kijun, senkouA, senkouB, chikou } = calculateIchimoku(
-        highs, lows, closes, tenkanPeriod, kijunPeriod, senkouBPeriod)
-      const { tenkan: tenkanLine, kijun: kijunLine, senkouA: senkouALine,
-        senkouB: senkouBLine, chikou: chikouLine } = indicators.ichimokuLines
+        highs,
+        lows,
+        closes,
+        tenkanPeriod,
+        kijunPeriod,
+        senkouBPeriod,
+      )
+      const {
+        tenkan: tenkanLine,
+        kijun: kijunLine,
+        senkouA: senkouALine,
+        senkouB: senkouBLine,
+        chikou: chikouLine,
+      } = indicators.ichimokuLines
 
       if (tenkanLine.visible) {
         const tenkanSeries = chart.addSeries(LineSeries, {
@@ -398,7 +412,10 @@ export const CandleChart = forwardRef<CandleChartHandle, CandleChartProps>(funct
           macdPaneIndex,
         )
         macdSeries.setData(toLinePoints(macdLine, dates))
-        lineRegistryRef.current['macd-macd'] = { series: macdSeries, width: toLineWidth(indicators.macdLines.macd.width) }
+        lineRegistryRef.current['macd-macd'] = {
+          series: macdSeries,
+          width: toLineWidth(indicators.macdLines.macd.width),
+        }
       }
 
       if (indicators.macdLines.signal.visible) {
@@ -415,7 +432,10 @@ export const CandleChart = forwardRef<CandleChartHandle, CandleChartProps>(funct
           macdPaneIndex,
         )
         signalSeries.setData(toLinePoints(signalLine, dates))
-        lineRegistryRef.current['macd-signal'] = { series: signalSeries, width: toLineWidth(indicators.macdLines.signal.width) }
+        lineRegistryRef.current['macd-signal'] = {
+          series: signalSeries,
+          width: toLineWidth(indicators.macdLines.signal.width),
+        }
       }
     }
 
