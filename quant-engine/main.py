@@ -78,9 +78,7 @@ def _to_daily_score_response(row: dict) -> DailyScoreResponse:
     divergence_flag = _clean(row.get("divergence_flag"))
     divergence = None
     if divergence_flag is not None:
-        divergence = DivergenceResponse(
-            flag=bool(divergence_flag), message=_clean(row.get("divergence_message"))
-        )
+        divergence = DivergenceResponse(flag=bool(divergence_flag), message=_clean(row.get("divergence_message")))
     return DailyScoreResponse(
         date=row["date"],
         close=float(row["close"]),
@@ -95,11 +93,7 @@ def _to_daily_score_response(row: dict) -> DailyScoreResponse:
 
 
 def _compute_score_series(stock: StockScoreRequest) -> list[DailyScoreResponse]:
-    df = (
-        pd.DataFrame([item.model_dump() for item in stock.ohlcv])
-        .sort_values("date")
-        .reset_index(drop=True)
-    )
+    df = pd.DataFrame([item.model_dump() for item in stock.ohlcv]).sort_values("date").reset_index(drop=True)
     scores_df = compute_scores(compute_all_indicators(df))
     return [_to_daily_score_response(row) for row in scores_df.to_dict("records")]
 
@@ -120,15 +114,9 @@ def calculate_score_series(request: ScoreBatchRequest) -> ScoreSeriesBatchRespon
 
 @app.post("/backtest/score", response_model=BacktestResponse)
 def backtest_score(request: BacktestRequest) -> BacktestResponse:
-    stock_df = (
-        pd.DataFrame([item.model_dump() for item in request.ohlcv])
-        .sort_values("date")
-        .reset_index(drop=True)
-    )
+    stock_df = pd.DataFrame([item.model_dump() for item in request.ohlcv]).sort_values("date").reset_index(drop=True)
     benchmark_df = (
-        pd.DataFrame([item.model_dump() for item in request.benchmark_ohlcv])
-        .sort_values("date")
-        .reset_index(drop=True)
+        pd.DataFrame([item.model_dump() for item in request.benchmark_ohlcv]).sort_values("date").reset_index(drop=True)
     )
 
     scores_df = compute_scores(compute_all_indicators(stock_df))
@@ -175,21 +163,21 @@ def backtest_cross_sectional(request: CrossSectionalBacktestRequest) -> CrossSec
     stocks = [
         (
             stock.stock_code,
-            pd.DataFrame([item.model_dump() for item in stock.daily_scores])
-            .sort_values("date")
-            .reset_index(drop=True),
+            pd.DataFrame([item.model_dump() for item in stock.daily_scores]).sort_values("date").reset_index(drop=True),
         )
         for stock in request.stocks
     ]
     benchmark_df = (
-        pd.DataFrame([item.model_dump() for item in request.benchmark_ohlcv])
-        .sort_values("date")
-        .reset_index(drop=True)
+        pd.DataFrame([item.model_dump() for item in request.benchmark_ohlcv]).sort_values("date").reset_index(drop=True)
     )
 
     stat = run_cross_sectional_backtest(
-        stocks, benchmark_df, request.axis, request.horizon,
-        null_test=request.null_test, null_repeats=request.null_repeats,
+        stocks,
+        benchmark_df,
+        request.axis,
+        request.horizon,
+        null_test=request.null_test,
+        null_repeats=request.null_repeats,
     )
 
     return CrossSectionalBacktestResponse(
@@ -221,14 +209,16 @@ def normalize_cross_section_endpoint(
     모듈 docstring 참고). 날짜/모집단을 나누는 책임은 호출자(Spring)에
     있다 - 이 엔드포인트는 받은 리스트 하나를 그대로 한 모집단으로 취급한다.
     """
-    result = normalize_cross_section([
-        StockAxisScores(
-            stock_code=item.stock_code,
-            trend_score=item.trend_score,
-            mean_reversion_score=item.mean_reversion_score,
-        )
-        for item in request.items
-    ])
+    result = normalize_cross_section(
+        [
+            StockAxisScores(
+                stock_code=item.stock_code,
+                trend_score=item.trend_score,
+                mean_reversion_score=item.mean_reversion_score,
+            )
+            for item in request.items
+        ]
+    )
     return CrossSectionNormalizeResponse(
         as_of=request.as_of,
         peer_group=request.peer_group,
@@ -268,7 +258,8 @@ def summarize(request: SummarizeRequest) -> SummarizeResponse:
     매번 즉시 실패 처리된다(2026-08-09, 신규 채널 백로그 재처리 중 실제 발견)."""
     try:
         result = generate_summary(
-            request.video_title, request.channel_name, request.transcript_content, request.source_kind)
+            request.video_title, request.channel_name, request.transcript_content, request.source_kind
+        )
     except ClientError as e:
         if e.code == 429:
             raise HTTPException(status_code=429, detail="Gemini API rate limit exceeded") from e
@@ -279,8 +270,8 @@ def summarize(request: SummarizeRequest) -> SummarizeResponse:
         macro_points=result.macro_points,
         mentioned_tickers=[
             TickerMentionResponse(
-                ticker_code=t.ticker_code, ticker_name=t.ticker_name,
-                stance=t.stance, confidence=t.confidence)
+                ticker_code=t.ticker_code, ticker_name=t.ticker_name, stance=t.stance, confidence=t.confidence
+            )
             for t in result.mentioned_tickers
         ],
         caveat=result.caveat,

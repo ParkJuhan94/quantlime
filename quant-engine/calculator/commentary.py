@@ -60,9 +60,7 @@ def _fallback_comment(score: ScoreResult) -> str:
     if score.trend_score is not None:
         return _TEMPLATE_TREND_ONLY["strong" if score.trend_score > 50 else "weak"]
     if score.mean_reversion_score is not None:
-        return _TEMPLATE_MEAN_REVERSION_ONLY[
-            "strong" if score.mean_reversion_score > 50 else "weak"
-        ]
+        return _TEMPLATE_MEAN_REVERSION_ONLY["strong" if score.mean_reversion_score > 50 else "weak"]
     return "데이터가 부족해 코멘트를 생성할 수 없습니다."
 
 
@@ -72,9 +70,7 @@ def _build_prompt(stock_code: str, score: ScoreResult, indicators: dict) -> str:
         divergence_text = f"있음 - {score.divergence.message}"
 
     trend_text = (
-        f"{score.trend_score:.1f} (50 초과=강세)"
-        if score.trend_score is not None
-        else "데이터 부족으로 산출 불가"
+        f"{score.trend_score:.1f} (50 초과=강세)" if score.trend_score is not None else "데이터 부족으로 산출 불가"
     )
     reversion_text = (
         f"{score.mean_reversion_score:.1f} (50 초과=과매도 근접)"

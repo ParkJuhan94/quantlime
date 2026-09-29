@@ -110,6 +110,7 @@ class CrossSectionalBacktestRequest(BaseModel):
     실측한 결과 8개 조합(축2 x horizon4)을 한 호출에 묶으면 널 테스트 없이도
     PythonEngineClient read timeout(60초)을 넘겼다(2026-08 감사 세션).
     """
+
     market: str
     score_version: str
     stocks: list[StockDailyScoreInput]
@@ -162,6 +163,7 @@ class CrossSectionNormalizeRequest(BaseModel):
     리스트를 받는다. OHLCV는 포함하지 않는다 - Spring이 이미 계산해 저장한
     값만 넘기면 되므로 전종목(9천여개) 페이로드가 가볍다
     (calculator/normalization.py 모듈 docstring 참고)."""
+
     as_of: date
     peer_group: Literal["domestic", "overseas"]
     items: list[CrossSectionAxisScoreInput]

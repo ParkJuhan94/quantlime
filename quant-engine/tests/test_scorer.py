@@ -95,8 +95,10 @@ class TestCalculateScoreColdStart:
         # given: MA120만 데이터 부족(신규상장 종목), 나머지 4개 이평선은 정상.
         # MACD도 제외해 MA_score만으로 결과를 검증한다.
         latest = _base_latest(
-            ma_120=None, close=150.0,
-            macd_histogram=None, macd_histogram_std60=None,
+            ma_120=None,
+            close=150.0,
+            macd_histogram=None,
+            macd_histogram_std60=None,
         )
 
         # when
@@ -110,7 +112,11 @@ class TestCalculateScoreColdStart:
         latest = _base_latest(
             macd_histogram=None,
             macd_histogram_std60=None,
-            ma_5=None, ma_10=None, ma_20=None, ma_60=None, ma_120=None,
+            ma_5=None,
+            ma_10=None,
+            ma_20=None,
+            ma_60=None,
+            ma_120=None,
             rsi=20.0,
         )
 
@@ -130,9 +136,15 @@ class TestCalculateScoreColdStart:
     def test_both_axes_missing_marks_insufficient_data(self):
         # given: 두 축 전부 계산 불가 (극단적 신규상장 종목)
         latest = _base_latest(
-            rsi=None, bollinger_percent_b=None,
-            macd_histogram=None, macd_histogram_std60=None,
-            ma_5=None, ma_10=None, ma_20=None, ma_60=None, ma_120=None,
+            rsi=None,
+            bollinger_percent_b=None,
+            macd_histogram=None,
+            macd_histogram_std60=None,
+            ma_5=None,
+            ma_10=None,
+            ma_20=None,
+            ma_60=None,
+            ma_120=None,
         )
 
         # when
@@ -164,7 +176,11 @@ class TestVolumeMultiplier:
         # MA는 이산값이라 정확히 50이 될 수 없으므로 제외하고 MACD만으로 검증.
         latest = _base_latest(
             volume_ratio=2.0,
-            ma_5=None, ma_10=None, ma_20=None, ma_60=None, ma_120=None,
+            ma_5=None,
+            ma_10=None,
+            ma_20=None,
+            ma_60=None,
+            ma_120=None,
         )
 
         # when
@@ -202,7 +218,10 @@ class TestQuadrant:
     def test_trend_up_reversion_up_is_pullback_quadrant(self):
         # given: 추세추종·평균회귀 둘 다 50 초과(상승추세 중 눌림목)
         latest = _base_latest(
-            close=150.0, macd_histogram=5.0, rsi=20.0, bollinger_percent_b=0.0,
+            close=150.0,
+            macd_histogram=5.0,
+            rsi=20.0,
+            bollinger_percent_b=0.0,
         )
 
         result = calculate_score(latest)
@@ -214,7 +233,10 @@ class TestQuadrant:
     def test_trend_up_reversion_down_is_overheated_quadrant(self):
         # given: 추세추종은 강세, 평균회귀는 과매수(약세)
         latest = _base_latest(
-            close=150.0, macd_histogram=5.0, rsi=90.0, bollinger_percent_b=1.0,
+            close=150.0,
+            macd_histogram=5.0,
+            rsi=90.0,
+            bollinger_percent_b=1.0,
         )
 
         result = calculate_score(latest)
@@ -226,7 +248,10 @@ class TestQuadrant:
     def test_trend_down_reversion_up_is_oversold_weak_trend_quadrant(self):
         # given: 추세추종은 약세, 평균회귀는 과매도(강세 신호)
         latest = _base_latest(
-            close=50.0, macd_histogram=-5.0, rsi=10.0, bollinger_percent_b=0.0,
+            close=50.0,
+            macd_histogram=-5.0,
+            rsi=10.0,
+            bollinger_percent_b=0.0,
         )
 
         result = calculate_score(latest)
@@ -238,7 +263,10 @@ class TestQuadrant:
     def test_trend_down_reversion_down_is_no_bounce_quadrant(self):
         # given: 추세추종·평균회귀 둘 다 50 미만
         latest = _base_latest(
-            close=50.0, macd_histogram=-5.0, rsi=90.0, bollinger_percent_b=1.0,
+            close=50.0,
+            macd_histogram=-5.0,
+            rsi=90.0,
+            bollinger_percent_b=1.0,
         )
 
         result = calculate_score(latest)
@@ -292,14 +320,16 @@ class TestComputeScores:
         dates = pd.date_range("2026-01-01", periods=days, freq="B")
         rng = np.random.default_rng(0)
         close = pd.Series(100 + np.cumsum(rng.normal(0, 1, size=days)))
-        return pd.DataFrame({
-            "date": dates,
-            "open": close,
-            "high": close + 1,
-            "low": close - 1,
-            "close": close,
-            "volume": rng.integers(1000, 2000, size=days),
-        })
+        return pd.DataFrame(
+            {
+                "date": dates,
+                "open": close,
+                "high": close + 1,
+                "low": close - 1,
+                "close": close,
+                "volume": rng.integers(1000, 2000, size=days),
+            }
+        )
 
     def test_compute_scores_reuses_calculate_score_per_row(self):
         # given: compute_scores는 calculate_score를 행 단위로 그대로
@@ -313,9 +343,16 @@ class TestComputeScores:
         # then
         assert len(scores_df) == len(enriched)
         assert list(scores_df.columns) == [
-            "date", "close", "trend_score", "mean_reversion_score",
-            "composite_score", "grade", "quadrant", "insufficient_data",
-            "divergence_flag", "divergence_message",
+            "date",
+            "close",
+            "trend_score",
+            "mean_reversion_score",
+            "composite_score",
+            "grade",
+            "quadrant",
+            "insufficient_data",
+            "divergence_flag",
+            "divergence_message",
         ]
         direct_result = calculate_score(enriched.iloc[-1].to_dict())
         last_scored = scores_df.iloc[-1]
@@ -339,9 +376,7 @@ class TestComputeScores:
 class TestCalculateScoreGradesFromAbsoluteComposite:
     def test_calculate_score_assigns_grade_from_raw_composite(self):
         # given: 두 축 모두 강하게 매수 신호(평균회귀 100 근방, 추세도 100 근방)
-        result = calculate_score(
-            _base_latest(rsi=15.0, bollinger_percent_b=0.0, macd_histogram=10.0, close=150.0)
-        )
+        result = calculate_score(_base_latest(rsi=15.0, bollinger_percent_b=0.0, macd_histogram=10.0, close=150.0))
 
         # then: 등급은 raw composite_score(절대점수) 기준으로 즉시 매겨진다
         # - 시장 전체 분포와 무관하게 이 종목 자체의 점수만으로 결정된다.
@@ -353,7 +388,11 @@ class TestCalculateScoreGradesFromAbsoluteComposite:
         latest = _base_latest(
             macd_histogram=None,
             macd_histogram_std60=None,
-            ma_5=None, ma_10=None, ma_20=None, ma_60=None, ma_120=None,
+            ma_5=None,
+            ma_10=None,
+            ma_20=None,
+            ma_60=None,
+            ma_120=None,
             rsi=20.0,
         )
 
@@ -435,7 +474,10 @@ class TestDowntrendGate:
         # given: 종가가 60/120일선 모두 아래이고 60일선도 120일선 아래
         # (장기 하락추세) + RSI/%B 둘 다 극단 과매도(원점수 100)
         gated = _apply_downtrend_gate(
-            mean_reversion_raw=100.0, close=50.0, ma_60=80.0, ma_120=100.0,
+            mean_reversion_raw=100.0,
+            close=50.0,
+            ma_60=80.0,
+            ma_120=100.0,
         )
 
         # then: DOWNTREND_GATE_FACTOR(0.5)만큼 중심(50) 쪽으로 당겨져
@@ -445,7 +487,10 @@ class TestDowntrendGate:
     def test_uptrend_is_not_gated(self):
         # given: 종가가 이평선 위(정배열)인 경우 게이트 미적용
         gated = _apply_downtrend_gate(
-            mean_reversion_raw=100.0, close=150.0, ma_60=120.0, ma_120=100.0,
+            mean_reversion_raw=100.0,
+            close=150.0,
+            ma_60=120.0,
+            ma_120=100.0,
         )
 
         assert gated == pytest.approx(100.0)
@@ -453,7 +498,10 @@ class TestDowntrendGate:
     def test_missing_moving_averages_skip_gate(self):
         # given: 신규상장 등으로 ma_120 계산 불가 - 판단 근거가 없어 게이트 미적용
         gated = _apply_downtrend_gate(
-            mean_reversion_raw=100.0, close=50.0, ma_60=80.0, ma_120=None,
+            mean_reversion_raw=100.0,
+            close=50.0,
+            ma_60=80.0,
+            ma_120=None,
         )
 
         assert gated == pytest.approx(100.0)
@@ -461,9 +509,16 @@ class TestDowntrendGate:
     def test_calculate_score_applies_gate_end_to_end(self):
         # given: 장기 하락추세 + 평균회귀 원점수 100(RSI/%B 극단 과매도)
         latest = _base_latest(
-            close=50.0, ma_5=50.0, ma_10=60.0, ma_20=70.0, ma_60=80.0, ma_120=100.0,
-            rsi=10.0, bollinger_percent_b=0.0,
-            macd_histogram=None, macd_histogram_std60=None,  # 추세축은 이번 검증과 무관하게 배제
+            close=50.0,
+            ma_5=50.0,
+            ma_10=60.0,
+            ma_20=70.0,
+            ma_60=80.0,
+            ma_120=100.0,
+            rsi=10.0,
+            bollinger_percent_b=0.0,
+            macd_histogram=None,
+            macd_histogram_std60=None,  # 추세축은 이번 검증과 무관하게 배제
         )
 
         # when

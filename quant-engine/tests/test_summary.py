@@ -23,8 +23,7 @@ def _fake_response(parsed, prompt_tokens: int = 100, candidates_tokens: int = 50
     return SimpleNamespace(
         parsed=parsed,
         text=None,
-        usage_metadata=SimpleNamespace(
-            prompt_token_count=prompt_tokens, candidates_token_count=candidates_tokens),
+        usage_metadata=SimpleNamespace(prompt_token_count=prompt_tokens, candidates_token_count=candidates_tokens),
     )
 
 
@@ -42,8 +41,7 @@ class TestGenerateSummary:
             key_points=["포인트1", "포인트2"],
             macro_points=["연준 9월 추가 인하 시사"],
             mentioned_tickers=[
-                _TickerMentionSchema(
-                    ticker_code="005930", ticker_name="삼성전자", stance="BULLISH", confidence=0.8)
+                _TickerMentionSchema(ticker_code="005930", ticker_name="삼성전자", stance="BULLISH", confidence=0.8)
             ],
         )
         mock_client = MagicMock()
@@ -171,8 +169,10 @@ class TestGenerateSummary:
             if config.response_schema is None:
                 call_count["chunk"] += 1
                 return SimpleNamespace(
-                    parsed=None, text="- 불릿 요약",
-                    usage_metadata=SimpleNamespace(prompt_token_count=1000, candidates_token_count=100))
+                    parsed=None,
+                    text="- 불릿 요약",
+                    usage_metadata=SimpleNamespace(prompt_token_count=1000, candidates_token_count=100),
+                )
             return _fake_response(final_parsed, prompt_tokens=2000, candidates_tokens=200)
 
         mock_client = MagicMock()

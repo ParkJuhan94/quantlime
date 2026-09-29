@@ -74,9 +74,7 @@ def compute_bollinger_percent_b(
     return (close - lower) / band_width
 
 
-def compute_moving_averages(
-    close: pd.Series, periods: list[int] = MA_PERIODS
-) -> dict[int, pd.Series]:
+def compute_moving_averages(close: pd.Series, periods: list[int] = MA_PERIODS) -> dict[int, pd.Series]:
     """기간별 단순이동평균. {5: series, 10: series, ...}."""
     return {p: close.rolling(window=p, min_periods=p).mean() for p in periods}
 
@@ -100,9 +98,9 @@ def compute_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
     result["rsi"] = compute_rsi(close)
     result["macd_histogram"] = compute_macd_histogram(close)
-    result["macd_histogram_std60"] = result["macd_histogram"].rolling(
-        window=MACD_HISTOGRAM_STD_WINDOW, min_periods=MACD_HISTOGRAM_STD_WINDOW
-    ).std()
+    result["macd_histogram_std60"] = (
+        result["macd_histogram"].rolling(window=MACD_HISTOGRAM_STD_WINDOW, min_periods=MACD_HISTOGRAM_STD_WINDOW).std()
+    )
     result["bollinger_percent_b"] = compute_bollinger_percent_b(close)
     result["volume_ratio"] = compute_volume_ratio(result["volume"])
 

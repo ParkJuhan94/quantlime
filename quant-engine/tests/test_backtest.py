@@ -4,7 +4,6 @@ import pytest
 
 from calculator.backtest import (
     HORIZONS,
-    WARMUP_TRADING_DAYS,
     _excess_returns_for_horizon,
     _forward_return,
     _prepare_backtest_frame,
@@ -18,15 +17,19 @@ from calculator.backtest import (
 class TestPrepareBacktestFrame:
     def test_inner_joins_on_date_and_drops_mismatched_rows(self):
         # given: 벤치마크에 2026-01-02 데이터가 없음(공휴일 등)
-        scores_df = pd.DataFrame({
-            "date": ["2026-01-01", "2026-01-02", "2026-01-03"],
-            "close": [100.0, 101.0, 102.0],
-            "trend_score": [50.0, 60.0, 70.0],
-        })
-        benchmark_df = pd.DataFrame({
-            "date": ["2026-01-01", "2026-01-03"],
-            "close": [1000.0, 1010.0],
-        })
+        scores_df = pd.DataFrame(
+            {
+                "date": ["2026-01-01", "2026-01-02", "2026-01-03"],
+                "close": [100.0, 101.0, 102.0],
+                "trend_score": [50.0, 60.0, 70.0],
+            }
+        )
+        benchmark_df = pd.DataFrame(
+            {
+                "date": ["2026-01-01", "2026-01-03"],
+                "close": [1000.0, 1010.0],
+            }
+        )
 
         # when
         merged = _prepare_backtest_frame(scores_df, benchmark_df)
@@ -69,26 +72,30 @@ class TestExcessReturnsForHorizon:
     def test_excludes_rows_before_warmup_by_own_history_position(self):
         # given: _score_row_index가 워밍업 미만인 앞쪽 3개 행은 스코어가
         # 있어도 제외돼야 한다 (0,1,2행 제외, warmup_days=3)
-        merged = pd.DataFrame({
-            "date": pd.date_range("2026-01-01", periods=7, freq="B").strftime("%Y-%m-%d"),
-            "_score_row_index": [0, 1, 2, 3, 4, 5, 6],
-            "close": [100.0, 101.0, 102.0, 103.0, 104.0, 105.0, 106.0],
-            "benchmark_close": [1000.0] * 7,
-            "score": [10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0],
-        })
+        merged = pd.DataFrame(
+            {
+                "date": pd.date_range("2026-01-01", periods=7, freq="B").strftime("%Y-%m-%d"),
+                "_score_row_index": [0, 1, 2, 3, 4, 5, 6],
+                "close": [100.0, 101.0, 102.0, 103.0, 104.0, 105.0, 106.0],
+                "benchmark_close": [1000.0] * 7,
+                "score": [10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0],
+            }
+        )
 
         result = _excess_returns_for_horizon(merged, "score", horizon=1, warmup_days=3)
 
         assert sorted(result["score"]) == [40.0, 50.0]
 
     def test_zero_warmup_keeps_all_eligible_rows(self):
-        merged = pd.DataFrame({
-            "date": pd.date_range("2026-01-01", periods=3, freq="B").strftime("%Y-%m-%d"),
-            "_score_row_index": [0, 1, 2],
-            "close": [100.0, 101.0, 102.0],
-            "benchmark_close": [1000.0, 1000.0, 1000.0],
-            "score": [10.0, 20.0, 30.0],
-        })
+        merged = pd.DataFrame(
+            {
+                "date": pd.date_range("2026-01-01", periods=3, freq="B").strftime("%Y-%m-%d"),
+                "_score_row_index": [0, 1, 2],
+                "close": [100.0, 101.0, 102.0],
+                "benchmark_close": [1000.0, 1000.0, 1000.0],
+                "score": [10.0, 20.0, 30.0],
+            }
+        )
 
         result = _excess_returns_for_horizon(merged, "score", horizon=1, warmup_days=0)
 
@@ -188,17 +195,21 @@ class TestRunBacktestIntegration:
         dates = pd.date_range("2026-01-01", periods=n, freq="B").strftime("%Y-%m-%d")
         rng = np.random.default_rng(1)
 
-        scores_df = pd.DataFrame({
-            "date": dates,
-            "close": 100 + np.cumsum(rng.normal(0, 1, size=n)),
-            "trend_score": rng.uniform(0, 100, size=n),
-            "mean_reversion_score": rng.uniform(0, 100, size=n),
-            "grade": rng.choice(["STRONG_BUY", "BUY", "NEUTRAL", "SELL", "STRONG_SELL"], size=n),
-        })
-        benchmark_df = pd.DataFrame({
-            "date": dates,
-            "close": 1000 + np.cumsum(rng.normal(0, 5, size=n)),
-        })
+        scores_df = pd.DataFrame(
+            {
+                "date": dates,
+                "close": 100 + np.cumsum(rng.normal(0, 1, size=n)),
+                "trend_score": rng.uniform(0, 100, size=n),
+                "mean_reversion_score": rng.uniform(0, 100, size=n),
+                "grade": rng.choice(["STRONG_BUY", "BUY", "NEUTRAL", "SELL", "STRONG_SELL"], size=n),
+            }
+        )
+        benchmark_df = pd.DataFrame(
+            {
+                "date": dates,
+                "close": 1000 + np.cumsum(rng.normal(0, 5, size=n)),
+            }
+        )
 
         results = run_backtest(scores_df, benchmark_df)
 

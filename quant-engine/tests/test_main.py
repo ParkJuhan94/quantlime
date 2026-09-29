@@ -17,14 +17,16 @@ def _make_ohlcv(days: int, start_price: float = 100.0, trend: float = 0.5) -> li
     price = start_price
     for i in range(days):
         price += trend
-        ohlcv.append({
-            "date": (start_date + timedelta(days=i)).isoformat(),
-            "open": price,
-            "high": price + 1,
-            "low": price - 1,
-            "close": price,
-            "volume": 1000.0,
-        })
+        ohlcv.append(
+            {
+                "date": (start_date + timedelta(days=i)).isoformat(),
+                "open": price,
+                "high": price + 1,
+                "low": price - 1,
+                "close": price,
+                "volume": 1000.0,
+            }
+        )
     return ohlcv
 
 
@@ -66,8 +68,10 @@ class TestCalculateScoreSeries:
         # 매긴다 - 횡단면 백분위(정규화 엔드포인트)와는 척도가 다른 별개 값.
         assert latest["grade"] == _grade(latest["composite_score"])
         assert latest["quadrant"] in {
-            "trend_up_oversold", "trend_up_overbought",
-            "trend_down_oversold", "trend_down_overbought",
+            "trend_up_oversold",
+            "trend_up_overbought",
+            "trend_down_oversold",
+            "trend_down_overbought",
         }
 
         earliest = daily_scores[0]
@@ -165,8 +169,8 @@ class TestTranscribe:
     def test_returns_available_transcript(self):
         with patch("main.fetch_transcript") as mock_fetch:
             mock_fetch.return_value = TranscriptResult(
-                available=True, source="youtube_auto_caption", lang="ko",
-                content="안녕하세요 반갑습니다", char_count=11)
+                available=True, source="youtube_auto_caption", lang="ko", content="안녕하세요 반갑습니다", char_count=11
+            )
 
             response = client.post("/transcribe", json={"video_id": "abc123"})
 
@@ -196,8 +200,7 @@ class TestSummarize:
                 summary="요약 내용",
                 key_points=["포인트1"],
                 mentioned_tickers=[
-                    TickerMention(ticker_code="005930", ticker_name="삼성전자",
-                                  stance="BULLISH", confidence=0.8)
+                    TickerMention(ticker_code="005930", ticker_name="삼성전자", stance="BULLISH", confidence=0.8)
                 ],
                 caveat="투자 권유 아님",
                 model="claude-haiku-4-5",
@@ -205,9 +208,14 @@ class TestSummarize:
                 output_tokens=50,
             )
 
-            response = client.post("/summarize", json={
-                "video_title": "제목", "channel_name": "채널", "transcript_content": "자막",
-            })
+            response = client.post(
+                "/summarize",
+                json={
+                    "video_title": "제목",
+                    "channel_name": "채널",
+                    "transcript_content": "자막",
+                },
+            )
 
             assert response.status_code == 200
             body = response.json()
@@ -221,15 +229,23 @@ class TestSummarize:
         # 요청되고, generate_summary에도 그대로 전달돼야 한다.
         with patch("main.generate_summary") as mock_generate:
             mock_generate.return_value = SummaryResult(
-                summary="요약 내용", key_points=[], mentioned_tickers=[],
-                caveat="투자 권유 아님", model="gemini-3.5-flash-lite",
-                input_tokens=10, output_tokens=5,
+                summary="요약 내용",
+                key_points=[],
+                mentioned_tickers=[],
+                caveat="투자 권유 아님",
+                model="gemini-3.5-flash-lite",
+                input_tokens=10,
+                output_tokens=5,
             )
 
-            response = client.post("/summarize", json={
-                "channel_name": "채널", "transcript_content": "게시글 본문",
-                "source_kind": "telegram",
-            })
+            response = client.post(
+                "/summarize",
+                json={
+                    "channel_name": "채널",
+                    "transcript_content": "게시글 본문",
+                    "source_kind": "telegram",
+                },
+            )
 
             assert response.status_code == 200
             mock_generate.assert_called_once_with(None, "채널", "게시글 본문", "telegram")
@@ -243,9 +259,14 @@ class TestSummarize:
         with patch("main.generate_summary") as mock_generate:
             mock_generate.side_effect = ClientError(429, {"error": {"message": "RESOURCE_EXHAUSTED"}})
 
-            response = client.post("/summarize", json={
-                "video_title": "제목", "channel_name": "채널", "transcript_content": "자막",
-            })
+            response = client.post(
+                "/summarize",
+                json={
+                    "video_title": "제목",
+                    "channel_name": "채널",
+                    "transcript_content": "자막",
+                },
+            )
 
             assert response.status_code == 429
 
@@ -261,8 +282,13 @@ class TestSummarize:
         with patch("main.generate_summary") as mock_generate:
             mock_generate.side_effect = ClientError(400, {"error": {"message": "INVALID_ARGUMENT"}})
 
-            response = no_raise_client.post("/summarize", json={
-                "video_title": "제목", "channel_name": "채널", "transcript_content": "자막",
-            })
+            response = no_raise_client.post(
+                "/summarize",
+                json={
+                    "video_title": "제목",
+                    "channel_name": "채널",
+                    "transcript_content": "자막",
+                },
+            )
 
             assert response.status_code == 500

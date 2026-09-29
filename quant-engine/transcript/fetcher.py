@@ -98,9 +98,7 @@ def fetch_transcript(
     except _NO_TRANSCRIPT_EXCEPTIONS as e:
         return TranscriptResult(available=False, reason=type(e).__name__)
     except FutureTimeoutError as e:
-        raise TimeoutError(
-            f"자막 조회가 {timeout_seconds}초 내에 끝나지 않았습니다: video_id={video_id}"
-        ) from e
+        raise TimeoutError(f"자막 조회가 {timeout_seconds}초 내에 끝나지 않았습니다: video_id={video_id}") from e
 
     content = " ".join(snippet.text.strip() for snippet in fetched.snippets if snippet.text.strip())
     source = "youtube_auto_caption" if fetched.is_generated else "youtube_caption"
@@ -132,6 +130,6 @@ def chunk_text(content: str, max_chars: int = 6000, overlap_chars: int = 200) ->
     start = 0
     step = max_chars - overlap_chars
     while start < len(content):
-        chunks.append(content[start:start + max_chars])
+        chunks.append(content[start : start + max_chars])
         start += step
     return chunks

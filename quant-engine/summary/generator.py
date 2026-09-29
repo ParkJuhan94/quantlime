@@ -152,7 +152,7 @@ _PROMPT_INTRO_TELEGRAM = (
 
 _PROMPT_INSTRUCTIONS_BODY = (
     "key_points는 3~5개, 완전한 문장이 아니라 핵심 구문으로 압축해 답하세요"
-    "(예: \"연준 9월 추가 인하 시사\", \"삼성전자 3분기 실적 컨센서스 상회\").\n\n"
+    '(예: "연준 9월 추가 인하 시사", "삼성전자 3분기 실적 컨센서스 상회").\n\n'
     "macro_points는 특정 종목이 아니라 시장 전반/거시경제(금리, 환율, 지수, "
     "업종 전반, 매크로 이벤트 등)에 대한 코멘트만 key_points와 동일한 형식의 "
     "구문으로 뽑으세요. 해당 내용이 없으면 빈 배열로 두세요(억지로 채우지 "
@@ -166,8 +166,8 @@ _PROMPT_INSTRUCTIONS_BODY = (
     "mentioned_tickers에서 아예 빼세요 - 틀린 값을 추측해서 채우지 마세요. "
     "ticker_name은 자막/제목에 실제로 나온 표현을 그대로 쓰고, 확실하지 않으면 "
     "비워두세요(새로 지어내지 마세요).\n\n"
-    "confidence(0.0~1.0)는 \"이 종목이 영상에서 스치듯 언급된 게 아니라 실제로 "
-    "유의미하게 논의됐다는 확신도\"를 뜻합니다 - 종목별로 실제 논의 비중에 "
+    'confidence(0.0~1.0)는 "이 종목이 영상에서 스치듯 언급된 게 아니라 실제로 '
+    '유의미하게 논의됐다는 확신도"를 뜻합니다 - 종목별로 실제 논의 비중에 '
     "따라 차등을 두세요(모든 종목에 같은 값을 반복해서 채우지 마세요). "
     "confidence가 낮게 나올 것 같은 종목은 애초에 mentioned_tickers에서 "
     "제외하는 쪽을 우선 고려하세요.\n\n"
@@ -230,8 +230,8 @@ def generate_summary(
 
     tickers = [
         TickerMention(
-            ticker_code=item.ticker_code, ticker_name=item.ticker_name,
-            stance=item.stance, confidence=item.confidence)
+            ticker_code=item.ticker_code, ticker_name=item.ticker_name, stance=item.stance, confidence=item.confidence
+        )
         for item in parsed.mentioned_tickers
     ]
 

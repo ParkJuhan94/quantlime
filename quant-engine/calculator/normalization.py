@@ -93,13 +93,13 @@ def normalize_cross_section(scores: list[StockAxisScores]) -> CrossSectionalNorm
             ],
         )
 
-    df = pd.DataFrame({
-        "stock_code": [s.stock_code for s in scores],
-        "trend_score": pd.to_numeric(pd.Series([s.trend_score for s in scores]), errors="coerce"),
-        "mean_reversion_score": pd.to_numeric(
-            pd.Series([s.mean_reversion_score for s in scores]), errors="coerce"
-        ),
-    })
+    df = pd.DataFrame(
+        {
+            "stock_code": [s.stock_code for s in scores],
+            "trend_score": pd.to_numeric(pd.Series([s.trend_score for s in scores]), errors="coerce"),
+            "mean_reversion_score": pd.to_numeric(pd.Series([s.mean_reversion_score for s in scores]), errors="coerce"),
+        }
+    )
 
     df["trend_percentile"] = _percentile_rank(df["trend_score"])
     df["mean_reversion_percentile"] = _percentile_rank(df["mean_reversion_score"])
@@ -111,10 +111,9 @@ def normalize_cross_section(scores: list[StockAxisScores]) -> CrossSectionalNorm
     # 종목만 대상으로 한다(scorer.calculate_score의 "단일축 종합점수
     # 금지"와 같은 원칙).
     both_present = df["trend_percentile"].notna() & df["mean_reversion_percentile"].notna()
-    weighted = (
-        df["trend_percentile"] * TREND_WEIGHT
-        + df["mean_reversion_percentile"] * MEAN_REVERSION_WEIGHT
-    ).where(both_present)
+    weighted = (df["trend_percentile"] * TREND_WEIGHT + df["mean_reversion_percentile"] * MEAN_REVERSION_WEIGHT).where(
+        both_present
+    )
     df["composite_percentile"] = _percentile_rank(weighted)
 
     items = [
