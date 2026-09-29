@@ -47,11 +47,11 @@ class VideoFilterServiceTest {
     private VideoFilterService videoFilterService;
 
     @Test
-    @DisplayName("[보존 기간(14일)을 이미 넘긴 영상은 다른 필터보다 먼저 FILTERED_OUT 처리한다(2026-08-09 - "
+    @DisplayName("[보존 기간(3일)을 이미 넘긴 영상은 다른 필터보다 먼저 FILTERED_OUT 처리한다(2026-08-09 - "
         + "삭제된 옛날 영상이 재수집→재처리되며 API 호출을 낭비하고 최근 영상의 배치 순번을 밀어내던 문제 수정)]")
     void applyFilters_alreadyPastRetentionWindow_filtersOutBeforeOtherChecks() {
         // given: velocity_multiplier=0(개인 채널)이라 하드필터만 통과하면 원래는
-        // 바로 SELECTED됐어야 할 조건이지만, 발행일이 보존기간(14일)을 넘겨 있다.
+        // 바로 SELECTED됐어야 할 조건이지만, 발행일이 보존기간(3일)을 넘겨 있다.
         Channel channel = channelOf(new ChannelFilterConfig(180, 0.0, 5, List.of(), List.of()));
         Video video = videoOf(channel, "오래된 영상", 400, 9999L, LocalDateTime.now(SEOUL).minusDays(15));
         given(videoRepository.findByChannelAndStatus(channel, VideoStatus.DISCOVERED)).willReturn(List.of(video));

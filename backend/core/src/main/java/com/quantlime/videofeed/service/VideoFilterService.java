@@ -40,18 +40,26 @@ public class VideoFilterService {
     // 이 유예 기간 동안은 PENDING_REVIEW로 두고 이후 재평가한다(§7 리스크).
     private static final long VELOCITY_GRACE_HOURS = 6;
 
-    // VideoRetentionService.RETENTION_DAYS와 반드시 같은 값 유지(공유 설정
-    // 파일이 없어 각자 상수로 둠 - frontend VIDEO_FEED_RETENTION_DAYS와
-    // 동일한 관례). 이미 보존기간을 넘긴 영상은 여기서 바로 걸러 자막/요약
-    // 파이프라인에 들여보내지 않는다 - 신규 채널의 오래된 백로그가
+    // 2026-09-29부로 VideoRetentionService.RETENTION_DAYS(DB 삭제 주기, 14일
+    // 유지)와 값을 일부러 분리했다(로컬 백엔드를 오랜만에 켰을 때 자막/요약
+    // 캐치업 대상을 최근 3일로 더 좁히기 위함 - 상세는 docs/CHANGELOG.md
+    // 2026-09-29 항목 참고). 분리해도 안전한 이유: 이 값(필터 컷오프)이
+    // VideoRetentionService 값(삭제 컷오프)보다 작은 방향이라, 여기서
+    // 걸러진 영상은 어차피 나중에 삭제될 영상이라서 "재수집→재분류→
+    // 재처리→재삭제" 낭비 루프(2026-08-09 실제 로그로 확인된 문제, 아래
+    // 설명 그대로)가 재발하지 않는다 - 반대 방향(이 값이 삭제 컷오프보다
+    // 커지는 경우)이었다면 문제가 됐을 것이므로 값을 다시 올릴 때는
+    // 반드시 VideoRetentionService 값 이하로 유지할 것.
+    // 이미 컷오프를 넘긴 영상은 여기서 바로 걸러 자막/요약 파이프라인에
+    // 들여보내지 않는다 - 신규 채널의 오래된 백로그가
     // VideoPersistService.existsByExternalVideoId 기준 재수집→재분류→
     // 재처리(자막/요약 API 호출)→보존기간 정리로 재삭제되는 낭비 루프를
     // 방지하고, publishedAt asc로 오래된 것부터 배치를 채우는 Transcribe/
     // SummarizeCandidates 쿼리가 이 오래된 영상들에 밀려 정작 최근 영상을
     // 자막/요약 배치에서 못 뽑는 문제도 함께 막는다(2026-08-09 실제 로그로
     // 확인 - 미과장 재수집 시 옛날 영상 수십 개가 배치를 독차지해 정작
-    // 14일 이내 최근 영상 2개는 계속 SELECTED에 머물러 있었음).
-    private static final int RETENTION_DAYS = 14;
+    // 최근 영상 2개는 계속 SELECTED에 머물러 있었음).
+    private static final int RETENTION_DAYS = 3;
 
     // Video.publishedAt은 YoutubeVideoCollector가 SEOUL로 zone-strip해 저장한
     // 값이라, 이와 비교하는 모든 "지금"은 bare LocalDateTime.now()(JVM 기본
