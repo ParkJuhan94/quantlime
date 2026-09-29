@@ -6,10 +6,12 @@ import com.quantlime.common.lock.RedisLockService;
 import com.quantlime.infra.tosspayments.dto.TossBillingKeyResponse;
 import com.quantlime.infra.tosspayments.dto.TossPaymentApprovalResponse;
 import com.quantlime.infra.tosspayments.exception.TossPaymentsErrorCode;
+import com.quantlime.payment.event.PaymentWebhookReceivedEvent;
 import com.quantlime.payment.implement.BillingProcessor;
 import com.quantlime.payment.implement.PaymentAppender;
 import com.quantlime.payment.implement.PaymentNotifier;
 import com.quantlime.payment.implement.PaymentReader;
+import com.quantlime.payment.implement.PaymentWebhookDedupStore;
 import com.quantlime.subscription.SubscriptionFixture;
 import com.quantlime.subscription.SubscriptionPlanFixture;
 import com.quantlime.subscription.domain.Subscription;
@@ -31,6 +33,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -78,6 +81,12 @@ class PaymentServiceTest {
 
     @Mock
     private RedisLockService redisLockService;
+
+    @Mock
+    private PaymentWebhookDedupStore paymentWebhookDedupStore;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private PaymentService paymentService;
@@ -352,17 +361,20 @@ class PaymentServiceTest {
     }
 
     @Test
-    @DisplayName("[웹훅 서명이 유효하면 예외 없이 통과한다]")
-    void handleWebhook_validSignature_doesNotThrow() {
+    @DisplayName("[웹훅 서명이 유효하면 카프카 중계용 도메인 이벤트를 발행한다]")
+    void handleWebhook_validSignature_publishesEvent() {
         // given
         given(billingProcessor.verifyWebhookSignature("payload", "signature")).willReturn(true);
 
-        // when & then
+        // when
         paymentService.handleWebhook("payload", "signature");
+
+        // then
+        verify(eventPublisher).publishEvent(any(PaymentWebhookReceivedEvent.class));
     }
 
     @Test
-    @DisplayName("[웹훅 서명이 유효하지 않으면 400을 던진다]")
+    @DisplayName("[웹훅 서명이 유효하지 않으면 400을 던지고 이벤트를 발행하지 않는다]")
     void handleWebhook_invalidSignature_throwsValidationException() {
         // given
         given(billingProcessor.verifyWebhookSignature("payload", "bad-signature")).willReturn(false);
@@ -370,5 +382,27 @@ class PaymentServiceTest {
         // when & then
         assertThatThrownBy(() -> paymentService.handleWebhook("payload", "bad-signature"))
             .isInstanceOf(ValidationException.class);
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    @DisplayName("[웹훅 처리 - 최초 payloadHash면 그대로 처리한다]")
+    void processWebhookEvent_firstSeen_proceeds() {
+        // given
+        given(paymentWebhookDedupStore.markProcessedIfAbsent("hash")).willReturn(true);
+
+        // when & then (예외 없이 통과 - 실제 처리는 로깅뿐)
+        paymentService.processWebhookEvent("hash", "payload");
+        verify(paymentWebhookDedupStore).markProcessedIfAbsent("hash");
+    }
+
+    @Test
+    @DisplayName("[웹훅 처리 - 이미 처리된 payloadHash면 스킵한다]")
+    void processWebhookEvent_duplicate_skips() {
+        // given
+        given(paymentWebhookDedupStore.markProcessedIfAbsent("hash")).willReturn(false);
+
+        // when & then (예외 없이 조용히 스킵)
+        paymentService.processWebhookEvent("hash", "payload");
     }
 }
