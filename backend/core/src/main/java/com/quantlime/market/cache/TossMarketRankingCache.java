@@ -45,8 +45,12 @@ public class TossMarketRankingCache {
     private static final String TYPE_TRADING_AMOUNT = "MARKET_TRADING_AMOUNT";
     private static final String TYPE_TRADING_VOLUME = "MARKET_TRADING_VOLUME";
 
+    // amount/volume 정렬에 한때 duration=realtime을 썼으나, 실제 API
+    // 호출로 대조해보니 realtime은 거래량을 심각하게 과소집계한다(삼성전자
+    // 기준 같은 거래일에 realtime 915,248주 vs 1d 30,567,358주 - 자체
+    // 캔들 데이터 32,046,681주와 대조해도 1d 쪽이 실제값). 전 sort에
+    // 대해 1d로 통일한다(2026-09-29).
     private static final String DURATION_1D = "1d";
-    private static final String DURATION_REALTIME = "realtime";
 
     public static final String SORT_GAINERS = "gainers";
     public static final String SORT_LOSERS = "losers";
@@ -91,9 +95,8 @@ public class TossMarketRankingCache {
     private List<MarketRankingResponse> fetchAndMap(CacheKey key) {
         String marketCountry = SCOPE_OVERSEAS.equals(key.scope()) ? MARKET_US : MARKET_KR;
         String type = resolveType(key.sort());
-        String duration = resolveDuration(key.sort());
 
-        TossRankingResponse response = tossApiClient.getRankings(type, marketCountry, duration, MAX_COUNT);
+        TossRankingResponse response = tossApiClient.getRankings(type, marketCountry, DURATION_1D, MAX_COUNT);
         List<TossRankingResponse.RankingItem> rankings =
             response.result() == null || response.result().rankings() == null
                 ? List.of() : response.result().rankings();
@@ -129,17 +132,6 @@ public class TossMarketRankingCache {
             case SORT_VOLUME -> TYPE_TRADING_VOLUME;
             default -> TYPE_TOP_GAINERS;
         };
-    }
-
-    /**
-     * TOP_GAINERS/TOP_LOSERS는 duration=realtime을 지원하지 않는다(400
-     * unsupported-ranking-duration) - 대신 1d를 쓰면 basePrice가 "1일 전
-     * 시작 시점 기준가"라 사실상 기존 자체 계산 방식의 "전일종가 대비
-     * 등락률"과 동등하다. amount/volume은 실시간 누적값이 자연스러우므로
-     * realtime을 쓴다.
-     */
-    private String resolveDuration(String sort) {
-        return (SORT_AMOUNT.equals(sort) || SORT_VOLUME.equals(sort)) ? DURATION_REALTIME : DURATION_1D;
     }
 
     private MarketRankingResponse toResponse(TossRankingResponse.RankingItem item, Map<String, Stock> stockByCode) {
