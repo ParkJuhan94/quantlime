@@ -1,0 +1,13 @@
+# 린트/포맷 설정(2026-09-30 도입, ruff 하나로 린트+포맷). 백엔드 Java 컨벤션과 맞춰
+# 줄 길이 120. 규칙은 "버그를 잡는 것" 위주로 시작하고(E/F/B), import 정렬(I)과
+# 최신 문법 권고(UP)만 얹었다 - 스타일 취향 규칙은 일부러 뺐다.
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["venv", "__pycache__"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "B", "I", "UP"]
+
+[tool.ruff.format]
+quote-style = "double"

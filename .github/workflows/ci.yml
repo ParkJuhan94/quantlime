@@ -42,6 +42,15 @@ jobs:
         working-directory: quant-engine
         run: pip install -r requirements.txt
 
+      # ruff는 런타임 의존성이 아니라 requirements.txt(Docker 이미지에 설치됨)에 넣지
+      # 않고 CI에서 버전을 고정해 설치한다
+      - name: 린트 + 포맷 검사 (ruff)
+        working-directory: quant-engine
+        run: |
+          pip install ruff==0.16.9
+          ruff check .
+          ruff format --check .
+
       - name: 테스트
         working-directory: quant-engine
         run: pytest
