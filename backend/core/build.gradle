@@ -56,6 +56,7 @@ dependencies {
     testFixturesImplementation 'org.testcontainers:testcontainers'
     testFixturesImplementation 'org.testcontainers:junit-jupiter'
     testFixturesImplementation 'org.testcontainers:mysql'
+    testFixturesImplementation 'org.testcontainers:redpanda'
     testFixturesCompileOnly 'org.projectlombok:lombok'
     testFixturesAnnotationProcessor 'org.projectlombok:lombok'
 
