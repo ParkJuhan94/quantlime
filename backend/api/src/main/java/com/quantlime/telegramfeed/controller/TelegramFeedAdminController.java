@@ -2,7 +2,6 @@ package com.quantlime.telegramfeed.controller;
 
 import com.quantlime.common.exception.ValidationException;
 import com.quantlime.telegramfeed.dto.TelegramCollectResult;
-import com.quantlime.telegramfeed.dto.TelegramDigestGenerateResult;
 import com.quantlime.telegramfeed.dto.TelegramRetentionResult;
 import com.quantlime.telegramfeed.dto.mapper.TelegramFeedMapper;
 import com.quantlime.telegramfeed.dto.response.TelegramChannelResponse;
@@ -63,11 +62,12 @@ public class TelegramFeedAdminController {
     }
 
     @PostMapping("/digest/generate")
-    @Operation(summary = "AI 다이제스트 생성 수동 트리거",
-        description = "채널×오늘 단위로 그날 SELECTED된 글 전부를 합쳐 AI 다이제스트를 즉시 생성한다. "
-            + "정규 스케줄러가 이미 실행 중이면 거절된다")
+    @Operation(summary = "AI 다이제스트 생성 이벤트 즉시 재발행",
+        description = "채널×오늘 단위 다이제스트 생성 이벤트를 채널마다 즉시 재발행만 한다(2026-09-30 카프카 "
+            + "다도메인 확장 Phase 4 - 실제 생성은 Kafka 컨슈머가 비동기로 처리). 응답은 처리 결과가 아니라 "
+            + "발행 건수다. 정규 스케줄러가 이미 실행 중이면 거절된다")
     @ApiResponse(useReturnTypeSchema = true)
-    public ResponseEntity<List<TelegramDigestGenerateResult>> generateDigest() {
+    public ResponseEntity<Integer> generateDigest() {
         return ResponseEntity.ok(telegramDigestGenerationFacade.runAllExclusively()
             .orElseThrow(() -> new ValidationException(TelegramFeedErrorCode.TELEGRAM_JOB_IN_PROGRESS)));
     }

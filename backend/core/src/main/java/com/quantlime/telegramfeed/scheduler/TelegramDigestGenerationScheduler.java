@@ -1,8 +1,6 @@
 package com.quantlime.telegramfeed.scheduler;
 
-import com.quantlime.telegramfeed.dto.TelegramDigestGenerateResult;
 import com.quantlime.telegramfeed.service.TelegramDigestGenerationFacade;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -16,6 +14,12 @@ import org.springframework.stereotype.Component;
  * 스케줄까지 따라가면 쿼터를 초과한다. "수집 사이클마다 누적 재요약"의 의미는
  * 수집이 촘촘히 돌아 이 스케줄이 실행되는 시점엔 이미 최신 글까지 반영돼
  * 있다는 뜻이지, 다이제스트 재생성 자체가 1시간마다라는 뜻이 아니다).
+ *
+ * <p>2026-09-30부로 실제 생성은 이 스레드가 아니라 Kafka 컨슈머
+ * (TelegramDigestGenerationConsumer, event 모듈)가 채널별로 처리한다(카프카
+ * 다도메인 확장 Phase 4) - 이 스케줄러는 채널마다 이벤트를 발행만 하고
+ * 끝나므로, 채널별 성공/실패 요약을 여기서 더 이상 볼 수 없다(각 컨슈머의
+ * 로그/DLT 알림으로 확인).
  */
 @Slf4j
 @Component
@@ -28,21 +32,10 @@ public class TelegramDigestGenerationScheduler {
     public void run() {
         try {
             telegramDigestGenerationFacade.runAllExclusively().ifPresentOrElse(
-                this::logSummary,
+                count -> log.info("텔레그램 다이제스트 생성 이벤트 발행 완료: {}건", count),
                 () -> log.info("이미 다른 실행이 텔레그램 다이제스트 생성 중 - 이번 실행은 스킵"));
         } catch (Exception e) {
             log.error("텔레그램 다이제스트 생성 스케줄 실행 실패: reason={}", e.getMessage(), e);
         }
-    }
-
-    private void logSummary(List<TelegramDigestGenerateResult> results) {
-        List<TelegramDigestGenerateResult> failures = results.stream().filter(r -> !r.success()).toList();
-        if (!failures.isEmpty()) {
-            // 실패해도 예외를 던지지 않고 이전 다이제스트가 그대로 서빙되는 구조라
-            // (PythonEngineClient 클래스 주석 참고) 조용히 묻히기 쉽다 - info보다
-            // 눈에 띄게 warn으로 격상.
-            log.warn("텔레그램 다이제스트 생성 일부 실패: failures={}", failures);
-        }
-        log.info("텔레그램 다이제스트 생성 완료: results={}", results);
     }
 }
