@@ -2,23 +2,20 @@ package com.quantlime.payment.service;
 
 import com.quantlime.common.exception.ExternalApiException;
 import com.quantlime.common.exception.ValidationException;
-import com.quantlime.infra.tosspayments.TossPaymentsApiClient;
-import com.quantlime.infra.tosspayments.TossPaymentsProperties;
-import com.quantlime.infra.tosspayments.TossWebhookVerifier;
+import com.quantlime.common.lock.RedisLockService;
 import com.quantlime.infra.tosspayments.dto.TossBillingKeyResponse;
 import com.quantlime.infra.tosspayments.dto.TossPaymentApprovalResponse;
 import com.quantlime.infra.tosspayments.exception.TossPaymentsErrorCode;
-import com.quantlime.notification.domain.NotificationType;
-import com.quantlime.notification.service.FcmPushService;
-import com.quantlime.payment.domain.Payment;
-import com.quantlime.payment.domain.PaymentStatus;
-import com.quantlime.payment.repository.PaymentRepository;
+import com.quantlime.payment.implement.BillingProcessor;
+import com.quantlime.payment.implement.PaymentAppender;
+import com.quantlime.payment.implement.PaymentNotifier;
+import com.quantlime.payment.implement.PaymentReader;
 import com.quantlime.subscription.SubscriptionFixture;
 import com.quantlime.subscription.SubscriptionPlanFixture;
 import com.quantlime.subscription.domain.Subscription;
 import com.quantlime.subscription.domain.SubscriptionPlan;
 import com.quantlime.subscription.domain.SubscriptionStatus;
-import com.quantlime.subscription.repository.SubscriptionRepository;
+import com.quantlime.subscription.implement.SubscriptionReader;
 import com.quantlime.subscription.service.SubscriptionPlanService;
 import com.quantlime.subscription.service.SubscriptionService;
 import com.quantlime.user.UserFixture;
@@ -26,6 +23,7 @@ import com.quantlime.user.domain.User;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.Optional;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -33,24 +31,26 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.client.HttpClientErrorException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+/**
+ * 2026-09-28 구현 레이어 분리 이후: 이 테스트는 PaymentService의 오케스트레이션
+ * (무엇을 어떤 순서로 호출하는가)만 검증한다. Toss HTTP 상태 코드 판별(카드 거절
+ * vs 429 vs 일시 장애) 같은 실제 분류 로직은 {@link BillingProcessor}로
+ * 옮겨졌고, 그 로직 자체의 정확성은 {@code BillingProcessorTest}가 검증한다 -
+ * 여기서는 billingProcessor.isBusinessDecline(...)의 결과값(true/false)만
+ * 목킹해 PaymentService가 그 결과에 따라 올바른 분기를 타는지만 본다.
+ */
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
 class PaymentServiceTest {
@@ -62,28 +62,22 @@ class PaymentServiceTest {
     private SubscriptionService subscriptionService;
 
     @Mock
-    private SubscriptionRepository subscriptionRepository;
+    private SubscriptionReader subscriptionReader;
 
     @Mock
-    private PaymentRepository paymentRepository;
+    private PaymentReader paymentReader;
 
     @Mock
-    private TossPaymentsApiClient tossPaymentsApiClient;
+    private PaymentAppender paymentAppender;
 
     @Mock
-    private TossWebhookVerifier tossWebhookVerifier;
+    private BillingProcessor billingProcessor;
 
     @Mock
-    private TossPaymentsProperties tossPaymentsProperties;
+    private PaymentNotifier paymentNotifier;
 
     @Mock
-    private StringRedisTemplate redisTemplate;
-
-    @Mock
-    private ValueOperations<String, String> valueOperations;
-
-    @Mock
-    private FcmPushService fcmPushService;
+    private RedisLockService redisLockService;
 
     @InjectMocks
     private PaymentService paymentService;
@@ -93,34 +87,39 @@ class PaymentServiceTest {
     private final Long userId = 1L;
     private final String lockKey = "subscription:subscribe-lock:" + userId;
 
-    // 카드 거절(HTTP 4xx)처럼 재시도해도 결과가 똑같은 "업무적 거절"을 흉내낸다 -
-    // PaymentService.isBusinessDecline이 원인(cause)의 타입으로 판단하므로
-    // 이 타입이어야 handleRenewalFailure(재시도 예약/PAST_DUE 전환) 경로를 탄다.
-    private ExternalApiException businessDeclineException() {
-        HttpClientErrorException decline = HttpClientErrorException.create(
-            HttpStatus.BAD_REQUEST, "Bad Request", HttpHeaders.EMPTY, new byte[0], null);
-        return new ExternalApiException(TossPaymentsErrorCode.PAYMENT_CHARGE_FAILED, decline);
+    // 카드 거절이든 일시 장애든 원인은 이제 PaymentService 입장에서 무의미하다 -
+    // billingProcessor.isBusinessDecline(...)의 반환값만 분기 기준이므로,
+    // 어떤 cause를 달든 상관없는 자리표시자 예외를 하나만 둔다.
+    private ExternalApiException tossChargeException() {
+        return new ExternalApiException(TossPaymentsErrorCode.PAYMENT_CHARGE_FAILED);
     }
 
-    // 최초 구독 흐름은 결제 전에 userId별 Redis 락을 잡는다 - 락 흐름까지
-    // 도달하는 테스트에서만 호출한다(할부 유효성 실패처럼 락 전에 던지는
-    // 테스트에서 호출하면 strict stubbing이 unnecessary stubbing으로 걸린다).
-    private void givenSubscribeLockAcquired() {
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.setIfAbsent(eq(lockKey), anyString(), any(Duration.class)))
-            .willReturn(true);
+    // 최초 구독 흐름은 결제 전에 userId별 분산락을 잡는다 - RedisLockService를
+    // 목킹해 "락을 획득했다"고 가정하고 실제 task(Supplier)를 그대로 실행시킨다.
+    @SuppressWarnings("unchecked")
+    private void givenLockAcquired() {
+        given(redisLockService.runExclusively(eq(lockKey), any(Duration.class), any()))
+            .willAnswer(invocation -> {
+                Supplier<Object> task = invocation.getArgument(2);
+                return Optional.of(task.get());
+            });
+    }
+
+    private void givenLockNotAcquired() {
+        given(redisLockService.runExclusively(eq(lockKey), any(Duration.class), any()))
+            .willReturn(Optional.empty());
     }
 
     @Test
     @DisplayName("[빌링키 발급과 첫 결제가 모두 성공하면 구독을 시작하고 결제 이력을 남긴다]")
     void issueBillingKeyAndSubscribe_success_activatesSubscription() {
         // given
-        givenSubscribeLockAcquired();
+        givenLockAcquired();
         given(subscriptionPlanService.getByCode("PLAN_3M")).willReturn(plan);
-        given(subscriptionRepository.findByUser_Id(userId)).willReturn(Optional.empty());
-        given(tossPaymentsApiClient.issueBillingKey(anyString(), eq("auth-key")))
+        given(subscriptionReader.findByUserId(userId)).willReturn(Optional.empty());
+        given(billingProcessor.issueBillingKey(anyString(), eq("auth-key")))
             .willReturn(new TossBillingKeyResponse("bk-1", "customer-1", "국민", "1234", "now"));
-        given(tossPaymentsApiClient.chargeWithBillingKey(
+        given(billingProcessor.charge(
             eq("bk-1"), anyString(), anyString(), anyString(), eq(plan.getPriceWon()), eq(0)))
             .willReturn(new TossPaymentApprovalResponse("pk-1", "order-1", "구독", "DONE", plan.getPriceWon(), "카드", "now"));
         Subscription activated = SubscriptionFixture.createSubscription(user, plan);
@@ -131,46 +130,41 @@ class PaymentServiceTest {
 
         // then
         assertThat(result).isEqualTo(activated);
-        verify(paymentRepository).save(any(Payment.class));
-        verify(redisTemplate).delete(lockKey);
-        verify(fcmPushService).sendToUser(
-            eq(userId), eq(NotificationType.PAYMENT_SUCCESS), anyString(), anyString(), eq("/subscribe"));
+        verify(paymentAppender).appendSuccess(
+            eq(activated.getUser()), eq(activated), anyString(), eq(plan.getPriceWon()), eq(0),
+            eq("pk-1"), eq(false));
+        verify(paymentNotifier).notifySubscriptionStarted(userId, plan.getName());
     }
 
     @Test
     @DisplayName("[이미 구독중인 사용자가 다시 결제를 시도하면 카드사 호출 없이 400을 던진다]")
     void issueBillingKeyAndSubscribe_alreadyActive_throwsBeforeCallingToss() {
         // given
-        givenSubscribeLockAcquired();
+        givenLockAcquired();
         Subscription activeSubscription = SubscriptionFixture.createSubscription(user, plan);
         given(subscriptionPlanService.getByCode("PLAN_3M")).willReturn(plan);
-        given(subscriptionRepository.findByUser_Id(userId)).willReturn(Optional.of(activeSubscription));
+        given(subscriptionReader.findByUserId(userId)).willReturn(Optional.of(activeSubscription));
 
         // when & then
         assertThatThrownBy(() ->
             paymentService.issueBillingKeyAndSubscribe(userId, "auth-key", "PLAN_3M", 0))
             .isInstanceOf(ValidationException.class);
-        verify(tossPaymentsApiClient, never()).issueBillingKey(anyString(), anyString());
-        // 락을 획득한 요청이므로(ACTIVE로 거절돼도) 락은 반드시 풀려야 한다.
-        verify(redisTemplate).delete(lockKey);
+        verify(billingProcessor, never()).issueBillingKey(anyString(), anyString());
     }
 
     @Test
     @DisplayName("[같은 사용자의 구독 요청이 이미 진행 중이면(락 미획득) 결제 전에 즉시 거절한다]")
     void issueBillingKeyAndSubscribe_lockNotAcquired_throwsWithoutCallingToss() {
-        // given: 다른 요청이 이미 락을 선점(setIfAbsent가 false 반환)
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.setIfAbsent(eq(lockKey), anyString(), any(Duration.class)))
-            .willReturn(false);
+        // given: 다른 요청이 이미 락을 선점(runExclusively가 빈 Optional 반환)
+        givenLockNotAcquired();
 
         // when & then
         assertThatThrownBy(() ->
             paymentService.issueBillingKeyAndSubscribe(userId, "auth-key", "PLAN_3M", 0))
             .isInstanceOf(ValidationException.class);
-        // 외부 결제는 물론 계획/조회조차 하지 않고, 남의 락을 지우지도 않는다.
+        // 외부 결제는 물론 계획/조회조차 하지 않는다 - 락을 못 잡으면 task 자체가 실행되지 않는다.
         verify(subscriptionPlanService, never()).getByCode(anyString());
-        verify(tossPaymentsApiClient, never()).issueBillingKey(anyString(), anyString());
-        verify(redisTemplate, never()).delete(anyString());
+        verify(billingProcessor, never()).issueBillingKey(anyString(), anyString());
     }
 
     @Test
@@ -180,31 +174,31 @@ class PaymentServiceTest {
         assertThatThrownBy(() ->
             paymentService.issueBillingKeyAndSubscribe(userId, "auth-key", "PLAN_3M", 1))
             .isInstanceOf(ValidationException.class);
-        verify(tossPaymentsApiClient, never()).issueBillingKey(anyString(), anyString());
+        // 락 획득 시도 자체를 하지 않는다 - 유효성 검증이 락보다 먼저다.
+        verify(redisLockService, never()).runExclusively(anyString(), any(Duration.class), any());
+        verify(billingProcessor, never()).issueBillingKey(anyString(), anyString());
     }
 
     @Test
     @DisplayName("[빌링키 발급 후 첫 결제가 거절되면 구독을 만들지 않고 예외를 전파한다]")
     void issueBillingKeyAndSubscribe_chargeFails_doesNotPersistAnything() {
         // given
-        givenSubscribeLockAcquired();
+        givenLockAcquired();
         given(subscriptionPlanService.getByCode("PLAN_3M")).willReturn(plan);
-        given(subscriptionRepository.findByUser_Id(userId)).willReturn(Optional.empty());
-        given(tossPaymentsApiClient.issueBillingKey(anyString(), anyString()))
+        given(subscriptionReader.findByUserId(userId)).willReturn(Optional.empty());
+        given(billingProcessor.issueBillingKey(anyString(), anyString()))
             .willReturn(new TossBillingKeyResponse("bk-1", "customer-1", "국민", "1234", "now"));
-        given(tossPaymentsApiClient.chargeWithBillingKey(
-            anyString(), anyString(), anyString(), anyString(), anyInt(), anyInt()))
-            .willThrow(new ExternalApiException(TossPaymentsErrorCode.PAYMENT_CHARGE_FAILED));
+        given(billingProcessor.charge(anyString(), anyString(), anyString(), anyString(), anyInt(), anyInt()))
+            .willThrow(tossChargeException());
 
         // when & then
         assertThatThrownBy(() ->
             paymentService.issueBillingKeyAndSubscribe(userId, "auth-key", "PLAN_3M", 0))
             .isInstanceOf(ExternalApiException.class);
         verify(subscriptionService, never()).activateOrResubscribe(any(), any(), any(), anyInt());
-        verify(paymentRepository, never()).save(any());
-        verify(fcmPushService, never()).sendToUser(any(), any(), any(), any(), any());
-        // 결제 실패로 예외가 나도 finally에서 락은 반드시 풀린다.
-        verify(redisTemplate).delete(lockKey);
+        verify(paymentAppender, never()).appendSuccess(
+            any(), any(), anyString(), anyInt(), anyInt(), anyString(), anyBoolean());
+        verify(paymentNotifier, never()).notifySubscriptionStarted(any(), any());
     }
 
     @Test
@@ -213,9 +207,8 @@ class PaymentServiceTest {
         // given
         Subscription subscription = SubscriptionFixture.createSubscription(user, plan);
         Long subscriptionId = 100L;
-        given(subscriptionRepository.findById(subscriptionId)).willReturn(Optional.of(subscription));
-        given(tossPaymentsApiClient.chargeWithBillingKey(
-            anyString(), anyString(), anyString(), anyString(), anyInt(), anyInt()))
+        given(subscriptionReader.getById(subscriptionId)).willReturn(subscription);
+        given(billingProcessor.charge(anyString(), anyString(), anyString(), anyString(), anyInt(), anyInt()))
             .willReturn(new TossPaymentApprovalResponse("pk-2", "order-2", "구독", "DONE", plan.getPriceWon(), "카드", "now"));
         LocalDate periodEndBefore = subscription.getCurrentPeriodEnd();
 
@@ -226,19 +219,22 @@ class PaymentServiceTest {
         assertThat(subscription.getCurrentPeriodEnd()).isAfter(periodEndBefore);
         assertThat(subscription.getRenewalFailureCount()).isZero();
         assertThat(subscription.getStatus()).isEqualTo(SubscriptionStatus.ACTIVE);
-        verify(paymentRepository).save(any(Payment.class));
+        verify(paymentAppender).appendSuccess(
+            eq(user), eq(subscription), anyString(), eq(plan.getPriceWon()),
+            eq(subscription.getInstallmentMonths()), eq("pk-2"), eq(true));
     }
 
     @Test
-    @DisplayName("[자동 갱신 결제가 카드 거절(업무적 거절)로 실패하면 내일로 재시도를 예약하고 결제수단 확인을 알린다(3회 미만)]")
+    @DisplayName("[자동 갱신 결제가 업무적 거절로 실패하면 내일로 재시도를 예약하고 결제수단 확인을 알린다"
+        + "(3회 미만)]")
     void chargeRenewal_businessDeclineBelowThreshold_schedulesRetryTomorrow() {
         // given
         Subscription subscription = SubscriptionFixture.createSubscription(user, plan);
         Long subscriptionId = 100L;
-        given(subscriptionRepository.findById(subscriptionId)).willReturn(Optional.of(subscription));
-        given(tossPaymentsApiClient.chargeWithBillingKey(
-            anyString(), anyString(), anyString(), anyString(), anyInt(), anyInt()))
-            .willThrow(businessDeclineException());
+        given(subscriptionReader.getById(subscriptionId)).willReturn(subscription);
+        given(billingProcessor.charge(anyString(), anyString(), anyString(), anyString(), anyInt(), anyInt()))
+            .willThrow(tossChargeException());
+        given(billingProcessor.isBusinessDecline(any(ExternalApiException.class))).willReturn(true);
 
         // when
         paymentService.chargeRenewal(subscriptionId);
@@ -247,25 +243,24 @@ class PaymentServiceTest {
         assertThat(subscription.getRenewalFailureCount()).isEqualTo(1);
         assertThat(subscription.getStatus()).isEqualTo(SubscriptionStatus.ACTIVE);
         assertThat(subscription.getNextBillingAt()).isEqualTo(LocalDate.now().plusDays(1));
-        verify(paymentRepository).save(argThat(p -> p.getStatus() == PaymentStatus.FAILED));
-        // 아직 ACTIVE라 결제수단을 바꿀 여지가 있다는 걸 알려야 하는 경로(내일 재시도) -
-        // PaymentService.handleRenewalFailure의 else 분기.
-        verify(fcmPushService).sendToUser(eq(user.getId()), eq(NotificationType.PAYMENT_FAILED),
-            anyString(), contains("내일 다시"), eq("/subscribe"));
+        verify(paymentAppender).appendFailure(
+            eq(user), eq(subscription), anyString(), eq(plan.getPriceWon()),
+            eq(subscription.getInstallmentMonths()), eq(true), anyString());
+        verify(paymentNotifier).notifyRenewalRetryScheduled(user.getId());
     }
 
     @Test
-    @DisplayName("[자동 갱신 카드 거절 재시도를 3회 모두 소진하면 PAST_DUE로 전환하고 일시중지를 알린다]")
+    @DisplayName("[자동 갱신 업무적 거절 재시도를 3회 모두 소진하면 PAST_DUE로 전환하고 FCM으로 알린다]")
     void chargeRenewal_businessDeclineAtThreshold_marksPastDue() {
         // given
         Subscription subscription = SubscriptionFixture.createSubscription(user, plan);
         subscription.recordRenewalFailure();
         subscription.recordRenewalFailure();
         Long subscriptionId = 100L;
-        given(subscriptionRepository.findById(subscriptionId)).willReturn(Optional.of(subscription));
-        given(tossPaymentsApiClient.chargeWithBillingKey(
-            anyString(), anyString(), anyString(), anyString(), anyInt(), anyInt()))
-            .willThrow(businessDeclineException());
+        given(subscriptionReader.getById(subscriptionId)).willReturn(subscription);
+        given(billingProcessor.charge(anyString(), anyString(), anyString(), anyString(), anyInt(), anyInt()))
+            .willThrow(tossChargeException());
+        given(billingProcessor.isBusinessDecline(any(ExternalApiException.class))).willReturn(true);
 
         // when
         paymentService.chargeRenewal(subscriptionId);
@@ -273,62 +268,60 @@ class PaymentServiceTest {
         // then
         assertThat(subscription.getRenewalFailureCount()).isEqualTo(3);
         assertThat(subscription.getStatus()).isEqualTo(SubscriptionStatus.PAST_DUE);
-        verify(fcmPushService).sendToUser(eq(user.getId()), eq(NotificationType.PAYMENT_FAILED),
-            anyString(), contains("일시중지"), eq("/subscribe"));
+        verify(paymentNotifier).notifyPastDue(user.getId());
     }
 
     @Test
-    @DisplayName("[이미 같은 과금 주기에 결제가 성공 처리돼 있으면(멱등) 토스를 다시 호출하지 않고 스킵한다]")
-    void chargeRenewal_alreadyProcessed_skipsWithoutCallingToss() {
-        // given: 카프카 재시도 또는 다음날 DB 재시도가 이미 성공한 결제와 같은
-        // orderId(구독ID+currentPeriodEnd로 결정론적)로 다시 들어온 상황.
+    @DisplayName("[billingProcessor가 업무적 거절이 아니라고 판단하면(일시 장애·429 등) DB 재시도 "
+        + "카운트를 건드리지 않고 예외를 그대로 던져 카프카 재시도(30s~270s)가 처리하게 한다 - "
+        + "구체적인 HTTP 상태 코드 판별 자체는 BillingProcessorTest가 검증한다]")
+    void chargeRenewal_notBusinessDecline_rethrowsForKafkaRetry() {
+        // given
         Subscription subscription = SubscriptionFixture.createSubscription(user, plan);
         Long subscriptionId = 100L;
-        given(subscriptionRepository.findById(subscriptionId)).willReturn(Optional.of(subscription));
-        given(paymentRepository.existsByOrderIdAndStatus(anyString(), eq(PaymentStatus.DONE)))
-            .willReturn(true);
+        given(subscriptionReader.getById(subscriptionId)).willReturn(subscription);
+        ExternalApiException transientError = tossChargeException();
+        given(billingProcessor.charge(anyString(), anyString(), anyString(), anyString(), anyInt(), anyInt()))
+            .willThrow(transientError);
+        given(billingProcessor.isBusinessDecline(any(ExternalApiException.class))).willReturn(false);
+
+        // when & then
+        assertThatThrownBy(() -> paymentService.chargeRenewal(subscriptionId))
+            .isSameAs(transientError);
+        assertThat(subscription.getRenewalFailureCount()).isZero();
+        assertThat(subscription.getStatus()).isEqualTo(SubscriptionStatus.ACTIVE);
+        verify(paymentAppender, never()).appendFailure(
+            any(), any(), anyString(), anyInt(), anyInt(), anyBoolean(), anyString());
+        // 카프카가 곧 재시도할 일시 장애는 사용자에게 알리지 않는다.
+        verify(paymentNotifier, never()).notifyRenewalRetryScheduled(any());
+        verify(paymentNotifier, never()).notifyPastDue(any());
+    }
+
+    @Test
+    @DisplayName("[이미 성공 처리된 갱신 결제(같은 과금주기)는 토스를 다시 호출하지 않고 멱등하게 스킵한다]")
+    void chargeRenewal_alreadyProcessed_skipsTossCall() {
+        // given
+        Subscription subscription = SubscriptionFixture.createSubscription(user, plan);
+        Long subscriptionId = 100L;
+        given(subscriptionReader.getById(subscriptionId)).willReturn(subscription);
+        given(paymentReader.isAlreadyProcessed(anyString())).willReturn(true);
 
         // when
         paymentService.chargeRenewal(subscriptionId);
 
         // then
-        verify(tossPaymentsApiClient, never()).chargeWithBillingKey(
+        verify(billingProcessor, never()).charge(
             anyString(), anyString(), anyString(), anyString(), anyInt(), anyInt());
-        verify(paymentRepository, never()).save(any());
-        assertThat(subscription.getRenewalFailureCount()).isZero();
     }
 
     @Test
-    @DisplayName("[일시 장애(타임아웃/5xx 등)로 결제가 실패하면 상태를 건드리지 않고 예외를 다시 던진다(카프카 재시도 대상)]")
-    void chargeRenewal_transientFailure_rethrowsWithoutUpdatingState() {
-        // given: 카드 거절(HttpClientErrorException)이 아닌 원인 - 연결 실패/타임아웃 등
-        // 재시도하면 결과가 달라질 수 있는 일시 장애를 흉내낸다.
-        Subscription subscription = SubscriptionFixture.createSubscription(user, plan);
-        Long subscriptionId = 100L;
-        given(subscriptionRepository.findById(subscriptionId)).willReturn(Optional.of(subscription));
-        given(tossPaymentsApiClient.chargeWithBillingKey(
-            anyString(), anyString(), anyString(), anyString(), anyInt(), anyInt()))
-            .willThrow(new ExternalApiException(
-                TossPaymentsErrorCode.PAYMENT_CHARGE_FAILED, new RuntimeException("connect timed out")));
-
-        // when & then
-        assertThatThrownBy(() -> paymentService.chargeRenewal(subscriptionId))
-            .isInstanceOf(ExternalApiException.class);
-        // 일시 장애는 여기서 DB 컬럼 재시도로 흡수하지 않는다 - @RetryableTopic이
-        // 재시도하고, 그마저 소진돼야 handleRenewalRetriesExhausted가 처리한다.
-        verify(paymentRepository, never()).save(any());
-        assertThat(subscription.getRenewalFailureCount()).isZero();
-        assertThat(subscription.getStatus()).isEqualTo(SubscriptionStatus.ACTIVE);
-        verify(fcmPushService, never()).sendToUser(any(), any(), any(), any(), any());
-    }
-
-    @Test
-    @DisplayName("[카프카 재시도 소진 후에도(DLT) 재시도 미만이면 내일로 재시도를 예약한다]")
+    @DisplayName("[카프카 재시도 소진 후 handleRenewalRetriesExhausted는 업무적 거절과 동일한 "
+        + "DB 컬럼 재시도 경로(내일 재시도/PAST_DUE)로 합류시킨다]")
     void handleRenewalRetriesExhausted_belowThreshold_schedulesRetryTomorrow() {
         // given
         Subscription subscription = SubscriptionFixture.createSubscription(user, plan);
         Long subscriptionId = 100L;
-        given(subscriptionRepository.findById(subscriptionId)).willReturn(Optional.of(subscription));
+        given(subscriptionReader.getById(subscriptionId)).willReturn(subscription);
 
         // when
         paymentService.handleRenewalRetriesExhausted(subscriptionId, "connect timed out");
@@ -337,8 +330,6 @@ class PaymentServiceTest {
         assertThat(subscription.getRenewalFailureCount()).isEqualTo(1);
         assertThat(subscription.getStatus()).isEqualTo(SubscriptionStatus.ACTIVE);
         assertThat(subscription.getNextBillingAt()).isEqualTo(LocalDate.now().plusDays(1));
-        verify(fcmPushService).sendToUser(
-            eq(user.getId()), eq(NotificationType.PAYMENT_FAILED), anyString(), anyString(), eq("/subscribe"));
     }
 
     @Test
@@ -349,7 +340,7 @@ class PaymentServiceTest {
         subscription.recordRenewalFailure();
         subscription.recordRenewalFailure();
         Long subscriptionId = 100L;
-        given(subscriptionRepository.findById(subscriptionId)).willReturn(Optional.of(subscription));
+        given(subscriptionReader.getById(subscriptionId)).willReturn(subscription);
 
         // when
         paymentService.handleRenewalRetriesExhausted(subscriptionId, "connect timed out");
@@ -357,16 +348,14 @@ class PaymentServiceTest {
         // then
         assertThat(subscription.getRenewalFailureCount()).isEqualTo(3);
         assertThat(subscription.getStatus()).isEqualTo(SubscriptionStatus.PAST_DUE);
-        verify(fcmPushService).sendToUser(
-            eq(user.getId()), eq(NotificationType.PAYMENT_FAILED), anyString(), anyString(), eq("/subscribe"));
+        verify(paymentNotifier).notifyPastDue(user.getId());
     }
 
     @Test
     @DisplayName("[웹훅 서명이 유효하면 예외 없이 통과한다]")
     void handleWebhook_validSignature_doesNotThrow() {
         // given
-        given(tossPaymentsProperties.getWebhookSecret()).willReturn("secret");
-        given(tossWebhookVerifier.verify("payload", "signature", "secret")).willReturn(true);
+        given(billingProcessor.verifyWebhookSignature("payload", "signature")).willReturn(true);
 
         // when & then
         paymentService.handleWebhook("payload", "signature");
@@ -376,8 +365,7 @@ class PaymentServiceTest {
     @DisplayName("[웹훅 서명이 유효하지 않으면 400을 던진다]")
     void handleWebhook_invalidSignature_throwsValidationException() {
         // given
-        given(tossPaymentsProperties.getWebhookSecret()).willReturn("secret");
-        given(tossWebhookVerifier.verify("payload", "bad-signature", "secret")).willReturn(false);
+        given(billingProcessor.verifyWebhookSignature("payload", "bad-signature")).willReturn(false);
 
         // when & then
         assertThatThrownBy(() -> paymentService.handleWebhook("payload", "bad-signature"))

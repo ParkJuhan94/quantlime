@@ -1,0 +1,16 @@
+plugins {
+    id 'java-library'
+}
+
+dependencies {
+    // ErrorCode 인터페이스(ExternalApiException/ExternalApiInvoker의 공개
+    // 시그니처가 직접 참조) - core/tosspayments 등 소비 모듈은 각자 이미
+    // ':common'을 직접 의존하고 있어(기존 컨벤션) 여기서는 implementation으로
+    // 충분하다.
+    implementation project(':common')
+
+    // HttpClientFactorySupport가 JdkClientHttpRequestFactory를 반환한다 -
+    // 소비 모듈(core/tosspayments)은 각자 spring-boot-starter-web을 이미
+    // 의존하므로 여기서도 implementation으로 충분하다.
+    implementation 'org.springframework:spring-web'
+}

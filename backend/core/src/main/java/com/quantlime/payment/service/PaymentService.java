@@ -1,24 +1,21 @@
 package com.quantlime.payment.service;
 
 import com.quantlime.common.exception.ExternalApiException;
-import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.common.exception.ValidationException;
-import com.quantlime.infra.tosspayments.TossPaymentsApiClient;
-import com.quantlime.infra.tosspayments.TossPaymentsProperties;
-import com.quantlime.infra.tosspayments.TossWebhookVerifier;
+import com.quantlime.common.lock.RedisLockService;
 import com.quantlime.infra.tosspayments.dto.TossBillingKeyResponse;
 import com.quantlime.infra.tosspayments.dto.TossPaymentApprovalResponse;
-import com.quantlime.notification.domain.NotificationType;
-import com.quantlime.notification.service.FcmPushService;
 import com.quantlime.payment.domain.Payment;
-import com.quantlime.payment.domain.PaymentStatus;
 import com.quantlime.payment.exception.PaymentErrorCode;
-import com.quantlime.payment.repository.PaymentRepository;
+import com.quantlime.payment.implement.BillingProcessor;
+import com.quantlime.payment.implement.PaymentAppender;
+import com.quantlime.payment.implement.PaymentNotifier;
+import com.quantlime.payment.implement.PaymentReader;
 import com.quantlime.subscription.domain.Subscription;
 import com.quantlime.subscription.domain.SubscriptionPlan;
 import com.quantlime.subscription.domain.SubscriptionStatus;
 import com.quantlime.subscription.exception.SubscriptionErrorCode;
-import com.quantlime.subscription.repository.SubscriptionRepository;
+import com.quantlime.subscription.implement.SubscriptionReader;
 import com.quantlime.subscription.service.SubscriptionPlanService;
 import com.quantlime.subscription.service.SubscriptionService;
 import com.quantlime.user.domain.User;
@@ -28,11 +25,17 @@ import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.HttpClientErrorException;
 
+/**
+ * 구독 결제 흐름을 오케스트레이션한다 - 조회/저장/외부 API 호출/알림 발송의
+ * 상세 구현은 전부 {@code payment.implement}/{@code subscription.implement}
+ * 패키지의 협력 객체(Reader/Appender/Processor/Notifier)에 위임하고, 이
+ * 클래스는 "무엇을 어떤 순서로 하는가"라는 흐름만 남긴다(2026-09-28
+ * 구현 레이어 분리 - 이전엔 Repository/infra 클라이언트를 직접 호출해
+ * 흐름과 상세 구현이 뒤섞여 있었다).
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -46,27 +49,29 @@ public class PaymentService {
     // DB 유니크 제약만으로는 동시 요청의 이중 결제를 막지 못한다(둘 다
     // ACTIVE 체크를 통과하고 둘 다 결제에 성공한 뒤 두 번째 save만 제약
     // 위반으로 실패 → 결제는 됐는데 구독 row는 없는 불일치). userId별
-    // Redis 락으로 결제 흐름 자체를 직렬화해, 결제가 최대 1회만 일어나게
+    // 분산락으로 결제 흐름 자체를 직렬화해, 결제가 최대 1회만 일어나게
     // 한다. TTL은 결제 왕복이 끝나기 전에 풀리지 않도록 넉넉히 잡되(30초),
-    // 프로세스가 죽어 finally가 못 돌아도 자동 만료되게 한다.
-    // Redis 장애 시 예외를 흡수하는 폴백은 두지 않는다 - 이 락이 막으려는
-    // 건 이중 결제라, 실패를 조용히 넘기면 락이 아예 없는 것과 같아진다.
-    // Redis가 죽으면 결제 흐름도 fail-closed로 막히는 게 맞는 동작이다
-    // (2026-08-17, PriceCacheStore와 다른 판단 - docs/00-sre/SRE.md "캐시" 절 참고).
-    // 이 락 자체의 알려진 한계(소유권 미검증 - RedisLockService의 UUID 토큰
-    // 방식과 다름)는 결제 도메인 백로그로 별도 관리한다.
+    // 프로세스가 죽어도 자동 만료되게 한다.
+    // RedisLockService는 Redis 장애 시 예외를 흡수하는 폴백을 두지 않는다 -
+    // 이 락이 막으려는 건 이중 결제라, 실패를 조용히 넘기면 락이 아예
+    // 없는 것과 같아진다. Redis가 죽으면 결제 흐름도 fail-closed로 막히는
+    // 게 맞는 동작이다(2026-08-17, PriceCacheStore와 다른 판단 -
+    // docs/00-sre/SRE.md "캐시" 절 참고).
+    // 2026-09-28부로 소유권을 검증하지 않던 자체 구현(StringRedisTemplate
+    // setIfAbsent+delete)을 걷어내고, UUID 토큰+Lua CAS로 TTL 만료 후에도
+    // 남의 락을 지우지 않는 RedisLockService로 교체했다(SRE.md 결제 도메인
+    // 백로그 #5 해결).
     private static final String SUBSCRIBE_LOCK_KEY_PREFIX = "subscription:subscribe-lock:";
     private static final Duration SUBSCRIBE_LOCK_TTL = Duration.ofSeconds(30);
 
     private final SubscriptionPlanService subscriptionPlanService;
     private final SubscriptionService subscriptionService;
-    private final SubscriptionRepository subscriptionRepository;
-    private final PaymentRepository paymentRepository;
-    private final TossPaymentsApiClient tossPaymentsApiClient;
-    private final TossWebhookVerifier tossWebhookVerifier;
-    private final TossPaymentsProperties tossPaymentsProperties;
-    private final StringRedisTemplate redisTemplate;
-    private final FcmPushService fcmPushService;
+    private final SubscriptionReader subscriptionReader;
+    private final PaymentReader paymentReader;
+    private final PaymentAppender paymentAppender;
+    private final BillingProcessor billingProcessor;
+    private final PaymentNotifier paymentNotifier;
+    private final RedisLockService redisLockService;
 
     // 카드 등록(빌링키 발급) 위젯 성공 콜백에서 호출한다 - 빌링키 발급과
     // 즉시 첫 결제를 한 번에 처리한다. Toss API 호출 자체는 트랜잭션
@@ -79,21 +84,10 @@ public class PaymentService {
         Long userId, String authKey, String planCode, int installmentMonths) {
         validateInstallmentMonths(installmentMonths);
 
-        // 락 획득 실패 = 같은 사용자의 다른 구독 요청이 이미 결제 중이라는
-        // 뜻 - 외부 결제를 부르기 전에 즉시 거절해 이중 결제를 원천 차단한다.
         String lockKey = SUBSCRIBE_LOCK_KEY_PREFIX + userId;
-        Boolean acquired = redisTemplate.opsForValue()
-            .setIfAbsent(lockKey, "1", SUBSCRIBE_LOCK_TTL);
-        if (!Boolean.TRUE.equals(acquired)) {
-            log.warn("구독 처리 중복 요청 차단(락 미획득): userId={}, planCode={}", userId, planCode);
-            throw new ValidationException(SubscriptionErrorCode.SUBSCRIPTION_IN_PROGRESS);
-        }
-
-        // 락을 획득한 뒤에만 finally에서 삭제한다 - 획득 실패 시(위에서 이미
-        // return) 여기에 오지 않으므로, 남의 락을 지우는 일은 없다.
-        try {
+        return redisLockService.runExclusively(lockKey, SUBSCRIBE_LOCK_TTL, () -> {
             SubscriptionPlan plan = subscriptionPlanService.getByCode(planCode);
-            SubscriptionStatus existingStatus = subscriptionRepository.findByUser_Id(userId)
+            SubscriptionStatus existingStatus = subscriptionReader.findByUserId(userId)
                 .map(Subscription::getStatus)
                 .orElse(null);
             if (existingStatus == SubscriptionStatus.ACTIVE) {
@@ -102,12 +96,12 @@ public class PaymentService {
 
             String customerKey = toCustomerKey(userId);
             TossBillingKeyResponse billingKeyResponse =
-                tossPaymentsApiClient.issueBillingKey(customerKey, authKey);
+                billingProcessor.issueBillingKey(customerKey, authKey);
 
             String orderId = generateOrderId();
             TossPaymentApprovalResponse approval;
             try {
-                approval = tossPaymentsApiClient.chargeWithBillingKey(
+                approval = billingProcessor.charge(
                     billingKeyResponse.billingKey(), customerKey, orderId, ORDER_NAME,
                     plan.getPriceWon(), installmentMonths);
             } catch (ExternalApiException e) {
@@ -123,17 +117,19 @@ public class PaymentService {
             Subscription subscription = subscriptionService.activateOrResubscribe(
                 userId, plan, billingKeyResponse.billingKey(), installmentMonths);
 
-            paymentRepository.save(Payment.success(
+            paymentAppender.appendSuccess(
                 subscription.getUser(), subscription, orderId, plan.getPriceWon(), installmentMonths,
-                approval.paymentKey(), false));
+                approval.paymentKey(), false);
 
             log.info("구독 시작 완료: userId={}, planCode={}, orderId={}", userId, planCode, orderId);
-            fcmPushService.sendToUser(userId, NotificationType.PAYMENT_SUCCESS,
-                "구독이 시작되었습니다", plan.getName() + " 플랜 결제가 완료됐어요.", "/subscribe");
+            paymentNotifier.notifySubscriptionStarted(userId, plan.getName());
             return subscription;
-        } finally {
-            redisTemplate.delete(lockKey);
-        }
+        }).orElseThrow(() -> {
+            // 락 획득 실패 = 같은 사용자의 다른 구독 요청이 이미 결제 중이라는
+            // 뜻 - 외부 결제를 부르기 전에 즉시 거절해 이중 결제를 원천 차단한다.
+            log.warn("구독 처리 중복 요청 차단(락 미획득): userId={}, planCode={}", userId, planCode);
+            return new ValidationException(SubscriptionErrorCode.SUBSCRIPTION_IN_PROGRESS);
+        });
     }
 
     // Kafka 컨슈머(SubscriptionRenewalConsumer, event 모듈)가 건별로
@@ -154,34 +150,33 @@ public class PaymentService {
     // handleRenewalRetriesExhausted()로 같은 DB 컬럼 경로에 합류시킨다.
     @Transactional
     public void chargeRenewal(Long subscriptionId) {
-        Subscription subscription = subscriptionRepository.findById(subscriptionId)
-            .orElseThrow(() -> new NotFoundException(SubscriptionErrorCode.NOT_FOUND_SUBSCRIPTION));
+        Subscription subscription = subscriptionReader.getById(subscriptionId);
         User user = subscription.getUser();
         SubscriptionPlan plan = subscription.getPlan();
         String customerKey = toCustomerKey(user.getId());
         String orderId = renewalOrderId(subscriptionId, subscription.getCurrentPeriodEnd());
 
-        if (paymentRepository.existsByOrderIdAndStatus(orderId, PaymentStatus.DONE)) {
+        if (paymentReader.isAlreadyProcessed(orderId)) {
             log.info("이미 처리된 구독 갱신 결제, 스킵(멱등): subscriptionId={}, orderId={}",
                 subscriptionId, orderId);
             return;
         }
 
         try {
-            TossPaymentApprovalResponse approval = tossPaymentsApiClient.chargeWithBillingKey(
+            TossPaymentApprovalResponse approval = billingProcessor.charge(
                 subscription.getBillingKey(), customerKey, orderId, ORDER_NAME,
                 plan.getPriceWon(), subscription.getInstallmentMonths());
-            paymentRepository.save(Payment.success(
+            paymentAppender.appendSuccess(
                 user, subscription, orderId, plan.getPriceWon(),
-                subscription.getInstallmentMonths(), approval.paymentKey(), true));
+                subscription.getInstallmentMonths(), approval.paymentKey(), true);
             subscription.renew();
             log.info("구독 자동 갱신 결제 성공: userId={}, subscriptionId={}, orderId={}",
                 user.getId(), subscriptionId, orderId);
         } catch (ExternalApiException e) {
-            if (isBusinessDecline(e)) {
-                paymentRepository.save(Payment.failure(
+            if (billingProcessor.isBusinessDecline(e)) {
+                paymentAppender.appendFailure(
                     user, subscription, orderId, plan.getPriceWon(),
-                    subscription.getInstallmentMonths(), true, e.getMessage()));
+                    subscription.getInstallmentMonths(), true, e.getMessage());
                 handleRenewalFailure(subscription, e.getMessage());
             } else {
                 log.warn("구독 자동 갱신 일시 실패(카프카 재시도 예정): "
@@ -200,8 +195,7 @@ public class PaymentService {
      */
     @Transactional
     public void handleRenewalRetriesExhausted(Long subscriptionId, String errorMessage) {
-        Subscription subscription = subscriptionRepository.findById(subscriptionId)
-            .orElseThrow(() -> new NotFoundException(SubscriptionErrorCode.NOT_FOUND_SUBSCRIPTION));
+        Subscription subscription = subscriptionReader.getById(subscriptionId);
         handleRenewalFailure(subscription, errorMessage);
     }
 
@@ -214,9 +208,7 @@ public class PaymentService {
             log.warn("구독 자동 갱신 최종 실패(재시도 소진), PAST_DUE 전환: "
                     + "userId={}, subscriptionId={}, error={}",
                 userId, subscriptionId, errorMessage);
-            fcmPushService.sendToUser(userId, NotificationType.PAYMENT_FAILED,
-                "결제에 실패했어요", "카드 결제가 계속 실패해 구독이 일시중지됐어요. 결제수단을 확인해주세요.",
-                "/subscribe");
+            paymentNotifier.notifyPastDue(userId);
         } else {
             subscription.scheduleRenewalRetry(LocalDate.now().plusDays(1));
             log.warn("구독 자동 갱신 결제 실패, 내일 재시도: "
@@ -225,32 +217,20 @@ public class PaymentService {
             // 아직 ACTIVE(프리미엄 유지)인 이 시점에 알려야 끊기기 전에
             // 결제수단을 바꿀 수 있다. 일시 장애(타임아웃/5xx)는 카프카가 먼저
             // 재시도하고 그게 다 실패해야 여기 오므로 알림이 폭주하진 않는다.
-            fcmPushService.sendToUser(userId, NotificationType.PAYMENT_FAILED,
-                "결제에 실패했어요", "내일 다시 결제를 시도해요. 구독은 유지 중이니 결제수단을 확인해주세요.",
-                "/subscribe");
+            paymentNotifier.notifyRenewalRetryScheduled(userId);
         }
-    }
-
-    /**
-     * HTTP 4xx(카드 거절 등 업무적 거절)인지 판단한다 - 5xx/타임아웃/연결
-     * 실패와 달리 몇 초~몇 분 뒤 재시도해도 같은 결과가 나오므로 카프카
-     * 재시도 대상에서 제외한다(클래스 상단 chargeRenewal 주석 참고).
-     */
-    private boolean isBusinessDecline(ExternalApiException e) {
-        return e.getCause() instanceof HttpClientErrorException;
     }
 
     @Transactional(readOnly = true)
     public List<Payment> getPaymentHistory(Long userId) {
-        return paymentRepository.findAllByUser_IdOrderByCreatedAtDesc(userId);
+        return paymentReader.getHistory(userId);
     }
 
     // 최소 구현: 서명 검증 + 수신 로깅까지. 카드 자동결제는 승인이
     // 동기(API 응답)로 오기 때문에 웹훅에 의존하는 상태 전이가 아직
     // 없다 - 실제 페이로드를 받아보며 이벤트 타입별 처리를 확장한다.
     public void handleWebhook(String payload, String signatureHeader) {
-        boolean valid = tossWebhookVerifier.verify(
-            payload, signatureHeader, tossPaymentsProperties.getWebhookSecret());
+        boolean valid = billingProcessor.verifyWebhookSignature(payload, signatureHeader);
         if (!valid) {
             throw new ValidationException(PaymentErrorCode.INVALID_WEBHOOK_SIGNATURE);
         }
@@ -282,7 +262,8 @@ public class PaymentService {
      * {@code currentPeriodEnd}는 이번 과금 주기의 갱신이 성공(renew())하기
      * 전까지는 값이 바뀌지 않으므로, 같은 과금 주기에 대한 재시도(카프카
      * 재시도든 다음날 DB 컬럼 재시도든)는 항상 같은 orderId를 만들어낸다 -
-     * chargeRenewal의 사전 확인(existsByOrderIdAndStatus)이 이 값을 키로 쓴다.
+     * chargeRenewal의 사전 확인({@code PaymentReader.isAlreadyProcessed})이
+     * 이 값을 키로 쓴다.
      */
     private String renewalOrderId(Long subscriptionId, LocalDate currentPeriodEnd) {
         return "SUB-RENEWAL-" + subscriptionId + "-" + currentPeriodEnd;

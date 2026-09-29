@@ -2,6 +2,12 @@ dependencies {
     implementation project(':core')
     implementation project(':event')
     implementation project(':common')
+    // GlobalExceptionHandler가 ExternalApiException을 직접 잡고,
+    // SubscriptionControllerTest가 TossPaymentsApiClient를 직접 @MockBean
+    // 한다 - core를 통한 전이 의존을 기대하지 않고(implementation은
+    // 비전이적) 각자 직접 선언한다(2026-09-28, 토스페이먼츠 모듈 분리)
+    implementation project(':client-support')
+    implementation project(':tosspayments')
     testImplementation(testFixtures(project(':core')))
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
