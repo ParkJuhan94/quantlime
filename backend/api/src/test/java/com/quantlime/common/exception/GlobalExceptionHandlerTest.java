@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -30,5 +31,29 @@ class GlobalExceptionHandlerTest extends ApiTestSupport {
         mockMvc.perform(get("/dev/no-such-endpoint"))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("[필수 쿼리 파라미터가 없으면 500이 아니라 400을 반환한다]")
+    void missingRequiredParam_returns400() throws Exception {
+        mockMvc.perform(get("/api/stocks/search"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    @DisplayName("[파라미터 타입이 맞지 않으면(limit=abc) 500이 아니라 400을 반환한다]")
+    void parameterTypeMismatch_returns400() throws Exception {
+        mockMvc.perform(get("/api/stocks/popular").param("limit", "abc"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    @DisplayName("[깨진 JSON 본문은 500이 아니라 400을 반환한다]")
+    void malformedJsonBody_returns400() throws Exception {
+        mockMvc.perform(post("/api/feedback").contentType("application/json").content("{not-json"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 }
