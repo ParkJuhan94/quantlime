@@ -1,25 +1,25 @@
 package com.quantlime.feed.controller;
 
-import com.quantlime.auth.jwt.JwtTokenProvider;
-import com.quantlime.support.ApiTestSupport;
-import com.quantlime.user.UserFixture;
-import com.quantlime.user.domain.OAuthProvider;
-import com.quantlime.user.domain.User;
-import com.quantlime.user.repository.UserRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.MediaType;
-
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.quantlime.auth.jwt.JwtTokenProvider;
+import com.quantlime.support.ApiTestSupport;
+import com.quantlime.user.UserFixture;
+import com.quantlime.user.domain.OAuthProvider;
+import com.quantlime.user.domain.User;
+import com.quantlime.user.repository.UserRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 
 @Tag("integration")
 class FeedControllerTest extends ApiTestSupport {

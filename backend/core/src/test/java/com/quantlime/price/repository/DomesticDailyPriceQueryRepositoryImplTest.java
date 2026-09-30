@@ -1,5 +1,7 @@
 package com.quantlime.price.repository;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.support.DataJpaTestSupport;
 import java.time.LocalDate;
@@ -8,8 +10,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 @Tag("integration")
 class DomesticDailyPriceQueryRepositoryImplTest extends DataJpaTestSupport {

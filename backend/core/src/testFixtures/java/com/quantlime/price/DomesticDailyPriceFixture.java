@@ -1,10 +1,10 @@
 package com.quantlime.price;
 
+import static lombok.AccessLevel.PRIVATE;
+
 import com.quantlime.price.domain.DomesticDailyPrice;
 import java.time.LocalDate;
 import lombok.NoArgsConstructor;
-
-import static lombok.AccessLevel.PRIVATE;
 
 @NoArgsConstructor(access = PRIVATE)
 public final class DomesticDailyPriceFixture {

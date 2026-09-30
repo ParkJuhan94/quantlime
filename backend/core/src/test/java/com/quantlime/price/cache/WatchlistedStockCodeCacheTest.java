@@ -1,5 +1,10 @@
 package com.quantlime.price.cache;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.watchlist.repository.WatchlistRepository;
 import java.time.Instant;
@@ -12,11 +17,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 
 /**
  * 생성자가 시장 범위(List&lt;MarketType&gt;)를 받는 구조라(2026-08-01

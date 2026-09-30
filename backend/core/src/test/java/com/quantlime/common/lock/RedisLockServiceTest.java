@@ -1,5 +1,7 @@
 package com.quantlime.common.lock;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.quantlime.support.DataJpaTestSupport;
 import java.time.Duration;
 import java.util.Optional;
@@ -12,8 +14,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.redis.core.StringRedisTemplate;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 // @DataJpaTest 슬라이스는 기본적으로 Redis 관련 자동설정을 포함하지 않아
 // StringRedisTemplate 빈이 없다 - RedisAutoConfiguration을 함께 @Import해

@@ -1,5 +1,7 @@
 package com.quantlime.score.dto.mapper;
 
+import static lombok.AccessLevel.PRIVATE;
+
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.DailyScoreSeriesApiResponse;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.DivergenceApiResponse;
 import com.quantlime.score.domain.Divergence;
@@ -10,8 +12,6 @@ import com.quantlime.score.dto.response.ScoreRankingResponse;
 import com.quantlime.score.dto.response.ScoreResponse;
 import java.time.LocalDate;
 import lombok.NoArgsConstructor;
-
-import static lombok.AccessLevel.PRIVATE;
 
 @NoArgsConstructor(access = PRIVATE)
 public final class ScoreMapper {

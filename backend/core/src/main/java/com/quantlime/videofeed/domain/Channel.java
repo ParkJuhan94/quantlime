@@ -1,5 +1,7 @@
 package com.quantlime.videofeed.domain;
 
+import static lombok.AccessLevel.PROTECTED;
+
 import com.quantlime.common.domain.TimeBaseEntity;
 import com.quantlime.videofeed.domain.converter.ChannelFilterConfigConverter;
 import com.quantlime.videofeed.domain.converter.TelegramFilterConfigConverter;
@@ -19,8 +21,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.util.Assert;
-
-import static lombok.AccessLevel.PROTECTED;
 
 @Entity
 @Table(name = "channel", uniqueConstraints = {

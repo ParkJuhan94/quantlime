@@ -1,13 +1,18 @@
 package com.quantlime.market.controller;
 
+import static org.mockito.BDDMockito.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
 import com.quantlime.auth.jwt.JwtTokenProvider;
 import com.quantlime.market.cache.BitcoinChartCache;
-import com.quantlime.market.cache.ExchangeRateChartCache;
 import com.quantlime.market.cache.DomesticIndexMinuteChartCache;
+import com.quantlime.market.cache.ExchangeRateChartCache;
 import com.quantlime.market.cache.MarketIndexCache;
 import com.quantlime.market.cache.MarketRankingCache;
-import com.quantlime.market.cache.TossMarketRankingCache;
 import com.quantlime.market.cache.OverseasIndexChartCache;
+import com.quantlime.market.cache.TossMarketRankingCache;
 import com.quantlime.market.domain.BenchmarkIndex;
 import com.quantlime.market.dto.response.IndexChartResponse;
 import com.quantlime.market.dto.response.IndexMinuteChartResponse;
@@ -28,11 +33,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.mock.mockito.MockBean;
-
-import static org.mockito.BDDMockito.given;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * MarketIndexCache/MarketRankingCache/TossMarketRankingCache/DomesticIndexChartCache는

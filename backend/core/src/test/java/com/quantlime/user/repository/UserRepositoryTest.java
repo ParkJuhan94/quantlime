@@ -1,5 +1,7 @@
 package com.quantlime.user.repository;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.quantlime.support.DataJpaTestSupport;
 import com.quantlime.user.UserFixture;
 import com.quantlime.user.domain.OAuthProvider;
@@ -9,8 +11,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 @Tag("integration")
 class UserRepositoryTest extends DataJpaTestSupport {

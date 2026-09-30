@@ -1,5 +1,7 @@
 package com.quantlime.price.cache;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -9,8 +11,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * 국내/해외 전용 조회 로직({@link com.quantlime.price.config.PriceCacheConfig}

@@ -1,5 +1,7 @@
 package com.quantlime.videofeed.dto.mapper;
 
+import static lombok.AccessLevel.PRIVATE;
+
 import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.Video;
 import com.quantlime.videofeed.domain.VideoTicker;
@@ -11,8 +13,6 @@ import com.quantlime.videofeed.dto.response.VideoFeedItemResponse;
 import com.quantlime.videofeed.dto.response.VideoFeedTickerResponse;
 import java.util.List;
 import lombok.NoArgsConstructor;
-
-import static lombok.AccessLevel.PRIVATE;
 
 @NoArgsConstructor(access = PRIVATE)
 public final class VideoFeedMapper {

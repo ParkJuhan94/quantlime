@@ -1,10 +1,10 @@
 package com.quantlime.notification.dto.mapper;
 
+import static lombok.AccessLevel.PRIVATE;
+
 import com.quantlime.notification.domain.Notification;
 import com.quantlime.notification.dto.response.NotificationResponse;
 import lombok.NoArgsConstructor;
-
-import static lombok.AccessLevel.PRIVATE;
 
 @NoArgsConstructor(access = PRIVATE)
 public final class NotificationMapper {
