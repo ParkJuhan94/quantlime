@@ -1,0 +1,22 @@
+# 커버리지는 관측만 한다(2026-09-30 도입) - 게이트를 걸 근거 수치가 쌓이기 전이라
+# status 체크는 informational로 두어 PR을 막지 않는다. 임계값은 안정화 후 별도 PR에서 결정
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
+
+comment:
+  layout: "reach, diff, flags, files"
+  require_changes: false
+
+flags:
+  backend:
+    paths:
+      - backend/
+  quant-engine:
+    paths:
+      - quant-engine/
