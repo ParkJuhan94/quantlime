@@ -29,6 +29,16 @@ jobs:
         working-directory: backend
         run: ./gradlew build
 
+      # 모듈별 jacoco XML을 Codecov가 합쳐 PR에 코멘트한다. 포크 PR처럼 시크릿이
+      # 없는 경우에도 CI가 깨지지 않게 fail_ci_if_error는 끈다
+      - name: 커버리지 업로드
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: backend/*/build/reports/jacoco/test/jacocoTestReport.xml
+          flags: backend
+          fail_ci_if_error: false
+
   quant-engine:
     runs-on: ubuntu-latest
     steps:
@@ -51,9 +61,20 @@ jobs:
           ruff check .
           ruff format --check .
 
+      # pytest-cov도 ruff와 같은 이유로 CI에서만 설치한다(런타임 의존성 아님)
       - name: 테스트
         working-directory: quant-engine
-        run: pytest
+        run: |
+          pip install pytest-cov==6.0.0
+          pytest --cov=. --cov-report=xml
+
+      - name: 커버리지 업로드
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: quant-engine/coverage.xml
+          flags: quant-engine
+          fail_ci_if_error: false
 
   frontend:
     runs-on: ubuntu-latest

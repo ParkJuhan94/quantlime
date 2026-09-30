@@ -20,6 +20,7 @@ allprojects {
 subprojects {
     apply plugin: 'java'
     apply plugin: 'io.spring.dependency-management'
+    apply plugin: 'jacoco'
 
     // client-support도 common과 동일하게 java-library로만 둔다(2026-09-28,
     // 토스페이먼츠 모듈 분리) - HttpClientFactorySupport/ExternalApiInvoker/
@@ -56,5 +57,15 @@ subprojects {
 
     tasks.named('test') {
         useJUnitPlatform()
+        finalizedBy tasks.named('jacocoTestReport')
+    }
+
+    // 커버리지는 Codecov가 모듈별 XML을 합쳐 PR에 리포트한다(2026-09-30 도입,
+    // 게이트 없이 관측만) - HTML은 로컬 확인용으로만 켠다
+    tasks.named('jacocoTestReport') {
+        reports {
+            xml.required = true
+            html.required = true
+        }
     }
 }
