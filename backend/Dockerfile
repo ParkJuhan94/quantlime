@@ -12,12 +12,16 @@ COPY api/build.gradle api/build.gradle
 COPY core/build.gradle core/build.gradle
 COPY common/build.gradle common/build.gradle
 COPY event/build.gradle event/build.gradle
+COPY client-support/build.gradle client-support/build.gradle
+COPY tosspayments/build.gradle tosspayments/build.gradle
 RUN ./gradlew --version
 
 COPY api api
 COPY core core
 COPY common common
 COPY event event
+COPY client-support client-support
+COPY tosspayments tosspayments
 RUN ./gradlew :api:bootJar -x test --no-daemon
 
 FROM eclipse-temurin:21-jre AS runtime
