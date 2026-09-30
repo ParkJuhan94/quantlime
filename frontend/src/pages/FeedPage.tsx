@@ -21,9 +21,7 @@ export function FeedPage() {
         <FeedComposerCard />
 
         {postsQuery.isLoading && <LoadingSpinner />}
-        {!postsQuery.isLoading && posts.length === 0 && (
-          <EmptyState message="아직 글이 없어요. 첫 글을 남겨보세요!" />
-        )}
+        {!postsQuery.isLoading && posts.length === 0 && <EmptyState message="아직 글이 없어요. 첫 글을 남겨보세요!" />}
 
         <div className="space-y-3">
           {posts.map((post) => (

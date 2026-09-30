@@ -223,10 +223,7 @@ export function HomeSidePanel({
 
   return (
     <div className="flex h-full overflow-hidden border-l border-gray-100 bg-white">
-      <div
-        className="overflow-hidden transition-[width] duration-200"
-        style={{ width: collapsed ? 0 : 300 }}
-      >
+      <div className="overflow-hidden transition-[width] duration-200" style={{ width: collapsed ? 0 : 300 }}>
         <div className="flex h-full w-[300px] flex-col p-4">
           {activeTab === 'watch' && (
             <>
@@ -240,9 +237,7 @@ export function HomeSidePanel({
                 )}
               </div>
               {!isAuthenticated && <EmptyState icon="document" message="로그인이 필요해요" />}
-              {isAuthenticated && watchlistLoading && (
-                <p className="text-xs text-gray-400">불러오는 중...</p>
-              )}
+              {isAuthenticated && watchlistLoading && <p className="text-xs text-gray-400">불러오는 중...</p>}
               {isAuthenticated && !watchlistLoading && watchlist.length === 0 && (
                 <EmptyState icon="heart" message="관심 종목이 없어요" />
               )}

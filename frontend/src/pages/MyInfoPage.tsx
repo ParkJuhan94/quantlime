@@ -1,11 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useMeQuery } from '../hooks/queries/useMe'
 import { ProfileAvatar } from '../components/common/ProfileAvatar'
-import {
-  useCancelSubscription,
-  useMySubscriptionQuery,
-  usePaymentHistoryQuery,
-} from '../hooks/queries/useSubscription'
+import { useCancelSubscription, useMySubscriptionQuery, usePaymentHistoryQuery } from '../hooks/queries/useSubscription'
 
 export function MyInfoPage() {
   const meQuery = useMeQuery(true)

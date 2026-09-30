@@ -27,15 +27,7 @@ export function SimpleLineChart({ prices, isUp }: { prices: number[]; isUp: bool
 
   return (
     <svg width="100%" height={HEIGHT} viewBox={`0 0 ${width} ${HEIGHT}`} preserveAspectRatio="none">
-      <line
-        x1="0"
-        y1={baselineY}
-        x2={width}
-        y2={baselineY}
-        stroke="#9ca3af"
-        strokeWidth="1"
-        strokeDasharray="4 4"
-      />
+      <line x1="0" y1={baselineY} x2={width} y2={baselineY} stroke="#9ca3af" strokeWidth="1" strokeDasharray="4 4" />
       <polyline points={points} fill="none" stroke={strokeColor} strokeWidth="4" />
     </svg>
   )

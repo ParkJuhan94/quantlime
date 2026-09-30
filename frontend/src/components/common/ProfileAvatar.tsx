@@ -23,12 +23,7 @@ export function ProfileAvatar({
   return (
     <div className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-200 ${className}`}>
       {showImage ? (
-        <img
-          src={profileImageUrl}
-          alt=""
-          className="h-full w-full object-cover"
-          onError={() => setImageFailed(true)}
-        />
+        <img src={profileImageUrl} alt="" className="h-full w-full object-cover" onError={() => setImageFailed(true)} />
       ) : nickname ? (
         <span className={`font-semibold text-gray-500 ${textSizeClassName}`}>{nickname.charAt(0)}</span>
       ) : (

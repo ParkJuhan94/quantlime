@@ -287,9 +287,7 @@ export function IndicatorDetailView({ indicatorKey, draft, onChange, onBack }: I
           <LineDetailRow
             label="BB중단"
             line={draft.bollingerBandsLines.middle}
-            onChange={(middle) =>
-              onChange({ ...draft, bollingerBandsLines: { ...draft.bollingerBandsLines, middle } })
-            }
+            onChange={(middle) => onChange({ ...draft, bollingerBandsLines: { ...draft.bollingerBandsLines, middle } })}
           />
           <LineDetailRow
             label="BB하단"
@@ -376,9 +374,7 @@ export function IndicatorDetailView({ indicatorKey, draft, onChange, onBack }: I
             <PeriodNumberInput
               label="시그널"
               value={draft.macdParams.signalPeriod}
-              onChange={(signalPeriod) =>
-                onChange({ ...draft, macdParams: { ...draft.macdParams, signalPeriod } })
-              }
+              onChange={(signalPeriod) => onChange({ ...draft, macdParams: { ...draft.macdParams, signalPeriod } })}
             />
           </div>
           <LineDetailRow

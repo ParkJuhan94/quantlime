@@ -28,8 +28,8 @@ export function AppSidePanel({ onWidthChange }: AppSidePanelProps) {
   const [panelCollapsed, setPanelCollapsed] = useState(false)
   const [recentlyViewed, setRecentlyViewed] = useState(() => recentlyViewedStorage.read())
 
-  const watchlist = isAuthenticated ? watchlistQuery.data ?? [] : []
-  const watchlistGroups = isAuthenticated ? groupsQuery.data ?? [] : []
+  const watchlist = isAuthenticated ? (watchlistQuery.data ?? []) : []
+  const watchlistGroups = isAuthenticated ? (groupsQuery.data ?? []) : []
   const watchlistCodes = watchlist.map((item) => item.stockCode)
   // WebSocket 푸시는 장중에만 브로드캐스트된다 - 장마감엔 관심종목이
   // 전부 "-"로만 보이는 문제가 있었다(사용자 리포트, 2026-07-16). REST

@@ -48,10 +48,7 @@ export function SubscribePage() {
     try {
       // Toss 결제창은 전체 페이지 리다이렉트라 React 상태가 유실된다 -
       // 콜백 페이지(PaymentResultPage)가 이어받을 수 있게 세션스토리지에 남겨둔다.
-      sessionStorage.setItem(
-        PENDING_CHECKOUT_KEY,
-        JSON.stringify({ planCode: selectedPlan.code, installmentMonths }),
-      )
+      sessionStorage.setItem(PENDING_CHECKOUT_KEY, JSON.stringify({ planCode: selectedPlan.code, installmentMonths }))
       const tossPayments = await loadTossPayments(env.tossPaymentsClientKey)
       const payment = tossPayments.payment({ customerKey })
       await payment.requestBillingAuth({

@@ -8,11 +8,7 @@ import type {
 } from '../types/stock'
 import type { ScoreResponse } from '../types/score'
 
-export async function searchStocks(
-  q: string,
-  page = 0,
-  size = 20,
-): Promise<PageResponse<StockDetailResponse>> {
+export async function searchStocks(q: string, page = 0, size = 20): Promise<PageResponse<StockDetailResponse>> {
   const { data } = await apiClient.get<PageResponse<StockDetailResponse>>('/api/stocks/search', {
     params: { q, page, size },
   })

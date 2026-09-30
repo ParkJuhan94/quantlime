@@ -42,7 +42,11 @@ function GripIcon() {
 export function WatchlistGroupEditModal({ open, onClose, watchlist, groups }: WatchlistGroupEditModalProps) {
   const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null)
   const [checkedCodes, setCheckedCodes] = useState<Set<string>>(new Set())
-  const [nameDialog, setNameDialog] = useState<{ mode: 'create' | 'rename'; groupId?: number; initialName?: string } | null>(null)
+  const [nameDialog, setNameDialog] = useState<{
+    mode: 'create' | 'rename'
+    groupId?: number
+    initialName?: string
+  } | null>(null)
   const [moveMenuOpen, setMoveMenuOpen] = useState(false)
   const [addStockOpen, setAddStockOpen] = useState(false)
   const [draggedGroupId, setDraggedGroupId] = useState<number | null>(null)
@@ -189,7 +193,9 @@ export function WatchlistGroupEditModal({ open, onClose, watchlist, groups }: Wa
                   }
                   onClick={() => setSelectedGroupId(group.id)}
                   className={`group flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-2 text-sm ${
-                    selectedGroupId === group.id ? 'bg-gray-100 font-semibold text-gray-900' : 'text-gray-700 hover:bg-gray-50'
+                    selectedGroupId === group.id
+                      ? 'bg-gray-100 font-semibold text-gray-900'
+                      : 'text-gray-700 hover:bg-gray-50'
                   }`}
                 >
                   <span className="cursor-grab active:cursor-grabbing">

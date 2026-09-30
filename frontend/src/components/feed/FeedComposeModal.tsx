@@ -124,10 +124,7 @@ export function FeedComposeModal({ open, onClose, editingPost }: FeedComposeModa
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35" onClick={onClose}>
-      <div
-        onClick={(event) => event.stopPropagation()}
-        className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"
-      >
+      <div onClick={(event) => event.stopPropagation()} className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
           <div className="relative">
             <button
@@ -251,8 +248,12 @@ export function FeedComposeModal({ open, onClose, editingPost }: FeedComposeModa
                 {uploading
                   ? '이미지 업로드 중...'
                   : activeMutation.isPending
-                    ? (isEditMode ? '수정하는 중...' : '남기는 중...')
-                    : (isEditMode ? '수정하기' : '남기기')}
+                    ? isEditMode
+                      ? '수정하는 중...'
+                      : '남기는 중...'
+                    : isEditMode
+                      ? '수정하기'
+                      : '남기기'}
               </button>
             </div>
             {uploadError && (

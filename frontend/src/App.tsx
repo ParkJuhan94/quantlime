@@ -30,8 +30,7 @@ function App() {
   // 화면 폭이 좁아 상시 노출할 공간이 없다(2026-09 모바일 반응형 대응).
   const isDesktop = useMediaQuery('(min-width: 1024px)')
   const showSidePanel =
-    isDesktop &&
-    !ROUTE_PREFIXES_WITHOUT_SIDE_PANEL.some((prefix) => location.pathname.startsWith(prefix))
+    isDesktop && !ROUTE_PREFIXES_WITHOUT_SIDE_PANEL.some((prefix) => location.pathname.startsWith(prefix))
 
   // 세션 만료로 인한 강제 로그아웃(api/client.ts)은 React 상태 밖에서
   // window.location.assign으로 풀 페이지 이동을 하므로 sessionStorage
@@ -77,9 +76,7 @@ function App() {
       </div>
 
       {showSidePanel && <AppSidePanel onWidthChange={setPanelWidth} />}
-      {showLogoutToast && (
-        <Toast message="퀀트라임에서 로그아웃 됐어요" onDismiss={() => setShowLogoutToast(false)} />
-      )}
+      {showLogoutToast && <Toast message="퀀트라임에서 로그아웃 됐어요" onDismiss={() => setShowLogoutToast(false)} />}
     </div>
   )
 }
