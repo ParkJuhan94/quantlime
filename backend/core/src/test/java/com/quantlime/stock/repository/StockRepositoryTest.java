@@ -1,10 +1,11 @@
 package com.quantlime.stock.repository;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.support.DataJpaTestSupport;
-import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -12,8 +13,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Slice;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 @Tag("integration")
 class StockRepositoryTest extends DataJpaTestSupport {

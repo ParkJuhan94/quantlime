@@ -1,5 +1,7 @@
 package com.quantlime.telegramfeed.dto.mapper;
 
+import static lombok.AccessLevel.PRIVATE;
+
 import com.quantlime.telegramfeed.domain.TelegramDigest;
 import com.quantlime.telegramfeed.domain.TelegramDigestTicker;
 import com.quantlime.telegramfeed.dto.TelegramSummaryPayload;
@@ -11,8 +13,6 @@ import com.quantlime.telegramfeed.dto.response.TelegramFeedTickerResponse;
 import com.quantlime.videofeed.domain.Channel;
 import java.util.List;
 import lombok.NoArgsConstructor;
-
-import static lombok.AccessLevel.PRIVATE;
 
 @NoArgsConstructor(access = PRIVATE)
 public final class TelegramFeedMapper {

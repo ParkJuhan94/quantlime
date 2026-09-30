@@ -1,9 +1,9 @@
 package com.quantlime.subscription;
 
+import static lombok.AccessLevel.PRIVATE;
+
 import com.quantlime.subscription.domain.SubscriptionPlan;
 import lombok.NoArgsConstructor;
-
-import static lombok.AccessLevel.PRIVATE;
 
 @NoArgsConstructor(access = PRIVATE)
 public final class SubscriptionPlanFixture {

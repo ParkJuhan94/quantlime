@@ -1,10 +1,10 @@
 package com.quantlime.user;
 
+import static lombok.AccessLevel.PRIVATE;
+
 import com.quantlime.user.domain.OAuthProvider;
 import com.quantlime.user.domain.User;
 import lombok.NoArgsConstructor;
-
-import static lombok.AccessLevel.PRIVATE;
 
 @NoArgsConstructor(access = PRIVATE)
 public final class UserFixture {

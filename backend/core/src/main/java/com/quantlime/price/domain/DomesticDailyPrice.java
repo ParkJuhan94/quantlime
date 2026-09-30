@@ -1,5 +1,7 @@
 package com.quantlime.price.domain;
 
+import static lombok.AccessLevel.PROTECTED;
+
 import com.quantlime.common.domain.TimeBaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -14,8 +16,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.util.Assert;
-
-import static lombok.AccessLevel.PROTECTED;
 
 // 2026-08-01 daily_price -> domestic_daily_price 테이블 리네임(국내/해외
 // 네이밍 일관성 정리, DomesticDailyPrice 클래스명과 짝) - unique

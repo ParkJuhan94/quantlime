@@ -1,5 +1,10 @@
 package com.quantlime.telegramfeed.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
+
 import com.quantlime.common.lock.RedisLockService;
 import com.quantlime.support.DataJpaTestSupport;
 import com.quantlime.telegramfeed.domain.TelegramDigest;
@@ -24,11 +29,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.mock;
 
 // VideoRetentionServiceTest와 동일한 이유(실제 여러 테이블에 걸친 삭제 검증)로
 // 격리된 Testcontainers MySQL(DataJpaTestSupport)에서 실제 DELETE까지 확인한다.

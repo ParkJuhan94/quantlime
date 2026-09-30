@@ -1,5 +1,8 @@
 package com.quantlime.backtest.repository;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+
 import com.quantlime.backtest.domain.BacktestDailyScore;
 import com.quantlime.support.DataJpaTestSupport;
 import java.time.LocalDate;
@@ -9,9 +12,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 
 @Tag("integration")
 class BacktestDailyScoreRepositoryTest extends DataJpaTestSupport {

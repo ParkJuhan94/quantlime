@@ -1,12 +1,12 @@
 package com.quantlime.infra.toss.dto;
 
+import static lombok.AccessLevel.PRIVATE;
+
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import lombok.NoArgsConstructor;
-
-import static lombok.AccessLevel.PRIVATE;
 
 @NoArgsConstructor(access = PRIVATE)
 public final class TossPriceMapper {

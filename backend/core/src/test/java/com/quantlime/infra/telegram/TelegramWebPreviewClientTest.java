@@ -1,5 +1,8 @@
 package com.quantlime.infra.telegram;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.quantlime.infra.telegram.dto.TelegramPreviewMessage;
 import com.quantlime.infra.telegram.dto.TelegramPreviewPage;
 import java.io.IOException;
@@ -10,9 +13,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.util.StreamUtils;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * TelegramWebPreviewClient.parsePage()를 실제로 캡처한 HTML 픽스처

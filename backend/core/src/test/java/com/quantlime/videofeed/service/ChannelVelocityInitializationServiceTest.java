@@ -1,5 +1,8 @@
 package com.quantlime.videofeed.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.given;
+
 import com.quantlime.infra.youtube.YoutubeApiClient;
 import com.quantlime.infra.youtube.dto.YoutubePlaylistItemsResponse;
 import com.quantlime.infra.youtube.dto.YoutubeVideosResponse;
@@ -21,9 +24,6 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.BDDMockito.given;
 
 // ChannelVelocityInitializationService는 @DataJpaTest 슬라이스가 스캔하는
 // Repository가 아니라 @Service라서 명시적으로 @Import해야 실제 스프링 빈(=AOP

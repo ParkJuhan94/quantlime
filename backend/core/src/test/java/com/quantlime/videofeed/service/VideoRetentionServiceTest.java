@@ -1,5 +1,10 @@
 package com.quantlime.videofeed.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
+
 import com.quantlime.common.lock.RedisLockService;
 import com.quantlime.support.DataJpaTestSupport;
 import com.quantlime.videofeed.domain.Channel;
@@ -25,11 +30,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.mock;
 
 // 실제로 여러 테이블(video/transcript/summary/video_ticker)에 걸쳐 삭제가
 // 정확히 일어나는지(고아 행이 안 남는지) 검증해야 해 Mockito 단위 테스트로는

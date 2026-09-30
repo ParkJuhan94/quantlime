@@ -1,5 +1,7 @@
 package com.quantlime.score.dto.mapper;
 
+import static lombok.AccessLevel.PRIVATE;
+
 import com.quantlime.infra.python.dto.CrossSectionNormalizeApiRequest;
 import com.quantlime.infra.python.dto.CrossSectionNormalizeApiRequest.AxisScoreApiItem;
 import com.quantlime.infra.python.dto.ScoreBatchApiRequest;
@@ -13,8 +15,6 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import lombok.NoArgsConstructor;
-
-import static lombok.AccessLevel.PRIVATE;
 
 @NoArgsConstructor(access = PRIVATE)
 public final class ScoreRequestMapper {
