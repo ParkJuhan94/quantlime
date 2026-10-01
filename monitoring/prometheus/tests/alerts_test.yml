@@ -41,6 +41,36 @@ tests:
         alertname: KafkaDltMessageArrived
         exp_alerts: []
 
+  # --- Kafka 발행 실패 ---
+  # 기동 시 0으로 선등록된 카운터(KafkaPublishMetricsBinder)가 0→1이 되면 발화한다.
+  - interval: 1m
+    input_series:
+      - series: 'kafka_publish_failures_total{topic="payment.webhook.received"}'
+        values: '0 0 0 1 1 1 1 1 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: KafkaPublishFailed
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: KafkaPublishFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              topic: payment.webhook.received
+            exp_annotations:
+              summary: "Kafka 발행 실패: payment.webhook.received"
+              description: "payment.webhook.received 토픽으로 이벤트를 보내지 못했습니다 - 브로커 장애/전송 타임아웃으로 이벤트가 유실됐을 수 있습니다. 결제 웹훅은 5xx로 응답해 Toss 재전송에 맡기고, 나머지 도메인은 다음 정기 사이클에서 복구됩니다. 브로커 상태(RedpandaDown)부터 확인하세요."
+
+  # 실패가 없으면(계속 0) 알림 없음.
+  - interval: 1m
+    input_series:
+      - series: 'kafka_publish_failures_total{topic="payment.webhook.received"}'
+        values: '0 0 0 0 0 0 0 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: KafkaPublishFailed
+        exp_alerts: []
+
   # --- Redpanda 생존 ---
   # cAdvisor가 컨테이너를 계속 보고 있으면(container_last_seen이 현재 시각을 따라감) 알림 없음.
   - interval: 1m
