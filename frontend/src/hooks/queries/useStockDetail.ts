@@ -1,5 +1,5 @@
-import { useQuery } from '@tanstack/react-query'
-import { getChart, getCurrentPrice, getFundamentals, getScore, getStock } from '../../api/stocks'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
+import { getChart, getCurrentPrice, getFundamentals, getMinuteChart, getScore, getStock } from '../../api/stocks'
 import { queryKeys } from '../queryKeys'
 
 export function useStockDetailQuery(stockCode: string) {
@@ -45,5 +45,20 @@ export function useStockScoreQuery(stockCode: string, enabled = true) {
     // 스코어 미계산(SC_000)은 404로 오는 정상 상태라 재시도가 무의미하다.
     retry: false,
     enabled,
+  })
+}
+
+// 분봉은 호출당 최대 200개(약 3.3시간)라 nextBefore 커서로 과거 방향 페이지를 이어 받는다.
+// 1분마다 다시 받아 최신 봉을 반영하고(서버 캐시 15초), 분봉 모드가 아니면 요청 자체를 보내지 않는다.
+export function useStockMinuteChartQuery(stockCode: string, enabled: boolean) {
+  return useInfiniteQuery({
+    queryKey: queryKeys.stockMinuteChart(stockCode),
+    queryFn: ({ pageParam }) => getMinuteChart(stockCode, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextBefore ?? undefined,
+    enabled,
+    refetchInterval: enabled ? 60_000 : false,
+    staleTime: 15_000,
+    retry: 1,
   })
 }

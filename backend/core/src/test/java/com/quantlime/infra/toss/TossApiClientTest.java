@@ -115,6 +115,28 @@ class TossApiClientTest {
     }
 
     @Test
+    @DisplayName("[분봉 조회는 before가 없으면 생략하고 있으면 그대로 전달한다]")
+    void getMinuteCandles_buildsQueryWithOptionalBefore() {
+        // given
+        when(tokenManager.getAccessToken()).thenReturn("token");
+        String body = "{\"result\":{\"candles\":[],\"nextBefore\":null}}";
+        mockServer.expect(requestTo(BASE_URL + "/api/v1/candles?symbol=005930&interval=1m&count=200"))
+            .andExpect(method(GET))
+            .andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+        mockServer.expect(requestTo(
+                BASE_URL + "/api/v1/candles?symbol=005930&interval=1m&count=200&before=2026-09-01T06:30:00Z"))
+            .andExpect(method(GET))
+            .andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+
+        // when
+        tossApiClient.getMinuteCandles("005930", 200, null);
+        tossApiClient.getMinuteCandles("005930", 200, "2026-09-01T06:30:00Z");
+
+        // then
+        mockServer.verify();
+    }
+
+    @Test
     @DisplayName("[랭킹 조회 시 type/marketCountry/duration/count 쿼리 파라미터를 그대로 전달한다]")
     void getRankings_success_buildsQueryParamsAndParsesResponse() {
         // given
