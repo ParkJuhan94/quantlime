@@ -39,10 +39,9 @@ export async function getInvestorTrading(
   interval: InvestorTradingInterval,
   count = 52,
 ): Promise<InvestorTradingResponse[]> {
-  const { data } = await apiClient.get<InvestorTradingResponse[]>(
-    `/api/market/indices/${code}/investor-trading`,
-    { params: { interval, count } },
-  )
+  const { data } = await apiClient.get<InvestorTradingResponse[]>(`/api/market/indices/${code}/investor-trading`, {
+    params: { interval, count },
+  })
   return data
 }
 

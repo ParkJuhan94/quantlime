@@ -1,5 +1,7 @@
 package com.quantlime.backtest.dto.mapper;
 
+import static lombok.AccessLevel.PRIVATE;
+
 import com.quantlime.infra.python.dto.BacktestApiRequest;
 import com.quantlime.infra.python.dto.BacktestApiRequest.OhlcvApiItem;
 import com.quantlime.market.domain.BenchmarkIndex;
@@ -7,8 +9,6 @@ import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
 import java.util.List;
 import lombok.NoArgsConstructor;
-
-import static lombok.AccessLevel.PRIVATE;
 
 @NoArgsConstructor(access = PRIVATE)
 public final class BacktestRequestMapper {

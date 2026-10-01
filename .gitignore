@@ -98,3 +98,7 @@ node_modules/
 
 # OS
 .DS_Store
+
+# 커버리지 산출물
+.coverage
+coverage.xml

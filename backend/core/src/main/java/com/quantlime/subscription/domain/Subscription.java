@@ -1,5 +1,8 @@
 package com.quantlime.subscription.domain;
 
+import static jakarta.persistence.ConstraintMode.NO_CONSTRAINT;
+import static lombok.AccessLevel.PROTECTED;
+
 import com.quantlime.common.domain.TimeBaseEntity;
 import com.quantlime.subscription.crypto.BillingKeyConverter;
 import com.quantlime.user.domain.User;
@@ -22,9 +25,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.util.Assert;
-
-import static jakarta.persistence.ConstraintMode.NO_CONSTRAINT;
-import static lombok.AccessLevel.PROTECTED;
 
 // 사용자 1명당 구독 1건(row)만 유지한다 - 갱신/해지/재구독은 새 row를
 // 만드는 대신 같은 row를 상태 전이시킨다. 첫 결제가 성공한 시점에만

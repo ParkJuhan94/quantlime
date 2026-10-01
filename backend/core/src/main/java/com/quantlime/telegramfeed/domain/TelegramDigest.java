@@ -1,5 +1,8 @@
 package com.quantlime.telegramfeed.domain;
 
+import static jakarta.persistence.ConstraintMode.NO_CONSTRAINT;
+import static lombok.AccessLevel.PROTECTED;
+
 import com.quantlime.common.domain.TimeBaseEntity;
 import com.quantlime.videofeed.domain.Channel;
 import jakarta.persistence.Column;
@@ -19,9 +22,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.util.Assert;
-
-import static jakarta.persistence.ConstraintMode.NO_CONSTRAINT;
-import static lombok.AccessLevel.PROTECTED;
 
 /**
  * 채널×날짜 단위 다이제스트 요약(2026-08-15, TelegramSummary를 대체).

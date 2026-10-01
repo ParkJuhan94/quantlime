@@ -17,10 +17,7 @@ function GoogleIcon() {
         fill="#34A853"
         d="M12 24c3.24 0 5.96-1.07 7.95-2.92l-3.88-3c-1.08.72-2.46 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.26v3.11A12 12 0 0 0 12 24Z"
       />
-      <path
-        fill="#FBBC05"
-        d="M5.27 14.27a7.2 7.2 0 0 1 0-4.54v-3.1H1.26a12 12 0 0 0 0 10.75l4.01-3.11Z"
-      />
+      <path fill="#FBBC05" d="M5.27 14.27a7.2 7.2 0 0 1 0-4.54v-3.1H1.26a12 12 0 0 0 0 10.75l4.01-3.11Z" />
       <path
         fill="#EA4335"
         d="M12 4.77c1.76 0 3.34.6 4.59 1.79l3.44-3.44C17.95 1.19 15.24 0 12 0A12 12 0 0 0 1.26 6.63l4.01 3.1C6.22 6.88 8.87 4.77 12 4.77Z"
@@ -85,9 +82,7 @@ export function LoginProviderButtons({ onSelect }: LoginProviderButtonsProps) {
             <Icon />
             {PROVIDER_LABELS[provider]}
             {lastProvider === provider && (
-              <span className="ml-1 rounded-full bg-black/10 px-2 py-0.5 text-[10px] font-medium">
-                최근 로그인
-              </span>
+              <span className="ml-1 rounded-full bg-black/10 px-2 py-0.5 text-[10px] font-medium">최근 로그인</span>
             )}
           </button>
         )

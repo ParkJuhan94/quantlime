@@ -22,7 +22,13 @@ class BandFillRenderer implements IPrimitivePaneRenderer {
   private readonly chart: IChartApi
   private readonly series: ISeriesApi<'Line'>
 
-  constructor(upper: BandFillPoint[], lower: BandFillPoint[], color: string, chart: IChartApi, series: ISeriesApi<'Line'>) {
+  constructor(
+    upper: BandFillPoint[],
+    lower: BandFillPoint[],
+    color: string,
+    chart: IChartApi,
+    series: ISeriesApi<'Line'>,
+  ) {
     this.upper = upper
     this.lower = lower
     this.color = color

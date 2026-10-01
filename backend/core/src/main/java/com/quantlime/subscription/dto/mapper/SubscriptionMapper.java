@@ -1,12 +1,12 @@
 package com.quantlime.subscription.dto.mapper;
 
+import static lombok.AccessLevel.PRIVATE;
+
 import com.quantlime.subscription.domain.Subscription;
 import com.quantlime.subscription.domain.SubscriptionPlan;
 import com.quantlime.subscription.dto.response.SubscriptionPlanResponse;
 import com.quantlime.subscription.dto.response.SubscriptionResponse;
 import lombok.NoArgsConstructor;
-
-import static lombok.AccessLevel.PRIVATE;
 
 @NoArgsConstructor(access = PRIVATE)
 public final class SubscriptionMapper {

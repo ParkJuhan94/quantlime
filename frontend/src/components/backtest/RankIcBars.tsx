@@ -8,7 +8,8 @@ const MIN_SCALE = 0.1
 export function RankIcBars({ horizons }: { horizons: HorizonBacktestResponse[] }) {
   const maxAbs = Math.max(
     MIN_SCALE,
-    ...horizons.flatMap((h) => [h.rankIc, h.rankIcCiLow, h.rankIcCiHigh])
+    ...horizons
+      .flatMap((h) => [h.rankIc, h.rankIcCiLow, h.rankIcCiHigh])
       .filter((v): v is number => v != null)
       .map(Math.abs),
   )

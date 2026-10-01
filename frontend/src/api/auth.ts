@@ -1,10 +1,7 @@
 import { apiClient } from './client'
 import type { OAuthProviderName, SocialLoginRequest, TokenResponse } from '../types/auth'
 
-export async function login(
-  provider: OAuthProviderName,
-  request: SocialLoginRequest,
-): Promise<TokenResponse> {
+export async function login(provider: OAuthProviderName, request: SocialLoginRequest): Promise<TokenResponse> {
   const { data } = await apiClient.post<TokenResponse>(`/api/auth/login/${provider}`, request)
   return data
 }

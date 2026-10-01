@@ -1,5 +1,8 @@
 package com.quantlime.feed.domain;
 
+import static jakarta.persistence.ConstraintMode.NO_CONSTRAINT;
+import static lombok.AccessLevel.PROTECTED;
+
 import com.quantlime.common.domain.TimeBaseEntity;
 import com.quantlime.user.domain.User;
 import jakarta.persistence.Column;
@@ -17,9 +20,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.util.Assert;
-
-import static jakarta.persistence.ConstraintMode.NO_CONSTRAINT;
-import static lombok.AccessLevel.PROTECTED;
 
 /**
  * 피드 글 좋아요 - 사용자당 글 하나에 한 번만 누를 수 있다(user_id +

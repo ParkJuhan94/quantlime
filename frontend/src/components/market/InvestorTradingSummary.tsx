@@ -53,11 +53,7 @@ export function InvestorTradingSummary({ code }: { code: 'KOSPI' | 'KOSDAQ' }) {
             </button>
           ))}
         </div>
-        <button
-          type="button"
-          onClick={() => setExpanded((prev) => !prev)}
-          className="text-gray-500 hover:underline"
-        >
+        <button type="button" onClick={() => setExpanded((prev) => !prev)} className="text-gray-500 hover:underline">
           {expanded ? '접기' : '자세히'}
         </button>
       </div>

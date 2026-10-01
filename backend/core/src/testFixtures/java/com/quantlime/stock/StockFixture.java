@@ -1,11 +1,11 @@
 package com.quantlime.stock;
 
+import static lombok.AccessLevel.PRIVATE;
+
 import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
 import lombok.NoArgsConstructor;
-
-import static lombok.AccessLevel.PRIVATE;
 
 @NoArgsConstructor(access = PRIVATE)
 public final class StockFixture {

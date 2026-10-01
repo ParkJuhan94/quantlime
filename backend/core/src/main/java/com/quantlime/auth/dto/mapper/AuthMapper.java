@@ -1,10 +1,10 @@
 package com.quantlime.auth.dto.mapper;
 
+import static lombok.AccessLevel.PRIVATE;
+
 import com.quantlime.auth.dto.response.TokenResponse;
 import java.util.concurrent.TimeUnit;
 import lombok.NoArgsConstructor;
-
-import static lombok.AccessLevel.PRIVATE;
 
 @NoArgsConstructor(access = PRIVATE)
 public final class AuthMapper {

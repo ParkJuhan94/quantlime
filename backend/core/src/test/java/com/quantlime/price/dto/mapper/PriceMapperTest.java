@@ -1,5 +1,7 @@
 package com.quantlime.price.dto.mapper;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.quantlime.price.DomesticDailyPriceFixture;
 import com.quantlime.price.OverseasDailyPriceFixture;
 import com.quantlime.price.domain.DomesticDailyPrice;
@@ -10,8 +12,6 @@ import java.time.LocalDate;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 @Tag("unit")
 class PriceMapperTest {

@@ -1,5 +1,8 @@
 package com.quantlime.telegramfeed.domain;
 
+import static jakarta.persistence.ConstraintMode.NO_CONSTRAINT;
+import static lombok.AccessLevel.PROTECTED;
+
 import com.quantlime.common.domain.TimeBaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -17,9 +20,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.util.Assert;
-
-import static jakarta.persistence.ConstraintMode.NO_CONSTRAINT;
-import static lombok.AccessLevel.PROTECTED;
 
 // TelegramPostTicker(2026-08-15 제거)를 대체 - videofeed.domain.VideoTicker와
 // 구조적으로 동일하되, 이제 개별 글이 아니라 다이제스트(TelegramDigest)에

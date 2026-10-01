@@ -43,9 +43,7 @@ export function BacktestPage() {
           <Link to={`/stocks/${stockCode}`} className="text-xs text-gray-500 hover:underline">
             ← 종목 상세로
           </Link>
-          <h1 className="mt-1 text-xl font-bold text-gray-900">
-            {detailQuery.data?.stockName ?? stockCode} 백테스트
-          </h1>
+          <h1 className="mt-1 text-xl font-bold text-gray-900">{detailQuery.data?.stockName ?? stockCode} 백테스트</h1>
         </section>
         <PremiumGate>
           <BacktestLockedPreview />
@@ -77,9 +75,7 @@ export function BacktestPage() {
         <Link to={`/stocks/${stockCode}`} className="text-xs text-gray-500 hover:underline">
           ← 종목 상세로
         </Link>
-        <h1 className="mt-1 text-xl font-bold text-gray-900">
-          {detailQuery.data?.stockName ?? stockCode} 백테스트
-        </h1>
+        <h1 className="mt-1 text-xl font-bold text-gray-900">{detailQuery.data?.stockName ?? stockCode} 백테스트</h1>
         <p className="text-xs text-gray-400">
           스코어 버전 {backtest.scoreVersion} · 최근 계산일 {backtest.backtestDate ?? '-'} · 표본{' '}
           {backtest.dailyScores.length}일

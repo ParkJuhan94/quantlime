@@ -20,15 +20,13 @@ export function ColorWidthChip({ line, onChange }: ColorWidthChipProps) {
         onClick={() => setSheetOpen(true)}
         className="flex shrink-0 items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 shadow-sm transition hover:border-gray-300 hover:bg-gray-50"
       >
-        <span className="h-3.5 w-3.5 shrink-0 rounded-full ring-1 ring-black/5" style={{ backgroundColor: line.color }} />
+        <span
+          className="h-3.5 w-3.5 shrink-0 rounded-full ring-1 ring-black/5"
+          style={{ backgroundColor: line.color }}
+        />
         {line.width}px
       </button>
-      <ColorWidthBottomSheet
-        open={sheetOpen}
-        line={line}
-        onChange={onChange}
-        onClose={() => setSheetOpen(false)}
-      />
+      <ColorWidthBottomSheet open={sheetOpen} line={line} onChange={onChange} onClose={() => setSheetOpen(false)} />
     </>
   )
 }

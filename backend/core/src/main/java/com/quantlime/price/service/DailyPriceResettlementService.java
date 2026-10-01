@@ -46,6 +46,9 @@ public class DailyPriceResettlementService {
             .toList();
     }
 
+    // rebackfill의 반환값(갱신 행 수)은 여기서 쓰지 않는다 - 성공 여부는 예외 유무로만
+    // 판단하는 의도된 무시라 Error Prone ReturnValueIgnored를 이 메서드에서만 끈다
+    @SuppressWarnings("ReturnValueIgnored")
     private int resettle(List<String> stockCodes, ToIntFunction<String> rebackfill) {
         log.info("가격 재확정 일괄 복구 시작: 대상종목수={}", stockCodes.size());
         int processed = 0;

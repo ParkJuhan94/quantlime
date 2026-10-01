@@ -1,12 +1,12 @@
 package com.quantlime.feed.dto.mapper;
 
+import static lombok.AccessLevel.PRIVATE;
+
 import com.quantlime.feed.domain.FeedComment;
 import com.quantlime.feed.domain.FeedPost;
 import com.quantlime.feed.dto.response.FeedCommentResponse;
 import com.quantlime.feed.dto.response.FeedPostResponse;
 import lombok.NoArgsConstructor;
-
-import static lombok.AccessLevel.PRIVATE;
 
 @NoArgsConstructor(access = PRIVATE)
 public final class FeedMapper {
