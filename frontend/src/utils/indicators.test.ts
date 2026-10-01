@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { calculateBollingerBands, calculateIchimoku, calculateMACD, calculateSMA } from './indicators'
+import {
+  calculateBollingerBands,
+  calculateIchimoku,
+  calculateMACD,
+  calculateSMA,
+  shiftBusinessDays,
+} from './indicators'
 import {
   CLOSES,
   EXPECTED_BB_LOWER,
@@ -143,5 +149,23 @@ describe('calculateIchimoku', () => {
 
     expect(result.senkouA[3]).toBeNull()
     expect(result.senkouA[4]).not.toBeNull()
+  })
+})
+
+describe('shiftBusinessDays', () => {
+  it('금요일에서 +1영업일은 다음 월요일이다(주말 건너뜀)', () => {
+    expect(shiftBusinessDays('2026-09-25', 1)).toBe('2026-09-28')
+  })
+
+  it('월요일에서 -1영업일은 직전 금요일이다', () => {
+    expect(shiftBusinessDays('2026-09-28', -1)).toBe('2026-09-25')
+  })
+
+  it('0이면 그대로다', () => {
+    expect(shiftBusinessDays('2026-09-30', 0)).toBe('2026-09-30')
+  })
+
+  it('+5영업일은 정확히 일주일 뒤 같은 요일이다', () => {
+    expect(shiftBusinessDays('2026-09-23', 5)).toBe('2026-09-30')
   })
 })

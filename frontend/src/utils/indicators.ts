@@ -276,5 +276,10 @@ export function shiftBusinessDays(dateStr: string, days: number): string {
       remaining -= 1
     }
   }
-  return date.toISOString().slice(0, 10)
+  // toISOString()은 UTC 기준이라 로컬 자정 Date를 UTC+ 타임존(KST 등)에서 변환하면 하루 전
+  // 날짜가 나온다 - 로컬 연/월/일을 그대로 쓴다(utils/dateFilter.ts의 toDateString과 같은 이유)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const dayOfMonth = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${dayOfMonth}`
 }
