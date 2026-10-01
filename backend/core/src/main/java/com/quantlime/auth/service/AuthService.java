@@ -10,7 +10,9 @@ import com.quantlime.infra.oauth.OAuthClientDispatcher;
 import com.quantlime.infra.oauth.dto.OAuthUserInfo;
 import com.quantlime.user.domain.OAuthProvider;
 import com.quantlime.user.domain.User;
+import com.quantlime.user.dto.response.LinkedProviderResponse;
 import com.quantlime.user.service.UserService;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -33,6 +35,21 @@ public class AuthService {
         User user = userService.findOrCreate(userInfo);
         log.info("소셜 로그인 완료: userId={}, provider={}", user.getId(), provider);
         return issueTokens(user);
+    }
+
+    /** 로그인된 사용자에게 추가 소셜 계정을 연결한다 - 인가 코드 교환으로 그 계정의 소유를 확인한 뒤에만 연결된다. */
+    @Transactional
+    public void link(Long userId, OAuthProvider provider, SocialLoginRequest request) {
+        OAuthUserInfo userInfo = oAuthClientDispatcher.fetch(provider, request.code(), request.redirectUri());
+        userService.linkSocialAccount(userId, userInfo);
+    }
+
+    public void unlink(Long userId, OAuthProvider provider) {
+        userService.unlinkSocialAccount(userId, provider);
+    }
+
+    public List<LinkedProviderResponse> linkedProviders(Long userId) {
+        return userService.getLinkedProviders(userId);
     }
 
     @Transactional(readOnly = true)
