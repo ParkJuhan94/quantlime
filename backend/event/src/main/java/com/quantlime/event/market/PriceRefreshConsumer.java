@@ -1,6 +1,7 @@
 package com.quantlime.event.market;
 
 import com.quantlime.event.observability.KafkaDltNotifier;
+import com.quantlime.event.retry.RetryBackoff;
 import com.quantlime.market.service.MarketDataRefreshService;
 import com.quantlime.market.service.PriceRefreshBatchGate;
 import com.quantlime.score.domain.PeerGroup;
@@ -69,7 +70,8 @@ public class PriceRefreshConsumer {
     private final PriceRefreshBatchGate priceRefreshBatchGate;
     private final KafkaDltNotifier dltNotifier;
 
-    @RetryableTopic(attempts = "4", backoff = @Backoff(delay = 30_000, multiplier = 3.0, maxDelay = 270_000),
+    @RetryableTopic(attempts = "4", backoff = @Backoff(delayExpression = RetryBackoff.DELAY_MS, multiplierExpression = RetryBackoff.MULTIPLIER,
+        maxDelayExpression = RetryBackoff.MAX_DELAY_MS),
         exclude = CallNotPermittedException.class)
     @KafkaListener(topics = MarketTopics.PRICE_REFRESH_REQUESTED, groupId = "price-refresh-collector",
         concurrency = "1", properties = {"max.poll.records=20", "max.poll.interval.ms=600000"})
