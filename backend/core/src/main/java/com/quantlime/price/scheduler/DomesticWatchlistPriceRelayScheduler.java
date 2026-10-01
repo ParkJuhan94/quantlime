@@ -6,6 +6,7 @@ import com.quantlime.price.cache.DomesticMarketCalendarCache;
 import com.quantlime.price.cache.PriceCacheStore;
 import com.quantlime.price.cache.WatchlistedStockCodeCache;
 import com.quantlime.price.dto.response.PriceSnapshot;
+import com.quantlime.price.realtime.PriceTopicSubscriptionTracker;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +44,7 @@ public class DomesticWatchlistPriceRelayScheduler {
     private final PriceCacheStore priceCacheStore;
     private final SimpMessagingTemplate messagingTemplate;
     private final PriceRelayLeaderGate priceRelayLeaderGate;
+    private final PriceTopicSubscriptionTracker priceTopicSubscriptionTracker;
 
     // 전용 풀(SchedulerConfig.priceSweepTaskScheduler)에서 실행 - 사유는
     // DomesticMarketPriceSweepScheduler 참고(2026-08-17).
@@ -66,7 +68,11 @@ public class DomesticWatchlistPriceRelayScheduler {
             return;
         }
 
-        List<String> stockCodes = domesticWatchlistedStockCodeCache.get();
+        // 구독자가 한 명도 없는 종목은 메시지를 만들어 보낼 필요도, Redis에서 읽을 필요도 없다
+        // (이전엔 관심종목 전체에 대해 구독자 유무와 무관하게 매 틱 발행했다, 2026-10-01).
+        List<String> stockCodes = domesticWatchlistedStockCodeCache.get().stream()
+            .filter(priceTopicSubscriptionTracker::hasSubscribers)
+            .toList();
         if (stockCodes.isEmpty()) {
             return;
         }
