@@ -1,5 +1,6 @@
 package com.quantlime.event.videofeed;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 
 import com.quantlime.videofeed.service.LocalTranscriptSyncService;
@@ -12,8 +13,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.annotation.Profile;
 import org.springframework.kafka.annotation.KafkaListener;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
