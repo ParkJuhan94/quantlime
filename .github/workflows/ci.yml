@@ -99,6 +99,18 @@ jobs:
         working-directory: frontend
         run: npm run format:check
 
+      - name: 단위 테스트 + 커버리지
+        working-directory: frontend
+        run: npm run test:coverage
+
+      - name: 커버리지 업로드
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: frontend/coverage/lcov.info
+          flags: frontend
+          fail_ci_if_error: false
+
       - name: 타입체크 + 빌드
         working-directory: frontend
         run: npm run build
