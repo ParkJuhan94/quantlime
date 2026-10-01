@@ -1,0 +1,72 @@
+# promtool 알림 규칙 단위 테스트(2026-10-01). 실행:
+#   docker run --rm --entrypoint promtool -v "$PWD/monitoring/prometheus:/p:ro" \
+#     prom/prometheus:v2.55.1 test rules /p/tests/alerts_test.yml
+# CI(.github/workflows/ci.yml monitoring 잡)가 같은 명령을 돈다 - 알림 규칙은 "울려야 할 때
+# 안 울리는" 실패가 조용해서, 규칙을 고칠 때마다 사람이 눈으로 확인하는 대신 테스트로 고정한다.
+rule_files:
+  - ../rules/alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  # --- Kafka DLT 백스톱 ---
+  # 기동 시 0으로 선등록된 카운터(DltMetricsBinder)가 첫 DLT에서 0→1이 되면 증가로 잡혀 알림이 발화한다.
+  - interval: 1m
+    input_series:
+      - series: 'dlt_messages_total{domain="payment-webhook",topic="payment.webhook.received"}'
+        values: '0 0 0 1 1 1 1 1 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: KafkaDltMessageArrived
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: KafkaDltMessageArrived
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              domain: payment-webhook
+              topic: payment.webhook.received
+            exp_annotations:
+              summary: "Kafka DLT 메시지 발생: payment-webhook"
+              description: "payment-webhook(topic=payment.webhook.received)에서 재시도 소진 후(또는 역직렬화 불가로) DLT로 이관된 메시지가 있습니다 - 운영(EC2)에는 Redpanda Console이 없으니 docker exec quantlime-prod-redpanda rpk topic consume payment.webhook.received-dlt -n 5 로 확인한 뒤 필요시 수동 재발행하세요."
+
+  # 선등록 없이 첫 DLT 때 값 1로 늦게 생긴 카운터(첫 샘플이 이미 1)는 increase()가 증가를 보지 못해
+  # 알림이 울리지 않는다 - DltMetricsBinder가 필요한 이유를 고정하는 문서화용 테스트.
+  - interval: 1m
+    input_series:
+      - series: 'dlt_messages_total{domain="payment-webhook",topic="payment.webhook.received"}'
+        values: '1 1 1 1 1 1 1 1 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: KafkaDltMessageArrived
+        exp_alerts: []
+
+  # --- Redpanda 생존 ---
+  # cAdvisor가 컨테이너를 계속 보고 있으면(container_last_seen이 현재 시각을 따라감) 알림 없음.
+  - interval: 1m
+    input_series:
+      - series: 'container_last_seen{name="quantlime-prod-redpanda"}'
+        values: '0+60x10'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: RedpandaDown
+        exp_alerts: []
+
+  # 마지막 목격 시각이 멈추고 60초가 지난 뒤 2분이 더 지나면 발화한다.
+  - interval: 1m
+    input_series:
+      - series: 'container_last_seen{name="quantlime-prod-redpanda"}'
+        values: '0 60 120 180 180 180 180 180 180 180'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: RedpandaDown
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: RedpandaDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              name: quantlime-prod-redpanda
+            exp_annotations:
+              summary: "Redpanda(Kafka 브로커) 컨테이너가 응답하지 않음"
+              description: "cAdvisor가 1분 이상 redpanda 컨테이너를 보지 못했습니다 - 이벤트 발행이 조용히 유실되고 컨슈머(가격 갱신/구독 갱신/결제 웹훅/자막·요약/텔레그램 다이제스트)가 멈춘 상태일 수 있습니다."

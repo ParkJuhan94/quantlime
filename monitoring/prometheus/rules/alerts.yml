@@ -57,6 +57,19 @@ groups:
           summary: "frontend(nginx) 컨테이너가 응답하지 않음"
           description: "cAdvisor가 1분 이상 frontend 컨테이너를 보지 못했습니다 - 80포트로 들어오는 모든 요청(정적/API 프록시/WS)이 도달 불가 상태일 수 있습니다."
 
+      # Redpanda(Kafka 브로커)도 같은 이유로 cAdvisor 생존 신호를 쓴다. 브로커가 죽으면
+      # kafkaTemplate.send가 결과 확인 없이 실패해 이벤트가 조용히 유실되고 컨슈머도 멈추는데,
+      # 백엔드 헬스체크에는 Kafka가 포함돼 있지 않아 다른 알림으로는 보이지 않는다
+      # (2026-10-01 Kafka 점검). restart: on-failure:5를 소진하고 멈춘 경우도 여기서 잡힌다.
+      - alert: RedpandaDown
+        expr: time() - container_last_seen{name="quantlime-prod-redpanda"} > 60
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redpanda(Kafka 브로커) 컨테이너가 응답하지 않음"
+          description: "cAdvisor가 1분 이상 redpanda 컨테이너를 보지 못했습니다 - 이벤트 발행이 조용히 유실되고 컨슈머(가격 갱신/구독 갱신/결제 웹훅/자막·요약/텔레그램 다이제스트)가 멈춘 상태일 수 있습니다."
+
       # restart: on-failure:5(도커 자체 재시작)와 autoheal(healthcheck 기반
       # 강제 재시작)이 반복적으로 발동하는 상황 - 둘 다 "복구는 됐지만
       # 계속 재발하는" 상태라 개별 alert(BackendDown 등)로는 안 걸릴 수
@@ -181,6 +194,10 @@ groups:
   # 규칙은 "앱 프로세스 자체가 죽어서 그 Slack 호출도 못 나간 경우"까지 잡는
   # 백스톱이다 - 카운터(dlt_messages_total)는 Slack 전송 성패와 무관하게
   # 먼저 증가하므로 이 경로만 따로 살아있다.
+  # 카운터는 기동 시 0으로 선등록된다(DltMetricsBinder, 2026-10-01) - 첫 DLT 때
+  # 늦게 생기면 첫 샘플이 이미 1이라 increase()가 증가를 못 보는 사각지대가 있었다
+  # (tests/alerts_test.yml 참고). 역직렬화 불가 메시지(포이즌 필)는 타입 핸들러가
+  # 호출되지 못해 DeserializationFailureDltObserver가 같은 카운터를 올린다.
   - name: quantlime-kafka-dlt
     rules:
       - alert: KafkaDltMessageArrived
@@ -190,7 +207,7 @@ groups:
           severity: warning
         annotations:
           summary: "Kafka DLT 메시지 발생: {{ $labels.domain }}"
-          description: "{{ $labels.domain }}(topic={{ $labels.topic }})에서 재시도 소진 후 DLT로 이관된 메시지가 있습니다 - Redpanda Console에서 확인 후 필요시 수동 재발행하세요."
+          description: "{{ $labels.domain }}(topic={{ $labels.topic }})에서 재시도 소진 후(또는 역직렬화 불가로) DLT로 이관된 메시지가 있습니다 - 운영(EC2)에는 Redpanda Console이 없으니 docker exec quantlime-prod-redpanda rpk topic consume {{ $labels.topic }}-dlt -n 5 로 확인한 뒤 필요시 수동 재발행하세요."
 
   # --- 리소스: JVM 힙 + 호스트 메모리/디스크 ---
   # 호스트 메모리/디스크 알림은 원래 CloudWatch 커스텀 메트릭+SNS로 별도
