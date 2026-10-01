@@ -1,9 +1,9 @@
 package com.quantlime.event.market;
 
+import com.quantlime.event.publish.KafkaEventSender;
 import com.quantlime.market.event.PriceRefreshRequestedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -21,11 +21,11 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @RequiredArgsConstructor
 public class MarketEventPublisher {
 
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final KafkaEventSender eventSender;
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onPriceRefreshRequested(PriceRefreshRequestedEvent event) {
-        kafkaTemplate.send(MarketTopics.PRICE_REFRESH_REQUESTED, event.stockCode(),
+        eventSender.send(MarketTopics.PRICE_REFRESH_REQUESTED, event.stockCode(),
             PriceRefreshRequestedMessage.of(event));
     }
 }

@@ -1,10 +1,10 @@
 package com.quantlime.event.videofeed;
 
+import com.quantlime.event.publish.KafkaEventSender;
 import com.quantlime.videofeed.event.VideoSelectedEvent;
 import com.quantlime.videofeed.event.VideoTranscribedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -26,19 +26,19 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @RequiredArgsConstructor
 public class VideoFeedEventPublisher {
 
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final KafkaEventSender eventSender;
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onVideoSelected(VideoSelectedEvent event) {
         String key = String.valueOf(event.videoId());
-        kafkaTemplate.send(VideoFeedTopics.VIDEO_SELECTED, key, VideoSelectedMessage.of(event.videoId()));
+        eventSender.send(VideoFeedTopics.VIDEO_SELECTED, key, VideoSelectedMessage.of(event.videoId()));
         log.debug("Kafka 발행: topic={}, videoId={}", VideoFeedTopics.VIDEO_SELECTED, event.videoId());
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onVideoTranscribed(VideoTranscribedEvent event) {
         String key = String.valueOf(event.videoId());
-        kafkaTemplate.send(VideoFeedTopics.VIDEO_TRANSCRIBED, key, VideoTranscribedMessage.of(event.videoId()));
+        eventSender.send(VideoFeedTopics.VIDEO_TRANSCRIBED, key, VideoTranscribedMessage.of(event.videoId()));
         log.debug("Kafka 발행: topic={}, videoId={}", VideoFeedTopics.VIDEO_TRANSCRIBED, event.videoId());
     }
 }

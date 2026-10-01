@@ -56,6 +56,11 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        # send()가 메타데이터를 못 얻을 때(브로커 다운 + 최초 발행) 기본 60초까지 호출 스레드를
+        # 붙든다 - 웹훅 요청 스레드나 스케줄러의 발행 루프가 건당 60초씩 멈추는 걸 막는다
+        # (2026-10-01, KafkaEventSender). 정상 상태의 메타데이터 조회는 밀리초 단위다.
+        max.block.ms: 5000
   task:
     scheduling:
       pool:
