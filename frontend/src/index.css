@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 /* 홈 리디자인(claude.ai/design "quantlime 토스증권 UI 리디자인") 로고 폰트.
    강조색(--color-accent)은 디자인 일관성을 블랙 기준으로 정리하며

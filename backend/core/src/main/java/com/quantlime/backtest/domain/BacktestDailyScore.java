@@ -1,5 +1,7 @@
 package com.quantlime.backtest.domain;
 
+import static lombok.AccessLevel.PROTECTED;
+
 import com.quantlime.common.domain.TimeBaseEntity;
 import com.quantlime.score.domain.Grade;
 import com.quantlime.score.domain.Quadrant;
@@ -17,8 +19,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.util.Assert;
-
-import static lombok.AccessLevel.PROTECTED;
 
 /**
  * 백테스트 기간 전체의 일별 스코어 원시 시계열 - 백테스트 요약 통계

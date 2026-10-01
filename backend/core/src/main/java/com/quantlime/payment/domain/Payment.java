@@ -1,5 +1,8 @@
 package com.quantlime.payment.domain;
 
+import static jakarta.persistence.ConstraintMode.NO_CONSTRAINT;
+import static lombok.AccessLevel.PROTECTED;
+
 import com.quantlime.common.domain.TimeBaseEntity;
 import com.quantlime.subscription.domain.Subscription;
 import com.quantlime.user.domain.User;
@@ -21,9 +24,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.util.Assert;
-
-import static jakarta.persistence.ConstraintMode.NO_CONSTRAINT;
-import static lombok.AccessLevel.PROTECTED;
 
 // 청구 시도 이력. 최초 가입 결제가 실패한 경우(카드 등록은 됐지만 첫
 // 결제가 거절된 경우)는 아직 Subscription이 없어 남길 곳이 없으므로

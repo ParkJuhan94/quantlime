@@ -147,7 +147,16 @@ export function AppHeader({ onLoggedOut }: AppHeaderProps) {
                 <stop offset="100%" stopColor="rgba(180,225,140,0.32)" />
               </linearGradient>
             </defs>
-            <rect x="18" y="18" width="214" height="214" rx="58" fill="url(#header-logo-glass)" stroke="rgba(16,24,40,0.14)" strokeWidth="3" />
+            <rect
+              x="18"
+              y="18"
+              width="214"
+              height="214"
+              rx="58"
+              fill="url(#header-logo-glass)"
+              stroke="rgba(16,24,40,0.14)"
+              strokeWidth="3"
+            />
             <path d="M40,70 L95,30 L120,30 L55,95 Z" fill="rgba(255,255,255,0.4)" />
             <circle cx="125" cy="130" r="80" fill="url(#header-logo-lime)" />
             <ellipse cx="148" cy="92" rx="24" ry="9" fill="#eaf8b0" opacity=".3" transform="rotate(-30 148 92)" />
@@ -191,14 +200,20 @@ export function AppHeader({ onLoggedOut }: AppHeaderProps) {
           aria-label="검색"
           className="flex h-9 w-9 items-center justify-center gap-2 rounded-lg bg-gray-200 text-sm text-gray-500 transition hover:bg-gray-300 lg:w-56 lg:justify-start lg:px-3.5"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            className="shrink-0"
+          >
             <circle cx="11" cy="11" r="7" />
             <path d="m21 21-4.3-4.3" />
           </svg>
           <span className="hidden items-center gap-1.5 lg:flex">
-            <kbd className="rounded bg-gray-300 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-gray-600">
-              /
-            </kbd>
+            <kbd className="rounded bg-gray-300 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-gray-600">/</kbd>
             를 눌러 검색하세요
           </span>
         </button>

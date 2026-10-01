@@ -1,11 +1,11 @@
 package com.quantlime.market.dto.mapper;
 
+import static lombok.AccessLevel.PRIVATE;
+
 import com.quantlime.market.domain.InvestorTrading;
 import com.quantlime.market.domain.InvestorTradingAmounts;
 import com.quantlime.market.dto.response.InvestorTradingResponse;
 import lombok.NoArgsConstructor;
-
-import static lombok.AccessLevel.PRIVATE;
 
 @NoArgsConstructor(access = PRIVATE)
 public final class InvestorTradingMapper {

@@ -1,7 +1,7 @@
 package com.quantlime.videofeed.domain;
 
-import com.quantlime.videofeed.exception.VideoFeedErrorCode;
 import com.quantlime.common.exception.ValidationException;
+import com.quantlime.videofeed.exception.VideoFeedErrorCode;
 import java.util.Arrays;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;

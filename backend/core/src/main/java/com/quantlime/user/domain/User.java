@@ -1,5 +1,7 @@
 package com.quantlime.user.domain;
 
+import static lombok.AccessLevel.PROTECTED;
+
 import com.quantlime.common.domain.TimeBaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -14,8 +16,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.util.Assert;
-
-import static lombok.AccessLevel.PROTECTED;
 
 @Entity
 @Table(name = "users", uniqueConstraints = @UniqueConstraint(

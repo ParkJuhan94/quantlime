@@ -33,11 +33,9 @@ async function reissueAccessToken(): Promise<string> {
   // 검증한다(요청 바디에 담을 필요가 없음). apiClient가 아닌 axios를
   // 직접 쓰는 이유는 그대로 유지 - 재발급 요청 자체가 요청 인터셉터에서
   // 만료된 액세스 토큰을 다시 붙이는 것을 피하기 위함.
-  const { data } = await axios.post<TokenResponse>(
-    `${env.apiBaseUrl}/api/auth/reissue`,
-    null,
-    { withCredentials: true },
-  )
+  const { data } = await axios.post<TokenResponse>(`${env.apiBaseUrl}/api/auth/reissue`, null, {
+    withCredentials: true,
+  })
   tokenStorage.setTokens(data)
   return data.accessToken
 }

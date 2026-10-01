@@ -68,7 +68,15 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'bottom', label: '하단 지표' },
 ]
 
-export function ToggleSwitch({ checked, onChange, label }: { checked: boolean; onChange: (next: boolean) => void; label: string }) {
+export function ToggleSwitch({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean
+  onChange: (next: boolean) => void
+  label: string
+}) {
   return (
     <button
       type="button"

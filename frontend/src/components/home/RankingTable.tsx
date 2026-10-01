@@ -71,7 +71,12 @@ interface DisplayRow {
   detailAvailable: boolean
 }
 
-function RankingRow({ row, index, isWatched, onToggleWatch }: {
+function RankingRow({
+  row,
+  index,
+  isWatched,
+  onToggleWatch,
+}: {
   row: DisplayRow
   index: number
   isWatched: boolean
@@ -109,9 +114,7 @@ function RankingRow({ row, index, isWatched, onToggleWatch }: {
     <tr
       onClick={handleRowClick}
       title={row.detailAvailable ? undefined : '상세 페이지 미지원 종목'}
-      className={`border-b border-gray-50 ${
-        row.detailAvailable ? 'cursor-pointer hover:bg-gray-50' : 'opacity-60'
-      }`}
+      className={`border-b border-gray-50 ${row.detailAvailable ? 'cursor-pointer hover:bg-gray-50' : 'opacity-60'}`}
     >
       <td className="py-2.5">
         <div className="flex items-center gap-2">
@@ -524,9 +527,7 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
               {!isLoading && displayRows.length === 0 && (
                 <tr>
                   <td colSpan={7} className="py-6 text-center text-sm text-gray-400">
-                    {isScoreMode &&
-                      effectiveWatchlistOnly &&
-                      '관심 종목이 없거나 아직 계산된 스코어가 없습니다.'}
+                    {isScoreMode && effectiveWatchlistOnly && '관심 종목이 없거나 아직 계산된 스코어가 없습니다.'}
                     {isScoreMode && !effectiveWatchlistOnly && '아직 계산된 스코어가 없습니다.'}
                     {isRealMode &&
                       effectiveWatchlistOnly &&

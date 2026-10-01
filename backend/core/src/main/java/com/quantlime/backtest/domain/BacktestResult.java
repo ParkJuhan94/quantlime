@@ -1,5 +1,7 @@
 package com.quantlime.backtest.domain;
 
+import static lombok.AccessLevel.PROTECTED;
+
 import com.quantlime.common.domain.TimeBaseEntity;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
@@ -24,8 +26,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.util.Assert;
-
-import static lombok.AccessLevel.PROTECTED;
 
 /**
  * 종목 하나의 (축, horizon) 조합에 대한 백테스트 결과 - Rank IC(+신뢰구간),

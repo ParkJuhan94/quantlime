@@ -1,10 +1,10 @@
 package com.quantlime.payment.dto.mapper;
 
+import static lombok.AccessLevel.PRIVATE;
+
 import com.quantlime.payment.domain.Payment;
 import com.quantlime.payment.dto.response.PaymentResponse;
 import lombok.NoArgsConstructor;
-
-import static lombok.AccessLevel.PRIVATE;
 
 @NoArgsConstructor(access = PRIVATE)
 public final class PaymentMapper {

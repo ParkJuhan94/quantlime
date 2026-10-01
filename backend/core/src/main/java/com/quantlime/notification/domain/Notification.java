@@ -1,5 +1,8 @@
 package com.quantlime.notification.domain;
 
+import static jakarta.persistence.ConstraintMode.NO_CONSTRAINT;
+import static lombok.AccessLevel.PROTECTED;
+
 import com.quantlime.common.domain.TimeBaseEntity;
 import com.quantlime.user.domain.User;
 import jakarta.persistence.Column;
@@ -18,9 +21,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.util.Assert;
-
-import static jakarta.persistence.ConstraintMode.NO_CONSTRAINT;
-import static lombok.AccessLevel.PROTECTED;
 
 // 브로드캐스트(관리자 공지, 전체 스코어 랭킹)도 사용자별로 별도 row를
 // 갖는다 - 알림별 읽음/안읽음(isRead)을 사용자마다 독립적으로 추적해야

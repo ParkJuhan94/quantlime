@@ -1,5 +1,12 @@
 package com.quantlime.event.payment;
 
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.verify;
+
 import com.quantlime.event.observability.KafkaDltNotifier;
 import com.quantlime.payment.service.PaymentService;
 import org.junit.jupiter.api.DisplayName;
@@ -9,13 +16,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.contains;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.BDDMockito.willThrow;
-import static org.mockito.Mockito.verify;
 
 /** {@code @DltHandler} 무한 재발행 루프 방지 불변식의 회귀 테스트 - 처음부터 방어 코드를 갖추고 태어난 컨슈머도 예외는 아니다. */
 @Tag("unit")

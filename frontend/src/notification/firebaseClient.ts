@@ -94,9 +94,7 @@ export async function requestFcmToken(): Promise<string | null> {
  * 서비스워커의 onBackgroundMessage는 호출되지 않고 여기로만 전달된다.
  * 반환된 함수를 호출하면 구독을 해제한다.
  */
-export async function listenForForegroundMessages(
-  onReceive: (payload: MessagePayload) => void,
-): Promise<() => void> {
+export async function listenForForegroundMessages(onReceive: (payload: MessagePayload) => void): Promise<() => void> {
   const messaging = await getMessagingInstance()
   if (!messaging) {
     return () => {}

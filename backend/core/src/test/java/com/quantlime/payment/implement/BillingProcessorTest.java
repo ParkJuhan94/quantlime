@@ -1,5 +1,9 @@
 package com.quantlime.payment.implement;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
+
 import com.quantlime.common.exception.ExternalApiException;
 import com.quantlime.infra.tosspayments.TossPaymentsApiClient;
 import com.quantlime.infra.tosspayments.TossPaymentsProperties;
@@ -18,10 +22,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.ResourceAccessException;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.verify;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)

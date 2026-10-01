@@ -82,10 +82,7 @@ export function FeedbackModal({ open, onClose }: FeedbackModalProps) {
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35" onClick={handleClose}>
-      <div
-        onClick={(event) => event.stopPropagation()}
-        className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl"
-      >
+      <div onClick={(event) => event.stopPropagation()} className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl">
         {status === 'sent' ? (
           <div className="py-4 text-center">
             <p className="mb-4 text-sm font-medium text-gray-900">의견이 전달됐어요. 감사합니다!</p>
@@ -159,9 +156,7 @@ export function FeedbackModal({ open, onClose }: FeedbackModalProps) {
                 이미지 첨부
               </button>
             </div>
-            {uploadError && (
-              <p className="mb-3 text-xs text-red-600">이미지 업로드에 실패했어요. 다시 시도해주세요.</p>
-            )}
+            {uploadError && <p className="mb-3 text-xs text-red-600">이미지 업로드에 실패했어요. 다시 시도해주세요.</p>}
             {status === 'error' && (
               <p className="mb-3 text-xs text-red-600">전송에 실패했어요. 잠시 후 다시 시도해주세요.</p>
             )}

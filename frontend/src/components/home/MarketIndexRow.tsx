@@ -213,7 +213,10 @@ function KrIndexCard({
 }) {
   const navigate = useNavigate()
   const minuteChartQuery = useIndexMinuteChartQuery(code, quote != null)
-  const prices = downsample((minuteChartQuery.data ?? []).map((point) => point.price), 30)
+  const prices = downsample(
+    (minuteChartQuery.data ?? []).map((point) => point.price),
+    30,
+  )
 
   if (!quote) {
     return <IndexCard label={label} valueText="-" changeText="-" isUp={null} />
@@ -308,16 +311,13 @@ function WorldIndexCard({ code, quote }: { code: WorldIndexCode; quote: IndexQuo
   )
 }
 
-function BitcoinCard({
-  priceKrw,
-  changeRate,
-}: {
-  priceKrw: number | null
-  changeRate: number | null
-}) {
+function BitcoinCard({ priceKrw, changeRate }: { priceKrw: number | null; changeRate: number | null }) {
   const navigate = useNavigate()
   const chartQuery = useBitcoinChartQuery(priceKrw != null)
-  const prices = downsample((chartQuery.data ?? []).map((point) => point.price), 30)
+  const prices = downsample(
+    (chartQuery.data ?? []).map((point) => point.price),
+    30,
+  )
 
   return (
     <IndexCard

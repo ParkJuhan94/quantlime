@@ -74,8 +74,8 @@ export function StockDetailPage() {
   const watchlistQuery = useWatchlistQuery(isAuthenticated)
   const groupsQuery = useWatchlistGroupsQuery(isAuthenticated)
   const removeWatchlist = useRemoveWatchlist()
-  const watchlist = isAuthenticated ? watchlistQuery.data ?? [] : []
-  const watchlistGroups = isAuthenticated ? groupsQuery.data ?? [] : []
+  const watchlist = isAuthenticated ? (watchlistQuery.data ?? []) : []
+  const watchlistGroups = isAuthenticated ? (groupsQuery.data ?? []) : []
   const isWatched = watchlist.some((item) => item.stockCode === stockCode)
 
   function toggleWatch() {
@@ -145,12 +145,17 @@ export function StockDetailPage() {
                 aria-label={isWatched ? '관심종목에서 삭제' : '관심종목에 추가'}
                 onClick={toggleWatch}
                 className={`shrink-0 self-center rounded-lg border p-1.5 transition ${
-                  isWatched
-                    ? 'border-red-200 bg-red-50 hover:bg-red-100'
-                    : 'border-gray-200 hover:bg-gray-50'
+                  isWatched ? 'border-red-200 bg-red-50 hover:bg-red-100' : 'border-gray-200 hover:bg-gray-50'
                 }`}
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill={isWatched ? '#dc2626' : 'none'} stroke={isWatched ? '#dc2626' : '#c6c6c6'} strokeWidth="2">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill={isWatched ? '#dc2626' : 'none'}
+                  stroke={isWatched ? '#dc2626' : '#c6c6c6'}
+                  strokeWidth="2"
+                >
                   <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z" />
                 </svg>
               </button>
@@ -161,7 +166,10 @@ export function StockDetailPage() {
             <div className="mt-1.5">
               <FundamentalsRow fundamentals={fundamentalsQuery.data} />
             </div>
-            <Link to={`/stocks/${stockCode}/backtest`} className="mt-1 inline-block text-xs text-gray-500 hover:underline">
+            <Link
+              to={`/stocks/${stockCode}/backtest`}
+              className="mt-1 inline-block text-xs text-gray-500 hover:underline"
+            >
               백테스트 보기 →
             </Link>
           </div>

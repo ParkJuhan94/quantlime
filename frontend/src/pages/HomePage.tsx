@@ -13,8 +13,8 @@ export function HomePage() {
   const removeWatchlist = useRemoveWatchlist()
   const [addTargetStockCode, setAddTargetStockCode] = useState<string | null>(null)
 
-  const watchlist = isAuthenticated ? watchlistQuery.data ?? [] : []
-  const watchlistGroups = isAuthenticated ? groupsQuery.data ?? [] : []
+  const watchlist = isAuthenticated ? (watchlistQuery.data ?? []) : []
+  const watchlistGroups = isAuthenticated ? (groupsQuery.data ?? []) : []
   const watchlistCodes = new Set(watchlist.map((item) => item.stockCode))
 
   // 관심종목 등록은 항상 그룹 지정이 필요하다("미분류" 폐지) - 삭제는

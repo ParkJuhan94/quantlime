@@ -1,5 +1,12 @@
 package com.quantlime.event.videofeed;
 
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.verify;
+
 import com.quantlime.event.observability.KafkaDltNotifier;
 import com.quantlime.videofeed.service.TranscriptProcessingService;
 import org.junit.jupiter.api.DisplayName;
@@ -9,13 +16,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.BDDMockito.willThrow;
-import static org.mockito.Mockito.verify;
 
 /**
  * {@code @DltHandler}는 절대 예외를 던지면 안 된다는 불변식(2026-09-30, 무한

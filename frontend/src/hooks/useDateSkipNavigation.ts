@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react'
-import { VIDEO_FEED_RETENTION_DAYS, clampToRetentionWindow, shiftDateString, todayDateString } from '../utils/dateFilter'
+import {
+  VIDEO_FEED_RETENTION_DAYS,
+  clampToRetentionWindow,
+  shiftDateString,
+  todayDateString,
+} from '../utils/dateFilter'
 
 interface UseDateSkipNavigationOptions {
   storageKey: string
@@ -54,9 +59,7 @@ function writeStoredDate(storageKey: string, date: string): void {
 // 보여준다"는 요구사항 자체가 세션 스코프였다. 쿠키(30일 영속)로는 브라우저를
 // 새로 열어도 몇 주 전에 보던 날짜가 그대로 복원돼 "오늘이 기본"이라는
 // 기대와 어긋났다.
-export function useDateSkipNavigation({
-  storageKey,
-}: UseDateSkipNavigationOptions): UseDateSkipNavigationResult {
+export function useDateSkipNavigation({ storageKey }: UseDateSkipNavigationOptions): UseDateSkipNavigationResult {
   const [selectedDate, setSelectedDate] = useState(() => readStoredDate(storageKey))
   // 이전/다음 버튼 중 마지막으로 누른 방향(기본은 과거 방향) - 콘텐츠가 없는
   // 날짜를 만나면 이 방향으로 계속 넘겨 콘텐츠가 있는 날짜를 찾는다. 페이지
@@ -71,8 +74,7 @@ export function useDateSkipNavigation({
   const oldestSelectableDate = shiftDateString(todayDateString(), -VIDEO_FEED_RETENTION_DAYS)
   const canGoPrev = selectedDate > oldestSelectableDate
   const canGoNext = selectedDate < todayDateString()
-  const canSkipFurther =
-    skipDirection === -1 ? selectedDate > oldestSelectableDate : selectedDate < todayDateString()
+  const canSkipFurther = skipDirection === -1 ? selectedDate > oldestSelectableDate : selectedDate < todayDateString()
 
   function goPrev() {
     setSkipDirection(-1)
