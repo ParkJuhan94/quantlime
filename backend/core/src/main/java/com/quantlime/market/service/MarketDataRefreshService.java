@@ -18,7 +18,10 @@ import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.DomesticStockMasterSyncService;
 import com.quantlime.stock.service.OverseasStockMasterSyncService;
 import com.quantlime.stock.service.StockMasterService;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -64,14 +67,17 @@ public class MarketDataRefreshService {
     // Toss 호출 처리율을 보존한다(PriceRefreshConsumer 클래스 주석 참고).
     private static final long INTER_STOCK_DELAY_MS = 150;
     private static final String LOCK_KEY = "lock:market-data-refresh";
-    // 전종목(국내+해외 약 9천개) 갭필은 "수 분~수십 분"(DevController 참고)
-    // 걸릴 수 있어 videofeed 락들(10~30분)보다 여유 있게 잡는다 - TTL이
-    // 실제 소요시간보다 짧으면 락이 만료돼 다른 트리거가 끼어들어 이
-    // 수정의 목적(동시 실행 방지) 자체가 무의미해진다.
-    private static final Duration LOCK_TTL = Duration.ofMinutes(60);
-    // fan-out 배치 완료 대기 상한 - LOCK_TTL보다 짧게 잡아, 대기 중 락이
-    // 먼저 만료되는 일이 없게 여유를 둔다.
-    private static final Duration BATCH_AWAIT_TIMEOUT = Duration.ofMinutes(55);
+    // 전종목 갭필 소요시간 재산정(2026-10-01, Kafka 점검): 갱신 대상은 약 8,100종목(국내
+    // 2,598 + 해외 5,504, 로컬 DB 기준)이고 컨슈머 1개가 순차 처리한다. 국내 실측 처리
+    // 속도가 분당 약 120종목이라(docs/CHANGELOG.md 2026-09-29/30) 해외도 비슷하다면
+    // 전체가 약 68분 - 기존 60분 TTL은 매일 구조적으로 부족했다(해외 속도는 미측정).
+    // TTL이 소요시간보다 짧으면 락이 만료돼 다른 트리거가 끼어들어 이 락의 목적(동시 실행
+    // 방지)이 무의미해진다. 크래시 시 락이 TTL만큼 남아 재기동 캐치업이 그동안 스킵되는
+    // 비용과의 절충으로 120분.
+    private static final Duration LOCK_TTL = Duration.ofMinutes(120);
+    // fan-out 완료 대기 상한(국내+해외가 하나의 데드라인을 공유) - 대기가 끝난 뒤에도
+    // 유동성/정규화/지수 갭필이 이어지므로 LOCK_TTL보다 충분히 짧게 둔다.
+    private static final Duration BATCH_AWAIT_TIMEOUT = Duration.ofMinutes(100);
     // 갱신 순서 결정용 거래대금 조회 기간 - DomesticUniverseSelectionService의
     // 백테스트 유니버스 선정("최근 3개월")과 같은 값을 재사용한다.
     private static final long TRADING_VALUE_LOOKBACK_MONTHS = 3;
@@ -95,6 +101,7 @@ public class MarketDataRefreshService {
     private final RedisLockService redisLockService;
     private final PriceRefreshBatchGate priceRefreshBatchGate;
     private final ApplicationEventPublisher eventPublisher;
+    private final MeterRegistry meterRegistry;
 
     /**
      * 락을 잡은 채로만 {@link #refreshAll()}을 실행한다 - OhlcvCollectorScheduler
@@ -163,8 +170,13 @@ public class MarketDataRefreshService {
         // 종목별 컨슈머가 전부 끝날 때까지 대기한 뒤에야 배치 단위
         // 후속작업(유동성 스냅샷/횡단면 정규화)을 정확히 1회 수행한다 -
         // 클래스 주석의 "fan-out과 락의 관계" 참고.
-        boolean domesticDone = priceRefreshBatchGate.awaitCompletion(runId, PeerGroup.DOMESTIC, BATCH_AWAIT_TIMEOUT);
-        boolean overseasDone = priceRefreshBatchGate.awaitCompletion(runId, PeerGroup.OVERSEAS, BATCH_AWAIT_TIMEOUT);
+        // 국내·해외가 같은 컨슈머 하나로 순차 소비되므로 대기 상한도 하나의 데드라인을
+        // 공유한다 - 각각 BATCH_AWAIT_TIMEOUT을 쓰면 최대 2배(락 TTL 초과)까지 늘어난다.
+        Instant awaitDeadline = Instant.now().plus(BATCH_AWAIT_TIMEOUT);
+        boolean domesticDone = priceRefreshBatchGate.awaitCompletion(
+            runId, PeerGroup.DOMESTIC, remainingUntil(awaitDeadline));
+        boolean overseasDone = priceRefreshBatchGate.awaitCompletion(
+            runId, PeerGroup.OVERSEAS, remainingUntil(awaitDeadline));
         if (!domesticDone) {
             log.warn("국내 가격 갱신 fan-out 배치 대기 시간 초과(일부 종목 미완료로 추정): runId={}", runId);
         }
@@ -330,15 +342,14 @@ public class MarketDataRefreshService {
             return;
         }
         failures.incrementAndGet();
+        recordPriceRefreshFailure(PeerGroup.DOMESTIC);
         // 레이트리밋/일시 장애 등으로 다수 종목이 한꺼번에 실패하면(예: Toss
         // 장애) 종목마다 풀 스택트레이스를 찍는 게 콘솔을 뒤덮어 정작 원인
         // 파악을 방해한다. 원인 자체(스택트레이스)가 필요하면 재현 후
-        // debug 레벨로 임시 확인할 것. 규모 파악은 이제 DLT 카운터
-        // (dlt_messages_total, KafkaDltNotifier 참고)로 한다 - fan-out
-        // 이후로는 이 실패가 개별 종목 메시지의 예외로 전파돼(handleDomesticFailure
-        // 자체는 삼키지만, 이 예외 케이스가 아닌 상위에서 던지는 다른 실패는
-        // @RetryableTopic 대상) 배치 하나의 AtomicInteger로는 더 이상 전체
-        // 규모를 대표하지 못한다.
+        // debug 레벨로 임시 확인할 것. 이 실패는 여기서 삼켜지므로 컨슈머는 성공으로
+        // 처리하고 @RetryableTopic/DLT(dlt_messages_total)에도 잡히지 않는다 - 규모는
+        // market.price.refresh.failures 카운터로 본다(2026-10-01, fan-out에서는 호출마다
+        // 새 AtomicInteger를 써서 배치 전체 실패 수를 더는 알 수 없었다).
         log.warn("국내 가격 갱신 실패(해당 종목만 스킵): stockCode={}, error={}", stockCode, e.getMessage());
         log.debug("국내 가격 갱신 실패 상세: stockCode={}", stockCode, e);
     }
@@ -367,6 +378,7 @@ public class MarketDataRefreshService {
             return;
         }
         failures.incrementAndGet();
+        recordPriceRefreshFailure(PeerGroup.OVERSEAS);
         log.warn("해외 가격 갱신 실패(해당 종목만 스킵): stockCode={}, error={}", stockCode, e.getMessage());
         log.debug("해외 가격 갱신 실패 상세: stockCode={}", stockCode, e);
     }
@@ -386,6 +398,19 @@ public class MarketDataRefreshService {
     private boolean isStockNotFound(Exception e) {
         return e instanceof ExternalApiException
             && e.getCause() instanceof HttpClientErrorException.NotFound;
+    }
+
+    private void recordPriceRefreshFailure(PeerGroup peerGroup) {
+        Counter.builder("market.price.refresh.failures")
+            .tag("peerGroup", peerGroup.getWireValue())
+            .description("가격 갱신 중 삼켜진(재시도/DLT로 가지 않는) 외부 API 실패 수")
+            .register(meterRegistry)
+            .increment();
+    }
+
+    private static Duration remainingUntil(Instant deadline) {
+        Duration remaining = Duration.between(Instant.now(), deadline);
+        return remaining.isNegative() ? Duration.ZERO : remaining;
     }
 
     private void sleepBetweenStocks() {

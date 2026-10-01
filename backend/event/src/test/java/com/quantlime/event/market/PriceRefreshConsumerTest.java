@@ -1,10 +1,13 @@
 package com.quantlime.event.market;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -50,7 +53,50 @@ class PriceRefreshConsumerTest {
     }
 
     @Test
-    @DisplayName("[onDlt는 정상 케이스에서 배치 카운터를 감소시키고 dltNotifier.notify를 호출한다]")
+    @DisplayName("[진행 중인 배치의 메시지는 종목 갱신 후 완료를 통지한다]")
+    void onPriceRefreshRequested_activeBatch_refreshesAndCompletes() {
+        // given
+        PriceRefreshRequestedMessage message = messageOf("005930");
+        given(priceRefreshBatchGate.isActive("run-1", PeerGroup.DOMESTIC)).willReturn(true);
+
+        // when
+        priceRefreshConsumer.onPriceRefreshRequested(message);
+
+        // then
+        verify(marketDataRefreshService).refreshSingleStockFromFanOut("005930", message.latestScoreDate());
+        verify(priceRefreshBatchGate).completeOne("run-1", PeerGroup.DOMESTIC, "005930");
+    }
+
+    @Test
+    @DisplayName("[만료/종료된 배치의 메시지는 Toss 호출 없이 건너뛴다 - 중단된 배치의 잔여 메시지 적체 대응]")
+    void onPriceRefreshRequested_staleBatch_isSkipped() {
+        // given
+        given(priceRefreshBatchGate.isActive("run-1", PeerGroup.DOMESTIC)).willReturn(false);
+
+        // when
+        priceRefreshConsumer.onPriceRefreshRequested(messageOf("005930"));
+
+        // then
+        verifyNoInteractions(marketDataRefreshService);
+        verify(priceRefreshBatchGate, never()).completeOne(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("[갱신이 예외를 던지면 완료를 통지하지 않고 전파한다 - @RetryableTopic이 재시도하게 하려는 것]")
+    void onPriceRefreshRequested_refreshFails_propagatesWithoutCompleting() {
+        // given
+        given(priceRefreshBatchGate.isActive("run-1", PeerGroup.DOMESTIC)).willReturn(true);
+        willThrow(new IllegalStateException("quant-engine 실패"))
+            .given(marketDataRefreshService).refreshSingleStockFromFanOut(any(), any());
+
+        // when & then
+        assertThatThrownBy(() -> priceRefreshConsumer.onPriceRefreshRequested(messageOf("005930")))
+            .isInstanceOf(IllegalStateException.class);
+        verify(priceRefreshBatchGate, never()).completeOne(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("[onDlt는 정상 케이스에서 배치 완료를 통지하고 dltNotifier.notify를 호출한다]")
     void onDlt_happyPath_completesCounterAndNotifiesDlt() {
         // given
         PriceRefreshRequestedMessage message = messageOf("005930");
@@ -59,7 +105,7 @@ class PriceRefreshConsumerTest {
         priceRefreshConsumer.onDlt(message);
 
         // then
-        verify(priceRefreshBatchGate).completeOne(eq("run-1"), eq(PeerGroup.DOMESTIC));
+        verify(priceRefreshBatchGate).completeOne(eq("run-1"), eq(PeerGroup.DOMESTIC), eq("005930"));
         verify(dltNotifier).notify(eq("market-price-refresh"), eq(MarketTopics.PRICE_REFRESH_REQUESTED), anyString());
     }
 
@@ -68,7 +114,7 @@ class PriceRefreshConsumerTest {
     void onDlt_batchGateThrows_doesNotPropagate() {
         // given
         PriceRefreshRequestedMessage message = messageOf("005930");
-        willThrow(new RuntimeException("Redis 장애")).given(priceRefreshBatchGate).completeOne(any(), any());
+        willThrow(new RuntimeException("Redis 장애")).given(priceRefreshBatchGate).completeOne(any(), any(), any());
 
         // when & then
         assertThatCode(() -> priceRefreshConsumer.onDlt(message)).doesNotThrowAnyException();

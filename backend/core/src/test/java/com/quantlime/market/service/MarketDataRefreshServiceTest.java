@@ -25,6 +25,8 @@ import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.DomesticStockMasterSyncService;
 import com.quantlime.stock.service.OverseasStockMasterSyncService;
 import com.quantlime.stock.service.StockMasterService;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -95,6 +97,8 @@ class MarketDataRefreshServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+
     private MarketDataRefreshService marketDataRefreshService;
 
     @BeforeEach
@@ -104,7 +108,7 @@ class MarketDataRefreshServiceTest {
             domesticDailyPriceRepository, overseasDailyPriceRepository,
             scoreRepository, priceGapFillService, stockLiquidityService, scoreService,
             scoreRankingCacheStore, benchmarkIndexBackfillService, investorTradingBackfillService,
-            redisLockService, priceRefreshBatchGate, eventPublisher);
+            redisLockService, priceRefreshBatchGate, eventPublisher, meterRegistry);
     }
 
     /**
@@ -181,6 +185,32 @@ class MarketDataRefreshServiceTest {
         verify(investorTradingBackfillService).refreshAllIfNeeded();
     }
 
+    private double failureCount(String peerGroup) {
+        return meterRegistry.get("market.price.refresh.failures").tag("peerGroup", peerGroup).counter().count();
+    }
+
+    @Test
+    @DisplayName("[국내·해외 fan-in 대기는 하나의 데드라인을 공유한다 - 두 번째 대기 상한이 첫 번째를 넘지 않고, "
+        + "전체가 락 TTL(120분)보다 충분히 짧다]")
+    void refreshAll_awaitsShareASingleDeadline() {
+        // given
+        Stock domestic = Stock.of(DOMESTIC_CODE, "삼성전자", MarketType.KOSPI, ListingStatus.LISTED, "전기전자");
+        Stock overseas = Stock.of(OVERSEAS_CODE, "APPLE INC", MarketType.NASDAQ, ListingStatus.LISTED, "720");
+        given(stockMasterService.getAllListedStocks()).willReturn(List.of(domestic, overseas));
+        given(priceRefreshBatchGate.awaitCompletion(any(), any(), any())).willReturn(true);
+
+        // when
+        marketDataRefreshService.refreshAll();
+
+        // then
+        ArgumentCaptor<Duration> timeouts = ArgumentCaptor.forClass(Duration.class);
+        verify(priceRefreshBatchGate, times(2)).awaitCompletion(any(), any(), timeouts.capture());
+        Duration first = timeouts.getAllValues().get(0);
+        Duration second = timeouts.getAllValues().get(1);
+        org.assertj.core.api.Assertions.assertThat(first).isLessThanOrEqualTo(Duration.ofMinutes(100));
+        org.assertj.core.api.Assertions.assertThat(second).isLessThanOrEqualTo(first);
+    }
+
     @Test
     @DisplayName("[국내 종목이 Toss stock-not-found(404)를 내면 가격 미커버로 표시해 이후 대상에서 제외한다]")
     void refreshSingleStockFromFanOut_domesticStockNotFound_marksPriceUnsupported() {
@@ -198,6 +228,9 @@ class MarketDataRefreshServiceTest {
         // then
         org.assertj.core.api.Assertions.assertThat(peerGroup).isEqualTo(PeerGroup.DOMESTIC);
         verify(stockMasterService).markPriceUnsupported(DOMESTIC_CODE);
+        // 404는 "미커버 종목 표시"이지 장애가 아니라 실패 카운터에 세지 않는다.
+        org.assertj.core.api.Assertions.assertThat(meterRegistry.find("market.price.refresh.failures").counter())
+            .isNull();
     }
 
     @Test
@@ -214,6 +247,8 @@ class MarketDataRefreshServiceTest {
 
         // then
         verify(stockMasterService, never()).markPriceUnsupported(any());
+        // 이 실패는 삼켜져 재시도/DLT로 가지 않으므로 규모를 볼 수 있는 유일한 지표다.
+        org.assertj.core.api.Assertions.assertThat(failureCount("domestic")).isEqualTo(1.0);
     }
 
     @Test
@@ -269,6 +304,7 @@ class MarketDataRefreshServiceTest {
 
         // then
         verify(stockMasterService, never()).markPriceUnsupported(any());
+        org.assertj.core.api.Assertions.assertThat(failureCount("overseas")).isEqualTo(1.0);
     }
 
     @Test
