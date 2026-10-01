@@ -77,6 +77,11 @@ public class MarketRankingCache {
         }
     }
 
+    /** 전종목 스냅샷 그대로(정렬 없음) - 섹터 집계처럼 종목 단위 정렬이 필요 없는 소비자용. */
+    public List<MarketRankingResponse> getAll() {
+        return readThrough();
+    }
+
     public List<MarketRankingResponse> getGainers(int limit, Set<String> stockCodes) {
         return filtered(stockCodes)
             .sorted(Comparator.comparingDouble(MarketRankingResponse::changeRate).reversed())
