@@ -1,5 +1,7 @@
 package com.quantlime.price.domain;
 
+import static lombok.AccessLevel.PROTECTED;
+
 import com.quantlime.common.domain.TimeBaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -13,8 +15,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.util.Assert;
-
-import static lombok.AccessLevel.PROTECTED;
 
 /**
  * 해외주식(NASDAQ/NYSE) 일별 OHLCV. {@link DomesticDailyPrice}와 별도 엔티티로 둔

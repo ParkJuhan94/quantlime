@@ -1,9 +1,9 @@
 package com.quantlime.market.service;
 
 import com.quantlime.market.cache.BitcoinChartCache;
-import com.quantlime.market.cache.ExchangeRateChartCache;
 import com.quantlime.market.cache.DomesticIndexChartCache;
 import com.quantlime.market.cache.DomesticIndexMinuteChartCache;
+import com.quantlime.market.cache.ExchangeRateChartCache;
 import com.quantlime.market.cache.MarketIndexCache;
 import com.quantlime.market.cache.OverseasIndexChartCache;
 import com.quantlime.market.domain.BenchmarkIndex;

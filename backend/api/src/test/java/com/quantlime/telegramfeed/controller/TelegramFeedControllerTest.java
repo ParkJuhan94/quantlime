@@ -1,5 +1,9 @@
 package com.quantlime.telegramfeed.controller;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
 import com.quantlime.support.ApiTestSupport;
 import com.quantlime.telegramfeed.domain.TelegramDigest;
 import com.quantlime.telegramfeed.domain.TelegramDigestTicker;
@@ -20,10 +24,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @Tag("integration")
 class TelegramFeedControllerTest extends ApiTestSupport {

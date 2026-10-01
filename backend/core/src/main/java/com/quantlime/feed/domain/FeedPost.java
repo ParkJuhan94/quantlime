@@ -1,5 +1,8 @@
 package com.quantlime.feed.domain;
 
+import static jakarta.persistence.ConstraintMode.NO_CONSTRAINT;
+import static lombok.AccessLevel.PROTECTED;
+
 import com.quantlime.common.domain.TimeBaseEntity;
 import com.quantlime.user.domain.User;
 import jakarta.persistence.Column;
@@ -18,9 +21,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.util.Assert;
-
-import static jakarta.persistence.ConstraintMode.NO_CONSTRAINT;
-import static lombok.AccessLevel.PROTECTED;
 
 /**
  * 피드(커뮤니티) 글 - 지금은 제목 한 줄만 남긴다(실제 토스증권 피드

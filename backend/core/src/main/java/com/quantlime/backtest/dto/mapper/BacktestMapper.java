@@ -1,5 +1,7 @@
 package com.quantlime.backtest.dto.mapper;
 
+import static lombok.AccessLevel.PRIVATE;
+
 import com.quantlime.backtest.domain.BacktestAxis;
 import com.quantlime.backtest.domain.BacktestBucket;
 import com.quantlime.backtest.domain.BacktestDailyScore;
@@ -22,8 +24,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import lombok.NoArgsConstructor;
-
-import static lombok.AccessLevel.PRIVATE;
 
 @NoArgsConstructor(access = PRIVATE)
 public final class BacktestMapper {

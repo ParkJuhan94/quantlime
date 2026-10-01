@@ -1,13 +1,13 @@
 package com.quantlime.backtest.domain;
 
+import static lombok.AccessLevel.PROTECTED;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.util.Assert;
-
-import static lombok.AccessLevel.PROTECTED;
 
 /**
  * 스코어 5분위 버킷 하나의 백테스트 통계(평균/중위 초과수익률, 히트레이트,

@@ -1,5 +1,12 @@
 package com.quantlime.market.cache;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+
 import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.toss.dto.TossMarketIndicatorCandleResponse;
 import com.quantlime.market.dto.response.IndexChartResponse;
@@ -14,13 +21,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 
 /**
  * 네이버 -> Toss market-indicators/candles로 이관(2026-07-29) 이후의

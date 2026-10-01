@@ -1,5 +1,7 @@
 package com.quantlime.backtest.domain;
 
+import static lombok.AccessLevel.PROTECTED;
+
 import com.quantlime.common.domain.TimeBaseEntity;
 import com.quantlime.stock.domain.MarketType;
 import jakarta.persistence.CollectionTable;
@@ -24,8 +26,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.util.Assert;
-
-import static lombok.AccessLevel.PROTECTED;
 
 /**
  * 시장 하나(코스피/코스닥/나스닥/뉴욕)의 (축, horizon) 조합에 대한 횡단면

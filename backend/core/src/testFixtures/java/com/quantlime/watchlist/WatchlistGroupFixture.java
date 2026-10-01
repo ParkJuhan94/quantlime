@@ -1,10 +1,10 @@
 package com.quantlime.watchlist;
 
+import static lombok.AccessLevel.PRIVATE;
+
 import com.quantlime.user.domain.User;
 import com.quantlime.watchlist.domain.WatchlistGroup;
 import lombok.NoArgsConstructor;
-
-import static lombok.AccessLevel.PRIVATE;
 
 @NoArgsConstructor(access = PRIVATE)
 public final class WatchlistGroupFixture {

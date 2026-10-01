@@ -1,5 +1,9 @@
 package com.quantlime.feedback.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
+
 import com.quantlime.common.upload.FileStorageProperties;
 import com.quantlime.feedback.dto.request.SendFeedbackRequest;
 import com.quantlime.infra.slack.SlackWebhookClient;
@@ -11,10 +15,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.verify;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
