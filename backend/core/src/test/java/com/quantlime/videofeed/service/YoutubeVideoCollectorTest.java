@@ -1,5 +1,9 @@
 package com.quantlime.videofeed.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.BDDMockito.given;
+
 import com.quantlime.infra.youtube.YoutubeApiClient;
 import com.quantlime.infra.youtube.dto.YoutubePlaylistItemsResponse;
 import com.quantlime.infra.youtube.dto.YoutubeVideosResponse;
@@ -16,10 +20,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.BDDMockito.given;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)

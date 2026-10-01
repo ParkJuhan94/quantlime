@@ -1,5 +1,15 @@
 package com.quantlime.price.scheduler;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.data.Offset.offset;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+
 import com.quantlime.common.exception.ExternalApiException;
 import com.quantlime.common.lock.PriceRelayLeaderGate;
 import com.quantlime.infra.toss.TossApiClient;
@@ -7,9 +17,9 @@ import com.quantlime.infra.toss.dto.TossPriceResponse;
 import com.quantlime.infra.toss.exception.TossApiErrorCode;
 import com.quantlime.market.cache.MarketRankingCache;
 import com.quantlime.market.dto.response.MarketRankingResponse;
+import com.quantlime.price.cache.OverseasMarketCalendarCache;
 import com.quantlime.price.cache.PreviousCloseCache;
 import com.quantlime.price.cache.PriceCacheStore;
-import com.quantlime.price.cache.OverseasMarketCalendarCache;
 import com.quantlime.price.cache.WatchlistedStockCodeCache;
 import com.quantlime.price.dto.response.PriceSnapshot;
 import com.quantlime.stock.domain.ListingStatus;
@@ -28,16 +38,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.assertj.core.data.Offset.offset;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)

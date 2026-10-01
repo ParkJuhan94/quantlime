@@ -1,11 +1,11 @@
 package com.quantlime.support;
 
+import static org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace.NONE;
+
 import com.quantlime.common.config.QuerydslConfig;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
-
-import static org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace.NONE;
 
 // @DataJpaTest는 JPA 관련 자동설정 슬라이스만 로드하고 QuerydslConfig 같은 일반
 // @Configuration 빈은 스캔하지 않는다. 그런데 이 슬라이스도 모듈 내 전체

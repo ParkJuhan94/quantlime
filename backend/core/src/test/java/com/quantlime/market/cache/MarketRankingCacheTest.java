@@ -1,5 +1,9 @@
 package com.quantlime.market.cache;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.quantlime.market.dto.response.MarketRankingResponse;
 import java.time.Duration;
@@ -15,10 +19,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.verify;
 
 // PriceCacheStoreTest와 동일 패턴(Mockito로 StringRedisTemplate/ValueOperations를
 // 직접 목(mock) - 실제 Redis 컨테이너 없이 직렬화/키/TTL을 검증) - 이

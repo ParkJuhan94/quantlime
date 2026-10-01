@@ -2,6 +2,8 @@ plugins {
     id 'java'
     id 'org.springframework.boot' version '3.3.6' apply false
     id 'io.spring.dependency-management' version '1.1.7'
+    id 'com.diffplug.spotless' version '7.0.2' apply false
+    id 'net.ltgt.errorprone' version '4.1.0' apply false
 }
 
 allprojects {
@@ -19,6 +21,23 @@ allprojects {
 
 subprojects {
     apply plugin: 'java'
+    apply plugin: 'com.diffplug.spotless'
+    apply plugin: 'net.ltgt.errorprone'
+    // 정식 포맷터(palantir/google-aosp)는 실측 결과 647개 중 560~595개 파일이 바뀌어
+    // 기존 스타일과 안 맞아 쓰지 않는다. 위생 항목만(169개 파일, 약 700줄)
+    spotless {
+        java {
+            // QueryDSL이 src/main/generated에 만드는 Q클래스는 compileJava의 산출물이라 제외
+            target fileTree('.') {
+                include 'src/**/*.java'
+                exclude '**/generated/**'
+            }
+            removeUnusedImports()
+            importOrder()
+            trimTrailingWhitespace()
+            endWithNewline()
+        }
+    }
     apply plugin: 'io.spring.dependency-management'
     apply plugin: 'jacoco'
 
@@ -45,6 +64,8 @@ subprojects {
     }
 
     dependencies {
+        errorprone 'com.google.errorprone:error_prone_core:2.36.0'
+        errorprone 'com.uber.nullaway:nullaway:0.12.3'
         compileOnly 'org.projectlombok:lombok'
         annotationProcessor 'org.projectlombok:lombok'
         testCompileOnly 'org.projectlombok:lombok'
@@ -53,6 +74,20 @@ subprojects {
         testImplementation 'org.testcontainers:testcontainers'
         testImplementation 'org.testcontainers:junit-jupiter'
         testImplementation 'org.testcontainers:mysql'
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        // 테스트 소스는 제외 - 프로덕션 코드의 버그 패턴만 본다
+        if (name.toLowerCase().contains('test')) {
+            options.errorprone.enabled = false
+        } else {
+            options.errorprone {
+                disableWarningsInGeneratedCode = true
+                excludedPaths = '.*/build/generated/.*'
+                check('NullAway', net.ltgt.gradle.errorprone.CheckSeverity.WARN)
+                option('NullAway:AnnotatedPackages', 'com.quantlime')
+            }
+        }
     }
 
     tasks.named('test') {
