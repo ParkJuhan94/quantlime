@@ -89,6 +89,35 @@ class FeedServiceTest {
     }
 
     @Test
+    @DisplayName("[수익인증 주제에 이미지가 없으면 ValidationException을 던진다]")
+    void createPost_profitProofWithoutImage_throws() {
+        // given
+        given(userRepository.findById(1L)).willReturn(Optional.of(UserFixture.createUser()));
+
+        // when & then
+        assertThatThrownBy(() -> feedService.createPost(
+            1L, new CreateFeedPostRequest("수익인증", "+10% 인증", null)))
+            .isInstanceOf(ValidationException.class);
+    }
+
+    @Test
+    @DisplayName("[수익인증 주제도 이미지가 있으면 작성된다]")
+    void createPost_profitProofWithImage_savesAndReturnsResponse() {
+        // given
+        User user = UserFixture.createUser();
+        given(userRepository.findById(1L)).willReturn(Optional.of(user));
+        FeedPost saved = FeedPost.of(user, FeedCategory.PROFIT_PROOF, "+10% 인증", "/uploads/a.png");
+        given(feedPostRepository.save(any(FeedPost.class))).willReturn(saved);
+
+        // when
+        FeedPostResponse response = feedService.createPost(
+            1L, new CreateFeedPostRequest("수익인증", "+10% 인증", "/uploads/a.png"));
+
+        // then
+        assertThat(response.category()).isEqualTo("수익인증");
+    }
+
+    @Test
     @DisplayName("[존재하지 않는 주제면 ValidationException을 던진다]")
     void createPost_invalidCategory_throws() {
         // given
