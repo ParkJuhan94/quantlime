@@ -8,7 +8,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.quantlime.stock.StockFixture;
 import com.quantlime.stock.dto.response.StockFundamentalsResponse;
 import com.quantlime.stock.repository.StockRepository;
-import com.quantlime.stock.service.StockFundamentalsService;
 import com.quantlime.support.MockedServicesApiTestSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

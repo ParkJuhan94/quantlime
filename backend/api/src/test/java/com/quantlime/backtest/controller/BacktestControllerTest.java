@@ -8,7 +8,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.quantlime.auth.jwt.JwtTokenProvider;
 import com.quantlime.backtest.dto.response.BacktestResponse;
-import com.quantlime.backtest.service.BacktestService;
 import com.quantlime.subscription.SubscriptionFixture;
 import com.quantlime.subscription.SubscriptionPlanFixture;
 import com.quantlime.subscription.domain.SubscriptionPlan;

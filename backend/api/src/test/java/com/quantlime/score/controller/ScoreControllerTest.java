@@ -1,8 +1,5 @@
 package com.quantlime.score.controller;
 
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -11,10 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.quantlime.auth.jwt.JwtTokenProvider;
 import com.quantlime.score.dto.response.ScoreRankingResponse;
-import com.quantlime.score.service.ScoreService;
 import com.quantlime.subscription.SubscriptionFixture;
 import com.quantlime.subscription.SubscriptionPlanFixture;
-import com.quantlime.subscription.domain.Subscription;
 import com.quantlime.subscription.domain.SubscriptionPlan;
 import com.quantlime.subscription.repository.SubscriptionPlanRepository;
 import com.quantlime.subscription.repository.SubscriptionRepository;

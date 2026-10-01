@@ -6,10 +6,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.quantlime.auth.jwt.JwtTokenProvider;
-import com.quantlime.backtest.service.BacktestDatasetPreparationService;
-import com.quantlime.backtest.service.BacktestService;
-import com.quantlime.backtest.service.BacktestUniverseService;
-import com.quantlime.backtest.service.CrossSectionalBacktestService;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.support.MockedServicesApiTestSupport;
 import com.quantlime.user.UserFixture;
