@@ -152,6 +152,15 @@ services:
     mem_limit: 64m
     logging: *default-logging
 
+  # 실제 도메인 HTTPS 프로브(TLS 인증서 만료일 + 응답 여부) - prometheus.yml의
+  # blackbox-https job이 이 컨테이너를 경유해 대상 URL을 호출한다.
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    container_name: quantlime-prod-blackbox-exporter
+    restart: on-failure:5
+    mem_limit: 32m
+    logging: *default-logging
+
   # Redis 자체 상태(redis_up)도 동일한 이유로 직접 스크랩한다.
   redis-exporter:
     image: oliver006/redis_exporter:v1.62.0
