@@ -21,6 +21,7 @@ import com.quantlime.feed.dto.response.FeedPostResponse;
 import com.quantlime.feed.repository.FeedCommentRepository;
 import com.quantlime.feed.repository.FeedPostLikeRepository;
 import com.quantlime.feed.repository.FeedPostRepository;
+import com.quantlime.feed.repository.FeedReportRepository;
 import com.quantlime.user.UserFixture;
 import com.quantlime.user.domain.User;
 import com.quantlime.user.repository.UserRepository;
@@ -53,6 +54,9 @@ class FeedServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private FeedReportRepository feedReportRepository;
 
     @InjectMocks
     private FeedService feedService;

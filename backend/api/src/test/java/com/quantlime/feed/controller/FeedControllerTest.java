@@ -13,6 +13,7 @@ import com.quantlime.support.ApiTestSupport;
 import com.quantlime.user.UserFixture;
 import com.quantlime.user.domain.OAuthProvider;
 import com.quantlime.user.domain.User;
+import com.quantlime.user.domain.UserRole;
 import com.quantlime.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -318,5 +319,64 @@ class FeedControllerTest extends ApiTestSupport {
             .andExpect(jsonPath("$.content[0].mine").value(false));
         mockMvc.perform(get("/api/feed/posts"))
             .andExpect(jsonPath("$.content[0].mine").value(false));
+    }
+
+    @Test
+    @DisplayName("[본인 글을 신고하면 400을 반환한다]")
+    void reportPost_ownPost_returns400() throws Exception {
+        long postId = createPostAndGetId();
+
+        mockMvc.perform(post("/api/feed/posts/{postId}/reports", postId)
+                .header("Authorization", "Bearer " + accessToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"reason\":\"SPAM\"}"))
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("[서로 다른 사용자 3명이 신고하면 글이 목록에서 사라지고 관리자가 복구하면 다시 보인다]")
+    void reportPost_threeReporters_hidesFromListAndAdminRestores() throws Exception {
+        // given
+        long postId = createPostAndGetId();
+
+        // when: 서로 다른 신고자 3명
+        for (int i = 0; i < 3; i++) {
+            User reporter = userRepository.save(UserFixture.createUser(OAuthProvider.GOOGLE, "reporter" + i));
+            String token = jwtTokenProvider.createAccessToken(reporter.getId(), reporter.getRole());
+            mockMvc.perform(post("/api/feed/posts/{postId}/reports", postId)
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"reason\":\"ADVERTISEMENT\"}"))
+                .andExpect(status().isOk());
+        }
+
+        // then: 목록에서 사라진다
+        mockMvc.perform(get("/api/feed/posts"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content").isEmpty());
+
+        // 관리자 숨김 목록에는 신고 수 3과 함께 보인다
+        User admin = userRepository.save(UserFixture.createUser(OAuthProvider.GOOGLE, "admin"));
+        String adminToken = jwtTokenProvider.createAccessToken(admin.getId(), UserRole.ADMIN);
+        mockMvc.perform(get("/api/admin/feed-moderation/posts/hidden")
+                .header("Authorization", "Bearer " + adminToken))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content[0].id").value(postId))
+            .andExpect(jsonPath("$.content[0].reportCount").value(3));
+
+        // 복구하면 다시 노출된다
+        mockMvc.perform(post("/api/admin/feed-moderation/posts/{postId}/restore", postId)
+                .header("Authorization", "Bearer " + adminToken))
+            .andExpect(status().isOk());
+        mockMvc.perform(get("/api/feed/posts"))
+            .andExpect(jsonPath("$.content[0].id").value(postId));
+    }
+
+    @Test
+    @DisplayName("[일반 사용자는 관리자 모더레이션 API에 접근하면 403이다]")
+    void adminModeration_nonAdmin_returns403() throws Exception {
+        mockMvc.perform(get("/api/admin/feed-moderation/posts/hidden")
+                .header("Authorization", "Bearer " + accessToken))
+            .andExpect(status().isForbidden());
     }
 }

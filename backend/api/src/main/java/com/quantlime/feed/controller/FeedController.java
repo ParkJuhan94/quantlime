@@ -5,9 +5,11 @@ import com.quantlime.auth.resolver.OptionalLoginUser;
 import com.quantlime.common.dto.PageResponse;
 import com.quantlime.feed.dto.request.CreateFeedCommentRequest;
 import com.quantlime.feed.dto.request.CreateFeedPostRequest;
+import com.quantlime.feed.dto.request.ReportFeedRequest;
 import com.quantlime.feed.dto.request.UpdateFeedPostRequest;
 import com.quantlime.feed.dto.response.FeedCommentResponse;
 import com.quantlime.feed.dto.response.FeedPostResponse;
+import com.quantlime.feed.service.FeedModerationService;
 import com.quantlime.feed.service.FeedService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -33,6 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class FeedController {
 
     private final FeedService feedService;
+    private final FeedModerationService feedModerationService;
 
     @PostMapping("/posts")
     @Operation(summary = "피드 글 작성", description = "제목과 주제(카테고리)로 피드 글을 작성한다(로그인 필요)")
@@ -104,5 +107,29 @@ public class FeedController {
         @PathVariable Long postId,
         Pageable pageable) {
         return ResponseEntity.ok(PageResponse.of(feedService.getComments(postId, pageable)));
+    }
+
+    @PostMapping("/posts/{postId}/reports")
+    @Operation(
+        summary = "피드 글 신고",
+        description = "로그인 필요. 본인 글은 신고할 수 없고(400), 같은 사용자의 중복 신고는 조용히 무시한다. "
+            + "서로 다른 신고자 3명이 신고하면 자동으로 숨김 처리된다"
+    )
+    public ResponseEntity<Void> reportPost(
+        @LoginUser Long userId,
+        @PathVariable Long postId,
+        @Valid @RequestBody ReportFeedRequest request) {
+        feedModerationService.reportPost(userId, postId, request.reason());
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/comments/{commentId}/reports")
+    @Operation(summary = "피드 댓글 신고", description = "글 신고와 동일한 규칙(로그인 필요, 본인 댓글 불가, 3명 신고 시 자동 숨김)")
+    public ResponseEntity<Void> reportComment(
+        @LoginUser Long userId,
+        @PathVariable Long commentId,
+        @Valid @RequestBody ReportFeedRequest request) {
+        feedModerationService.reportComment(userId, commentId, request.reason());
+        return ResponseEntity.ok().build();
     }
 }
