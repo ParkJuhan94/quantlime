@@ -41,3 +41,38 @@ export interface StockFundamentalsResponse {
   psr: number | null
   debtRatio: number | null
 }
+
+export interface OrderbookLevel {
+  price: number | null
+  volume: number | null
+}
+
+// asks는 낮은 가격순, bids는 높은 가격순(토스 응답 그대로).
+export interface OrderbookResponse {
+  timestamp: string | null
+  currency: 'KRW' | 'USD'
+  asks: OrderbookLevel[]
+  bids: OrderbookLevel[]
+}
+
+export interface TradeResponse {
+  price: number | null
+  volume: number | null
+  timestamp: string
+  currency: 'KRW' | 'USD'
+}
+
+// 가격제한이 없는 시장(미국 등)은 상/하한가가 null.
+export interface PriceLimitResponse {
+  upperLimitPrice: number | null
+  lowerLimitPrice: number | null
+  currency: 'KRW' | 'USD'
+}
+
+export interface StockWarningResponse {
+  warningType: string
+  label: string
+  exchange: string | null
+  startDate: string | null
+  endDate: string | null
+}

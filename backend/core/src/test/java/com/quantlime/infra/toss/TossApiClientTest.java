@@ -115,6 +115,45 @@ class TossApiClientTest {
     }
 
     @Test
+    @DisplayName("[호가/체결/상하한가/유의사항 조회는 각 경로와 쿼리 파라미터로 호출하고 응답을 파싱한다]")
+    void marketDepthEndpoints_buildExpectedRequestsAndParse() {
+        // given
+        when(tokenManager.getAccessToken()).thenReturn("token");
+        mockServer.expect(requestTo(BASE_URL + "/api/v1/orderbook?symbol=005930"))
+            .andExpect(method(GET))
+            .andRespond(withSuccess(
+                "{\"result\":{\"timestamp\":null,\"currency\":\"KRW\","
+                    + "\"asks\":[{\"price\":\"72100\",\"volume\":\"8500\"}],"
+                    + "\"bids\":[{\"price\":\"72000\",\"volume\":\"100\"}]}}",
+                MediaType.APPLICATION_JSON));
+        mockServer.expect(requestTo(BASE_URL + "/api/v1/trades?symbol=005930&count=30"))
+            .andExpect(method(GET))
+            .andRespond(withSuccess(
+                "{\"result\":[{\"price\":\"72000\",\"volume\":\"120\","
+                    + "\"timestamp\":\"2026-03-25T09:30:42.000+09:00\",\"currency\":\"KRW\"}]}",
+                MediaType.APPLICATION_JSON));
+        mockServer.expect(requestTo(BASE_URL + "/api/v1/price-limits?symbol=005930"))
+            .andExpect(method(GET))
+            .andRespond(withSuccess(
+                "{\"result\":{\"timestamp\":\"2026-03-25T09:30:00.123+09:00\","
+                    + "\"upperLimitPrice\":\"93000\",\"lowerLimitPrice\":null,\"currency\":\"KRW\"}}",
+                MediaType.APPLICATION_JSON));
+        mockServer.expect(requestTo(BASE_URL + "/api/v1/stocks/005930/warnings"))
+            .andExpect(method(GET))
+            .andRespond(withSuccess(
+                "{\"result\":[{\"warningType\":\"VI_STATIC\",\"exchange\":\"KRX\","
+                    + "\"startDate\":null,\"endDate\":null}]}",
+                MediaType.APPLICATION_JSON));
+
+        // when & then
+        assertThat(tossApiClient.getOrderbook("005930").result().asks().get(0).price()).isEqualTo("72100");
+        assertThat(tossApiClient.getTrades("005930", 30).result()).hasSize(1);
+        assertThat(tossApiClient.getPriceLimits("005930").result().lowerLimitPrice()).isNull();
+        assertThat(tossApiClient.getStockWarnings("005930").result().get(0).warningType()).isEqualTo("VI_STATIC");
+        mockServer.verify();
+    }
+
+    @Test
     @DisplayName("[랭킹 조회 시 type/marketCountry/duration/count 쿼리 파라미터를 그대로 전달한다]")
     void getRankings_success_buildsQueryParamsAndParsesResponse() {
         // given

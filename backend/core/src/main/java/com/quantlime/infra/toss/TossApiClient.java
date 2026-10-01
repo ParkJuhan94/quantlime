@@ -9,9 +9,13 @@ import com.quantlime.infra.toss.dto.TossInvestorTradingResponse;
 import com.quantlime.infra.toss.dto.TossMarketCalendarResponse;
 import com.quantlime.infra.toss.dto.TossMarketIndicatorCandleResponse;
 import com.quantlime.infra.toss.dto.TossMarketIndicatorPriceResponse;
+import com.quantlime.infra.toss.dto.TossOrderbookResponse;
+import com.quantlime.infra.toss.dto.TossPriceLimitResponse;
 import com.quantlime.infra.toss.dto.TossPriceResponse;
 import com.quantlime.infra.toss.dto.TossRankingResponse;
 import com.quantlime.infra.toss.dto.TossStockInfoResponse;
+import com.quantlime.infra.toss.dto.TossStockWarningResponse;
+import com.quantlime.infra.toss.dto.TossTradeResponse;
 import com.quantlime.infra.toss.dto.TossUsMarketCalendarResponse;
 import com.quantlime.infra.toss.exception.TossApiErrorCode;
 import io.github.resilience4j.bulkhead.annotation.Bulkhead;
@@ -268,6 +272,78 @@ public class TossApiClient {
                 .header("authorization", "Bearer " + token)
                 .retrieve()
                 .body(TossPriceResponse.class),
+            HttpClientErrorException.TooManyRequests.class,
+            TossApiErrorCode.RATE_LIMIT_EXCEEDED));
+    }
+
+    /** 호가 조회(매도/매수 호가 + 잔량) - 호출 측({@code StockMarketDepthCache})이 짧게 캐싱한다. */
+    @CircuitBreaker(name = "toss")
+    @Bulkhead(name = "toss")
+    public TossOrderbookResponse getOrderbook(String symbol) {
+        return withTokenRetry("orderbook", token -> ExternalApiInvoker.call(
+            TossApiErrorCode.ORDERBOOK_INQUIRY_FAILED,
+            () -> tossRestClient.get()
+                .uri(uriBuilder -> uriBuilder
+                    .path("/api/v1/orderbook")
+                    .queryParam("symbol", symbol)
+                    .build())
+                .header("authorization", "Bearer " + token)
+                .retrieve()
+                .body(TossOrderbookResponse.class),
+            HttpClientErrorException.TooManyRequests.class,
+            TossApiErrorCode.RATE_LIMIT_EXCEEDED));
+    }
+
+    /** 최근 체결 내역 조회(최대 50건). */
+    @CircuitBreaker(name = "toss")
+    @Bulkhead(name = "toss")
+    public TossTradeResponse getTrades(String symbol, int count) {
+        return withTokenRetry("trades", token -> ExternalApiInvoker.call(
+            TossApiErrorCode.TRADE_INQUIRY_FAILED,
+            () -> tossRestClient.get()
+                .uri(uriBuilder -> uriBuilder
+                    .path("/api/v1/trades")
+                    .queryParam("symbol", symbol)
+                    .queryParam("count", count)
+                    .build())
+                .header("authorization", "Bearer " + token)
+                .retrieve()
+                .body(TossTradeResponse.class),
+            HttpClientErrorException.TooManyRequests.class,
+            TossApiErrorCode.RATE_LIMIT_EXCEEDED));
+    }
+
+    /** 상/하한가 조회(가격제한이 없는 시장은 null). */
+    @CircuitBreaker(name = "toss")
+    @Bulkhead(name = "toss")
+    public TossPriceLimitResponse getPriceLimits(String symbol) {
+        return withTokenRetry("price-limits", token -> ExternalApiInvoker.call(
+            TossApiErrorCode.PRICE_LIMIT_INQUIRY_FAILED,
+            () -> tossRestClient.get()
+                .uri(uriBuilder -> uriBuilder
+                    .path("/api/v1/price-limits")
+                    .queryParam("symbol", symbol)
+                    .build())
+                .header("authorization", "Bearer " + token)
+                .retrieve()
+                .body(TossPriceLimitResponse.class),
+            HttpClientErrorException.TooManyRequests.class,
+            TossApiErrorCode.RATE_LIMIT_EXCEEDED));
+    }
+
+    /** 매수 유의사항(투자경고/VI 발동 등) 조회. */
+    @CircuitBreaker(name = "toss")
+    @Bulkhead(name = "toss")
+    public TossStockWarningResponse getStockWarnings(String symbol) {
+        return withTokenRetry("stock-warnings", token -> ExternalApiInvoker.call(
+            TossApiErrorCode.STOCK_WARNING_INQUIRY_FAILED,
+            () -> tossRestClient.get()
+                .uri(uriBuilder -> uriBuilder
+                    .path("/api/v1/stocks/{symbol}/warnings")
+                    .build(symbol))
+                .header("authorization", "Bearer " + token)
+                .retrieve()
+                .body(TossStockWarningResponse.class),
             HttpClientErrorException.TooManyRequests.class,
             TossApiErrorCode.RATE_LIMIT_EXCEEDED));
     }

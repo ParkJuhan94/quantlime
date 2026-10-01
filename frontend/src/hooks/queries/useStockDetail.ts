@@ -1,5 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
-import { getChart, getCurrentPrice, getFundamentals, getScore, getStock } from '../../api/stocks'
+import {
+  getChart,
+  getCurrentPrice,
+  getFundamentals,
+  getOrderbook,
+  getPriceLimit,
+  getScore,
+  getStock,
+  getStockWarnings,
+  getTrades,
+} from '../../api/stocks'
 import { queryKeys } from '../queryKeys'
 
 export function useStockDetailQuery(stockCode: string) {
@@ -45,5 +55,43 @@ export function useStockScoreQuery(stockCode: string, enabled = true) {
     // 스코어 미계산(SC_000)은 404로 오는 정상 상태라 재시도가 무의미하다.
     retry: false,
     enabled,
+  })
+}
+
+// 호가/체결은 서버가 2초 캐싱하므로 프론트도 3초 폴링(탭이 백그라운드면 React Query가
+// 기본으로 멈춘다). 실패해도 이전 값을 유지해 화면이 깜빡이지 않게 retry는 1회만.
+export function useStockOrderbookQuery(stockCode: string) {
+  return useQuery({
+    queryKey: queryKeys.stockOrderbook(stockCode),
+    queryFn: () => getOrderbook(stockCode),
+    refetchInterval: 3_000,
+    retry: 1,
+  })
+}
+
+export function useStockTradesQuery(stockCode: string) {
+  return useQuery({
+    queryKey: queryKeys.stockTrades(stockCode),
+    queryFn: () => getTrades(stockCode),
+    refetchInterval: 3_000,
+    retry: 1,
+  })
+}
+
+export function useStockPriceLimitQuery(stockCode: string) {
+  return useQuery({
+    queryKey: queryKeys.stockPriceLimit(stockCode),
+    queryFn: () => getPriceLimit(stockCode),
+    staleTime: 60 * 1000,
+    retry: 1,
+  })
+}
+
+export function useStockWarningsQuery(stockCode: string) {
+  return useQuery({
+    queryKey: queryKeys.stockWarnings(stockCode),
+    queryFn: () => getStockWarnings(stockCode),
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
   })
 }
