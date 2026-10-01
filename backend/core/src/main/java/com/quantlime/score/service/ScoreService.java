@@ -7,6 +7,7 @@ import com.quantlime.infra.python.dto.CrossSectionNormalizeApiResponse;
 import com.quantlime.infra.python.dto.ScoreBatchApiRequest;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.StockScoreSeriesApiResponse;
+import com.quantlime.market.domain.RankingPeriod;
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.price.domain.StockLiquidity;
@@ -32,11 +33,13 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -271,6 +274,88 @@ public class ScoreService {
             }
         }
         return ranking.size() > limit ? ranking.subList(0, limit) : ranking;
+    }
+
+    /**
+     * 랭킹 기간(1주/1개월 등) 정렬 - "기간 시작 대비 종합점수(원점수) 변화량"
+     * 내림차순(2026-10-01 결정). 기간 시작 시점 이전 스코어 이력이 없는 신규
+     * 종목은 비교 대상이 없어 제외된다. 관심종목 경로는 종목 수가 작아 캐시
+     * 없이 계산하고, 전체 경로는 scope+기간별로 Redis에 캐싱한다.
+     */
+    @Transactional(readOnly = true)
+    public List<ScoreRankingResponse> getScoreChangeRanking(
+        Long userId, boolean watchlistOnly, int limit, String scope, RankingPeriod period) {
+        if (watchlistOnly) {
+            List<String> codes = watchlistRepository.findAllWithStockByUserId(userId).stream()
+                .map(Watchlist::getStock)
+                .filter(stock -> matchesScope(stock.getMarketType(), scope))
+                .map(Stock::getStockCode)
+                .toList();
+            List<Score> latest = scoreRepository.findLatestScoresByStockCodesOrderByCompositeScoreDesc(codes);
+            return buildScoreChangeRanking(latest, limit, period);
+        }
+
+        String cacheScope = ScoreRankingCacheStore.changeScope(scope, period);
+        List<ScoreRankingResponse> ranking = scoreRankingCacheStore.find(cacheScope).orElse(null);
+        if (ranking == null) {
+            Object lock = rankingCacheLoadLocks.computeIfAbsent(cacheScope, key -> new Object());
+            synchronized (lock) {
+                ranking = scoreRankingCacheStore.find(cacheScope).orElse(null);
+                if (ranking == null) {
+                    List<Score> latest = scoreRepository.findLatestScoresForNormalization(scopeToMarketTypes(scope));
+                    ranking = buildScoreChangeRanking(latest, MAX_CACHEABLE_RANKING_SIZE, period);
+                    scoreRankingCacheStore.save(cacheScope, ranking);
+                }
+            }
+        }
+        return ranking.size() > limit ? ranking.subList(0, limit) : ranking;
+    }
+
+    private List<ScoreRankingResponse> buildScoreChangeRanking(List<Score> latestScores, int limit, RankingPeriod period) {
+        if (latestScores.isEmpty()) {
+            return List.of();
+        }
+        LocalDate latestDate = latestScores.stream().map(Score::getScoreDate).max(Comparator.naturalOrder()).orElseThrow();
+        LocalDate baselineDate = latestDate.minusDays(period.getDays());
+        List<String> codes = latestScores.stream().map(Score::getStockCode).toList();
+        Map<String, Score> baselineByCode = scoreRepository.findLatestScoresOnOrBefore(codes, baselineDate).stream()
+            .collect(Collectors.toMap(Score::getStockCode, Function.identity(), (a, b) -> a));
+
+        record Change(Score score, double delta) {
+        }
+        List<Change> top = latestScores.stream()
+            .map(latest -> {
+                Score base = baselineByCode.get(latest.getStockCode());
+                if (base == null || latest.getCompositeScore() == null || base.getCompositeScore() == null
+                    || !base.getScoreDate().isBefore(latest.getScoreDate())) {
+                    return null;
+                }
+                return new Change(latest, latest.getCompositeScore() - base.getCompositeScore());
+            })
+            .filter(Objects::nonNull)
+            .sorted(Comparator.comparingDouble(Change::delta).reversed())
+            .limit(limit)
+            .toList();
+
+        List<String> topCodes = top.stream().map(change -> change.score().getStockCode()).toList();
+        Map<String, Stock> stockByCode = stockMasterService.getStocksByCodesInOrder(topCodes).stream()
+            .collect(Collectors.toMap(Stock::getStockCode, stock -> stock));
+        Map<String, Double> avgTradingValueByCode = avgTradingValueByStockCode(stockByCode.keySet());
+
+        return top.stream()
+            .map(change -> {
+                Stock stock = stockByCode.get(change.score().getStockCode());
+                if (stock == null) {
+                    return null;
+                }
+                return ScoreMapper.toScoreRankingResponse(
+                    change.score(), stock.getDisplayName(), stock.getSector(), StockMapper.toLogoUrl(stock),
+                    !stock.getMarketType().isDomestic(),
+                    avgTradingValueByCode.get(change.score().getStockCode()),
+                    change.delta());
+            })
+            .filter(Objects::nonNull)
+            .toList();
     }
 
     private List<ScoreRankingResponse> queryAllStocksScoreRanking(int limit, String scope) {

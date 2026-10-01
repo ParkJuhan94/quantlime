@@ -14,6 +14,7 @@ import com.quantlime.market.cache.MarketRankingCache;
 import com.quantlime.market.cache.OverseasIndexChartCache;
 import com.quantlime.market.cache.TossMarketRankingCache;
 import com.quantlime.market.domain.BenchmarkIndex;
+import com.quantlime.market.domain.RankingPeriod;
 import com.quantlime.market.dto.response.IndexChartResponse;
 import com.quantlime.market.dto.response.IndexMinuteChartResponse;
 import com.quantlime.market.dto.response.MarketIndexResponse;
@@ -227,7 +228,7 @@ class MarketControllerTest extends ApiTestSupport {
     @DisplayName("[국내 급상승 랭킹 조회 성공 시 200과 Toss 랭킹 캐시 결과를 반환한다]")
     void getRanking_domesticGainers_returns200() throws Exception {
         // given: watchlistOnly=false(기본)면 국내/해외 모두 TossMarketRankingCache 경로
-        given(tossMarketRankingCache.get("domestic", "gainers")).willReturn(
+        given(tossMarketRankingCache.get("domestic", "gainers", RankingPeriod.REALTIME)).willReturn(
             List.of(new MarketRankingResponse("005930", "삼성전자", "전기전자",
                 71400.0, 2.0, "KRW", 1000000.0, 71400000000.0, null, true, null, null, null)));
 
@@ -243,7 +244,7 @@ class MarketControllerTest extends ApiTestSupport {
     @DisplayName("[급하락 랭킹 조회 시 losers 타입으로 Toss 랭킹 캐시를 조회한다]")
     void getRanking_losers_usesTossRankingCacheWithLosersSort() throws Exception {
         // given
-        given(tossMarketRankingCache.get("domestic", "losers")).willReturn(
+        given(tossMarketRankingCache.get("domestic", "losers", RankingPeriod.REALTIME)).willReturn(
             List.of(new MarketRankingResponse("035420", "NAVER", "서비스업",
                 100000.0, -4.5, "KRW", 500000.0, 50000000000.0, null, true, null, null, null)));
 
@@ -259,7 +260,7 @@ class MarketControllerTest extends ApiTestSupport {
     @DisplayName("[해외 거래대금 랭킹 조회 시 scope=overseas로 Toss 랭킹 캐시를 조회한다]")
     void getRanking_overseasAmount_usesTossRankingCacheWithUsScope() throws Exception {
         // given
-        given(tossMarketRankingCache.get("overseas", "amount")).willReturn(
+        given(tossMarketRankingCache.get("overseas", "amount", RankingPeriod.REALTIME)).willReturn(
             List.of(new MarketRankingResponse("AAPL", "AAPL", null,
                 341.43, 0.4, "USD", 51859042.0, 17631000000.0, null, false, null, null, null)));
 

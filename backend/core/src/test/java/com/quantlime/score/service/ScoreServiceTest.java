@@ -20,6 +20,7 @@ import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.DailyScoreSeri
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.DivergenceApiResponse;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.StockScoreSeriesApiResponse;
 import com.quantlime.infra.python.exception.PythonEngineErrorCode;
+import com.quantlime.market.domain.RankingPeriod;
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.repository.StockLiquidityRepository;
 import com.quantlime.price.service.DomesticDailyPriceService;
@@ -293,6 +294,33 @@ class ScoreServiceTest {
         assertThat(result.get(0).stockName()).isEqualTo("삼성전자");
         assertThat(result.get(0).compositeScore()).isEqualTo(90.0);
         verify(scoreRankingCacheStore).save("all", result);
+    }
+
+    @Test
+    @DisplayName("[1주 기간 스코어 랭킹은 기간 시작 대비 종합점수 변화량이 큰 순으로 정렬하고 이력 없는 종목은 제외한다]")
+    void getScoreChangeRanking_sortsByDeltaAndSkipsNoBaseline() {
+        // given: A는 +20, B는 +5, C는 기간 시작 이력 없음
+        LocalDate today = LocalDate.of(2026, 10, 1);
+        Score latestA = Score.of("A", today, 80.0, 40.0, 80.0, null, null, Divergence.of(false, null), false);
+        Score latestB = Score.of("B", today, 80.0, 40.0, 70.0, null, null, Divergence.of(false, null), false);
+        Score latestC = Score.of("C", today, 80.0, 40.0, 99.0, null, null, Divergence.of(false, null), false);
+        Score baseA = Score.of("A", today.minusDays(7), 50.0, 40.0, 60.0, null, null, Divergence.of(false, null), false);
+        Score baseB = Score.of("B", today.minusDays(7), 50.0, 40.0, 65.0, null, null, Divergence.of(false, null), false);
+        given(scoreRankingCacheStore.find("all:1w")).willReturn(Optional.empty());
+        given(scoreRepository.findLatestScoresForNormalization(null)).willReturn(List.of(latestA, latestB, latestC));
+        given(scoreRepository.findLatestScoresOnOrBefore(List.of("A", "B", "C"), today.minusDays(7)))
+            .willReturn(List.of(baseA, baseB));
+        given(stockMasterService.getStocksByCodesInOrder(List.of("A", "B"))).willReturn(List.of(
+            StockFixture.createStock("A", "에이"), StockFixture.createStock("B", "비")));
+
+        // when
+        var result = scoreService.getScoreChangeRanking(1L, false, 10, "all", RankingPeriod.WEEK);
+
+        // then
+        assertThat(result).extracting(ScoreRankingResponse::stockCode).containsExactly("A", "B");
+        assertThat(result.get(0).scoreChange()).isEqualTo(20.0);
+        assertThat(result.get(1).scoreChange()).isEqualTo(5.0);
+        verify(scoreRankingCacheStore).save(eq("all:1w"), any());
     }
 
     // 2026-09 성능 감사 중 curl로 20개 동시 요청을 캐시 비운 직후 쏴서

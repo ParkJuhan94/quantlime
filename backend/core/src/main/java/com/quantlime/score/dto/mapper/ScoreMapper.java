@@ -64,6 +64,12 @@ public final class ScoreMapper {
     public static ScoreRankingResponse toScoreRankingResponse(
         Score score, String stockName, String sector, String logoUrl, boolean overseas,
         Double avgTradingValue) {
+        return toScoreRankingResponse(score, stockName, sector, logoUrl, overseas, avgTradingValue, null);
+    }
+
+    public static ScoreRankingResponse toScoreRankingResponse(
+        Score score, String stockName, String sector, String logoUrl, boolean overseas,
+        Double avgTradingValue, Double scoreChange) {
         return new ScoreRankingResponse(
             score.getStockCode(),
             stockName,
@@ -79,7 +85,8 @@ public final class ScoreMapper {
             score.isInsufficientData(),
             logoUrl,
             overseas,
-            avgTradingValue
+            avgTradingValue,
+            scoreChange
         );
     }
 

@@ -12,6 +12,7 @@ import com.quantlime.infra.toss.dto.TossRankingResponse;
 import com.quantlime.infra.toss.dto.TossRankingResponse.RankedResult;
 import com.quantlime.infra.toss.dto.TossRankingResponse.RankingItem;
 import com.quantlime.infra.toss.dto.TossRankingResponse.RankingPrice;
+import com.quantlime.market.domain.RankingPeriod;
 import com.quantlime.market.dto.response.MarketRankingResponse;
 import com.quantlime.stock.StockFixture;
 import com.quantlime.stock.domain.ListingStatus;
@@ -66,6 +67,22 @@ class TossMarketRankingCacheTest {
 
         // then
         verify(tossApiClient, times(1)).getRankings("MARKET_TRADING_AMOUNT", "US", "1d", 100);
+    }
+
+    @Test
+    @DisplayName("[기간 1주는 duration=1w로, 실시간은 duration=1d로 조회하고 캐시도 기간별로 분리된다]")
+    void get_period_mapsToTossDurationAndSeparatesCache() {
+        // given
+        given(tossApiClient.getRankings("TOP_GAINERS", "KR", "1w", 100)).willReturn(emptyResponse());
+        given(tossApiClient.getRankings("TOP_GAINERS", "KR", "1d", 100)).willReturn(emptyResponse());
+
+        // when
+        tossMarketRankingCache.get("domestic", "gainers", RankingPeriod.WEEK);
+        tossMarketRankingCache.get("domestic", "gainers", RankingPeriod.REALTIME);
+
+        // then
+        verify(tossApiClient, times(1)).getRankings("TOP_GAINERS", "KR", "1w", 100);
+        verify(tossApiClient, times(1)).getRankings("TOP_GAINERS", "KR", "1d", 100);
     }
 
     @Test

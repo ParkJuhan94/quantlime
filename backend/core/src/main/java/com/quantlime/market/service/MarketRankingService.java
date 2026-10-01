@@ -2,6 +2,7 @@ package com.quantlime.market.service;
 
 import com.quantlime.market.cache.MarketRankingCache;
 import com.quantlime.market.cache.TossMarketRankingCache;
+import com.quantlime.market.domain.RankingPeriod;
 import com.quantlime.market.dto.response.MarketRankingResponse;
 import com.quantlime.score.domain.Score;
 import com.quantlime.score.repository.ScoreRepository;
@@ -48,12 +49,19 @@ public class MarketRankingService {
     private final ScoreRepository scoreRepository;
 
     public List<MarketRankingResponse> getRanking(String scope, String sort, int limit, Set<String> watchlistCodes) {
+        return getRanking(scope, sort, limit, watchlistCodes, RankingPeriod.REALTIME);
+    }
+
+    public List<MarketRankingResponse> getRanking(
+            String scope, String sort, int limit, Set<String> watchlistCodes, RankingPeriod period) {
         boolean isGainersOrLosers = SORT_GAINERS.equals(sort) || SORT_LOSERS.equals(sort);
-        if (watchlistCodes != null && isGainersOrLosers) {
+        // 관심종목 자체계산 경로는 "오늘" 등락률만 계산하므로 실시간/1일일 때만
+        // 쓴다 - 1주 이상 기간은 토스 랭킹(top100)을 관심종목으로 걸러서 보여준다.
+        if (watchlistCodes != null && isGainersOrLosers && period.isIntraday()) {
             return enrichWithScore(watchlistRanking(scope, sort, limit, watchlistCodes));
         }
 
-        List<MarketRankingResponse> ranked = tossMarketRankingCache.get(scope, sort);
+        List<MarketRankingResponse> ranked = tossMarketRankingCache.get(scope, sort, period);
         if (watchlistCodes != null) {
             ranked = ranked.stream().filter(item -> watchlistCodes.contains(item.stockCode())).toList();
         }

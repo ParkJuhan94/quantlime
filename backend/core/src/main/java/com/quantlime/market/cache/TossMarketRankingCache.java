@@ -2,6 +2,7 @@ package com.quantlime.market.cache;
 
 import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.toss.dto.TossRankingResponse;
+import com.quantlime.market.domain.RankingPeriod;
 import com.quantlime.market.dto.response.MarketRankingResponse;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.dto.mapper.StockMapper;
@@ -48,9 +49,9 @@ public class TossMarketRankingCache {
     // amount/volume 정렬에 한때 duration=realtime을 썼으나, 실제 API
     // 호출로 대조해보니 realtime은 거래량을 심각하게 과소집계한다(삼성전자
     // 기준 같은 거래일에 realtime 915,248주 vs 1d 30,567,358주 - 자체
-    // 캔들 데이터 32,046,681주와 대조해도 1d 쪽이 실제값). 전 sort에
-    // 대해 1d로 통일한다(2026-09-29).
-    private static final String DURATION_1D = "1d";
+    // 캔들 데이터 32,046,681주와 대조해도 1d 쪽이 실제값). 실시간/1일은
+    // 둘 다 1d로 통일한다(2026-09-29, RankingPeriod.REALTIME 참고) - 1주
+    // 이상 기간은 토스 duration 값을 그대로 쓴다.
 
     public static final String SORT_GAINERS = "gainers";
     public static final String SORT_LOSERS = "losers";
@@ -66,7 +67,11 @@ public class TossMarketRankingCache {
     private final Map<CacheKey, CachedEntry> cache = new ConcurrentHashMap<>();
 
     public List<MarketRankingResponse> get(String scope, String sort) {
-        CacheKey key = new CacheKey(scope, sort);
+        return get(scope, sort, RankingPeriod.REALTIME);
+    }
+
+    public List<MarketRankingResponse> get(String scope, String sort, RankingPeriod period) {
+        CacheKey key = new CacheKey(scope, sort, period.getTossDuration());
         CachedEntry entry = cache.get(key);
         if (entry != null && !entry.isStale()) {
             return entry.items();
@@ -96,7 +101,7 @@ public class TossMarketRankingCache {
         String marketCountry = SCOPE_OVERSEAS.equals(key.scope()) ? MARKET_US : MARKET_KR;
         String type = resolveType(key.sort());
 
-        TossRankingResponse response = tossApiClient.getRankings(type, marketCountry, DURATION_1D, MAX_COUNT);
+        TossRankingResponse response = tossApiClient.getRankings(type, marketCountry, key.duration(), MAX_COUNT);
         List<TossRankingResponse.RankingItem> rankings =
             response.result() == null || response.result().rankings() == null
                 ? List.of() : response.result().rankings();
@@ -172,7 +177,7 @@ public class TossMarketRankingCache {
         return raw == null ? null : Double.parseDouble(raw);
     }
 
-    private record CacheKey(String scope, String sort) {
+    private record CacheKey(String scope, String sort, String duration) {
     }
 
     private record CachedEntry(List<MarketRankingResponse> items, Instant cachedAt) {

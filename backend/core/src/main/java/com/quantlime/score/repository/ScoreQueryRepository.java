@@ -46,4 +46,11 @@ public interface ScoreQueryRepository {
      * 재계산은 이 루프가 끝난 뒤에 실행됨).
      */
     Map<String, LocalDate> findLatestScoreDateByStockCode();
+
+    /**
+     * 주어진 종목들의 {@code date} 이전(포함) 가장 최근 스코어 행을 종목당
+     * 하나씩 반환한다 - 랭킹 기간(1주/1개월 등) 정렬에서 "기간 시작 시점의
+     * 스코어"를 구할 때 쓴다. 해당 날짜 이전 이력이 없는 종목은 결과에 없다.
+     */
+    List<Score> findLatestScoresOnOrBefore(List<String> stockCodes, LocalDate date);
 }
