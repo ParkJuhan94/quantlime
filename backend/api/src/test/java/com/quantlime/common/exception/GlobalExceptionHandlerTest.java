@@ -56,4 +56,20 @@ class GlobalExceptionHandlerTest extends ApiTestSupport {
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
+
+    @Test
+    @DisplayName("[지원하지 않는 HTTP 메서드는 500이 아니라 405를 반환한다]")
+    void unsupportedHttpMethod_returns405() throws Exception {
+        mockMvc.perform(get("/api/feedback"))
+            .andExpect(status().isMethodNotAllowed())
+            .andExpect(jsonPath("$.code").value("METHOD_NOT_ALLOWED"));
+    }
+
+    @Test
+    @DisplayName("[지원하지 않는 Content-Type은 500이 아니라 415를 반환한다]")
+    void unsupportedMediaType_returns415() throws Exception {
+        mockMvc.perform(post("/api/feedback").contentType("text/plain").content("hello"))
+            .andExpect(status().isUnsupportedMediaType())
+            .andExpect(jsonPath("$.code").value("UNSUPPORTED_MEDIA_TYPE"));
+    }
 }
