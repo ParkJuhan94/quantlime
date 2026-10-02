@@ -26,6 +26,10 @@ public record ScoreRankingResponse(
     // 모드 랭킹에서 항상 "-"였던 거래대금 컬럼을 채운다(2026-09 감사
     // 세션 - 유동성 필터를 넣는 이상 사용자가 그 값을 봐야 왜 이 종목만
     // 보이는지 납득된다). 유동성 스냅샷이 아직 없는 종목은 null.
-    Double avgTradingValue
+    Double avgTradingValue,
+    // 기간 정렬(period=1w 등)일 때만 채워지는 "기간 시작 대비 종합점수(원점수)
+    // 변화량" - 실시간/1일 정렬에서는 null. 과거 행의 백분위는 최신
+    // 배치만 채워져 있어 비교할 수 없으므로 원점수(compositeScore) 차이를 쓴다.
+    Double scoreChange
 ) {
 }

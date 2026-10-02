@@ -2,6 +2,7 @@ package com.quantlime.score.controller;
 
 import com.quantlime.auth.resolver.OptionalLoginUser;
 import com.quantlime.common.exception.ForbiddenException;
+import com.quantlime.market.domain.RankingPeriod;
 import com.quantlime.score.dto.response.ScoreRankingResponse;
 import com.quantlime.score.dto.response.ScoreResponse;
 import com.quantlime.score.service.ScoreService;
@@ -51,7 +52,8 @@ public class ScoreController {
         summary = "스코어 랭킹 조회(구독자 전용)",
         description = "watchlistOnly=true(기본값)면 로그인 사용자의 관심 종목만, false면 전 상장종목 상위 N개를 "
             + "종합점수 내림차순으로 조회한다. scope=domestic|overseas로 시장을 좁힐 수 있고, 기본값 all은 국내/해외를 "
-            + "구분 없이 섞어 정렬한다. 구독중(status=ACTIVE)이 아니면 403(SUB_006)."
+            + "구분 없이 섞어 정렬한다. period=1w|1mo|3mo|6mo|1y면 기간 시작 대비 종합점수 변화량 내림차순으로 정렬한다"
+            + "(realtime/1d는 기존과 동일). 구독중(status=ACTIVE)이 아니면 403(SUB_006)."
     )
     @ApiResponse(useReturnTypeSchema = true)
     public ResponseEntity<List<ScoreRankingResponse>> getDashboardScores(
@@ -61,10 +63,17 @@ public class ScoreController {
         @Max(value = 50, message = "limit는 50 이하여야 합니다.") int limit,
         @RequestParam(defaultValue = "all")
         @Pattern(regexp = "all|domestic|overseas", message = "scope는 all, domestic, overseas 중 하나여야 합니다.") String scope,
+        @RequestParam(defaultValue = "realtime")
+        @Pattern(regexp = "realtime|1d|1w|1mo|3mo|6mo|1y",
+            message = "period는 realtime, 1d, 1w, 1mo, 3mo, 6mo, 1y 중 하나여야 합니다.") String period,
         @OptionalLoginUser Long userId) {
         requirePremium(userId);
         // requirePremium을 통과했다는 건 userId != null이 이미 보장된다는
         // 뜻이다(hasActivePremium(null)은 항상 false라 여기 도달 전에 403).
+        RankingPeriod rankingPeriod = RankingPeriod.of(period);
+        if (!rankingPeriod.isIntraday()) {
+            return ResponseEntity.ok(scoreService.getScoreChangeRanking(userId, watchlistOnly, limit, scope, rankingPeriod));
+        }
         if (watchlistOnly) {
             return ResponseEntity.ok(scoreService.getDashboardScores(userId, scope));
         }

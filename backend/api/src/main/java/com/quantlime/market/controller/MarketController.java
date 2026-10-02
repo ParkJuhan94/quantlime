@@ -1,6 +1,7 @@
 package com.quantlime.market.controller;
 
 import com.quantlime.auth.resolver.OptionalLoginUser;
+import com.quantlime.market.domain.RankingPeriod;
 import com.quantlime.market.dto.response.HotSectorResponse;
 import com.quantlime.market.dto.response.IndexChartResponse;
 import com.quantlime.market.dto.response.IndexMinuteChartResponse;
@@ -121,7 +122,9 @@ public class MarketController {
         description = "지정한 시장(scope)의 종목을 정렬 기준(sort)으로 정렬한 상위 N개를 조회한다(장중에만 갱신). "
             + "scope=overseas는 Toss 랭킹 API(최대 100건) 기반이라 watchlistOnly=true여도 top100 밖의 "
             + "관심종목은 gainers/losers일 때만 자체 계산으로 걸러진다(amount/volume은 top100 이내로 제한). "
-            + "watchlistOnly=true면 로그인한 사용자의 관심종목만 걸러 정렬한다(비로그인이면 빈 배열)"
+            + "watchlistOnly=true면 로그인한 사용자의 관심종목만 걸러 정렬한다(비로그인이면 빈 배열). "
+            + "period(realtime|1d|1w|1mo|3mo|6mo|1y)는 토스 랭킹 duration과 1:1 대응하며, 1w 이상에서 "
+            + "관심종목만 보기는 토스 top100을 관심종목으로 거른다"
     )
     @ApiResponse(useReturnTypeSchema = true)
     public ResponseEntity<List<MarketRankingResponse>> getRanking(
@@ -133,13 +136,16 @@ public class MarketController {
         @RequestParam(defaultValue = "10")
         @Min(value = 1, message = "limit는 1 이상이어야 합니다.")
         @Max(value = 50, message = "limit는 50 이하여야 합니다.") int limit,
+        @RequestParam(defaultValue = "realtime")
+        @Pattern(regexp = "realtime|1d|1w|1mo|3mo|6mo|1y",
+            message = "period는 realtime, 1d, 1w, 1mo, 3mo, 6mo, 1y 중 하나여야 합니다.") String period,
         @RequestParam(defaultValue = "false") boolean watchlistOnly,
         @OptionalLoginUser Long userId) {
         if (watchlistOnly && userId == null) {
             return ResponseEntity.ok(List.of());
         }
         Set<String> watchlistCodes = watchlistOnly ? watchlistService.getWatchlistStockCodes(userId) : null;
-        return ResponseEntity.ok(marketRankingService.getRanking(scope, sort, limit, watchlistCodes));
+        return ResponseEntity.ok(marketRankingService.getRanking(scope, sort, limit, watchlistCodes, RankingPeriod.of(period)));
     }
 
     @GetMapping("/sectors")

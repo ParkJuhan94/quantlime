@@ -3,9 +3,11 @@ package com.quantlime.score.cache;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.quantlime.market.domain.RankingPeriod;
 import com.quantlime.score.dto.response.ScoreRankingResponse;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -93,10 +95,23 @@ public class ScoreRankingCacheStore {
      */
     public void evictAll() {
         try {
-            redisTemplate.delete(List.of(key("all"), key("domestic"), key("overseas")));
+            List<String> keys = new ArrayList<>();
+            for (String scope : List.of("all", "domestic", "overseas")) {
+                keys.add(key(scope));
+                // 기간별(1w/1mo 등) 스코어 변화량 랭킹 키도 같은 배치 결과에 의존한다.
+                for (RankingPeriod period : RankingPeriod.values()) {
+                    keys.add(key(changeScope(scope, period)));
+                }
+            }
+            redisTemplate.delete(keys);
         } catch (DataAccessException e) {
             log.warn("스코어 랭킹 캐시 무효화 실패(Redis 연결): error={}", e.getMessage());
         }
+    }
+
+    /** 기간별 변화량 랭킹의 캐시 scope 문자열("domestic:1w" 등). */
+    public static String changeScope(String scope, RankingPeriod period) {
+        return scope + ":" + period.getCode();
     }
 
     private String key(String scope) {

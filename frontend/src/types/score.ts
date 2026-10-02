@@ -39,4 +39,7 @@ export interface ScoreRankingResponse {
   // 최근 20거래일 일평균 거래대금(원/달러) - 유동성 필터를 통과한 종목만
   // 랭킹에 노출되므로, 사용자가 왜 이 종목이 보이는지 납득할 수 있게 함께 보여준다.
   avgTradingValue: number | null
+  // 기간 정렬(1주 이상)일 때만 채워지는 "기간 시작 대비 종합점수(원점수) 변화량" -
+  // 실시간/1일 정렬에서는 null.
+  scoreChange: number | null
 }

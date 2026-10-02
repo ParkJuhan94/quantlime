@@ -5,6 +5,7 @@ import { GRADE_STYLES } from '../score/GradeBadge'
 import { changeRateColorClass, formatChangeRate, formatPrice, formatTradingAmount } from '../../utils/priceFormat'
 import { formatScore } from '../../utils/scoreFormat'
 import { buildStockLogoUrl } from '../../utils/stockLogo'
+import type { RankingPeriodCode } from '../../api/market'
 import { useMarketRankingQuery } from '../../hooks/queries/useMarketRanking'
 import { useDashboardScoresQuery } from '../../hooks/queries/useDashboardScores'
 import { useStockPriceSocket } from '../../hooks/useStockPriceSocket'
@@ -42,6 +43,17 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: 'losers', label: '급하락' },
 ]
 
+// 드롭다운 라벨 → 백엔드 period 코드(RankingPeriod.code, 토스 랭킹 duration과 1:1).
+const PERIOD_CODES: Record<Period, RankingPeriodCode> = {
+  실시간: 'realtime',
+  '1일': '1d',
+  '1주일': '1w',
+  '1개월': '1mo',
+  '3개월': '3mo',
+  '6개월': '6mo',
+  '1년': '1y',
+}
+
 const PERIOD_OPTIONS: Period[] = ['실시간', '1일', '1주일', '1개월', '3개월', '6개월', '1년']
 
 interface DisplayRow {
@@ -64,6 +76,8 @@ interface DisplayRow {
   compositeScore?: number | null
   compositePercentile?: number | null
   grade?: string | null
+  // 스코어 탭의 기간 정렬(1주 이상)에서만 값이 있다 - 기간 시작 대비 원점수 변화량.
+  scoreChange?: number | null
   // 2026-08-01 추가 - 로컬 stock 테이블에 없는 종목(해외 랭킹 상위권이
   // 백테스트 유니버스 밖인 경우)은 상세페이지/관심종목 등록이 둘 다
   // 404가 나므로 클릭·하트를 막는다. 스코어 탭은 로컬 스코어 계산
@@ -186,7 +200,13 @@ function RankingRow({
               {formatScore(row.compositeScore)}
               {row.grade && <span className="font-normal opacity-80">{row.grade}</span>}
             </span>
-            {row.compositePercentile != null && (
+            {row.scoreChange != null && (
+              <span className={`text-[10px] font-medium ${row.scoreChange >= 0 ? 'text-red-600' : 'text-blue-600'}`}>
+                {row.scoreChange >= 0 ? '+' : ''}
+                {formatScore(row.scoreChange)}
+              </span>
+            )}
+            {row.scoreChange == null && row.compositePercentile != null && (
               <span className="text-[10px] text-gray-400">상위 {formatScore(100 - row.compositePercentile)}%</span>
             )}
           </div>
@@ -303,6 +323,9 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
   const rankingScope: RankingScope = scope === 'overseas' ? 'overseas' : 'domestic'
   const isRealMode = sortKey === 'gainers' || sortKey === 'losers' || sortKey === 'amount'
   const isScoreMode = sortKey === 'score'
+  const periodCode = PERIOD_CODES[period]
+  // 실시간/1일은 "오늘" 기준이고, 그 이상은 기간 시작 대비 변화 기준이다.
+  const isLongPeriod = periodCode !== 'realtime' && periodCode !== '1d'
   // 스코어/급상승/급하락/거래대금 4개 필터 전부 "관심종목만/전체" 토글을
   // 공통으로 둔다(2026-07-18 피드백에서 스코어·급상승·급하락까지 우선
   // 통합했고, 2026-07-19 피드백으로 거래대금도 동일하게 맞춤). 스코어
@@ -321,10 +344,11 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
     50,
     isRealMode,
     effectiveWatchlistOnly,
+    periodCode,
   )
   // 스코어 탭이 아니거나 구독자가 아니면 요청 자체를 보내지 않는다
   // (PremiumGate 참고 - 잠겨 있을 때 network 탭에 값이 안 남아야 한다).
-  const scoreQuery = useDashboardScoresQuery(effectiveWatchlistOnly, 50, scope, isScoreMode && isPremium)
+  const scoreQuery = useDashboardScoresQuery(effectiveWatchlistOnly, 50, scope, isScoreMode && isPremium, periodCode)
   const scoreStockCodes = isScoreMode && isPremium ? (scoreQuery.data ?? []).map((item) => item.stockCode) : []
   // WebSocket 실시간 브로드캐스트는 장중에만 오므로 소켓만 쓰면 장마감엔
   // 현재가/등락률이 전부 "-"로 보인다(AppSidePanel에서 이미 한 번 겪은
@@ -334,26 +358,31 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
   const scoreRestPrices = useStockPricesQuery(scoreStockCodes)
 
   const displayRows: DisplayRow[] = isScoreMode
-    ? [...(scoreQuery.data ?? [])]
-        .sort((a, b) => (b.compositePercentile ?? -Infinity) - (a.compositePercentile ?? -Infinity))
-        .map((item) => {
-          const livePrice = scoreSocketPrices[item.stockCode] ?? scoreRestPrices[item.stockCode]
-          return {
-            stockCode: item.stockCode,
-            stockName: item.stockName,
-            sector: item.sector,
-            logoUrl: item.logoUrl ?? buildStockLogoUrl(item.stockCode),
-            overseas: item.overseas,
-            price: livePrice?.currentPrice ?? null,
-            changeRate: livePrice?.changeRate ?? null,
-            currency: item.overseas ? 'USD' : 'KRW',
-            tradingAmount: item.avgTradingValue,
-            compositeScore: item.compositeScore,
-            compositePercentile: item.compositePercentile,
-            grade: item.grade,
-            detailAvailable: true,
-          }
-        })
+    ? // 기간 정렬(1주 이상)은 서버가 이미 변화량 순으로 정렬해 내려주므로 다시 정렬하지 않는다.
+      (isLongPeriod
+        ? [...(scoreQuery.data ?? [])]
+        : [...(scoreQuery.data ?? [])].sort(
+            (a, b) => (b.compositePercentile ?? -Infinity) - (a.compositePercentile ?? -Infinity),
+          )
+      ).map((item) => {
+        const livePrice = scoreSocketPrices[item.stockCode] ?? scoreRestPrices[item.stockCode]
+        return {
+          stockCode: item.stockCode,
+          stockName: item.stockName,
+          sector: item.sector,
+          logoUrl: item.logoUrl ?? buildStockLogoUrl(item.stockCode),
+          overseas: item.overseas,
+          price: livePrice?.currentPrice ?? null,
+          changeRate: livePrice?.changeRate ?? null,
+          currency: item.overseas ? 'USD' : 'KRW',
+          tradingAmount: item.avgTradingValue,
+          compositeScore: item.compositeScore,
+          compositePercentile: item.compositePercentile,
+          grade: item.grade,
+          scoreChange: item.scoreChange,
+          detailAvailable: true,
+        }
+      })
     : isRealMode
       ? (rankingQuery.data ?? []).map((row) => ({
           stockCode: row.stockCode,
@@ -475,7 +504,15 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
       </div>
 
       <p className="mb-2 text-xs text-gray-400">
-        {period !== '실시간' && '기간별 랭킹은 아직 준비 중이라 실시간 기준으로 보여드려요 · '}
+        {period !== '실시간' &&
+          isRealMode &&
+          effectiveWatchlistOnly &&
+          isLongPeriod &&
+          sortKey !== 'amount' &&
+          '기간별 관심종목 랭킹은 해당 기간 상위 100위 이내 종목만 보여드려요 · '}
+        {isScoreMode &&
+          isLongPeriod &&
+          `${period} 전 대비 종합점수(원점수) 변화량이 큰 순입니다 · 이력이 없는 신규 종목은 제외됩니다 · `}
         {isScoreMode &&
           (effectiveWatchlistOnly
             ? '관심종목 중 상대 순위(백분위)가 높은 순입니다'

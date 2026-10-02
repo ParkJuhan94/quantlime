@@ -62,7 +62,7 @@ class ScoreControllerTest extends MockedServicesApiTestSupport {
 
     private ScoreRankingResponse ranking(String code) {
         return new ScoreRankingResponse(code, "종목" + code, "섹터", null, 1.0, 2.0, 70.0, 10.0, 20.0, 90.0,
-            "BUY", false, null, false, null);
+            "BUY", false, null, false, null, null);
     }
 
     @Test

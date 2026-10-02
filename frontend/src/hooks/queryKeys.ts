@@ -16,12 +16,12 @@ export const queryKeys = {
   // 관심종목 등록/해제 후에는 조합과 무관하게 전부 무효화해야 해 접두
   // 키를 따로 둔다(React Query는 배열 접두사로 부분 일치 무효화 가능).
   dashboardScoresAll: ['dashboard', 'scores'] as const,
-  dashboardScores: (watchlistOnly: boolean, limit: number, scope: string) =>
-    ['dashboard', 'scores', watchlistOnly, limit, scope] as const,
+  dashboardScores: (watchlistOnly: boolean, limit: number, scope: string, period: string) =>
+    ['dashboard', 'scores', watchlistOnly, limit, scope, period] as const,
   marketIndices: ['market', 'indices'] as const,
   hotSectors: (limit: number) => ['market', 'sectors', limit] as const,
-  marketRanking: (scope: string, sort: string, limit: number, watchlistOnly: boolean) =>
-    ['market', 'ranking', scope, sort, limit, watchlistOnly] as const,
+  marketRanking: (scope: string, sort: string, limit: number, watchlistOnly: boolean, period: string) =>
+    ['market', 'ranking', scope, sort, limit, watchlistOnly, period] as const,
   indexChart: (code: string) => ['market', 'indices', code, 'chart'] as const,
   indexMinuteChart: (code: string) => ['market', 'indices', code, 'minute-chart'] as const,
   bitcoinChart: ['market', 'indices', 'bitcoin', 'minute-chart'] as const,

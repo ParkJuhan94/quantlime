@@ -10,9 +10,12 @@ import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verify;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.quantlime.market.domain.RankingPeriod;
 import com.quantlime.score.dto.response.ScoreRankingResponse;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,6 +23,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.QueryTimeoutException;
@@ -50,7 +54,7 @@ class ScoreRankingCacheStoreTest {
 
     private ScoreRankingResponse score(String code) {
         return new ScoreRankingResponse(code, "종목" + code, "섹터", null, 1.0, 2.0, 70.0, 10.0, 20.0, 90.0,
-            "BUY", false, null, false, 1234.5);
+            "BUY", false, null, false, 1234.5, null);
     }
 
     @Test
@@ -123,11 +127,22 @@ class ScoreRankingCacheStoreTest {
     }
 
     @Test
-    @DisplayName("[evictAll은 all/domestic/overseas 3개 키를 한 번에 지운다 - 애매한 부분 갱신 창을 만들지 않는다]")
-    void evictAll_deletesAllThreeScopes() {
+    @DisplayName("[evictAll은 all/domestic/overseas 각각의 기본 키와 기간별 키를 한 번에 지운다 - 애매한 부분 갱신 창을 만들지 않는다]")
+    @SuppressWarnings("unchecked")
+    void evictAll_deletesBaseAndPeriodKeysOfAllScopes() {
         store.evictAll();
 
-        verify(redisTemplate).delete(List.of("score:ranking:all", "score:ranking:domestic", "score:ranking:overseas"));
+        ArgumentCaptor<Collection<String>> captor = ArgumentCaptor.forClass(Collection.class);
+        verify(redisTemplate).delete(captor.capture());
+        List<String> expected = new ArrayList<>();
+        for (String scope : List.of("all", "domestic", "overseas")) {
+            expected.add("score:ranking:" + scope);
+            for (RankingPeriod period : RankingPeriod.values()) {
+                expected.add("score:ranking:" + ScoreRankingCacheStore.changeScope(scope, period));
+            }
+        }
+        assertThat(captor.getValue()).containsExactlyInAnyOrderElementsOf(expected);
+        assertThat(captor.getValue()).contains("score:ranking:all", "score:ranking:domestic", "score:ranking:overseas");
     }
 
     @Test
