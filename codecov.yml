@@ -20,3 +20,6 @@ flags:
   quant-engine:
     paths:
       - quant-engine/
+  frontend:
+    paths:
+      - frontend/

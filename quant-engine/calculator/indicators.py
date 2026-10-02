@@ -4,6 +4,12 @@
 지표의 "원값(raw value)"을 반환한다. 점수 변환은 scorer.py의 책임이다.
 데이터가 부족해 계산할 수 없는 구간은 NaN으로 남긴다 (콜드스타트 처리는
 scorer.py에서 NaN 여부로 판단).
+
+프론트 차트 오버레이(frontend/src/utils/indicators.ts)와 정의가 의도적으로 다르다
+(2026-10-02 결정): 볼린저 표준편차는 여기서 표본(ddof=1, pandas 기본)이고 프론트는
+모표준편차, EMA 시드는 여기서 첫 값(ewm adjust=False)이고 프론트는 첫 N개 SMA다.
+이 값들은 점수 계산 내부에서만 쓰여 화면에 노출되지 않으며, 공식을 바꾸면 v3.0
+점수 분포와 백테스트가 달라지므로 프론트에 맞추려 하지 말 것.
 """
 
 from __future__ import annotations

@@ -6,17 +6,30 @@ const INTERVAL_OPTIONS: { key: ChartInterval; label: string }[] = [
   { key: 'monthly', label: '월봉' },
 ]
 
-interface ChartIntervalSelectorProps {
-  value: ChartInterval
-  onChange: (interval: ChartInterval) => void
+// 분봉은 일봉 집계로 만들 수 없어 서버가 온디맨드로 내려주는 별도 데이터다 - 지원하는 화면(종목 상세)만
+// allowMinute로 옵션을 켠다(지수 상세 등은 일/주/월봉만).
+export type ChartIntervalOrMinute = ChartInterval | 'minute'
+
+interface ChartIntervalSelectorProps<T extends ChartIntervalOrMinute> {
+  value: T
+  onChange: (interval: T) => void
+  allowMinute?: boolean
 }
 
-// 분봉은 백엔드가 일봉만 수집해서(§6) 프론트 집계로 만들 수 없다 -
-// 별도 수집 파이프라인이 필요해 이번 범위에서 제외했다.
-export function ChartIntervalSelector({ value, onChange }: ChartIntervalSelectorProps) {
+// 제네릭이라 일/주/월봉만 쓰는 화면(지수 상세)은 ChartInterval 상태를 그대로 넘기고, 분봉을 켠
+// 화면만 ChartIntervalOrMinute 상태를 넘긴다.
+export function ChartIntervalSelector<T extends ChartIntervalOrMinute = ChartInterval>({
+  value,
+  onChange,
+  allowMinute = false,
+}: ChartIntervalSelectorProps<T>) {
+  const options = (allowMinute ? [{ key: 'minute', label: '분봉' }, ...INTERVAL_OPTIONS] : INTERVAL_OPTIONS) as {
+    key: T
+    label: string
+  }[]
   return (
     <div className="flex gap-1">
-      {INTERVAL_OPTIONS.map((option) => (
+      {options.map((option) => (
         <button
           key={option.key}
           type="button"

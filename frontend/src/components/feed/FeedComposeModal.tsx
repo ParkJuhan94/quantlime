@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useMeQuery } from '../../hooks/queries/useMe'
 import { useCreateFeedPost, useUpdateFeedPost } from '../../hooks/queries/useFeed'
 import { ProfileAvatar } from '../common/ProfileAvatar'
-import { FEED_CATEGORIES, type FeedCategory } from '../../mock/feedMock'
+import { FEED_CATEGORIES, IMAGE_REQUIRED_CATEGORIES, type FeedCategory } from '../../mock/feedMock'
 import { uploadImage } from '../../api/upload'
 import { resolveUploadUrl } from '../../utils/uploadUrl'
 import type { FeedPostResponse } from '../../types/feed'
@@ -91,7 +91,8 @@ export function FeedComposeModal({ open, onClose, editingPost }: FeedComposeModa
   // 제목만 실제로 입력을 막는 조건으로 두고, 주제 누락은 버튼을 막는 대신
   // handleSubmit에서 흔들기 애니메이션으로 유도한다(disabled로 막으면
   // 왜 안 눌리는지 알기 어려움).
-  const canSubmit = title.trim().length > 0
+  const imageRequired = category !== null && IMAGE_REQUIRED_CATEGORIES.includes(category)
+  const canSubmit = title.trim().length > 0 && (!imageRequired || imagePreviewUrl !== null)
 
   async function handleSubmit() {
     if (category === null) {
@@ -256,6 +257,9 @@ export function FeedComposeModal({ open, onClose, editingPost }: FeedComposeModa
                       : '남기기'}
               </button>
             </div>
+            {imageRequired && imagePreviewUrl === null && (
+              <p className="mt-2 text-right text-xs text-gray-500">수익인증 글은 이미지 첨부가 필요해요.</p>
+            )}
             {uploadError && (
               <p className="mt-2 text-right text-xs text-red-600">이미지 업로드에 실패했어요. 다시 시도해주세요.</p>
             )}

@@ -1,6 +1,7 @@
 package com.quantlime.feed.service;
 
 import com.quantlime.common.exception.NotFoundException;
+import com.quantlime.common.exception.ValidationException;
 import com.quantlime.feed.domain.FeedCategory;
 import com.quantlime.feed.domain.FeedComment;
 import com.quantlime.feed.domain.FeedPost;
@@ -45,6 +46,7 @@ public class FeedService {
     public FeedPostResponse createPost(Long userId, CreateFeedPostRequest request) {
         User user = findUser(userId);
         FeedCategory category = FeedCategory.of(request.category());
+        validateImageRequirement(category, request.imageUrl());
         FeedPost post = feedPostRepository.save(FeedPost.of(user, category, request.title(), request.imageUrl()));
         return FeedMapper.toFeedPostResponse(post, 0, 0, false, true);
     }
@@ -76,6 +78,7 @@ public class FeedService {
     public FeedPostResponse updatePost(Long userId, Long postId, UpdateFeedPostRequest request) {
         FeedPost post = findOwnedPost(userId, postId);
         FeedCategory category = FeedCategory.of(request.category());
+        validateImageRequirement(category, request.imageUrl());
         post.update(category, request.title(), request.imageUrl());
 
         long likeCount = toCountMap(feedPostLikeRepository.countByPostIds(List.of(postId))).getOrDefault(postId, 0L);
@@ -130,6 +133,12 @@ public class FeedService {
     public Slice<FeedCommentResponse> getComments(Long postId, Pageable pageable) {
         return feedCommentRepository.findByFeedPostIdOrderByIdAsc(postId, pageable)
             .map(FeedMapper::toFeedCommentResponse);
+    }
+
+    private void validateImageRequirement(FeedCategory category, String imageUrl) {
+        if (category.isImageRequired() && (imageUrl == null || imageUrl.isBlank())) {
+            throw new ValidationException(FeedErrorCode.IMAGE_REQUIRED);
+        }
     }
 
     private User findUser(Long userId) {

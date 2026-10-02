@@ -1,15 +1,20 @@
 package com.quantlime.score.service;
 
+import com.quantlime.infra.python.dto.CrossSectionNormalizeApiResponse.NormalizedItemApiResponse;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.DailyScoreSeriesApiResponse;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.StockScoreSeriesApiResponse;
 import com.quantlime.price.util.DailyPriceSettlementPolicy;
+import com.quantlime.score.domain.PeerGroup;
 import com.quantlime.score.domain.Score;
 import com.quantlime.score.dto.mapper.ScoreMapper;
 import com.quantlime.score.repository.ScoreRepository;
+import com.quantlime.stock.domain.MarketType;
 import jakarta.persistence.EntityManager;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -116,5 +121,28 @@ public class ScorePersistenceService {
     public void deleteFrom(LocalDate from) {
         int deleted = scoreRepository.deleteByScoreDateGreaterThanEqual(from);
         log.info("스코어 일괄 삭제 완료: from={}, 삭제건수={}", from, deleted);
+    }
+
+    /**
+     * quant-engine이 돌려준 횡단면 백분위를 최신 {@link Score} 행에 반영한다.
+     * HTTP 호출 전에 읽어둔 엔티티를 재사용하지 않고 여기서 다시 조회한다 -
+     * 호출 사이에 트랜잭션이 끝나 분리(detached)된 엔티티라 dirty checking이
+     * 동작하지 않기 때문이다. 재조회 사이 새 배치가 끼어들어 최신 배치일이
+     * 바뀌었더라도 응답에 없는 종목은 건드리지 않고 건너뛴다.
+     */
+    @Transactional
+    public void applyNormalization(List<MarketType> marketTypes, PeerGroup peerGroup,
+                                   List<NormalizedItemApiResponse> items) {
+        Map<String, Score> scoreByStockCode = scoreRepository.findLatestScoresForNormalization(marketTypes)
+            .stream().collect(Collectors.toMap(Score::getStockCode, score -> score));
+        for (NormalizedItemApiResponse item : items) {
+            Score score = scoreByStockCode.get(item.stockCode());
+            if (score == null) {
+                continue;
+            }
+            score.applyNormalization(
+                item.trendPercentile(), item.meanReversionPercentile(),
+                item.compositePercentile(), peerGroup);
+        }
     }
 }
