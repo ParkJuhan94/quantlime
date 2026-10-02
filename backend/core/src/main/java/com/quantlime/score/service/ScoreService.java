@@ -398,7 +398,10 @@ public class ScoreService {
      * {@code peerGroup}(국내 또는 해외) 안에서 상장·가격지원·유동성 조건을
      * 만족하는 종목들의 최신 절대 서브스코어를 quant-engine에 넘겨 횡단면
      * 백분위(랭킹 정렬 전용)를 받고, 각 종목의 최신 {@link Score} 행에
-     * 반영한다. 등급(grade)은 이 경로와 무관하다 - 원점수 계산
+     * 반영한다. 이 메서드 자체는 트랜잭션을 만들지 않는다 -
+     * 조회(리포지토리 자체 트랜잭션) → quant-engine HTTP 호출 → 저장({@link
+     * ScorePersistenceService#applyNormalization}, 짧은 쓰기 트랜잭션)을
+     * 분리해, HTTP 응답을 기다리는 동안 DB 커넥션을 붙잡지 않는다. 등급(grade)은 이 경로와 무관하다 - 원점수 계산
      * ({@link #recalculateDomesticScores}/{@link #recalculateOverseasScores})
      * 시점에 quant-engine이 절대점수 기준으로 이미 매겨 저장했으므로, 이
      * 메서드가 실행되지 않거나 늦어져도 등급은 항상 최신 상태다.
@@ -407,7 +410,6 @@ public class ScoreService {
      * {@code minSampleMet=false}로 아무것도 반영하지 않는다 - 그 날짜의
      * 횡단면 순위 자체가 불안정하기 때문(calculator/normalization.py 참고).
      */
-    @Transactional
     public void normalizeCrossSection(PeerGroup peerGroup) {
         List<MarketType> marketTypes = peerGroup == PeerGroup.DOMESTIC
             ? MarketType.domesticValues() : MarketType.overseasValues();
@@ -417,8 +419,6 @@ public class ScoreService {
             return;
         }
 
-        Map<String, Score> scoreByStockCode = latestScores.stream()
-            .collect(Collectors.toMap(Score::getStockCode, score -> score));
         CrossSectionNormalizeApiRequest request = ScoreRequestMapper.toNormalizeRequest(
             LocalDate.now(), peerGroup, latestScores);
         CrossSectionNormalizeApiResponse response = pythonEngineClient.normalizeCrossSection(request);
@@ -429,15 +429,7 @@ public class ScoreService {
             return;
         }
 
-        for (CrossSectionNormalizeApiResponse.NormalizedItemApiResponse item : response.items()) {
-            Score score = scoreByStockCode.get(item.stockCode());
-            if (score == null) {
-                continue;
-            }
-            score.applyNormalization(
-                item.trendPercentile(), item.meanReversionPercentile(),
-                item.compositePercentile(), peerGroup);
-        }
+        scorePersistenceService.applyNormalization(marketTypes, peerGroup, response.items());
         log.info("횡단면 정규화 완료: peerGroup={}, 대상종목수={}", peerGroup, latestScores.size());
     }
 

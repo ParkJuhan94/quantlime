@@ -89,6 +89,23 @@ class MarketControllerTest extends ApiTestSupport {
     private BenchmarkIndexRepository benchmarkIndexRepository;
 
     @Test
+    @DisplayName("[지금 뜨는 산업 조회 시 스냅샷이 비어 있으면(장 마감) 200과 빈 배열을 반환한다]")
+    void getHotSectors_emptySnapshot_returnsEmptyArray() throws Exception {
+        // when & then
+        mockMvc.perform(get("/api/market/sectors"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$").isEmpty());
+    }
+
+    @Test
+    @DisplayName("[지금 뜨는 산업 조회 시 limit이 범위를 벗어나면 400을 반환한다]")
+    void getHotSectors_limitOutOfRange_returns400() throws Exception {
+        // when & then
+        mockMvc.perform(get("/api/market/sectors").param("limit", "0"))
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
     @DisplayName("[주요 지수 조회 성공 시 200과 환율·비트코인·코스피/코스닥/해외지수 시세를 반환한다]")
     void getIndices_success_returns200() throws Exception {
         // given

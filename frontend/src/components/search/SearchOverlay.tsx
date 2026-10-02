@@ -4,8 +4,9 @@ import { useStockSearch } from '../../hooks/queries/useStockSearch'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { searchHistoryStorage } from '../../storage/searchHistoryStorage'
 import { StockLogo } from '../common/StockLogo'
-import { currencyForMarketType } from '../../utils/priceFormat'
+import { changeRateColorClass, currencyForMarketType, formatChangeRate } from '../../utils/priceFormat'
 import { usePopularStocksQuery } from '../../hooks/queries/usePopularStocks'
+import { useHotSectorsQuery } from '../../hooks/queries/useHotSectors'
 import type { StockDetailResponse } from '../../types/stock'
 import { useAuth } from '../../auth/useAuth'
 import { useRemoveWatchlist, useWatchlistQuery } from '../../hooks/queries/useWatchlist'
@@ -67,6 +68,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
   const debouncedQuery = useDebouncedValue(query, 300)
   const searchQuery = useStockSearch(debouncedQuery)
   const popularStocksQuery = usePopularStocksQuery(5)
+  const hotSectorsQuery = useHotSectorsQuery(5, open)
   const resultRefs = useRef<(HTMLLIElement | null)[]>([])
 
   const recentSearchScrollRef = useRef<HTMLDivElement>(null)
@@ -276,6 +278,30 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                     }`}
                   />
                 </div>
+              </div>
+            )}
+
+            {/* 장중에만 값이 있다(서버 스냅샷 기준) - 마감 후엔 빈 배열이라 섹션 자체를 숨긴다
+                (가짜 등락률을 채우지 않는다, frontend/CLAUDE.md). */}
+            {hotSectorsQuery.data && hotSectorsQuery.data.length > 0 && (
+              <div className="mb-5">
+                <p className="mb-2 text-xs font-semibold text-gray-400">지금 뜨는 산업</p>
+                <ul className="flex flex-col">
+                  {hotSectorsQuery.data.map((sector, index) => (
+                    <li key={sector.sector} className="flex items-center gap-3 rounded-lg px-2 py-1.5">
+                      <span className="w-3.5 text-xs font-semibold text-gray-300">{index + 1}</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-gray-900">{sector.sector}</p>
+                        <p className="truncate text-xs text-gray-400">
+                          {sector.leaders.map((leader) => leader.stockName).join(' · ')}
+                        </p>
+                      </div>
+                      <span className={`text-sm font-semibold ${changeRateColorClass(sector.changeRate)}`}>
+                        {formatChangeRate(sector.changeRate)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
 
