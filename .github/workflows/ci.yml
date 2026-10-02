@@ -114,3 +114,22 @@ jobs:
       - name: 타입체크 + 빌드
         working-directory: frontend
         run: npm run build
+
+  # 알림 규칙은 "울려야 할 때 안 울리는" 실패가 조용해서 코드와 같이 CI에서 검증한다(2026-10-01).
+  # promtool은 docker-compose.monitoring.yml과 같은 prom/prometheus 이미지에 들어 있다.
+  monitoring:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 알림 규칙 문법 검사 (promtool check rules)
+        run: >
+          docker run --rm --entrypoint promtool
+          -v "$PWD/monitoring/prometheus:/p:ro"
+          prom/prometheus:v2.55.1 check rules /p/rules/alerts.yml
+
+      - name: 알림 규칙 단위 테스트 (promtool test rules)
+        run: >
+          docker run --rm --entrypoint promtool
+          -v "$PWD/monitoring/prometheus:/p:ro"
+          prom/prometheus:v2.55.1 test rules /p/tests/alerts_test.yml

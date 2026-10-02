@@ -23,16 +23,22 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class KafkaDltNotifier {
 
+    static final String COUNTER_NAME = "dlt.messages";
+
     private final MeterRegistry meterRegistry;
     private final SlackWebhookClient slackWebhookClient;
 
-    public void notify(String domain, String topic, String detail) {
-        Counter.builder("dlt.messages")
+    /** 카운터 정의를 한 곳에 둔다 - 알림 사유별로 등록 위치(실제 발생/기동 선등록)가 달라도 같은 시리즈여야 한다. */
+    static Counter counter(MeterRegistry registry, String domain, String topic) {
+        return Counter.builder(COUNTER_NAME)
             .tag("domain", domain)
             .tag("topic", topic)
             .description("Kafka DLT(Dead Letter Topic)로 이관된 메시지 수")
-            .register(meterRegistry)
-            .increment();
+            .register(registry);
+    }
+
+    public void notify(String domain, String topic, String detail) {
+        counter(meterRegistry, domain, topic).increment();
 
         try {
             slackWebhookClient.sendOpsMessage(
