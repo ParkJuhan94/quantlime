@@ -43,7 +43,7 @@ class ScoreRankingNotificationSchedulerTest {
 
     private ScoreRankingResponse score(String name, String grade) {
         return new ScoreRankingResponse("000001", name, "섹터", null, null, null, 70.0, null, null, 90.0,
-            grade, false, null, false, null);
+            grade, false, null, false, null, null);
     }
 
     @Test

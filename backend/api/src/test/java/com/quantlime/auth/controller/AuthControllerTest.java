@@ -3,6 +3,7 @@ package com.quantlime.auth.controller;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -118,6 +119,56 @@ class AuthControllerTest extends ApiTestSupport {
     void reissue_invalidTokenCookie_returns401() throws Exception {
         mockMvc.perform(post("/api/auth/reissue")
                 .cookie(new Cookie(RefreshTokenCookieProvider.COOKIE_NAME, "invalid-refresh-token")))
+            .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("[로그인 후 다른 소셜 계정을 연결하면 204이고 연결 목록에 나타나며, 연결된 계정으로 로그인하면 같은 사용자로 들어온다]")
+    void link_thenLoginWithLinkedAccount_sameUser() throws Exception {
+        // given: 구글로 가입
+        given(oAuthClientDispatcher.fetch(eq(OAuthProvider.GOOGLE), any(), any()))
+            .willReturn(new OAuthUserInfo(OAuthProvider.GOOGLE, "g-link-1", "a@gmail.com", "연결유저", null));
+        String loginBody = objectMapper.writeValueAsString(new SocialLoginRequest("code", "http://localhost/cb"));
+        String loginResponse = mockMvc.perform(post("/api/auth/login/google")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(loginBody))
+            .andReturn().getResponse().getContentAsString();
+        String accessToken = objectMapper.readTree(loginResponse).get("accessToken").asText();
+
+        // when: 카카오 연결
+        given(oAuthClientDispatcher.fetch(eq(OAuthProvider.KAKAO), any(), any()))
+            .willReturn(new OAuthUserInfo(OAuthProvider.KAKAO, "k-link-1", "a@kakao.com", "카카오닉", null));
+        mockMvc.perform(post("/api/auth/link/kakao")
+                .header("Authorization", "Bearer " + accessToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(loginBody))
+            .andExpect(status().isNoContent());
+
+        // then: 연결 목록에 구글(primary)·카카오가 나온다
+        mockMvc.perform(get("/api/auth/linked-providers").header("Authorization", "Bearer " + accessToken))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].provider").value("google"))
+            .andExpect(jsonPath("$[0].primary").value(true))
+            .andExpect(jsonPath("$[1].provider").value("kakao"))
+            .andExpect(jsonPath("$[1].primary").value(false));
+
+        // 카카오로 로그인해도 새 사용자가 생기지 않고 같은 사용자의 토큰이 발급된다
+        String kakaoLogin = mockMvc.perform(post("/api/auth/login/kakao")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(loginBody))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+        String kakaoToken = objectMapper.readTree(kakaoLogin).get("accessToken").asText();
+        mockMvc.perform(get("/api/auth/linked-providers").header("Authorization", "Bearer " + kakaoToken))
+            .andExpect(jsonPath("$[0].provider").value("google"));
+    }
+
+    @Test
+    @DisplayName("[로그인하지 않고 소셜 계정을 연결하면 401을 반환한다]")
+    void link_unauthenticated_returns401() throws Exception {
+        mockMvc.perform(post("/api/auth/link/kakao")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(new SocialLoginRequest("code", "http://localhost/cb"))))
             .andExpect(status().isUnauthorized());
     }
 }

@@ -1,6 +1,7 @@
 package com.quantlime.event.videofeed;
 
 import com.quantlime.event.observability.KafkaDltNotifier;
+import com.quantlime.event.retry.RetryBackoff;
 import com.quantlime.videofeed.service.TranscriptProcessingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +29,8 @@ public class TranscriptRequestConsumer {
     private final TranscriptProcessingService transcriptProcessingService;
     private final KafkaDltNotifier dltNotifier;
 
-    @RetryableTopic(attempts = "4", backoff = @Backoff(delay = 30_000, multiplier = 3.0, maxDelay = 270_000))
+    @RetryableTopic(attempts = "4", backoff = @Backoff(delayExpression = RetryBackoff.DELAY_MS, multiplierExpression = RetryBackoff.MULTIPLIER,
+        maxDelayExpression = RetryBackoff.MAX_DELAY_MS))
     @KafkaListener(topics = VideoFeedTopics.VIDEO_SELECTED, groupId = "transcript-collector")
     public void onVideoSelected(VideoSelectedMessage message) {
         transcriptProcessingService.processVideo(message.videoId());

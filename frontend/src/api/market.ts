@@ -6,6 +6,7 @@ import type {
   InvestorTradingInterval,
   InvestorTradingResponse,
   MarketIndexResponse,
+  HotSectorResponse,
   MarketRankingResponse,
 } from '../types/market'
 
@@ -45,14 +46,23 @@ export async function getInvestorTrading(
   return data
 }
 
+// 백엔드 RankingPeriod.code와 일치해야 한다(토스 랭킹 duration과 1:1 대응).
+export type RankingPeriodCode = 'realtime' | '1d' | '1w' | '1mo' | '3mo' | '6mo' | '1y'
+
 export async function getMarketRanking(
   scope: 'domestic' | 'overseas',
   sort: 'gainers' | 'losers' | 'amount',
   limit = 10,
   watchlistOnly = false,
+  period: RankingPeriodCode = 'realtime',
 ): Promise<MarketRankingResponse[]> {
   const { data } = await apiClient.get<MarketRankingResponse[]>('/api/market/ranking', {
-    params: { scope, sort, limit, watchlistOnly },
+    params: { scope, sort, limit, watchlistOnly, period },
   })
+  return data
+}
+
+export async function getHotSectors(limit = 5): Promise<HotSectorResponse[]> {
+  const { data } = await apiClient.get<HotSectorResponse[]>('/api/market/sectors', { params: { limit } })
   return data
 }

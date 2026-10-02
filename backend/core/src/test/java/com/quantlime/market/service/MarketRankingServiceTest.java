@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 
 import com.quantlime.market.cache.MarketRankingCache;
 import com.quantlime.market.cache.TossMarketRankingCache;
+import com.quantlime.market.domain.RankingPeriod;
 import com.quantlime.market.dto.response.MarketRankingResponse;
 import com.quantlime.score.domain.Divergence;
 import com.quantlime.score.domain.Grade;
@@ -60,10 +61,29 @@ class MarketRankingServiceTest {
     }
 
     @Test
+    @DisplayName("[1주 기간 + 관심종목만 보기는 자체계산 대신 토스 1w 랭킹을 관심종목으로 거른다]")
+    void getRanking_weekPeriodWithWatchlist_usesTossRankingFiltered() {
+        // given
+        given(tossMarketRankingCache.get("domestic", "gainers", RankingPeriod.WEEK)).willReturn(List.of(
+            new MarketRankingResponse("005930", "삼성전자", "반도체", 56500.0, 3.0, "KRW", 1.0, 1.0, null, true,
+                null, null, null),
+            new MarketRankingResponse("000660", "SK하이닉스", "반도체", 200000.0, 2.0, "KRW", 1.0, 1.0, null, true,
+                null, null, null)));
+
+        // when
+        List<MarketRankingResponse> result = marketRankingService.getRanking(
+            "domestic", "gainers", 10, java.util.Set.of("000660"), RankingPeriod.WEEK);
+
+        // then
+        assertThat(result).extracting(MarketRankingResponse::stockCode).containsExactly("000660");
+        verify(domesticMarketRankingCache, never()).getGainers(anyInt(), any());
+    }
+
+    @Test
     @DisplayName("[관심종목만 보기가 아니면 국내/해외 모두 Toss 랭킹 캐시를 쓴다]")
     void getRanking_notWatchlistOnly_usesTossRankingCache() {
         // given
-        given(tossMarketRankingCache.get("domestic", "gainers")).willReturn(
+        given(tossMarketRankingCache.get("domestic", "gainers", RankingPeriod.REALTIME)).willReturn(
             List.of(ranking("005930", 2.0)));
 
         // when
@@ -88,7 +108,7 @@ class MarketRankingServiceTest {
 
         // then
         assertThat(result).extracting(MarketRankingResponse::stockCode).containsExactly("005930");
-        verify(tossMarketRankingCache, never()).get(any(), any());
+        verify(tossMarketRankingCache, never()).get(any(), any(), any());
         verify(overseasMarketRankingCache, never()).getGainers(anyInt(), any());
     }
 
@@ -130,7 +150,7 @@ class MarketRankingServiceTest {
     void getRanking_watchlistOnlyAmountSort_usesTossCacheFilteredByWatchlist() {
         // given
         Set<String> watchlistCodes = Set.of("005930");
-        given(tossMarketRankingCache.get("domestic", "amount")).willReturn(
+        given(tossMarketRankingCache.get("domestic", "amount", RankingPeriod.REALTIME)).willReturn(
             List.of(ranking("005930", 1.0), ranking("000660", 2.0)));
 
         // when
@@ -145,7 +165,7 @@ class MarketRankingServiceTest {
     @DisplayName("[스코어가 있는 종목은 응답에 compositeScore/등급이 채워진다]")
     void getRanking_enrichesWithScoreWhenAvailable() {
         // given
-        given(tossMarketRankingCache.get("domestic", "gainers")).willReturn(
+        given(tossMarketRankingCache.get("domestic", "gainers", RankingPeriod.REALTIME)).willReturn(
             List.of(ranking("005930", 2.0)));
         Score score = Score.of("005930", LocalDate.now(), 70.0, 60.0, 65.0,
             Grade.BUY, Quadrant.TREND_UP_OVERSOLD, Divergence.of(false, null), false);
@@ -165,7 +185,7 @@ class MarketRankingServiceTest {
     @DisplayName("[스코어 배치가 아직 안 돈 종목은 compositeScore/등급이 null로 남는다]")
     void getRanking_leavesScoreNullWhenNotFound() {
         // given
-        given(tossMarketRankingCache.get("domestic", "gainers")).willReturn(
+        given(tossMarketRankingCache.get("domestic", "gainers", RankingPeriod.REALTIME)).willReturn(
             List.of(ranking("005930", 2.0)));
         given(scoreRepository.findLatestScoresByStockCodesOrderByCompositeScoreDesc(List.of("005930")))
             .willReturn(List.of());

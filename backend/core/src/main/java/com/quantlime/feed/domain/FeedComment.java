@@ -44,6 +44,10 @@ public class FeedComment extends TimeBaseEntity {
     @Column(name = "content", nullable = false, length = CONTENT_MAX_LENGTH)
     private String content;
 
+    // FeedPost.hidden과 동일한 의미 - 신고 누적 시 자동 숨김.
+    @Column(name = "hidden", nullable = false)
+    private boolean hidden;
+
     @Builder
     private FeedComment(User user, FeedPost feedPost, String content) {
         validateFeedComment(user, feedPost, content);
@@ -58,6 +62,14 @@ public class FeedComment extends TimeBaseEntity {
             .feedPost(feedPost)
             .content(content)
             .build();
+    }
+
+    public void hide() {
+        this.hidden = true;
+    }
+
+    public void restore() {
+        this.hidden = false;
     }
 
     private void validateFeedComment(User user, FeedPost feedPost, String content) {

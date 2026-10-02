@@ -1,12 +1,25 @@
 import { useNavigate } from 'react-router-dom'
+import { buildAuthorizeUrl } from '../config/oauth'
+import { useLinkedProvidersQuery, useUnlinkSocialAccount } from '../hooks/queries/useLinkedProviders'
 import { useMeQuery } from '../hooks/queries/useMe'
+import type { OAuthProviderName } from '../types/auth'
 import { ProfileAvatar } from '../components/common/ProfileAvatar'
 import { useCancelSubscription, useMySubscriptionQuery, usePaymentHistoryQuery } from '../hooks/queries/useSubscription'
+
+const PROVIDERS: { key: OAuthProviderName; label: string }[] = [
+  { key: 'google', label: '구글' },
+  { key: 'kakao', label: '카카오' },
+  { key: 'naver', label: '네이버' },
+]
 
 export function MyInfoPage() {
   const meQuery = useMeQuery(true)
   const me = meQuery.data
   const navigate = useNavigate()
+
+  const linkedQuery = useLinkedProvidersQuery(true)
+  const unlink = useUnlinkSocialAccount()
+  const linkedByProvider = new Map((linkedQuery.data ?? []).map((item) => [item.provider, item]))
 
   const subscriptionQuery = useMySubscriptionQuery(true)
   const paymentHistoryQuery = usePaymentHistoryQuery(true)
@@ -40,6 +53,48 @@ export function MyInfoPage() {
           </div>
         </div>
       )}
+
+      {/* 이메일 일치만으로 계정을 합치지 않는다(탈취 벡터) - 로그인한 상태에서 추가 소셜 인증을 거쳐 직접 연결한다. */}
+      <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-6">
+        <h2 className="mb-3 text-sm font-semibold text-gray-900">연결된 계정</h2>
+        <ul className="flex flex-col gap-2">
+          {PROVIDERS.map((provider) => {
+            const linked = linkedByProvider.get(provider.key)
+            return (
+              <li key={provider.key} className="flex items-center justify-between text-sm">
+                <span className="text-gray-700">
+                  {provider.label}
+                  {linked?.primary && <span className="ml-1.5 text-xs text-gray-400">가입 계정</span>}
+                </span>
+                {linked ? (
+                  linked.primary ? (
+                    <span className="text-xs text-gray-400">연결됨</span>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={unlink.isPending}
+                      onClick={() => unlink.mutate(provider.key)}
+                      className="rounded-lg border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-30"
+                    >
+                      해제
+                    </button>
+                  )
+                ) : (
+                  <button
+                    type="button"
+                    disabled={linkedQuery.isLoading}
+                    onClick={() => window.location.assign(buildAuthorizeUrl(provider.key, 'link'))}
+                    className="rounded-lg bg-gray-900 px-3 py-1 text-xs font-semibold text-white hover:bg-gray-800 disabled:opacity-30"
+                  >
+                    연결
+                  </button>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+        {unlink.isError && <p className="mt-2 text-xs text-red-600">연결 해제에 실패했어요. 다시 시도해주세요.</p>}
+      </div>
 
       <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-6">
         <h2 className="mb-3 text-sm font-semibold text-gray-900">구독</h2>

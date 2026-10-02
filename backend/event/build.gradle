@@ -1,5 +1,17 @@
+plugins {
+    // @Component/@RetryableTopic 대상 클래스는 Kotlin에서 기본 final이라 Spring
+    // 프록시가 불가능하다 - kotlin-spring(allopen)이 스프링 어노테이션 클래스를 open으로 만든다.
+    id 'org.jetbrains.kotlin.jvm'
+    id 'org.jetbrains.kotlin.plugin.spring'
+}
+
 dependencies {
     implementation project(':core')
+
+    // kotlin-reflect가 있어야 Spring이 Kotlin nullable 파라미터(String?)를
+    // optional로 인식한다(DLT 핸들러의 exceptionMessage 헤더).
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib'
+    implementation 'org.jetbrains.kotlin:kotlin-reflect'
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
 

@@ -1,10 +1,12 @@
 package com.quantlime.feed.service;
 
 import com.quantlime.common.exception.NotFoundException;
+import com.quantlime.common.exception.ValidationException;
 import com.quantlime.feed.domain.FeedCategory;
 import com.quantlime.feed.domain.FeedComment;
 import com.quantlime.feed.domain.FeedPost;
 import com.quantlime.feed.domain.FeedPostLike;
+import com.quantlime.feed.domain.FeedReportTarget;
 import com.quantlime.feed.dto.mapper.FeedMapper;
 import com.quantlime.feed.dto.request.CreateFeedCommentRequest;
 import com.quantlime.feed.dto.request.CreateFeedPostRequest;
@@ -15,6 +17,7 @@ import com.quantlime.feed.exception.FeedErrorCode;
 import com.quantlime.feed.repository.FeedCommentRepository;
 import com.quantlime.feed.repository.FeedPostLikeRepository;
 import com.quantlime.feed.repository.FeedPostRepository;
+import com.quantlime.feed.repository.FeedReportRepository;
 import com.quantlime.user.domain.User;
 import com.quantlime.user.exception.UserErrorCode;
 import com.quantlime.user.repository.UserRepository;
@@ -36,12 +39,14 @@ public class FeedService {
     private final FeedPostRepository feedPostRepository;
     private final FeedPostLikeRepository feedPostLikeRepository;
     private final FeedCommentRepository feedCommentRepository;
+    private final FeedReportRepository feedReportRepository;
     private final UserRepository userRepository;
 
     @Transactional
     public FeedPostResponse createPost(Long userId, CreateFeedPostRequest request) {
         User user = findUser(userId);
         FeedCategory category = FeedCategory.of(request.category());
+        validateImageRequirement(category, request.imageUrl());
         FeedPost post = feedPostRepository.save(FeedPost.of(user, category, request.title(), request.imageUrl()));
         return FeedMapper.toFeedPostResponse(post, 0, 0, false, true);
     }
@@ -73,6 +78,7 @@ public class FeedService {
     public FeedPostResponse updatePost(Long userId, Long postId, UpdateFeedPostRequest request) {
         FeedPost post = findOwnedPost(userId, postId);
         FeedCategory category = FeedCategory.of(request.category());
+        validateImageRequirement(category, request.imageUrl());
         post.update(category, request.title(), request.imageUrl());
 
         long likeCount = toCountMap(feedPostLikeRepository.countByPostIds(List.of(postId))).getOrDefault(postId, 0L);
@@ -87,6 +93,10 @@ public class FeedService {
     @Transactional
     public void deletePost(Long userId, Long postId) {
         FeedPost post = findOwnedPost(userId, postId);
+        // 신고 기록도 대상이 사라지면 의미가 없어 같이 정리한다(FeedModerationService.deletePost와 동일).
+        feedReportRepository.deleteByTargetTypeAndTargetIdIn(
+            FeedReportTarget.COMMENT, feedCommentRepository.findIdsByFeedPostId(postId));
+        feedReportRepository.deleteByTargetTypeAndTargetId(FeedReportTarget.POST, postId);
         feedCommentRepository.deleteByFeedPost_Id(postId);
         feedPostLikeRepository.deleteByFeedPost_Id(postId);
         feedPostRepository.delete(post);
@@ -123,6 +133,12 @@ public class FeedService {
     public Slice<FeedCommentResponse> getComments(Long postId, Pageable pageable) {
         return feedCommentRepository.findByFeedPostIdOrderByIdAsc(postId, pageable)
             .map(FeedMapper::toFeedCommentResponse);
+    }
+
+    private void validateImageRequirement(FeedCategory category, String imageUrl) {
+        if (category.isImageRequired() && (imageUrl == null || imageUrl.isBlank())) {
+            throw new ValidationException(FeedErrorCode.IMAGE_REQUIRED);
+        }
     }
 
     private User findUser(Long userId) {

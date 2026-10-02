@@ -14,17 +14,20 @@ import static org.mockito.Mockito.verify;
 import com.quantlime.common.exception.ExternalApiException;
 import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.infra.python.PythonEngineClient;
+import com.quantlime.infra.python.dto.CrossSectionNormalizeApiResponse;
 import com.quantlime.infra.python.dto.ScoreBatchApiRequest;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.DailyScoreSeriesApiResponse;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.DivergenceApiResponse;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.StockScoreSeriesApiResponse;
 import com.quantlime.infra.python.exception.PythonEngineErrorCode;
+import com.quantlime.market.domain.RankingPeriod;
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.repository.StockLiquidityRepository;
 import com.quantlime.price.service.DomesticDailyPriceService;
 import com.quantlime.score.cache.ScoreRankingCacheStore;
 import com.quantlime.score.domain.Divergence;
+import com.quantlime.score.domain.PeerGroup;
 import com.quantlime.score.domain.Quadrant;
 import com.quantlime.score.domain.Score;
 import com.quantlime.score.dto.response.ScoreRankingResponse;
@@ -295,6 +298,33 @@ class ScoreServiceTest {
         verify(scoreRankingCacheStore).save("all", result);
     }
 
+    @Test
+    @DisplayName("[1주 기간 스코어 랭킹은 기간 시작 대비 종합점수 변화량이 큰 순으로 정렬하고 이력 없는 종목은 제외한다]")
+    void getScoreChangeRanking_sortsByDeltaAndSkipsNoBaseline() {
+        // given: A는 +20, B는 +5, C는 기간 시작 이력 없음
+        LocalDate today = LocalDate.of(2026, 10, 1);
+        Score latestA = Score.of("A", today, 80.0, 40.0, 80.0, null, null, Divergence.of(false, null), false);
+        Score latestB = Score.of("B", today, 80.0, 40.0, 70.0, null, null, Divergence.of(false, null), false);
+        Score latestC = Score.of("C", today, 80.0, 40.0, 99.0, null, null, Divergence.of(false, null), false);
+        Score baseA = Score.of("A", today.minusDays(7), 50.0, 40.0, 60.0, null, null, Divergence.of(false, null), false);
+        Score baseB = Score.of("B", today.minusDays(7), 50.0, 40.0, 65.0, null, null, Divergence.of(false, null), false);
+        given(scoreRankingCacheStore.find("all:1w")).willReturn(Optional.empty());
+        given(scoreRepository.findLatestScoresForNormalization(null)).willReturn(List.of(latestA, latestB, latestC));
+        given(scoreRepository.findLatestScoresOnOrBefore(List.of("A", "B", "C"), today.minusDays(7)))
+            .willReturn(List.of(baseA, baseB));
+        given(stockMasterService.getStocksByCodesInOrder(List.of("A", "B"))).willReturn(List.of(
+            StockFixture.createStock("A", "에이"), StockFixture.createStock("B", "비")));
+
+        // when
+        var result = scoreService.getScoreChangeRanking(1L, false, 10, "all", RankingPeriod.WEEK);
+
+        // then
+        assertThat(result).extracting(ScoreRankingResponse::stockCode).containsExactly("A", "B");
+        assertThat(result.get(0).scoreChange()).isEqualTo(20.0);
+        assertThat(result.get(1).scoreChange()).isEqualTo(5.0);
+        verify(scoreRankingCacheStore).save(eq("all:1w"), any());
+    }
+
     // 2026-09 성능 감사 중 curl로 20개 동시 요청을 캐시 비운 직후 쏴서
     // 재현한 캐시 스탬피드(9개가 동시에 DB를 때려 HikariCP active가
     // 풀 전체(10/10)까지 참) - rankingCacheLoadLocks 단일 비행 락으로
@@ -350,6 +380,46 @@ class ScoreServiceTest {
         // 캐시 저장은 각각 정확히 1회뿐이다.
         verify(scoreRepository, times(1)).findTopScoresOrderByCompositeScoreDesc(50, null);
         verify(scoreRankingCacheStore, times(1)).save(eq("all"), any());
+    }
+
+    @Test
+    @DisplayName("[횡단면 정규화는 HTTP 호출 결과를 별도 저장 빈에 위임하고 서비스 자체는 트랜잭션을 열지 않는다]")
+    void normalizeCrossSection_delegatesPersistenceWithoutOwnTransaction() throws NoSuchMethodException {
+        // given
+        Score latest = Score.of(STOCK_CODE, LocalDate.now(), 60.0, 40.0, 50.0, null,
+            null, Divergence.of(false, null), false);
+        given(scoreRepository.findLatestScoresForNormalization(anyList())).willReturn(List.of(latest));
+        CrossSectionNormalizeApiResponse response = new CrossSectionNormalizeApiResponse(
+            "2026-10-01", "domestic", true,
+            List.of(new CrossSectionNormalizeApiResponse.NormalizedItemApiResponse(
+                STOCK_CODE, 70.0, 30.0, 55.0)));
+        given(pythonEngineClient.normalizeCrossSection(any())).willReturn(response);
+
+        // when
+        scoreService.normalizeCrossSection(PeerGroup.DOMESTIC);
+
+        // then: HTTP 응답을 기다리는 동안 DB 커넥션을 쥐지 않도록 쓰기 트랜잭션은
+        // 저장 빈(applyNormalization)에만 있어야 한다 - 회귀하면 이 단언이 깨진다.
+        verify(scorePersistenceService).applyNormalization(anyList(), eq(PeerGroup.DOMESTIC), eq(response.items()));
+        assertThat(ScoreService.class.getMethod("normalizeCrossSection", PeerGroup.class)
+            .isAnnotationPresent(org.springframework.transaction.annotation.Transactional.class)).isFalse();
+    }
+
+    @Test
+    @DisplayName("[횡단면 정규화: 표본 부족이면 저장을 위임하지 않는다]")
+    void normalizeCrossSection_minSampleNotMet_skipsPersistence() {
+        // given
+        Score latest = Score.of(STOCK_CODE, LocalDate.now(), 60.0, 40.0, 50.0, null,
+            null, Divergence.of(false, null), false);
+        given(scoreRepository.findLatestScoresForNormalization(anyList())).willReturn(List.of(latest));
+        given(pythonEngineClient.normalizeCrossSection(any()))
+            .willReturn(new CrossSectionNormalizeApiResponse("2026-10-01", "domestic", false, List.of()));
+
+        // when
+        scoreService.normalizeCrossSection(PeerGroup.DOMESTIC);
+
+        // then
+        verify(scorePersistenceService, never()).applyNormalization(any(), any(), any());
     }
 
     private DomesticDailyPrice domesticDailyPrice(LocalDate tradeDate) {

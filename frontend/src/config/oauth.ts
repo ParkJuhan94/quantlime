@@ -20,6 +20,10 @@ const SCOPES: Partial<Record<OAuthProviderName, string>> = {
 }
 
 const STATE_STORAGE_KEY_PREFIX = 'ql_oauth_state_'
+const MODE_STORAGE_KEY = 'ql_oauth_mode'
+
+/** 같은 콜백 URL(프로바이더 콘솔에 등록된 redirect URI)을 로그인과 계정 연결이 함께 쓴다 - 목적은 sessionStorage로 구분한다. */
+export type OAuthMode = 'login' | 'link'
 
 /** 각 프로바이더 콘솔에 등록된 Authorized Redirect URI와 정확히 일치해야 한다. */
 export function getRedirectUri(provider: OAuthProviderName): string {
@@ -42,9 +46,10 @@ function generateRandomState(): string {
  * CSRF 방지용 state를 생성해 브라우저 리다이렉트 전에 sessionStorage에
  * 저장하고, authorize URL을 만들어 반환한다.
  */
-export function buildAuthorizeUrl(provider: OAuthProviderName): string {
+export function buildAuthorizeUrl(provider: OAuthProviderName, mode: OAuthMode = 'login'): string {
   const state = generateRandomState()
   sessionStorage.setItem(`${STATE_STORAGE_KEY_PREFIX}${provider}`, state)
+  sessionStorage.setItem(MODE_STORAGE_KEY, mode)
 
   const params = new URLSearchParams({
     client_id: CLIENT_IDS[provider],
@@ -66,4 +71,15 @@ export function consumeState(provider: OAuthProviderName): string | null {
   const state = sessionStorage.getItem(key)
   sessionStorage.removeItem(key)
   return state
+}
+
+/**
+ * 콜백에서 이번 인증의 목적(로그인/계정 연결)을 꺼내며 지운다(1회성). 연결 모드는 state 검증을 통과한
+ * 경우에만 신뢰된다 - state가 맞지 않으면 어떤 모드든 요청 자체를 거부하므로, 공격자가 피해자의
+ * 브라우저에 자기 인가 코드를 심어 계정을 연결시키는 CSRF를 막는다.
+ */
+export function consumeMode(): OAuthMode {
+  const mode = sessionStorage.getItem(MODE_STORAGE_KEY)
+  sessionStorage.removeItem(MODE_STORAGE_KEY)
+  return mode === 'link' ? 'link' : 'login'
 }

@@ -19,3 +19,24 @@ export async function issueDevToken(): Promise<TokenResponse> {
   const { data } = await apiClient.post<TokenResponse>('/dev/auth/token')
   return data
 }
+
+export interface LinkedProvider {
+  provider: OAuthProviderName
+  label: string
+  // 가입에 사용한 계정 - 연결 해제할 수 없다.
+  primary: boolean
+}
+
+export async function getLinkedProviders(): Promise<LinkedProvider[]> {
+  const { data } = await apiClient.get<LinkedProvider[]>('/api/auth/linked-providers')
+  return data
+}
+
+// 로그인한 상태에서 다른 소셜 계정을 추가로 연결한다(인가 코드 교환으로 소유 확인 후 연결).
+export async function linkSocialAccount(provider: OAuthProviderName, request: SocialLoginRequest): Promise<void> {
+  await apiClient.post(`/api/auth/link/${provider}`, request)
+}
+
+export async function unlinkSocialAccount(provider: OAuthProviderName): Promise<void> {
+  await apiClient.delete(`/api/auth/link/${provider}`)
+}

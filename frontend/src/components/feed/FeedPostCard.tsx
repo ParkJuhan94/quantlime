@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useAuth } from '../../auth/useAuth'
-import { useDeleteFeedPost, useLikeFeedPost, useUnlikeFeedPost } from '../../hooks/queries/useFeed'
+import { useDeleteFeedPost, useLikeFeedPost, useReportFeedPost, useUnlikeFeedPost } from '../../hooks/queries/useFeed'
 import { LoginModal } from '../auth/LoginModal'
 import { FeedCommentSection } from './FeedCommentSection'
 import { FeedComposeModal } from './FeedComposeModal'
+import { FeedReportButton } from './FeedReportButton'
 import type { FeedPostResponse } from '../../types/feed'
 import { formatRelativeTime } from '../../utils/relativeTime'
 import { resolveUploadUrl } from '../../utils/uploadUrl'
@@ -33,6 +34,7 @@ export function FeedPostCard({ post }: { post: FeedPostResponse }) {
   const likePost = useLikeFeedPost()
   const unlikePost = useUnlikeFeedPost()
   const deletePost = useDeleteFeedPost()
+  const reportPost = useReportFeedPost()
 
   // 프로필 사진이 있으면 그대로 보여주고, 없거나 깨졌으면(onError) 예전처럼
   // 닉네임별 색상이 다른 이니셜 원으로 대체한다(2026-07-16 - 백엔드는 이미
@@ -119,6 +121,12 @@ export function FeedPostCard({ post }: { post: FeedPostResponse }) {
                 </button>
               </>
             )}
+          </div>
+        )}
+        {/* 남의 글에만 신고를 노출한다(서버도 본인 글 신고는 400) - 서로 다른 3명이 신고하면 자동 숨김된다. */}
+        {!post.mine && (
+          <div className="shrink-0">
+            <FeedReportButton onReport={(reason) => reportPost.mutateAsync({ postId: post.id, reason })} />
           </div>
         )}
       </div>

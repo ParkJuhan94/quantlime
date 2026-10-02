@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { login } from '../api/auth'
-import { consumeState, getRedirectUri } from '../config/oauth'
+import { linkSocialAccount, login } from '../api/auth'
+import { consumeMode, consumeState, getRedirectUri } from '../config/oauth'
 import { useAuth } from '../auth/useAuth'
 import { getErrorMessage } from '../api/errors'
 import { lastLoginProviderStorage } from '../storage/lastLoginProviderStorage'
@@ -27,6 +27,7 @@ export function OAuthCallbackPage() {
       const code = searchParams.get('code')
       const returnedState = searchParams.get('state')
       const expectedState = consumeState(oauthProvider)
+      const mode = consumeMode()
 
       if (!code) {
         setError('인증 코드가 없습니다.')
@@ -34,6 +35,17 @@ export function OAuthCallbackPage() {
       }
       if (!expectedState || returnedState !== expectedState) {
         setError('요청 상태가 일치하지 않습니다. 다시 로그인해 주세요.')
+        return
+      }
+
+      if (mode === 'link') {
+        // 계정 연결 - 이미 로그인된 상태에서만 의미가 있고(백엔드가 401로 막는다) 토큰은 새로 받지 않는다.
+        try {
+          await linkSocialAccount(oauthProvider, { code, redirectUri: getRedirectUri(oauthProvider) })
+          navigate('/me', { replace: true })
+        } catch (linkError) {
+          setError(getErrorMessage(linkError, '계정 연결에 실패했습니다.'))
+        }
         return
       }
 

@@ -15,6 +15,14 @@
 # node-exporter/cAdvisor + Prometheus + Alertmanager)으로 일원화했다
 # (docs/DEPLOYMENT.md 참고).
 #
+# 부팅 시 자동 기동(@reboot): 컨테이너 restart 정책이 on-failure:5라 EC2를
+# stop/start하거나 재부팅하면(도커 데몬이 컨테이너를 정상 정지시켜 "수동
+# 정지"로 기록됨) 스택이 자동으로 올라오지 않는다(2026-10-01 실측 - 부팅
+# 후 컨테이너 전부 Exited). unless-stopped로 바꾸면 compose의
+# depends_on(service_healthy) 순서가 무시돼 4GB 인스턴스에서 MySQL/JVM/
+# Redpanda가 동시에 뜨고 크래시 루프 상한도 사라지므로, 정책은 그대로
+# 두고 부팅 시 `compose up -d`를 한 번 실행해 순서를 보장한다.
+#
 # 멱등성: 마커 주석(quantlime-backup-mysql 등)으로 기존에 등록된 줄을 찾아
 # 항상 이 스크립트가 정의한 최신 내용으로 덮어쓴다 - "마커가 있으면
 # 건너뛴다"였던 이전 방식은 시각/경로가 바뀌어도 재실행 시 갱신되지 않는
@@ -28,24 +36,31 @@ mkdir -p "$LOG_DIR"
 
 BACKUP_MARKER="# quantlime-backup-mysql"
 UPLOADS_MARKER="# quantlime-backup-uploads"
+BOOT_MARKER="# quantlime-boot-up"
 
 # 18:00/18:15 UTC = 03:00/03:15 KST(다음날)
 BACKUP_LINE="0 18 * * * $QUANTLIME_DIR/scripts/backup-mysql.sh >> $LOG_DIR/backup-mysql.log 2>&1 $BACKUP_MARKER"
 UPLOADS_LINE="15 18 * * * $QUANTLIME_DIR/scripts/backup-uploads.sh >> $LOG_DIR/backup-uploads.log 2>&1 $UPLOADS_MARKER"
 
+# 크론 @reboot 시점엔 도커 데몬이 아직 준비 전일 수 있어 최대 5분 대기 후 기동.
+# 이미지는 pull하지 않는다(배포는 CD 몫, 부팅 복구는 기존 이미지로 충분).
+BOOT_LINE="@reboot for i in \$(seq 60); do docker info >/dev/null 2>&1 && break; sleep 5; done; cd $QUANTLIME_DIR && docker compose -f docker-compose.prod.yml -f docker-compose.monitoring.yml --env-file .env.prod up -d >> $LOG_DIR/boot-up.log 2>&1 $BOOT_MARKER"
+
 current_crontab="$(crontab -l 2>/dev/null || true)"
 
 # 기존 마커 줄을 전부 제거한 뒤 현재 정의로 다시 추가 - 시각/경로 변경이
 # 재실행만으로 반영되도록 한다.
-new_crontab="$(grep -vF "$BACKUP_MARKER" <<< "$current_crontab" | grep -vF "$UPLOADS_MARKER" || true)"
+new_crontab="$(grep -vF "$BACKUP_MARKER" <<< "$current_crontab" | grep -vF "$UPLOADS_MARKER" | grep -vF "$BOOT_MARKER" || true)"
 new_crontab="$new_crontab
 $BACKUP_LINE
-$UPLOADS_LINE"
+$UPLOADS_LINE
+$BOOT_LINE"
 
 # 앞뒤 빈 줄 정리 후 반영
 echo "$new_crontab" | sed '/^$/d' | crontab -
 
 echo "[install-cron] MySQL 백업(매일 03:00 KST = 18:00 UTC) 등록/갱신"
 echo "[install-cron] 업로드 이미지 백업(매일 03:15 KST = 18:15 UTC) 등록/갱신"
+echo "[install-cron] 부팅 시 스택 자동 기동(@reboot) 등록/갱신"
 echo "[install-cron] 완료. 현재 crontab:"
 crontab -l

@@ -12,6 +12,7 @@ import com.quantlime.price.cache.PreviousCloseCache;
 import com.quantlime.price.cache.PriceCacheStore;
 import com.quantlime.price.cache.WatchlistedStockCodeCache;
 import com.quantlime.price.dto.response.PriceSnapshot;
+import com.quantlime.price.realtime.PriceTopicSubscriptionTracker;
 import com.quantlime.price.util.ChangeRateCalculator;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.dto.mapper.StockMapper;
@@ -86,6 +87,7 @@ public class OverseasWatchlistPriceScheduler {
     private final StockRepository stockRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final PriceRelayLeaderGate priceRelayLeaderGate;
+    private final PriceTopicSubscriptionTracker priceTopicSubscriptionTracker;
 
     // 전용 풀(SchedulerConfig.priceSweepTaskScheduler)에서 실행 - 사유는
     // DomesticMarketPriceSweepScheduler 참고(2026-08-17).
@@ -159,6 +161,10 @@ public class OverseasWatchlistPriceScheduler {
         }
         priceCacheStore.saveAll(snapshots);
         for (PriceSnapshot snapshot : snapshots) {
+            // 구독자가 없는 종목은 발행을 건너뛴다(캐시/랭킹 적재는 위에서 이미 끝났다, 2026-10-01).
+            if (!priceTopicSubscriptionTracker.hasSubscribers(snapshot.stockCode())) {
+                continue;
+            }
             messagingTemplate.convertAndSend(PRICE_TOPIC_PREFIX + snapshot.stockCode(), snapshot);
         }
         return chunkRanking;

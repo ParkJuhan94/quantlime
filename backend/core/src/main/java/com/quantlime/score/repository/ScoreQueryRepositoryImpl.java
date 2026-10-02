@@ -132,6 +132,10 @@ public class ScoreQueryRepositoryImpl implements ScoreQueryRepository {
      * 비용이 있었다.
      */
     private BooleanExpression latestScoreDateTuple(QScore latest, List<String> stockCodes) {
+        return latestScoreDateTuple(latest, stockCodes, null);
+    }
+
+    private BooleanExpression latestScoreDateTuple(QScore latest, List<String> stockCodes, LocalDate onOrBefore) {
         JPAQuery<Tuple> latestDates = queryFactory
             .select(latest.stockCode, latest.scoreDate.max())
             .from(latest)
@@ -139,7 +143,25 @@ public class ScoreQueryRepositoryImpl implements ScoreQueryRepository {
         if (stockCodes != null) {
             latestDates.where(latest.stockCode.in(stockCodes));
         }
+        if (onOrBefore != null) {
+            latestDates.where(latest.scoreDate.loe(onOrBefore));
+        }
         return Expressions.list(QScore.score.stockCode, QScore.score.scoreDate).in(latestDates);
+    }
+
+    @Override
+    public List<Score> findLatestScoresOnOrBefore(List<String> stockCodes, LocalDate date) {
+        if (stockCodes.isEmpty()) {
+            return List.of();
+        }
+        QScore score = QScore.score;
+        QScore latest = new QScore("latest");
+        return queryFactory
+            .selectFrom(score)
+            .where(
+                score.stockCode.in(stockCodes),
+                latestScoreDateTuple(latest, stockCodes, date))
+            .fetch();
     }
 
     @Override

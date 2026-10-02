@@ -2,9 +2,14 @@ import { apiClient } from './client'
 import type {
   CurrentPriceResponse,
   DailyChartResponse,
+  OrderbookResponse,
+  MinuteChartResponse,
   PageResponse,
+  PriceLimitResponse,
   StockDetailResponse,
   StockFundamentalsResponse,
+  StockWarningResponse,
+  TradeResponse,
 } from '../types/stock'
 import type { ScoreResponse } from '../types/score'
 
@@ -46,5 +51,33 @@ export async function getPopularStocks(limit = 5): Promise<StockDetailResponse[]
  * 호출 측에서 이를 에러가 아니라 정상적인 빈 상태로 다뤄야 한다. */
 export async function getScore(stockCode: string): Promise<ScoreResponse> {
   const { data } = await apiClient.get<ScoreResponse>(`/api/stocks/${stockCode}/score`)
+  return data
+}
+
+export async function getOrderbook(stockCode: string): Promise<OrderbookResponse> {
+  const { data } = await apiClient.get<OrderbookResponse>(`/api/stocks/${stockCode}/orderbook`)
+  return data
+}
+
+export async function getTrades(stockCode: string): Promise<TradeResponse[]> {
+  const { data } = await apiClient.get<TradeResponse[]>(`/api/stocks/${stockCode}/trades`)
+  return data
+}
+
+export async function getPriceLimit(stockCode: string): Promise<PriceLimitResponse> {
+  const { data } = await apiClient.get<PriceLimitResponse>(`/api/stocks/${stockCode}/price-limits`)
+  return data
+}
+
+export async function getStockWarnings(stockCode: string): Promise<StockWarningResponse[]> {
+  const { data } = await apiClient.get<StockWarningResponse[]>(`/api/stocks/${stockCode}/warnings`)
+  return data
+}
+
+// before(UTC Z 표기)를 생략하면 가장 최근 1분봉부터 최대 200개 - 서버가 Redis로 15초 캐싱한다.
+export async function getMinuteChart(stockCode: string, before?: string): Promise<MinuteChartResponse> {
+  const { data } = await apiClient.get<MinuteChartResponse>(`/api/stocks/${stockCode}/minute-chart`, {
+    params: before ? { before } : undefined,
+  })
   return data
 }

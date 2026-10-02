@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { getMarketRanking } from '../../api/market'
+import { getMarketRanking, type RankingPeriodCode } from '../../api/market'
 import { queryKeys } from '../queryKeys'
 
 // 백엔드가 랭킹을 짧은 TTL로 캐싱하므로(국내: 자체 계산 스윕, 해외:
@@ -12,10 +12,11 @@ export function useMarketRankingQuery(
   limit = 10,
   enabled = true,
   watchlistOnly = false,
+  period: RankingPeriodCode = 'realtime',
 ) {
   return useQuery({
-    queryKey: queryKeys.marketRanking(scope, sort, limit, watchlistOnly),
-    queryFn: () => getMarketRanking(scope, sort, limit, watchlistOnly),
+    queryKey: queryKeys.marketRanking(scope, sort, limit, watchlistOnly, period),
+    queryFn: () => getMarketRanking(scope, sort, limit, watchlistOnly, period),
     enabled,
     refetchInterval: enabled ? 5_000 : false,
   })

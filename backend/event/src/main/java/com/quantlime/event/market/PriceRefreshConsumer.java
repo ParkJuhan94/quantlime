@@ -1,6 +1,7 @@
 package com.quantlime.event.market;
 
 import com.quantlime.event.observability.KafkaDltNotifier;
+import com.quantlime.event.retry.RetryBackoff;
 import com.quantlime.market.service.MarketDataRefreshService;
 import com.quantlime.market.service.PriceRefreshBatchGate;
 import com.quantlime.score.domain.PeerGroup;
@@ -27,11 +28,23 @@ import org.springframework.stereotype.Component;
  * 유지한다. 실측 후 필요하면 동시성을 올리되, 그때는 Toss 레이트리밋을
  * 넘기지 않도록 별도 RateLimiter 도입을 재검토해야 한다.
  *
- * <p><b>DLT 핸들러가 반드시 카운터를 감소시키는 이유</b>: {@link
- * PriceRefreshBatchGate}는 발행된 종목 수만큼 감소돼야 0에 도달한다 - 이
- * 종목 하나가 재시도 소진 후 DLT로 가는데도 카운터를 안 줄이면, {@code
+ * <p><b>DLT 핸들러가 반드시 완료를 통지하는 이유</b>: {@link
+ * PriceRefreshBatchGate}는 발행된 종목이 전부 완료돼야 배치를 끝난 것으로 본다 -
+ * 이 종목 하나가 재시도 소진 후 DLT로 가는데도 완료를 통지하지 않으면, {@code
  * MarketDataRefreshService.refreshAll()}의 fan-in 대기가 이 배치에서
- * 영원히(타임아웃까지) 정규화를 못 하게 된다.
+ * 영원히(타임아웃까지) 정규화를 못 하게 된다. 통지는 종목코드 단위라
+ * 재전달돼도 한 번만 센다.
+ *
+ * <p><b>만료된 배치의 메시지는 처리하지 않는다</b>(2026-10-01, Kafka 점검): 앱이
+ * 배치 도중 중단되면 그 배치의 잔여 메시지가 토픽에 남는다(로컬에서 3만 건 적체를
+ * 실측). 재기동 후 그 오래된 메시지까지 Toss 호출을 해가며 처리하면 새 배치가 그
+ * 뒤에 줄을 선다 - 배치 키(TTL 3시간)가 사라졌으면 그 배치는 끝난 것이라 건너뛴다.
+ *
+ * <p><b>폴링 배치를 20건으로 줄이고 {@code max.poll.interval.ms}를 10분으로 늘린
+ * 이유</b>: 종목 하나가 약 0.5초(실측 분당 120종목)라 기본값(500건 × 0.5초 = 250초)은
+ * 기본 5분 한도에 17% 여유뿐이었다. 한도를 넘기면 컨슈머가 그룹에서 쫓겨나 리밸런스와
+ * 재전달이 일어난다. 20건 × 0.5초 = 10초로 줄이고, quant-engine이 느려지는 경우
+ * (read timeout 60초)에도 여유가 있게 한도를 10분으로 둔다.
  *
  * <p><b>{@code exclude = CallNotPermittedException.class}인 이유</b>(2026-09-30,
  * 9/24~25 국내 배치 0%-정체 조사 후속): quant-engine 서킷("quant-engine"
@@ -57,26 +70,33 @@ public class PriceRefreshConsumer {
     private final PriceRefreshBatchGate priceRefreshBatchGate;
     private final KafkaDltNotifier dltNotifier;
 
-    @RetryableTopic(attempts = "4", backoff = @Backoff(delay = 30_000, multiplier = 3.0, maxDelay = 270_000),
+    @RetryableTopic(attempts = "4", backoff = @Backoff(delayExpression = RetryBackoff.DELAY_MS, multiplierExpression = RetryBackoff.MULTIPLIER,
+        maxDelayExpression = RetryBackoff.MAX_DELAY_MS),
         exclude = CallNotPermittedException.class)
     @KafkaListener(topics = MarketTopics.PRICE_REFRESH_REQUESTED, groupId = "price-refresh-collector",
-        concurrency = "1")
+        concurrency = "1", properties = {"max.poll.records=20", "max.poll.interval.ms=600000"})
     public void onPriceRefreshRequested(PriceRefreshRequestedMessage message) {
-        PeerGroup peerGroup = marketDataRefreshService.refreshSingleStockFromFanOut(
-            message.stockCode(), message.latestScoreDate());
-        priceRefreshBatchGate.completeOne(message.runId(), peerGroup);
+        PeerGroup peerGroup = PeerGroup.of(message.peerGroup());
+        if (!priceRefreshBatchGate.isActive(message.runId(), peerGroup)) {
+            log.info("만료/종료된 배치의 가격 갱신 메시지, 스킵: stockCode={}, runId={}",
+                message.stockCode(), message.runId());
+            return;
+        }
+        marketDataRefreshService.refreshSingleStockFromFanOut(message.stockCode(), message.latestScoreDate());
+        priceRefreshBatchGate.completeOne(message.runId(), peerGroup, message.stockCode());
     }
 
     // 절대 예외를 던지면 안 된다(2026-09-30, SubscriptionRenewalConsumer에서
     // 실제로 겪은 무한 재발행 루프 사고 - TranscriptRequestConsumer.onDlt 주석
-    // 참고). 특히 이 핸들러는 completeOne(Redis DECR)이 Redis 장애 시 던질 수
+    // 참고). 특히 이 핸들러는 completeOne(Redis SADD)이 Redis 장애 시 던질 수
     // 있는데, 그 경우에도 무한루프에 빠지면 안 되므로 try/catch가 더욱 중요하다 -
-    // 다만 카운터 감소 자체가 실패하면 배치 fan-in이 못 끝나는 문제는 여전히
+    // 다만 완료 통지 자체가 실패하면 배치 fan-in이 못 끝나는 문제는 여전히
     // 남는다(별도 개선 과제, 일단 무한루프만 우선 차단).
     @DltHandler
     public void onDlt(PriceRefreshRequestedMessage message) {
         try {
-            priceRefreshBatchGate.completeOne(message.runId(), PeerGroup.of(message.peerGroup()));
+            priceRefreshBatchGate.completeOne(message.runId(), PeerGroup.of(message.peerGroup()),
+                message.stockCode());
             log.error("가격 갱신 최종 실패(재시도 소진, DLT 이관) - 다음 정기 배치(16:00/20:10)에서 자동 재시도됨: "
                     + "stockCode={}, runId={}",
                 message.stockCode(), message.runId());

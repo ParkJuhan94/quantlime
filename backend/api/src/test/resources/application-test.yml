@@ -25,3 +25,22 @@ upload:
 toss:
   client-id: test-toss-client-id
   client-secret: test-toss-client-secret
+
+# 테스트 컨텍스트에서는 @KafkaListener 컨테이너를 기동하지 않는다(2026-10-01). 컨텍스트는
+# @MockBean 조합이 다를 때마다 새로 뜨고 JVM에 캐시되는데, 컨텍스트마다 컨슈머 5종이 같은
+# 그룹 ID로 Redpanda에 붙어 캐시된 컨텍스트가 ~50개가 되자 리밸런싱 폭주로 api 테스트가
+# 40분 넘게 멈췄다. 브로커 왕복이 필요한 테스트(PaymentWebhookKafkaIntegrationTest)만
+# @TestPropertySource로 다시 켠다 - 리스너 기동 여부는 KafkaTemplate 발행과 무관하다.
+spring:
+  kafka:
+    listener:
+      auto-startup: false
+
+# 재시도 백오프를 테스트에서는 밀리초 단위로 줄인다(2026-10-01). 운영값(30s→90s→270s)으로는
+# 재시도→DLT 전 과정을 확인하는 데 6분 넘게 걸려 E2E 테스트가 불가능했다. 리스너를 켜는
+# 테스트(KafkaRetryDltEndToEndTest 등)에만 영향을 준다 - RetryBackoff 참고.
+kafka:
+  retry:
+    delay-ms: 300
+    multiplier: 1.0
+    max-delay-ms: 300

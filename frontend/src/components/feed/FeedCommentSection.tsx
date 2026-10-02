@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useAuth } from '../../auth/useAuth'
 import { useMeQuery } from '../../hooks/queries/useMe'
-import { useCreateFeedComment, useFeedCommentsQuery } from '../../hooks/queries/useFeed'
+import { useCreateFeedComment, useFeedCommentsQuery, useReportFeedComment } from '../../hooks/queries/useFeed'
+import { FeedReportButton } from './FeedReportButton'
 import { ProfileAvatar } from '../common/ProfileAvatar'
 import { LoginModal } from '../auth/LoginModal'
 import { formatRelativeTime } from '../../utils/relativeTime'
@@ -14,6 +15,7 @@ export function FeedCommentSection({ postId }: { postId: number }) {
   const meQuery = useMeQuery(isAuthenticated)
   const commentsQuery = useFeedCommentsQuery(postId, true)
   const createComment = useCreateFeedComment(postId)
+  const reportComment = useReportFeedComment()
   const [content, setContent] = useState('')
   const [loginModalOpen, setLoginModalOpen] = useState(false)
 
@@ -50,6 +52,10 @@ export function FeedCommentSection({ postId }: { postId: number }) {
                 <span className="text-gray-400">· {formatRelativeTime(comment.createdAt)}</span>
               </p>
               <p className="text-xs leading-relaxed text-gray-700">{comment.content}</p>
+            </div>
+            {/* 댓글 응답엔 본인 여부가 없어 모든 댓글에 노출한다 - 본인 댓글을 신고하면 서버가 400으로 막고 메시지를 보여준다. */}
+            <div className="shrink-0">
+              <FeedReportButton onReport={(reason) => reportComment.mutateAsync({ commentId: comment.id, reason })} />
             </div>
           </li>
         ))}

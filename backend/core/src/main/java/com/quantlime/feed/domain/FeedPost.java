@@ -58,6 +58,10 @@ public class FeedPost extends TimeBaseEntity {
     @Column(name = "image_url")
     private String imageUrl;
 
+    // 신고 누적(FeedModerationService)으로 자동 숨김되거나 관리자가 숨긴 글 - 목록 조회에서 제외된다.
+    @Column(name = "hidden", nullable = false)
+    private boolean hidden;
+
     @Builder
     private FeedPost(User user, FeedCategory category, String title, String imageUrl) {
         validateFeedPost(user, category, title);
@@ -85,6 +89,14 @@ public class FeedPost extends TimeBaseEntity {
         this.category = category;
         this.title = title;
         this.imageUrl = imageUrl;
+    }
+
+    public void hide() {
+        this.hidden = true;
+    }
+
+    public void restore() {
+        this.hidden = false;
     }
 
     private void validateFeedPost(User user, FeedCategory category, String title) {

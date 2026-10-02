@@ -98,3 +98,11 @@ export interface MarketRankingResponse {
   compositePercentile: number | null
   grade: string | null
 }
+
+// 거래대금 가중 평균 등락률 기준 섹터 순위 - leaders는 가중치(거래대금)가 큰 대표 종목.
+export interface HotSectorResponse {
+  sector: string
+  changeRate: number
+  stockCount: number
+  leaders: { stockCode: string; stockName: string; changeRate: number }[]
+}

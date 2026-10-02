@@ -1,11 +1,14 @@
 package com.quantlime.market.controller;
 
 import com.quantlime.auth.resolver.OptionalLoginUser;
+import com.quantlime.market.domain.RankingPeriod;
+import com.quantlime.market.dto.response.HotSectorResponse;
 import com.quantlime.market.dto.response.IndexChartResponse;
 import com.quantlime.market.dto.response.IndexMinuteChartResponse;
 import com.quantlime.market.dto.response.InvestorTradingResponse;
 import com.quantlime.market.dto.response.MarketIndexResponse;
 import com.quantlime.market.dto.response.MarketRankingResponse;
+import com.quantlime.market.service.HotSectorService;
 import com.quantlime.market.service.InvestorTradingService;
 import com.quantlime.market.service.MarketIndexService;
 import com.quantlime.market.service.MarketRankingService;
@@ -37,6 +40,7 @@ public class MarketController {
     private final MarketIndexService marketIndexService;
     private final MarketRankingService marketRankingService;
     private final InvestorTradingService investorTradingService;
+    private final HotSectorService hotSectorService;
     private final WatchlistService watchlistService;
 
     @GetMapping("/indices")
@@ -118,7 +122,9 @@ public class MarketController {
         description = "지정한 시장(scope)의 종목을 정렬 기준(sort)으로 정렬한 상위 N개를 조회한다(장중에만 갱신). "
             + "scope=overseas는 Toss 랭킹 API(최대 100건) 기반이라 watchlistOnly=true여도 top100 밖의 "
             + "관심종목은 gainers/losers일 때만 자체 계산으로 걸러진다(amount/volume은 top100 이내로 제한). "
-            + "watchlistOnly=true면 로그인한 사용자의 관심종목만 걸러 정렬한다(비로그인이면 빈 배열)"
+            + "watchlistOnly=true면 로그인한 사용자의 관심종목만 걸러 정렬한다(비로그인이면 빈 배열). "
+            + "period(realtime|1d|1w|1mo|3mo|6mo|1y)는 토스 랭킹 duration과 1:1 대응하며, 1w 이상에서 "
+            + "관심종목만 보기는 토스 top100을 관심종목으로 거른다"
     )
     @ApiResponse(useReturnTypeSchema = true)
     public ResponseEntity<List<MarketRankingResponse>> getRanking(
@@ -130,12 +136,29 @@ public class MarketController {
         @RequestParam(defaultValue = "10")
         @Min(value = 1, message = "limit는 1 이상이어야 합니다.")
         @Max(value = 50, message = "limit는 50 이하여야 합니다.") int limit,
+        @RequestParam(defaultValue = "realtime")
+        @Pattern(regexp = "realtime|1d|1w|1mo|3mo|6mo|1y",
+            message = "period는 realtime, 1d, 1w, 1mo, 3mo, 6mo, 1y 중 하나여야 합니다.") String period,
         @RequestParam(defaultValue = "false") boolean watchlistOnly,
         @OptionalLoginUser Long userId) {
         if (watchlistOnly && userId == null) {
             return ResponseEntity.ok(List.of());
         }
         Set<String> watchlistCodes = watchlistOnly ? watchlistService.getWatchlistStockCodes(userId) : null;
-        return ResponseEntity.ok(marketRankingService.getRanking(scope, sort, limit, watchlistCodes));
+        return ResponseEntity.ok(marketRankingService.getRanking(scope, sort, limit, watchlistCodes, RankingPeriod.of(period)));
+    }
+
+    @GetMapping("/sectors")
+    @Operation(
+        summary = "지금 뜨는 산업(국내 섹터별 등락률) 조회",
+        description = "국내 전종목 실시간 스냅샷을 섹터로 묶어 거래대금 가중 평균 등락률 상위 N개를 조회한다. "
+            + "유동성 필터를 통과한 종목만 집계하고 종목 3개 미만 섹터는 제외한다. 장중에만 값이 있다(마감 후 빈 배열)"
+    )
+    @ApiResponse(useReturnTypeSchema = true)
+    public ResponseEntity<List<HotSectorResponse>> getHotSectors(
+        @RequestParam(defaultValue = "5")
+        @Min(value = 1, message = "limit는 1 이상이어야 합니다.")
+        @Max(value = 20, message = "limit는 20 이하여야 합니다.") int limit) {
+        return ResponseEntity.ok(hotSectorService.getHotSectors(limit));
     }
 }

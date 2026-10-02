@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   useStockChartQuery,
+  useStockMinuteChartQuery,
   useStockDetailQuery,
   useStockFundamentalsQuery,
   useStockPriceQuery,
@@ -14,8 +15,10 @@ import { useWatchlistGroupsQuery } from '../hooks/queries/useWatchlistGroups'
 import { LoadingSpinner } from '../components/common/LoadingSpinner'
 import { ErrorState } from '../components/common/ErrorState'
 import { EmptyState } from '../components/common/EmptyState'
-import { ChartIntervalSelector } from '../components/chart/ChartIntervalSelector'
+import { ChartIntervalSelector, type ChartIntervalOrMinute } from '../components/chart/ChartIntervalSelector'
+import { MinuteCandleChart } from '../components/chart/MinuteCandleChart'
 import { IndicatorControls } from '../components/chart/IndicatorControls'
+import { StockMarketDepth } from '../components/stock/StockMarketDepth'
 import { OverlayIndicatorLegend, SubPanelIndicatorLegend } from '../components/chart/IndicatorLegend'
 import type { CandleChartHandle } from '../components/chart/CandleChart'
 import { ScoreSummaryRow } from '../components/score/ScoreSummaryRow'
@@ -27,7 +30,7 @@ import { useIsPremium } from '../hooks/queries/useSubscription'
 import { getErrorMessage, isNotFoundStatus } from '../api/errors'
 import { changeRateColorClass, currencyForMarketType, formatChangeRate, formatPrice } from '../utils/priceFormat'
 import type { IndicatorSettings } from '../utils/indicators'
-import { aggregateCandles, type ChartInterval } from '../utils/candleAggregation'
+import { aggregateCandles } from '../utils/candleAggregation'
 import { recentlyViewedStorage } from '../storage/recentlyViewedStorage'
 import { indicatorSettingsStorage } from '../storage/indicatorSettingsStorage'
 
@@ -44,7 +47,7 @@ const MAX_CHART_DAYS = 365
 
 export function StockDetailPage() {
   const { stockCode = '' } = useParams<{ stockCode: string }>()
-  const [chartInterval, setChartInterval] = useState<ChartInterval>('daily')
+  const [chartInterval, setChartInterval] = useState<ChartIntervalOrMinute>('daily')
   const [indicators, setIndicators] = useState<IndicatorSettings>(() => indicatorSettingsStorage.read())
   const [addTargetStockCode, setAddTargetStockCode] = useState<string | null>(null)
   const candleChartRef = useRef<CandleChartHandle>(null)
@@ -57,9 +60,15 @@ export function StockDetailPage() {
   const detailQuery = useStockDetailQuery(stockCode)
   const priceQuery = useStockPriceQuery(stockCode)
   const chartQuery = useStockChartQuery(stockCode, MAX_CHART_DAYS)
+  const isMinuteMode = chartInterval === 'minute'
+  const minuteQuery = useStockMinuteChartQuery(stockCode, isMinuteMode)
+  const minuteCandles = useMemo(
+    () => (minuteQuery.data?.pages ?? []).flatMap((page) => page.candles),
+    [minuteQuery.data],
+  )
   const chartData = useMemo(
-    () => aggregateCandles(chartQuery.data ?? [], chartInterval),
-    [chartQuery.data, chartInterval],
+    () => aggregateCandles(chartQuery.data ?? [], isMinuteMode ? 'daily' : chartInterval),
+    [chartQuery.data, chartInterval, isMinuteMode],
   )
   const { isPremium, isResolving } = useIsPremium()
   const scoreQuery = useStockScoreQuery(stockCode, isPremium)
@@ -196,35 +205,69 @@ export function StockDetailPage() {
 
       <section className="rounded-xl border border-gray-200 bg-white p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <OverlayIndicatorLegend
-            indicators={indicators}
-            onItemClick={(key) => candleChartRef.current?.highlightSeries(key)}
-          />
+          {/* 분봉은 지표 없이 캔들+거래량만 보여준다(MinuteCandleChart 주석 참고) - 지표 UI는 숨긴다. */}
+          {isMinuteMode ? (
+            <span className="text-xs text-gray-500">1분봉 · 최근 거래분</span>
+          ) : (
+            <OverlayIndicatorLegend
+              indicators={indicators}
+              onItemClick={(key) => candleChartRef.current?.highlightSeries(key)}
+            />
+          )}
           <div className="flex items-center gap-2">
-            <IndicatorControls value={indicators} onChange={handleIndicatorsChange} />
-            <ChartIntervalSelector value={chartInterval} onChange={setChartInterval} />
+            {!isMinuteMode && <IndicatorControls value={indicators} onChange={handleIndicatorsChange} />}
+            <ChartIntervalSelector value={chartInterval} onChange={setChartInterval} allowMinute />
           </div>
         </div>
-        {chartQuery.isLoading && <LoadingSpinner />}
-        {chartQuery.isError && (
-          <ErrorState message={getErrorMessage(chartQuery.error, '차트를 불러오지 못했습니다.')} />
+        {isMinuteMode ? (
+          <>
+            {minuteQuery.isLoading && <LoadingSpinner />}
+            {minuteQuery.isError && (
+              <ErrorState message={getErrorMessage(minuteQuery.error, '분봉 차트를 불러오지 못했습니다.')} />
+            )}
+            {!minuteQuery.isLoading && !minuteQuery.isError && minuteCandles.length === 0 && (
+              <EmptyState message="분봉 데이터가 없습니다." />
+            )}
+            {minuteCandles.length > 0 && <MinuteCandleChart candles={minuteCandles} currency={currency} />}
+            {minuteQuery.hasNextPage && (
+              <div className="mt-3 flex justify-center">
+                <button
+                  type="button"
+                  disabled={minuteQuery.isFetchingNextPage}
+                  onClick={() => void minuteQuery.fetchNextPage()}
+                  className="rounded-lg border border-gray-200 px-4 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+                >
+                  {minuteQuery.isFetchingNextPage ? '불러오는 중...' : '이전 분봉 더 보기'}
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            {chartQuery.isLoading && <LoadingSpinner />}
+            {chartQuery.isError && (
+              <ErrorState message={getErrorMessage(chartQuery.error, '차트를 불러오지 못했습니다.')} />
+            )}
+            {chartData.length === 0 && !chartQuery.isLoading && !chartQuery.isError && (
+              <EmptyState message="차트 데이터가 없습니다." />
+            )}
+            {chartData.length > 0 && (
+              <Suspense fallback={<LoadingSpinner />}>
+                <CandleChart
+                  ref={candleChartRef}
+                  data={chartData}
+                  displayDays={chartData.length}
+                  indicators={indicators}
+                  livePrice={chartInterval === 'daily' ? livePrice : undefined}
+                />
+              </Suspense>
+            )}
+            <SubPanelIndicatorLegend indicators={indicators} />
+          </>
         )}
-        {chartData.length === 0 && !chartQuery.isLoading && !chartQuery.isError && (
-          <EmptyState message="차트 데이터가 없습니다." />
-        )}
-        {chartData.length > 0 && (
-          <Suspense fallback={<LoadingSpinner />}>
-            <CandleChart
-              ref={candleChartRef}
-              data={chartData}
-              displayDays={chartData.length}
-              indicators={indicators}
-              livePrice={chartInterval === 'daily' ? livePrice : undefined}
-            />
-          </Suspense>
-        )}
-        <SubPanelIndicatorLegend indicators={indicators} />
       </section>
+
+      <StockMarketDepth stockCode={stockCode} />
 
       {scoreQuery.isLoading && <LoadingSpinner />}
       {scoreQuery.isError && isNotFoundStatus(scoreQuery.error) && (
