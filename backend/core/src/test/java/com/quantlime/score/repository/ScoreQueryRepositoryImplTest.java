@@ -14,6 +14,7 @@ import com.quantlime.stock.repository.StockRepository;
 import com.quantlime.support.DataJpaTestSupport;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -110,5 +111,107 @@ class ScoreQueryRepositoryImplTest extends DataJpaTestSupport {
 
         // then
         assertThat(result).extracting(Score::getStockCode).containsExactly("005930");
+    }
+
+    private Score scoreWithComposite(String stockCode, LocalDate scoreDate, Double compositeScore) {
+        return Score.of(stockCode, scoreDate, 50.0, 50.0, compositeScore, null,
+            null, Divergence.of(false, null), false);
+    }
+
+    @Test
+    @DisplayName("[관심종목 경로는 종목별 최신 날짜 행만 종합점수 내림차순으로(점수 없음은 맨 뒤) 반환하고 요청 밖 종목은 제외한다]")
+    void findLatestScoresByStockCodes_returnsLatestPerStockOrderedByCompositeNullsLast() {
+        // given
+        LocalDate today = LocalDate.now();
+        scoreRepository.save(scoreWithComposite("A", today.minusDays(3), 10.0)); // A의 옛 행(제외돼야 함)
+        scoreRepository.save(scoreWithComposite("A", today, 70.0));
+        scoreRepository.save(scoreWithComposite("B", today, 90.0));
+        scoreRepository.save(scoreWithComposite("C", today, null));
+        scoreRepository.save(scoreWithComposite("D", today, 99.0)); // 요청에 없는 종목
+
+        // when
+        List<Score> result = scoreRepository.findLatestScoresByStockCodesOrderByCompositeScoreDesc(
+            List.of("A", "B", "C"));
+
+        // then
+        assertThat(result).extracting(Score::getStockCode).containsExactly("B", "A", "C");
+        assertThat(result.get(1).getScoreDate()).isEqualTo(today);
+    }
+
+    @Test
+    @DisplayName("[종목코드가 비어 있으면 쿼리 없이 빈 목록이다]")
+    void findLatestScoresByStockCodes_emptyCodes_returnsEmpty() {
+        assertThat(scoreRepository.findLatestScoresByStockCodesOrderByCompositeScoreDesc(List.of())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("[정규화 모집단은 적격 종목의 최신 배치일 행만이고 옛 날짜 행·부적격(유동성 없음) 종목은 제외한다]")
+    void findLatestScoresForNormalization_returnsLatestBatchOfEligibleStocksOnly() {
+        // given
+        LocalDate today = LocalDate.now();
+        seedEligibleStock("005930", MarketType.KOSPI);
+        seedEligibleStock("AAPL", MarketType.NASDAQ);
+        stockRepository.save(Stock.of("111111", "유동성없음", MarketType.KOSPI, ListingStatus.LISTED, "업종"));
+        scoreRepository.save(score("005930", today.minusDays(1), 10.0)); // 최신 배치일이 아님
+        scoreRepository.save(score("005930", today, 60.0));
+        scoreRepository.save(score("AAPL", today, 40.0));
+        scoreRepository.save(score("111111", today, 99.0)); // stock_liquidity 행이 없어 부적격
+
+        // when
+        List<Score> all = scoreRepository.findLatestScoresForNormalization(null);
+        List<Score> domesticOnly = scoreRepository.findLatestScoresForNormalization(List.of(MarketType.KOSPI));
+        List<Score> emptyFilter = scoreRepository.findLatestScoresForNormalization(List.of());
+
+        // then
+        assertThat(all).extracting(Score::getStockCode).containsExactlyInAnyOrder("005930", "AAPL");
+        assertThat(all).allSatisfy(score -> assertThat(score.getScoreDate()).isEqualTo(today));
+        assertThat(domesticOnly).extracting(Score::getStockCode).containsExactly("005930");
+        assertThat(emptyFilter).extracting(Score::getStockCode).containsExactlyInAnyOrder("005930", "AAPL");
+    }
+
+    @Test
+    @DisplayName("[적격 종목이 없거나 스코어 행이 하나도 없으면 정규화 모집단은 빈 목록이다]")
+    void findLatestScoresForNormalization_noEligibleStocksOrNoScores_returnsEmpty() {
+        // 적격 종목 없음(스코어만 있음)
+        scoreRepository.save(score("005930", LocalDate.now(), 60.0));
+        assertThat(scoreRepository.findLatestScoresForNormalization(null)).isEmpty();
+
+        // 적격 종목은 있지만 해당 종목 스코어 행이 최신 배치일에 없음
+        seedEligibleStock("000660", MarketType.KOSPI);
+        assertThat(scoreRepository.findLatestScoresForNormalization(List.of(MarketType.KOSPI))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("[특정 날짜 이하 중 종목별 최신 행을 돌려준다(그 이후 행은 무시, 코드가 비면 빈 목록)]")
+    void findLatestScoresOnOrBefore_returnsLatestRowOnOrBeforeDate() {
+        // given
+        LocalDate today = LocalDate.now();
+        scoreRepository.save(scoreWithComposite("A", today.minusDays(5), 30.0));
+        scoreRepository.save(scoreWithComposite("A", today.minusDays(1), 80.0)); // 기준일 이후 -> 무시
+        scoreRepository.save(scoreWithComposite("B", today.minusDays(3), 55.0));
+
+        // when
+        List<Score> result = scoreRepository.findLatestScoresOnOrBefore(List.of("A", "B"), today.minusDays(3));
+
+        // then: A는 기준일 이하 중 최신(-5일), B는 기준일 당일(-3일) 행
+        assertThat(result).extracting(Score::getStockCode, Score::getScoreDate)
+            .containsExactlyInAnyOrder(
+                org.assertj.core.groups.Tuple.tuple("A", today.minusDays(5)),
+                org.assertj.core.groups.Tuple.tuple("B", today.minusDays(3)));
+        assertThat(scoreRepository.findLatestScoresOnOrBefore(List.of(), today)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("[종목별 최신 산출일 맵은 각 종목의 가장 늦은 score_date다]")
+    void findLatestScoreDateByStockCode_returnsMaxDatePerStock() {
+        LocalDate today = LocalDate.now();
+        scoreRepository.save(scoreWithComposite("A", today.minusDays(4), 10.0));
+        scoreRepository.save(scoreWithComposite("A", today.minusDays(2), 20.0));
+        scoreRepository.save(scoreWithComposite("B", today.minusDays(7), 30.0));
+
+        Map<String, LocalDate> result = scoreRepository.findLatestScoreDateByStockCode();
+
+        assertThat(result).containsOnly(
+            Map.entry("A", today.minusDays(2)), Map.entry("B", today.minusDays(7)));
     }
 }
