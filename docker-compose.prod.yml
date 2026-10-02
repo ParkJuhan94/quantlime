@@ -135,6 +135,13 @@ services:
     restart: on-failure:5
     mem_limit: 400m
     logging: *default-logging
+    # 토픽 데이터(처리 중인 재시도 메시지, DLT - 수동 재발행의 원천)를 명명 볼륨에 둔다(2026-10-01,
+    # Kafka 점검). 이미지가 선언한 익명 볼륨은 `up -d` 재생성에서는 유지되지만 `down`/`volume
+    # prune`/호스트 교체 때 사라진다. 기존 익명 볼륨의 데이터는 자동으로 옮겨지지 않는다 - 보존하려면
+    # 배포 전에 1회 이관한다(docs/00-sre/SRE.md §7 "Kafka 런북 - 볼륨 이관"). 메모리(256M/400m)는
+    # 아직 실측 전이다 - 같은 문서의 "메모리 실측" 명령으로 확인할 것.
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
     healthcheck:
       test: [ "CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1" ]
       interval: 15s
@@ -245,3 +252,4 @@ volumes:
   mysql_data:
   redis_data:
   upload_data:
+  redpanda_data:

@@ -34,9 +34,10 @@ spring:
       # PriceCacheStore/RefreshTokenStore/RedisLockService 전부 무방비였음).
       timeout: 2s
       connect-timeout: 1s
-  # 영상 피드 파이프라인 이벤트화(2026-09-14, event 모듈) - 로컬 전용
-  # docker-compose kafka 서비스(KRaft 단일 브로커)를 가리킨다. 운영(EC2) 반영은
-  # 이번 스코프 아님.
+  # 이벤트 브로커(Redpanda, Kafka 와이어 프로토콜 호환). 영상 피드(2026-09-14)에서 시작해
+  # 시장/구독/결제/텔레그램까지 event 모듈이 쓴다. 로컬은 docker-compose.yml의 redpanda
+  # (localhost:9092), 운영은 docker-compose.prod.yml의 redpanda(redpanda:9092,
+  # KAFKA_BOOTSTRAP_SERVERS)를 가리킨다.
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
