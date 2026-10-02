@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -13,6 +15,7 @@ import com.quantlime.price.cache.DomesticMarketCalendarCache;
 import com.quantlime.price.cache.PriceCacheStore;
 import com.quantlime.price.cache.WatchlistedStockCodeCache;
 import com.quantlime.price.dto.response.PriceSnapshot;
+import com.quantlime.price.realtime.PriceTopicSubscriptionTracker;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,6 +49,9 @@ class DomesticWatchlistPriceRelaySchedulerTest {
     @Mock
     private PriceRelayLeaderGate priceRelayLeaderGate;
 
+    @Mock
+    private PriceTopicSubscriptionTracker priceTopicSubscriptionTracker;
+
     @InjectMocks
     private DomesticWatchlistPriceRelayScheduler domesticWatchlistPriceRelayScheduler;
 
@@ -54,6 +60,27 @@ class DomesticWatchlistPriceRelaySchedulerTest {
     @BeforeEach
     void setUpLeader() {
         given(priceRelayLeaderGate.isLeader()).willReturn(true);
+        // 기본은 모든 종목에 구독자가 있는 상태 - 구독자 필터 자체는 별도 테스트가 검증한다.
+        lenient().when(priceTopicSubscriptionTracker.hasSubscribers(anyString())).thenReturn(true);
+    }
+
+    @Test
+    @DisplayName("[구독자가 없는 종목은 Redis 조회도 발행도 하지 않는다]")
+    void broadcast_noSubscribers_skipsLookupAndPublish() {
+        // given
+        given(domesticMarketCalendarCache.isMarketOpenNow()).willReturn(true);
+        given(domesticWatchlistedStockCodeCache.get()).willReturn(List.of(STOCK_CODE, "000660"));
+        given(priceTopicSubscriptionTracker.hasSubscribers(STOCK_CODE)).willReturn(false);
+        PriceSnapshot cached = new PriceSnapshot("000660", 200000.0, 1.0, "2026-07-15T09:00:00+09:00");
+        given(priceCacheStore.findAll(List.of("000660"))).willReturn(Map.of("000660", cached));
+
+        // when
+        domesticWatchlistPriceRelayScheduler.broadcastCurrentPrices();
+
+        // then: 구독자 있는 종목만 조회·발행된다
+        verify(priceCacheStore).findAll(List.of("000660"));
+        verify(messagingTemplate).convertAndSend("/topic/price.000660", cached);
+        verify(messagingTemplate, never()).convertAndSend(eq("/topic/price." + STOCK_CODE), any(Object.class));
     }
 
     @Test

@@ -4,9 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.data.Offset.offset;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -22,6 +24,7 @@ import com.quantlime.price.cache.PreviousCloseCache;
 import com.quantlime.price.cache.PriceCacheStore;
 import com.quantlime.price.cache.WatchlistedStockCodeCache;
 import com.quantlime.price.dto.response.PriceSnapshot;
+import com.quantlime.price.realtime.PriceTopicSubscriptionTracker;
 import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
@@ -72,6 +75,9 @@ class OverseasWatchlistPriceSchedulerTest {
     @Mock
     private PriceRelayLeaderGate priceRelayLeaderGate;
 
+    @Mock
+    private PriceTopicSubscriptionTracker priceTopicSubscriptionTracker;
+
     @InjectMocks
     private OverseasWatchlistPriceScheduler overseasWatchlistPriceScheduler;
 
@@ -80,6 +86,8 @@ class OverseasWatchlistPriceSchedulerTest {
     @BeforeEach
     void setUpLeader() {
         given(priceRelayLeaderGate.isLeader()).willReturn(true);
+        // 기본은 모든 종목에 구독자가 있는 상태 - 구독자 필터는 별도 테스트가 검증한다.
+        lenient().when(priceTopicSubscriptionTracker.hasSubscribers(anyString())).thenReturn(true);
     }
 
     @Test
@@ -122,6 +130,26 @@ class OverseasWatchlistPriceSchedulerTest {
 
         // then
         verify(tossApiClient, never()).getCurrentPrices(anyString());
+    }
+
+    @Test
+    @DisplayName("[구독자가 없는 종목은 캐시에는 저장하되 브로드캐스트는 하지 않는다]")
+    void refresh_noSubscribers_savesButDoesNotBroadcast() {
+        // given
+        given(overseasMarketCalendarCache.isMarketOpenNow()).willReturn(true);
+        given(overseasWatchlistedStockCodeCache.get()).willReturn(List.of(STOCK_CODE));
+        given(overseasPreviousCloseCache.get(List.of(STOCK_CODE))).willReturn(Map.of(STOCK_CODE, 340.0));
+        given(tossApiClient.getCurrentPrices(STOCK_CODE)).willReturn(
+            new TossPriceResponse(List.of(
+                new TossPriceResponse.TossPrice(STOCK_CODE, "2026-07-29T17:43:12+09:00", "341.43", "USD"))));
+        given(priceTopicSubscriptionTracker.hasSubscribers(STOCK_CODE)).willReturn(false);
+
+        // when
+        overseasWatchlistPriceScheduler.refreshAndBroadcast();
+
+        // then
+        verify(priceCacheStore).saveAll(anyList());
+        verify(messagingTemplate, never()).convertAndSend(anyString(), any(Object.class));
     }
 
     @Test
