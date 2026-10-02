@@ -6,11 +6,13 @@ import {
   getFeedComments,
   getFeedPosts,
   likeFeedPost,
+  reportFeedComment,
+  reportFeedPost,
   unlikeFeedPost,
   updateFeedPost,
 } from '../../api/feed'
 import { queryKeys } from '../queryKeys'
-import type { FeedPostResponse } from '../../types/feed'
+import type { FeedPostResponse, FeedReportReason } from '../../types/feed'
 import type { PageResponse } from '../../types/stock'
 
 export function useFeedPostsQuery(category?: string) {
@@ -139,5 +141,20 @@ export function useCreateFeedComment(postId: number) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.feedComments(postId) })
       patchPostInCaches(queryClient, postId, (post) => ({ ...post, commentCount: post.commentCount + 1 }))
     },
+  })
+}
+
+// 신고는 서버에서 3명 누적 시 자동 숨김되지만 내 화면의 목록은 곧바로 바뀌지 않아도 되므로
+// (임계치 미만이 대부분) 캐시를 건드리지 않는다.
+export function useReportFeedPost() {
+  return useMutation({
+    mutationFn: ({ postId, reason }: { postId: number; reason: FeedReportReason }) => reportFeedPost(postId, reason),
+  })
+}
+
+export function useReportFeedComment() {
+  return useMutation({
+    mutationFn: ({ commentId, reason }: { commentId: number; reason: FeedReportReason }) =>
+      reportFeedComment(commentId, reason),
   })
 }

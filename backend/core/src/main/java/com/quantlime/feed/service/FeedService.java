@@ -6,6 +6,7 @@ import com.quantlime.feed.domain.FeedCategory;
 import com.quantlime.feed.domain.FeedComment;
 import com.quantlime.feed.domain.FeedPost;
 import com.quantlime.feed.domain.FeedPostLike;
+import com.quantlime.feed.domain.FeedReportTarget;
 import com.quantlime.feed.dto.mapper.FeedMapper;
 import com.quantlime.feed.dto.request.CreateFeedCommentRequest;
 import com.quantlime.feed.dto.request.CreateFeedPostRequest;
@@ -16,6 +17,7 @@ import com.quantlime.feed.exception.FeedErrorCode;
 import com.quantlime.feed.repository.FeedCommentRepository;
 import com.quantlime.feed.repository.FeedPostLikeRepository;
 import com.quantlime.feed.repository.FeedPostRepository;
+import com.quantlime.feed.repository.FeedReportRepository;
 import com.quantlime.user.domain.User;
 import com.quantlime.user.exception.UserErrorCode;
 import com.quantlime.user.repository.UserRepository;
@@ -37,6 +39,7 @@ public class FeedService {
     private final FeedPostRepository feedPostRepository;
     private final FeedPostLikeRepository feedPostLikeRepository;
     private final FeedCommentRepository feedCommentRepository;
+    private final FeedReportRepository feedReportRepository;
     private final UserRepository userRepository;
 
     @Transactional
@@ -90,6 +93,10 @@ public class FeedService {
     @Transactional
     public void deletePost(Long userId, Long postId) {
         FeedPost post = findOwnedPost(userId, postId);
+        // 신고 기록도 대상이 사라지면 의미가 없어 같이 정리한다(FeedModerationService.deletePost와 동일).
+        feedReportRepository.deleteByTargetTypeAndTargetIdIn(
+            FeedReportTarget.COMMENT, feedCommentRepository.findIdsByFeedPostId(postId));
+        feedReportRepository.deleteByTargetTypeAndTargetId(FeedReportTarget.POST, postId);
         feedCommentRepository.deleteByFeedPost_Id(postId);
         feedPostLikeRepository.deleteByFeedPost_Id(postId);
         feedPostRepository.delete(post);

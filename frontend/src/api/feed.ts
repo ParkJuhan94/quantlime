@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { FeedCommentResponse, FeedPostResponse } from '../types/feed'
+import type { FeedCommentResponse, FeedPostResponse, FeedReportReason } from '../types/feed'
 import type { PageResponse } from '../types/stock'
 
 export async function createFeedPost(
@@ -52,4 +52,12 @@ export async function getFeedComments(postId: number): Promise<PageResponse<Feed
 export async function createFeedComment(postId: number, content: string): Promise<FeedCommentResponse> {
   const { data } = await apiClient.post<FeedCommentResponse>(`/api/feed/posts/${postId}/comments`, { content })
   return data
+}
+
+export async function reportFeedPost(postId: number, reason: FeedReportReason): Promise<void> {
+  await apiClient.post(`/api/feed/posts/${postId}/reports`, { reason })
+}
+
+export async function reportFeedComment(commentId: number, reason: FeedReportReason): Promise<void> {
+  await apiClient.post(`/api/feed/comments/${commentId}/reports`, { reason })
 }
