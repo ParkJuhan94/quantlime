@@ -5,6 +5,8 @@ import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -69,6 +71,24 @@ public class GlobalExceptionHandler {
         HttpMessageNotReadableException e) {
         log.warn("요청 본문 파싱 실패: message={}", e.getMessage());
         return new ErrorResponseTemplate("요청 본문을 읽을 수 없습니다.", "VALIDATION_ERROR");
+    }
+
+    // 지원하지 않는 HTTP 메서드/Content-Type도 클라이언트 요청 오류인데 catch-all이 삼켜 500으로
+    // 응답했다(#81의 400 매핑과 같은 유형, 2026-10-02) - 표준 상태 코드로 돌려준다.
+    @ResponseStatus(HttpStatus.METHOD_NOT_ALLOWED)
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ErrorResponseTemplate handleHttpRequestMethodNotSupportedException(
+        HttpRequestMethodNotSupportedException e) {
+        log.warn("지원하지 않는 HTTP 메서드: method={}", e.getMethod());
+        return new ErrorResponseTemplate("지원하지 않는 요청 방식입니다.", "METHOD_NOT_ALLOWED");
+    }
+
+    @ResponseStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ErrorResponseTemplate handleHttpMediaTypeNotSupportedException(
+        HttpMediaTypeNotSupportedException e) {
+        log.warn("지원하지 않는 Content-Type: contentType={}", e.getContentType());
+        return new ErrorResponseTemplate("지원하지 않는 요청 형식입니다.", "UNSUPPORTED_MEDIA_TYPE");
     }
 
     @ResponseStatus(HttpStatus.BAD_REQUEST)
