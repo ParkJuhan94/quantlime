@@ -18,6 +18,7 @@ import { EmptyState } from '../components/common/EmptyState'
 import { ChartIntervalSelector, type ChartIntervalOrMinute } from '../components/chart/ChartIntervalSelector'
 import { MinuteCandleChart } from '../components/chart/MinuteCandleChart'
 import { IndicatorControls } from '../components/chart/IndicatorControls'
+import { StockMarketDepth } from '../components/stock/StockMarketDepth'
 import { OverlayIndicatorLegend, SubPanelIndicatorLegend } from '../components/chart/IndicatorLegend'
 import type { CandleChartHandle } from '../components/chart/CandleChart'
 import { ScoreSummaryRow } from '../components/score/ScoreSummaryRow'
@@ -265,6 +266,8 @@ export function StockDetailPage() {
           </>
         )}
       </section>
+
+      <StockMarketDepth stockCode={stockCode} />
 
       {scoreQuery.isLoading && <LoadingSpinner />}
       {scoreQuery.isError && isNotFoundStatus(scoreQuery.error) && (
