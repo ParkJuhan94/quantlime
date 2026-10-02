@@ -1,6 +1,7 @@
 package com.quantlime.event.telegramfeed;
 
 import com.quantlime.event.observability.KafkaDltNotifier;
+import com.quantlime.event.retry.RetryBackoff;
 import com.quantlime.telegramfeed.service.TelegramDigestGenerationFacade;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,7 +32,8 @@ public class TelegramDigestGenerationConsumer {
     private final TelegramDigestGenerationFacade telegramDigestGenerationFacade;
     private final KafkaDltNotifier dltNotifier;
 
-    @RetryableTopic(attempts = "4", backoff = @Backoff(delay = 30_000, multiplier = 3.0, maxDelay = 270_000))
+    @RetryableTopic(attempts = "4", backoff = @Backoff(delayExpression = RetryBackoff.DELAY_MS, multiplierExpression = RetryBackoff.MULTIPLIER,
+        maxDelayExpression = RetryBackoff.MAX_DELAY_MS))
     @KafkaListener(topics = TelegramFeedTopics.TELEGRAM_DIGEST_GENERATION_REQUESTED,
         groupId = "telegram-digest-collector")
     public void onDigestGenerationRequested(TelegramDigestGenerationRequestedMessage message) {
