@@ -4,10 +4,13 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -37,6 +40,35 @@ public class GlobalExceptionHandler {
             .orElse("잘못된 요청입니다.");
         log.warn("파라미터 검증 실패: message={}", message);
         return new ErrorResponseTemplate(message, "VALIDATION_ERROR");
+    }
+
+    // 아래 세 예외는 전부 클라이언트 요청 오류인데, 별도 처리가 없으면 catch-all
+    // (Exception.class)이 삼켜 500으로 응답해 서버 장애 알림/메트릭을 오염시킨다
+    // (2026-10-01 테스트 작성 중 발견 - 필수 쿼리 파라미터 누락이 500으로 응답).
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ErrorResponseTemplate handleMissingServletRequestParameterException(
+        MissingServletRequestParameterException e) {
+        log.warn("필수 요청 파라미터 누락: name={}", e.getParameterName());
+        return new ErrorResponseTemplate(
+            "필수 요청 파라미터가 없습니다: " + e.getParameterName(), "VALIDATION_ERROR");
+    }
+
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ErrorResponseTemplate handleMethodArgumentTypeMismatchException(
+        MethodArgumentTypeMismatchException e) {
+        log.warn("요청 파라미터 타입 불일치: name={}, value={}", e.getName(), e.getValue());
+        return new ErrorResponseTemplate(
+            "요청 파라미터 형식이 올바르지 않습니다: " + e.getName(), "VALIDATION_ERROR");
+    }
+
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ErrorResponseTemplate handleHttpMessageNotReadableException(
+        HttpMessageNotReadableException e) {
+        log.warn("요청 본문 파싱 실패: message={}", e.getMessage());
+        return new ErrorResponseTemplate("요청 본문을 읽을 수 없습니다.", "VALIDATION_ERROR");
     }
 
     @ResponseStatus(HttpStatus.BAD_REQUEST)
