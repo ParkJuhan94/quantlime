@@ -119,7 +119,9 @@ services:
   # VM(당시 4GB 한도)이 반복적으로 다운되는 걸 겪고 같은 날 Redpanda로 교체했다 - 네이티브
   # 단일 바이너리라 JVM 오버헤드가 없고, Kafka 와이어 프로토콜과 호환돼 Spring Kafka
   # 클라이언트 코드/개념(파티션·컨슈머그룹·@RetryableTopic 등)은 전혀 안 바뀐다.
-  # 운영(EC2) 반영은 이번 스코프 아님 - docker-compose.prod.yml에는 추가하지 않는다.
+  # 운영(EC2)에도 같은 Redpanda가 docker-compose.prod.yml에 반영돼 있다(2026-09-15 - 브로커 없이는
+  # 백엔드 기동과 자막·요약 트리거가 깨져 추가했다). 이 파일의 데이터는 이미지가 만든 익명 볼륨이라
+  # `docker compose down` 뒤에는 새로 시작한다(로컬은 초기화가 쉬운 편이 낫다).
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:v24.2.18
     container_name: quantlime-redpanda
