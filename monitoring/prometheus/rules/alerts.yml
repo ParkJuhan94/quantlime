@@ -84,6 +84,30 @@ groups:
           summary: "컨테이너 재시작 루프 감지: {{ $labels.name }}"
           description: "{{ $labels.name }}이(가) 최근 30분간 3회 이상 재시작했습니다 - restart:on-failure 또는 autoheal이 반복 발동 중일 수 있습니다."
 
+  # --- 외부 관점(blackbox 프로브, 운영 전용 - 로컬엔 job이 없어 발동 안 함) ---
+  - name: quantlime-external
+    rules:
+      # certbot.timer 갱신이 조용히 실패하면 만료 시점에 전면 접속 불가가 된다
+      # (2026-09-07 HTTPS 전용 전환 이후). 갱신은 만료 30일 전부터 시도하므로
+      # 14일 미만이면 최소 2주째 실패 중이라는 뜻.
+      - alert: TlsCertExpiringSoon
+        expr: (probe_ssl_earliest_cert_expiry{job="blackbox-https"} - time()) / 86400 < 14
+        for: 1h
+        labels:
+          severity: critical
+        annotations:
+          summary: "TLS 인증서 만료 임박"
+          description: "{{ $labels.instance }}의 인증서가 {{ $value | humanize }}일 뒤 만료됩니다 - certbot renew 실패 여부를 확인하세요(sudo certbot renew --dry-run)."
+
+      - alert: SiteProbeFailed
+        expr: probe_success{job="blackbox-https"} == 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "도메인 HTTPS 프로브 실패"
+          description: "{{ $labels.instance }}로의 HTTPS 요청이 3분 이상 실패합니다(인증서 오류, nginx 다운, DNS 문제 포함)."
+
   # --- HTTP 지연/에러율 ---
   - name: quantlime-http
     rules:

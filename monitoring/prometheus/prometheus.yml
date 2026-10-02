@@ -54,3 +54,22 @@ scrape_configs:
   - job_name: redis-exporter
     static_configs:
       - targets: ["redis-exporter:9121"]
+
+  # 외부 관점 프로브(blackbox) - 실제 도메인으로 HTTPS 요청을 보내 TLS 인증서
+  # 만료일과 응답 가능 여부를 본다. 같은 EC2 안에서 도는 프로브라 호스트가
+  # 죽으면 같이 죽으므로 "외부 업타임 체크(UptimeRobot 등)"를 대체하지는
+  # 못한다 - 인증서 갱신 실패를 조용히 놓치지 않기 위한 것(alerts.yml의
+  # TlsCertExpiringSoon 참고).
+  - job_name: blackbox-https
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets: ["https://quantlime.com/api/health"]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
