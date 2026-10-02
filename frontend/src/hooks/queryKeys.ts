@@ -18,6 +18,7 @@ export const queryKeys = {
   dashboardScores: (watchlistOnly: boolean, limit: number, scope: string) =>
     ['dashboard', 'scores', watchlistOnly, limit, scope] as const,
   marketIndices: ['market', 'indices'] as const,
+  hotSectors: (limit: number) => ['market', 'sectors', limit] as const,
   marketRanking: (scope: string, sort: string, limit: number, watchlistOnly: boolean) =>
     ['market', 'ranking', scope, sort, limit, watchlistOnly] as const,
   indexChart: (code: string) => ['market', 'indices', code, 'chart'] as const,
