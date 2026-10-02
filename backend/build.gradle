@@ -96,6 +96,12 @@ subprojects {
 
     tasks.named('test') {
         useJUnitPlatform()
+        // Gradle 테스트 JVM의 기본 힙은 512MB다. 통합 테스트는 @MockBean 조합마다 Spring 컨텍스트를
+        // 새로 띄워 JVM에 캐시하는데, 테스트가 늘면서 CI에서 컨텍스트 생성 중 OutOfMemoryError가
+        // 간헐적으로 났다(2026-10-02, #82 PR 실행과 main 실행에서 WatchlistControllerTest 컨텍스트 로딩 실패).
+        // 로컬(./gradlew)과 GitHub Actions가 같은 설정을 읽는다. 컨텍스트가 계속 쌓이는 구조 자체는
+        // 그대로라 이건 여유를 늘리는 것이고, 또 부족해지면 컨텍스트 수를 줄이는 쪽을 먼저 검토할 것.
+        maxHeapSize = '1g'
         finalizedBy tasks.named('jacocoTestReport')
     }
 
