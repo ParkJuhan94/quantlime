@@ -1,9 +1,9 @@
 package com.quantlime.event.telegramfeed;
 
+import com.quantlime.event.publish.KafkaEventSender;
 import com.quantlime.telegramfeed.event.TelegramDigestGenerationRequestedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -19,12 +19,12 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @RequiredArgsConstructor
 public class TelegramFeedEventPublisher {
 
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final KafkaEventSender eventSender;
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onDigestGenerationRequested(TelegramDigestGenerationRequestedEvent event) {
         String key = String.valueOf(event.channelId());
-        kafkaTemplate.send(TelegramFeedTopics.TELEGRAM_DIGEST_GENERATION_REQUESTED, key,
+        eventSender.send(TelegramFeedTopics.TELEGRAM_DIGEST_GENERATION_REQUESTED, key,
             TelegramDigestGenerationRequestedMessage.of(event.channelId(), event.date()));
     }
 }

@@ -51,8 +51,10 @@ public class SubscriptionRenewalScheduler {
         log.info("구독 자동 갱신 이벤트 발행: count={}", dueSubscriptionIds.size());
         // 실제 결제는 이제 이 스레드가 아니라 Kafka 컨슈머
         // (SubscriptionRenewalConsumer, event 모듈)가 건별로 처리한다
-        // (2026-09-24, 카프카 다도메인 확장 Phase 2). 이벤트 발행 자체는
-        // 실패하지 않으므로 SafeExecutor로 감쌀 것이 없다 - 개별 결제
+        // (2026-09-24, 카프카 다도메인 확장 Phase 2). 발행은 비동기 fire-and-forget이라
+        // 이 루프는 브로커 실패로 중단되지 않는다 - 발행 실패는 KafkaEventSender가
+        // ERROR 로그와 kafka.publish.failures 카운터로 남기고(2026-10-01), 그 구독은
+        // 갱신 상태가 그대로라 다음날 04:00 배치가 다시 집어든다. 개별 결제
         // 실패/재시도는 PaymentService.chargeRenewal과 DLT 핸들러가 처리한다.
         dueSubscriptionIds.forEach(subscriptionId ->
             eventPublisher.publishEvent(new SubscriptionRenewalDueEvent(subscriptionId)));

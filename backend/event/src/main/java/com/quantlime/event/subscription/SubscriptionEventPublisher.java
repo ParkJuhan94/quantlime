@@ -1,9 +1,9 @@
 package com.quantlime.event.subscription;
 
+import com.quantlime.event.publish.KafkaEventSender;
 import com.quantlime.subscription.event.SubscriptionRenewalDueEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -18,12 +18,12 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @RequiredArgsConstructor
 public class SubscriptionEventPublisher {
 
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final KafkaEventSender eventSender;
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onRenewalDue(SubscriptionRenewalDueEvent event) {
         String key = String.valueOf(event.subscriptionId());
-        kafkaTemplate.send(SubscriptionTopics.SUBSCRIPTION_RENEWAL_DUE, key,
+        eventSender.send(SubscriptionTopics.SUBSCRIPTION_RENEWAL_DUE, key,
             SubscriptionRenewalDueMessage.of(event.subscriptionId()));
     }
 }
