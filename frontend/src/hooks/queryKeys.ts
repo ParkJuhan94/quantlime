@@ -9,6 +9,7 @@ export const queryKeys = {
   stockTrades: (stockCode: string) => ['stocks', 'trades', stockCode] as const,
   stockPriceLimit: (stockCode: string) => ['stocks', 'price-limit', stockCode] as const,
   stockWarnings: (stockCode: string) => ['stocks', 'warnings', stockCode] as const,
+  stockMinuteChart: (stockCode: string) => ['stocks', 'minute-chart', stockCode] as const,
   stockChart: (stockCode: string, days: number) => ['stocks', 'chart', stockCode, days] as const,
   stockScore: (stockCode: string) => ['stocks', 'score', stockCode] as const,
   backtest: (stockCode: string) => ['backtest', stockCode] as const,
@@ -21,6 +22,7 @@ export const queryKeys = {
   dashboardScores: (watchlistOnly: boolean, limit: number, scope: string) =>
     ['dashboard', 'scores', watchlistOnly, limit, scope] as const,
   marketIndices: ['market', 'indices'] as const,
+  hotSectors: (limit: number) => ['market', 'sectors', limit] as const,
   marketRanking: (scope: string, sort: string, limit: number, watchlistOnly: boolean) =>
     ['market', 'ranking', scope, sort, limit, watchlistOnly] as const,
   indexChart: (code: string) => ['market', 'indices', code, 'chart'] as const,

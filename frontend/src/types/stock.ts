@@ -76,3 +76,18 @@ export interface StockWarningResponse {
   startDate: string | null
   endDate: string | null
 }
+
+// time은 epoch 초(UTC), candles는 시간 오름차순. nextBefore는 더 과거 페이지의 커서(null이면 끝).
+export interface MinuteCandle {
+  time: number
+  open: number
+  high: number
+  low: number
+  close: number
+  volume: number
+}
+
+export interface MinuteChartResponse {
+  candles: MinuteCandle[]
+  nextBefore: string | null
+}

@@ -54,6 +54,15 @@ class PriceControllerTest extends ApiTestSupport {
     }
 
     @Test
+    @DisplayName("[분봉 조회 시 before 형식이 UTC Z가 아니면 400을 반환한다]")
+    void getMinuteChart_invalidBefore_returns400() throws Exception {
+        // when & then: +09:00 오프셋은 토스 쿼리스트링에서 깨지므로 거부한다
+        mockMvc.perform(get("/api/stocks/{stockCode}/minute-chart", stock.getStockCode())
+                .param("before", "2026-09-01T15:30:00+09:00"))
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
     @DisplayName("[현재가 조회 성공 시 200과 DB의 마지막 종가를 반환한다]")
     void getCurrentPrice_success_returns200() throws Exception {
         // given: 캐시 미스 경로는 더 이상 Toss를 직접 호출하지 않고 DB의

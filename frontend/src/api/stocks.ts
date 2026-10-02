@@ -3,6 +3,7 @@ import type {
   CurrentPriceResponse,
   DailyChartResponse,
   OrderbookResponse,
+  MinuteChartResponse,
   PageResponse,
   PriceLimitResponse,
   StockDetailResponse,
@@ -70,5 +71,13 @@ export async function getPriceLimit(stockCode: string): Promise<PriceLimitRespon
 
 export async function getStockWarnings(stockCode: string): Promise<StockWarningResponse[]> {
   const { data } = await apiClient.get<StockWarningResponse[]>(`/api/stocks/${stockCode}/warnings`)
+  return data
+}
+
+// before(UTC Z 표기)를 생략하면 가장 최근 1분봉부터 최대 200개 - 서버가 Redis로 15초 캐싱한다.
+export async function getMinuteChart(stockCode: string, before?: string): Promise<MinuteChartResponse> {
+  const { data } = await apiClient.get<MinuteChartResponse>(`/api/stocks/${stockCode}/minute-chart`, {
+    params: before ? { before } : undefined,
+  })
   return data
 }

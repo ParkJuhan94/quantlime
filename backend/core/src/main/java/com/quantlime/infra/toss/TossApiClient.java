@@ -132,6 +132,18 @@ public class TossApiClient {
     }
 
     /**
+     * 종목 상세 분봉 차트용 - 최신 {@code count}개(최대 200, API 제약) 1분봉을 조회한다.
+     * {@code before}가 null이면 가장 최근부터, 있으면 그 시각 직전부터 과거 방향으로
+     * 조회한다(페이지네이션 커서). {@code before}는 {@link #get1MinuteCandleBefore}와
+     * 동일한 이유로 {@code +} 오프셋이 아닌 UTC {@code Z} 표기여야 한다.
+     */
+    @CircuitBreaker(name = "toss")
+    @Bulkhead(name = "toss")
+    public TossCandleResponse getMinuteCandles(String symbol, int count, String before) {
+        return fetchCandlesWithRateLimitRetry(symbol, () -> fetchMinuteCandles(symbol, count, before));
+    }
+
+    /**
      * getDailyCandles/get1MinuteCandleBefore가 공유하는 429 재시도 루프 -
      * 두 엔드포인트 모두 같은 {@code /api/v1/candles} 경로·레이트리밋 그룹
      * (MARKET_DATA_CHART)을 쓴다.
@@ -218,17 +230,25 @@ public class TossApiClient {
     }
 
     private TossCandleResponse fetchMinuteCandle(String symbol, String before) {
+        return fetchMinuteCandles(symbol, 1, before);
+    }
+
+    private TossCandleResponse fetchMinuteCandles(String symbol, int count, String before) {
         awaitCandleRateLimit();
         return withTokenRetry("candles-1m", token -> ExternalApiInvoker.call(
             TossApiErrorCode.CANDLE_INQUIRY_FAILED,
             () -> tossRestClient.get()
-                .uri(uriBuilder -> uriBuilder
-                    .path("/api/v1/candles")
-                    .queryParam("symbol", symbol)
-                    .queryParam("interval", "1m")
-                    .queryParam("count", 1)
-                    .queryParam("before", before)
-                    .build())
+                .uri(uriBuilder -> {
+                    var builder = uriBuilder
+                        .path("/api/v1/candles")
+                        .queryParam("symbol", symbol)
+                        .queryParam("interval", "1m")
+                        .queryParam("count", count);
+                    if (before != null) {
+                        builder.queryParam("before", before);
+                    }
+                    return builder.build();
+                })
                 .header("authorization", "Bearer " + token)
                 .retrieve()
                 .body(TossCandleResponse.class),

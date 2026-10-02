@@ -1,11 +1,13 @@
 package com.quantlime.market.controller;
 
 import com.quantlime.auth.resolver.OptionalLoginUser;
+import com.quantlime.market.dto.response.HotSectorResponse;
 import com.quantlime.market.dto.response.IndexChartResponse;
 import com.quantlime.market.dto.response.IndexMinuteChartResponse;
 import com.quantlime.market.dto.response.InvestorTradingResponse;
 import com.quantlime.market.dto.response.MarketIndexResponse;
 import com.quantlime.market.dto.response.MarketRankingResponse;
+import com.quantlime.market.service.HotSectorService;
 import com.quantlime.market.service.InvestorTradingService;
 import com.quantlime.market.service.MarketIndexService;
 import com.quantlime.market.service.MarketRankingService;
@@ -37,6 +39,7 @@ public class MarketController {
     private final MarketIndexService marketIndexService;
     private final MarketRankingService marketRankingService;
     private final InvestorTradingService investorTradingService;
+    private final HotSectorService hotSectorService;
     private final WatchlistService watchlistService;
 
     @GetMapping("/indices")
@@ -137,5 +140,19 @@ public class MarketController {
         }
         Set<String> watchlistCodes = watchlistOnly ? watchlistService.getWatchlistStockCodes(userId) : null;
         return ResponseEntity.ok(marketRankingService.getRanking(scope, sort, limit, watchlistCodes));
+    }
+
+    @GetMapping("/sectors")
+    @Operation(
+        summary = "지금 뜨는 산업(국내 섹터별 등락률) 조회",
+        description = "국내 전종목 실시간 스냅샷을 섹터로 묶어 거래대금 가중 평균 등락률 상위 N개를 조회한다. "
+            + "유동성 필터를 통과한 종목만 집계하고 종목 3개 미만 섹터는 제외한다. 장중에만 값이 있다(마감 후 빈 배열)"
+    )
+    @ApiResponse(useReturnTypeSchema = true)
+    public ResponseEntity<List<HotSectorResponse>> getHotSectors(
+        @RequestParam(defaultValue = "5")
+        @Min(value = 1, message = "limit는 1 이상이어야 합니다.")
+        @Max(value = 20, message = "limit는 20 이하여야 합니다.") int limit) {
+        return ResponseEntity.ok(hotSectorService.getHotSectors(limit));
     }
 }
