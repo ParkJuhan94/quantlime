@@ -134,11 +134,7 @@ export function FeedPostCard({ post }: { post: FeedPostResponse }) {
           onClick={() => setImageViewerOpen(true)}
           className="mt-3 block w-full cursor-zoom-in overflow-hidden rounded-xl bg-gray-50"
         >
-          <img
-            src={resolveUploadUrl(post.imageUrl)}
-            alt=""
-            className="max-h-80 w-full object-contain"
-          />
+          <img src={resolveUploadUrl(post.imageUrl)} alt="" className="max-h-80 w-full object-contain" />
         </button>
       )}
 

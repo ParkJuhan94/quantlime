@@ -1,12 +1,12 @@
 package com.quantlime.subscription;
 
+import static lombok.AccessLevel.PRIVATE;
+
 import com.quantlime.subscription.domain.Subscription;
 import com.quantlime.subscription.domain.SubscriptionPlan;
 import com.quantlime.user.domain.User;
 import java.time.LocalDate;
 import lombok.NoArgsConstructor;
-
-import static lombok.AccessLevel.PRIVATE;
 
 @NoArgsConstructor(access = PRIVATE)
 public final class SubscriptionFixture {

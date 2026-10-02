@@ -1,5 +1,11 @@
 package com.quantlime.price.controller;
 
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.BDDMockito.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
 import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.price.DomesticDailyPriceFixture;
 import com.quantlime.price.cache.PriceCacheStore;
@@ -16,12 +22,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.mock.mockito.MockBean;
-
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.BDDMockito.given;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @Tag("integration")
 class PriceControllerTest extends ApiTestSupport {
@@ -51,6 +51,15 @@ class PriceControllerTest extends ApiTestSupport {
     void setUp() {
         stock = stockRepository.save(StockFixture.createStock());
         given(priceCacheStore.find(anyString())).willReturn(Optional.empty());
+    }
+
+    @Test
+    @DisplayName("[분봉 조회 시 before 형식이 UTC Z가 아니면 400을 반환한다]")
+    void getMinuteChart_invalidBefore_returns400() throws Exception {
+        // when & then: +09:00 오프셋은 토스 쿼리스트링에서 깨지므로 거부한다
+        mockMvc.perform(get("/api/stocks/{stockCode}/minute-chart", stock.getStockCode())
+                .param("before", "2026-09-01T15:30:00+09:00"))
+            .andExpect(status().isBadRequest());
     }
 
     @Test

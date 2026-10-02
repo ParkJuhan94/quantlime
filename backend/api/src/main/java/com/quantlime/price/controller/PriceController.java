@@ -2,6 +2,8 @@ package com.quantlime.price.controller;
 
 import com.quantlime.price.dto.response.CurrentPriceResponse;
 import com.quantlime.price.dto.response.DailyChartResponse;
+import com.quantlime.price.dto.response.MinuteChartResponse;
+import com.quantlime.price.service.StockMinuteChartService;
 import com.quantlime.price.service.StockPriceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -27,6 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class PriceController {
 
     private final StockPriceService stockPriceService;
+    private final StockMinuteChartService stockMinuteChartService;
 
     @GetMapping("/{stockCode}/price")
     @Operation(
@@ -53,5 +56,21 @@ public class PriceController {
         @Min(value = 1, message = "days는 1 이상이어야 합니다.")
         @Max(value = 365, message = "days는 365 이하여야 합니다.") int days) {
         return ResponseEntity.ok(stockPriceService.getChart(stockCode, days));
+    }
+
+    @GetMapping("/{stockCode}/minute-chart")
+    @Operation(
+        summary = "1분봉 차트 조회",
+        description = "최근 1분봉 최대 200개를 시간 오름차순으로 조회한다(저장 없이 토스 온디맨드 호출, 서버 Redis 캐시 15초). "
+            + "before(UTC Z 표기, 예: 2026-09-01T06:30:00Z)를 주면 그 시각 직전부터 과거 방향으로 조회하며, "
+            + "응답의 nextBefore를 다음 요청의 before로 넘겨 더 과거로 이어간다(null이면 끝)"
+    )
+    @ApiResponse(useReturnTypeSchema = true)
+    public ResponseEntity<MinuteChartResponse> getMinuteChart(
+        @PathVariable String stockCode,
+        @RequestParam(required = false)
+        @Pattern(regexp = "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z",
+            message = "before는 UTC Z 표기(예: 2026-09-01T06:30:00Z)여야 합니다.") String before) {
+        return ResponseEntity.ok(stockMinuteChartService.getMinuteChart(stockCode, before));
     }
 }

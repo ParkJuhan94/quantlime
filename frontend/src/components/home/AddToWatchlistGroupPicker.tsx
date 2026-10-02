@@ -43,10 +43,7 @@ export function AddToWatchlistGroupPicker({ stockCode, groups, onClose }: AddToW
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35" onClick={onClose}>
-      <div
-        onClick={(event) => event.stopPropagation()}
-        className="w-full max-w-xs rounded-2xl bg-white p-5 shadow-2xl"
-      >
+      <div onClick={(event) => event.stopPropagation()} className="w-full max-w-xs rounded-2xl bg-white p-5 shadow-2xl">
         <p className="mb-3 text-sm font-semibold text-gray-900">어느 그룹에 추가할까요?</p>
         <div className="mb-3 flex max-h-64 flex-col gap-1 overflow-y-auto">
           {groups.map((group) => (

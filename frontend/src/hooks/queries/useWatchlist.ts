@@ -1,11 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  addWatchlist,
-  getWatchlist,
-  moveWatchlistGroup,
-  removeWatchlist,
-  reorderWatchlist,
-} from '../../api/watchlist'
+import { addWatchlist, getWatchlist, moveWatchlistGroup, removeWatchlist, reorderWatchlist } from '../../api/watchlist'
 import { queryKeys } from '../queryKeys'
 import type { WatchlistResponse } from '../../types/watchlist'
 
@@ -20,8 +14,7 @@ export function useWatchlistQuery(enabled = true) {
 export function useAddWatchlist() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ stockCode, groupId }: { stockCode: string; groupId: number }) =>
-      addWatchlist(stockCode, groupId),
+    mutationFn: ({ stockCode, groupId }: { stockCode: string; groupId: number }) => addWatchlist(stockCode, groupId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.watchlist })
       void queryClient.invalidateQueries({ queryKey: queryKeys.dashboardScoresAll })

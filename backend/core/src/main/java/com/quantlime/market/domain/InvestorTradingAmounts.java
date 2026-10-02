@@ -1,12 +1,12 @@
 package com.quantlime.market.domain;
 
+import static lombok.AccessLevel.PROTECTED;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-
-import static lombok.AccessLevel.PROTECTED;
 
 /**
  * 투자자별 매매대금(개인·외국인·기관계·기타법인 4주체 + 기관 세부 7종)의

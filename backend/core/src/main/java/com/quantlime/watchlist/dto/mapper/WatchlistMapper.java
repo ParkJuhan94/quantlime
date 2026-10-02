@@ -1,13 +1,13 @@
 package com.quantlime.watchlist.dto.mapper;
 
+import static lombok.AccessLevel.PRIVATE;
+
 import com.quantlime.stock.dto.mapper.StockMapper;
 import com.quantlime.watchlist.domain.Watchlist;
 import com.quantlime.watchlist.domain.WatchlistGroup;
 import com.quantlime.watchlist.dto.response.WatchlistGroupResponse;
 import com.quantlime.watchlist.dto.response.WatchlistResponse;
 import lombok.NoArgsConstructor;
-
-import static lombok.AccessLevel.PRIVATE;
 
 @NoArgsConstructor(access = PRIVATE)
 public final class WatchlistMapper {

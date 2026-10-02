@@ -1,5 +1,7 @@
 package com.quantlime.stock.dto.mapper;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
@@ -7,8 +9,6 @@ import com.quantlime.stock.dto.response.StockDetailResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 @Tag("unit")
 class StockMapperTest {

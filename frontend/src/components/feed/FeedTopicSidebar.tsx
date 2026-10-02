@@ -5,6 +5,7 @@ const TOPIC_EMOJIS: Record<FeedFilter, string> = {
   국내주식토론: '🇰🇷',
   미국주식이야기: '🇺🇸',
   아무말대잔치: '💬',
+  수익인증: '💰',
 }
 
 const FILTERS: FeedFilter[] = ['전체', ...FEED_CATEGORIES]

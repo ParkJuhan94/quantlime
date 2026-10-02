@@ -1,5 +1,14 @@
 package com.quantlime.feed.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+
 import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.common.exception.ValidationException;
 import com.quantlime.feed.domain.FeedCategory;
@@ -28,15 +37,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.SliceImpl;
 import org.springframework.test.util.ReflectionTestUtils;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
@@ -86,6 +86,35 @@ class FeedServiceTest {
         assertThatThrownBy(() -> feedService.createPost(
             999L, new CreateFeedPostRequest("국내주식토론", "제목", null)))
             .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("[수익인증 주제에 이미지가 없으면 ValidationException을 던진다]")
+    void createPost_profitProofWithoutImage_throws() {
+        // given
+        given(userRepository.findById(1L)).willReturn(Optional.of(UserFixture.createUser()));
+
+        // when & then
+        assertThatThrownBy(() -> feedService.createPost(
+            1L, new CreateFeedPostRequest("수익인증", "+10% 인증", null)))
+            .isInstanceOf(ValidationException.class);
+    }
+
+    @Test
+    @DisplayName("[수익인증 주제도 이미지가 있으면 작성된다]")
+    void createPost_profitProofWithImage_savesAndReturnsResponse() {
+        // given
+        User user = UserFixture.createUser();
+        given(userRepository.findById(1L)).willReturn(Optional.of(user));
+        FeedPost saved = FeedPost.of(user, FeedCategory.PROFIT_PROOF, "+10% 인증", "/uploads/a.png");
+        given(feedPostRepository.save(any(FeedPost.class))).willReturn(saved);
+
+        // when
+        FeedPostResponse response = feedService.createPost(
+            1L, new CreateFeedPostRequest("수익인증", "+10% 인증", "/uploads/a.png"));
+
+        // then
+        assertThat(response.category()).isEqualTo("수익인증");
     }
 
     @Test

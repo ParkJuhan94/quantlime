@@ -1,5 +1,8 @@
 package com.quantlime.telegramfeed.domain;
 
+import static jakarta.persistence.ConstraintMode.NO_CONSTRAINT;
+import static lombok.AccessLevel.PROTECTED;
+
 import com.quantlime.common.domain.TimeBaseEntity;
 import com.quantlime.videofeed.domain.Channel;
 import jakarta.persistence.Column;
@@ -20,9 +23,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.util.Assert;
-
-import static jakarta.persistence.ConstraintMode.NO_CONSTRAINT;
-import static lombok.AccessLevel.PROTECTED;
 
 /**
  * 텔레그램 채널 글(Phase 8 P7). 유튜브 Video와 구조적으로 대응하지만

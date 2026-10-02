@@ -1,5 +1,8 @@
 package com.quantlime.notification.domain;
 
+import static jakarta.persistence.ConstraintMode.NO_CONSTRAINT;
+import static lombok.AccessLevel.PROTECTED;
+
 import com.quantlime.common.domain.TimeBaseEntity;
 import com.quantlime.user.domain.User;
 import jakarta.persistence.Column;
@@ -17,9 +20,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.util.Assert;
-
-import static jakarta.persistence.ConstraintMode.NO_CONSTRAINT;
-import static lombok.AccessLevel.PROTECTED;
 
 // 사용자당 여러 기기(브라우저) 토큰을 동시에 보관한다(데스크톱+모바일
 // 동시 로그인 지원) - 같은 토큰 문자열이 다른 계정으로 재등록되면(같은

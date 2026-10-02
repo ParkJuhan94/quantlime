@@ -14,9 +14,7 @@ const GRADE_SCALE: { label: string; activeClass: string; glowColor: string }[] =
   { label: '강력매수', activeClass: 'bg-red-600 text-white', glowColor: 'rgba(220, 38, 38, 0.55)' },
 ]
 
-type ScoreSummaryRowProps =
-  | { locked: true; score?: undefined }
-  | { locked?: false; score: ScoreResponse }
+type ScoreSummaryRowProps = { locked: true; score?: undefined } | { locked?: false; score: ScoreResponse }
 
 // 등급 박스 5칸을 위쪽 전체 너비에 걸쳐 넓게 배치하고, 추세추종/평균회귀/
 // 코멘트는 그 아래로 내린다(예전엔 박스 옆에 나란히 둬서 박스 폭이
@@ -73,9 +71,7 @@ export function ScoreSummaryRow(props: ScoreSummaryRowProps) {
               key={tier.label}
               style={isActive ? ({ '--glow-color': tier.glowColor } as CSSProperties) : undefined}
               className={`flex flex-col items-center justify-center gap-1.5 rounded-xl py-4 text-center transition ${
-                isActive
-                  ? `${tier.activeClass} animate-glow-pulse`
-                  : 'border border-gray-200 bg-gray-50 text-gray-500'
+                isActive ? `${tier.activeClass} animate-glow-pulse` : 'border border-gray-200 bg-gray-50 text-gray-500'
               }`}
             >
               <span className="text-xs font-medium">{tier.label}</span>
@@ -122,8 +118,8 @@ export function ScoreSummaryRow(props: ScoreSummaryRowProps) {
             <circle cx="12" cy="8" r="0.75" fill="currentColor" stroke="none" />
           </svg>
           <div className="invisible absolute left-0 top-6 z-20 w-56 rounded-xl border border-gray-100 bg-white p-3 text-xs leading-relaxed text-gray-600 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100">
-            퀀트라임의 자체 로직·백테스팅을 통해 산출한 100점 만점 기준의 점수예요.
-            세부 산출 방식은 외부에 공개하지 않아요.
+            퀀트라임의 자체 로직·백테스팅을 통해 산출한 100점 만점 기준의 점수예요. 세부 산출 방식은 외부에 공개하지
+            않아요.
             {score.insufficientData && (
               <p className="mt-2 text-[11px] text-gray-400">데이터가 충분하지 않아 신뢰도가 낮아요.</p>
             )}
@@ -140,7 +136,9 @@ function ScoreStat({ label, value, percentile }: { label: string; value: number 
       <p className="text-[10px] text-gray-400">{label}</p>
       <p className="text-xs font-semibold text-gray-900">
         {formatScore(value)}
-        {percentile != null && <span className="ml-1 font-normal text-gray-400">(상위 {formatScore(100 - percentile)}%)</span>}
+        {percentile != null && (
+          <span className="ml-1 font-normal text-gray-400">(상위 {formatScore(100 - percentile)}%)</span>
+        )}
       </p>
     </div>
   )

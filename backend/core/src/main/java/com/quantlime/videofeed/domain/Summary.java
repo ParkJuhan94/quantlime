@@ -1,5 +1,8 @@
 package com.quantlime.videofeed.domain;
 
+import static jakarta.persistence.ConstraintMode.NO_CONSTRAINT;
+import static lombok.AccessLevel.PROTECTED;
+
 import com.quantlime.common.domain.TimeBaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -16,9 +19,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.util.Assert;
-
-import static jakarta.persistence.ConstraintMode.NO_CONSTRAINT;
-import static lombok.AccessLevel.PROTECTED;
 
 // P4(AI 요약)에서 채울 스키마 - payload는 §6 요약 JSON 스키마를 그대로
 // 문자열로 저장한다(P4 설계가 아직 진행 중이라 타입 고정을 미룸).

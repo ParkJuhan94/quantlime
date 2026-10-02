@@ -6,6 +6,7 @@ import type {
   InvestorTradingInterval,
   InvestorTradingResponse,
   MarketIndexResponse,
+  HotSectorResponse,
   MarketRankingResponse,
 } from '../types/market'
 
@@ -39,10 +40,9 @@ export async function getInvestorTrading(
   interval: InvestorTradingInterval,
   count = 52,
 ): Promise<InvestorTradingResponse[]> {
-  const { data } = await apiClient.get<InvestorTradingResponse[]>(
-    `/api/market/indices/${code}/investor-trading`,
-    { params: { interval, count } },
-  )
+  const { data } = await apiClient.get<InvestorTradingResponse[]>(`/api/market/indices/${code}/investor-trading`, {
+    params: { interval, count },
+  })
   return data
 }
 
@@ -55,5 +55,10 @@ export async function getMarketRanking(
   const { data } = await apiClient.get<MarketRankingResponse[]>('/api/market/ranking', {
     params: { scope, sort, limit, watchlistOnly },
   })
+  return data
+}
+
+export async function getHotSectors(limit = 5): Promise<HotSectorResponse[]> {
+  const { data } = await apiClient.get<HotSectorResponse[]>('/api/market/sectors', { params: { limit } })
   return data
 }

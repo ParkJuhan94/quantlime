@@ -3,7 +3,11 @@ import type { IndicatorSettings } from '../../utils/indicators'
 import { IndicatorSettingsModal } from './IndicatorSettingsModal'
 
 const TOGGLE_KEYS: Array<keyof Pick<IndicatorSettings, 'volume' | 'ma' | 'bollingerBands' | 'ichimoku' | 'macd'>> = [
-  'volume', 'ma', 'bollingerBands', 'ichimoku', 'macd',
+  'volume',
+  'ma',
+  'bollingerBands',
+  'ichimoku',
+  'macd',
 ]
 
 interface IndicatorControlsProps {
@@ -27,9 +31,7 @@ export function IndicatorControls({ value, onChange }: IndicatorControlsProps) {
         className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
       >
         보조지표
-        <span className="rounded-full bg-gray-100 px-1.5 text-[11px] font-semibold text-gray-500">
-          {activeCount}
-        </span>
+        <span className="rounded-full bg-gray-100 px-1.5 text-[11px] font-semibold text-gray-500">{activeCount}</span>
       </button>
 
       <IndicatorSettingsModal

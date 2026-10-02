@@ -15,12 +15,7 @@ const RIBBON_HEIGHT = 14
 const GAP = 8
 const TOTAL_HEIGHT = PRICE_HEIGHT + GAP + SCORE_HEIGHT + GAP + RIBBON_HEIGHT + 20
 
-function buildSegments(
-  values: (number | null)[],
-  min: number,
-  max: number,
-  height: number,
-): string[] {
+function buildSegments(values: (number | null)[], min: number, max: number, height: number): string[] {
   const n = values.length
   const stepX = WIDTH / Math.max(n - 1, 1)
   const range = max - min || 1
@@ -72,7 +67,9 @@ export function BacktestPriceScoreChart({ dailyScores }: { dailyScores: DailySco
         <LegendDot color="#111827" label="종가" />
         <LegendDot color="#7c3aed" label="추세추종 점수" />
         <LegendDot color="#0d9488" label="평균회귀 점수" />
-        <span className="text-gray-400">최저 {formatPrice(priceMin)} · 최고 {formatPrice(priceMax)}</span>
+        <span className="text-gray-400">
+          최저 {formatPrice(priceMin)} · 최고 {formatPrice(priceMax)}
+        </span>
       </div>
 
       <svg width="100%" viewBox={`0 0 ${WIDTH} ${TOTAL_HEIGHT}`} preserveAspectRatio="none">
@@ -101,17 +98,25 @@ export function BacktestPriceScoreChart({ dailyScores }: { dailyScores: DailySco
               y={0}
               width={Math.max(stepX, 1)}
               height={RIBBON_HEIGHT}
-              fill={d.quadrant ? QUADRANT_LINE_COLORS[d.quadrant] ?? '#d1d5db' : '#e5e7eb'}
+              fill={d.quadrant ? (QUADRANT_LINE_COLORS[d.quadrant] ?? '#d1d5db') : '#e5e7eb'}
             />
           ))}
         </g>
 
         {/* x축 날짜 라벨 3개(처음/중간/끝) */}
-        <text x={0} y={TOTAL_HEIGHT} fontSize="11" fill="#9ca3af">{firstDate}</text>
-        <text x={WIDTH / 2} y={TOTAL_HEIGHT} fontSize="11" fill="#9ca3af" textAnchor="middle">{midDate}</text>
-        <text x={WIDTH} y={TOTAL_HEIGHT} fontSize="11" fill="#9ca3af" textAnchor="end">{lastDate}</text>
+        <text x={0} y={TOTAL_HEIGHT} fontSize="11" fill="#9ca3af">
+          {firstDate}
+        </text>
+        <text x={WIDTH / 2} y={TOTAL_HEIGHT} fontSize="11" fill="#9ca3af" textAnchor="middle">
+          {midDate}
+        </text>
+        <text x={WIDTH} y={TOTAL_HEIGHT} fontSize="11" fill="#9ca3af" textAnchor="end">
+          {lastDate}
+        </text>
       </svg>
-      <p className="mt-1 text-[11px] text-gray-400">하단 리본 색상은 그날의 사분면(추세추종 x 평균회귀)을 나타냅니다.</p>
+      <p className="mt-1 text-[11px] text-gray-400">
+        하단 리본 색상은 그날의 사분면(추세추종 x 평균회귀)을 나타냅니다.
+      </p>
     </div>
   )
 }

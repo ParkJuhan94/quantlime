@@ -1,6 +1,13 @@
 /**
  * 차트 보조지표 계산 유틸. 스코어링(quant-engine)과는 무관한, 원값 그대로의
  * 표준 공식만 구현한다 - 가중치/등급 산출 없이 캔들 위에 그대로 겹쳐 그리는 용도.
+ *
+ * 퀀트 엔진(quant-engine/calculator/indicators.py, pandas)과 정의가 의도적으로 다르다
+ * (2026-10-02 결정: 표준 정의 유지) - 볼린저 표준편차는 여기서 모표준편차(ddof=0)이고
+ * 엔진은 표본표준편차(ddof=1), EMA 시드는 여기서 첫 N개 SMA이고 엔진은 첫 값(ewm
+ * adjust=False)이다. 사용자가 다른 차트 서비스(TradingView 등)와 값을 비교하는 화면이라
+ * 표준 정의를 쓰고, 엔진 값은 점수 계산 내부에서만 쓰여 화면에 노출되지 않는다.
+ * 이 파일을 엔진에 맞추거나 그 반대로 바꾸려 하지 말 것(테스트 fixture 주석도 참고).
  */
 
 export type LineDashStyle = 'solid' | 'dashed' | 'dotted'
@@ -276,5 +283,10 @@ export function shiftBusinessDays(dateStr: string, days: number): string {
       remaining -= 1
     }
   }
-  return date.toISOString().slice(0, 10)
+  // toISOString()은 UTC 기준이라 로컬 자정 Date를 UTC+ 타임존(KST 등)에서 변환하면 하루 전
+  // 날짜가 나온다 - 로컬 연/월/일을 그대로 쓴다(utils/dateFilter.ts의 toDateString과 같은 이유)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const dayOfMonth = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${dayOfMonth}`
 }

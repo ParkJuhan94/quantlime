@@ -1,5 +1,7 @@
 package com.quantlime.price.dto.mapper;
 
+import static lombok.AccessLevel.PRIVATE;
+
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.price.dto.response.CurrentPriceResponse;
@@ -7,8 +9,6 @@ import com.quantlime.price.dto.response.DailyChartResponse;
 import com.quantlime.price.dto.response.PriceSnapshot;
 import com.quantlime.price.util.ChangeRateCalculator;
 import lombok.NoArgsConstructor;
-
-import static lombok.AccessLevel.PRIVATE;
 
 @NoArgsConstructor(access = PRIVATE)
 public final class PriceMapper {

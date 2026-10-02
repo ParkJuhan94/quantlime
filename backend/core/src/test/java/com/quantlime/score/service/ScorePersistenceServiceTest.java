@@ -1,12 +1,23 @@
 package com.quantlime.score.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+
+import com.quantlime.infra.python.dto.CrossSectionNormalizeApiResponse.NormalizedItemApiResponse;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.DailyScoreSeriesApiResponse;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.DivergenceApiResponse;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.StockScoreSeriesApiResponse;
 import com.quantlime.score.domain.Divergence;
+import com.quantlime.score.domain.PeerGroup;
 import com.quantlime.score.domain.Quadrant;
 import com.quantlime.score.domain.Score;
 import com.quantlime.score.repository.ScoreRepository;
+import com.quantlime.stock.domain.MarketType;
 import jakarta.persistence.EntityManager;
 import java.time.LocalDate;
 import java.util.List;
@@ -20,14 +31,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
@@ -57,6 +60,24 @@ class ScorePersistenceServiceTest {
 
         // then
         verify(scoreRepository).save(any(Score.class));
+    }
+
+    @Test
+    @DisplayName("[횡단면 정규화 결과는 재조회한 최신 스코어에 반영하고 응답에 없는 종목은 건드리지 않는다]")
+    void applyNormalization_appliesToRequeriedScoresAndSkipsUnknown() {
+        // given
+        Score target = Score.of(STOCK_CODE, TODAY, 60.0, 40.0, 50.0, null,
+            null, Divergence.of(false, null), false);
+        given(scoreRepository.findLatestScoresForNormalization(any())).willReturn(List.of(target));
+
+        // when
+        scorePersistenceService.applyNormalization(MarketType.domesticValues(), PeerGroup.DOMESTIC,
+            List.of(new NormalizedItemApiResponse(STOCK_CODE, 70.0, 30.0, 55.0),
+                new NormalizedItemApiResponse("UNKNOWN", 1.0, 1.0, 1.0)));
+
+        // then
+        assertThat(target.getCompositePercentile()).isEqualTo(55.0);
+        assertThat(target.getPeerGroup()).isEqualTo(PeerGroup.DOMESTIC);
     }
 
     @Test

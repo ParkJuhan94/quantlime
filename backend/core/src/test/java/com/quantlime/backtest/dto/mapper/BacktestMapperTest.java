@@ -1,5 +1,7 @@
 package com.quantlime.backtest.dto.mapper;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.quantlime.backtest.domain.BacktestAxis;
 import com.quantlime.backtest.domain.BacktestDailyScore;
 import com.quantlime.backtest.domain.BacktestResult;
@@ -18,8 +20,6 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 @Tag("unit")
 class BacktestMapperTest {

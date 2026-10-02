@@ -73,8 +73,9 @@ export function VideoFeedPage() {
       {videoFeedQuery.isError && (
         <ErrorState message={getErrorMessage(videoFeedQuery.error, '영상 요약을 불러오지 못했어요.')} />
       )}
-      {!videoFeedQuery.isError &&
-        (videoFeedQuery.isLoading || (videos.length === 0 && dateNav.canSkipFurther)) && <LoadingSpinner />}
+      {!videoFeedQuery.isError && (videoFeedQuery.isLoading || (videos.length === 0 && dateNav.canSkipFurther)) && (
+        <LoadingSpinner />
+      )}
       {!videoFeedQuery.isError && !videoFeedQuery.isLoading && videos.length === 0 && !dateNav.canSkipFurther && (
         <EmptyState message="아직 요약된 영상이 없어요." />
       )}

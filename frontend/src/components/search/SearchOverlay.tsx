@@ -4,8 +4,9 @@ import { useStockSearch } from '../../hooks/queries/useStockSearch'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { searchHistoryStorage } from '../../storage/searchHistoryStorage'
 import { StockLogo } from '../common/StockLogo'
-import { currencyForMarketType } from '../../utils/priceFormat'
+import { changeRateColorClass, currencyForMarketType, formatChangeRate } from '../../utils/priceFormat'
 import { usePopularStocksQuery } from '../../hooks/queries/usePopularStocks'
+import { useHotSectorsQuery } from '../../hooks/queries/useHotSectors'
 import type { StockDetailResponse } from '../../types/stock'
 import { useAuth } from '../../auth/useAuth'
 import { useRemoveWatchlist, useWatchlistQuery } from '../../hooks/queries/useWatchlist'
@@ -28,13 +29,7 @@ function sortWatchedFirst<T extends { stockCode: string }>(items: T[], watchlist
   })
 }
 
-function WatchHeartButton({
-  isWatched,
-  onToggle,
-}: {
-  isWatched: boolean
-  onToggle: () => void
-}) {
+function WatchHeartButton({ isWatched, onToggle }: { isWatched: boolean; onToggle: () => void }) {
   // 종목상세 하트 버튼과 동일하게 border+배경 박스 스타일로 통일한다
   // (2026-07-17 피드백).
   return (
@@ -49,7 +44,14 @@ function WatchHeartButton({
         isWatched ? 'border-red-200 bg-red-50 hover:bg-red-100' : 'border-gray-200 hover:bg-gray-50'
       }`}
     >
-      <svg width="14" height="14" viewBox="0 0 24 24" fill={isWatched ? '#dc2626' : 'none'} stroke={isWatched ? '#dc2626' : '#c6c6c6'} strokeWidth="2">
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill={isWatched ? '#dc2626' : 'none'}
+        stroke={isWatched ? '#dc2626' : '#c6c6c6'}
+        strokeWidth="2"
+      >
         <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z" />
       </svg>
     </button>
@@ -66,6 +68,7 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
   const debouncedQuery = useDebouncedValue(query, 300)
   const searchQuery = useStockSearch(debouncedQuery)
   const popularStocksQuery = usePopularStocksQuery(5)
+  const hotSectorsQuery = useHotSectorsQuery(5, open)
   const resultRefs = useRef<(HTMLLIElement | null)[]>([])
 
   const recentSearchScrollRef = useRef<HTMLDivElement>(null)
@@ -84,8 +87,8 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
   const watchlistQuery = useWatchlistQuery(isAuthenticated)
   const groupsQuery = useWatchlistGroupsQuery(isAuthenticated)
   const removeWatchlist = useRemoveWatchlist()
-  const watchlist = isAuthenticated ? watchlistQuery.data ?? [] : []
-  const watchlistGroups = isAuthenticated ? groupsQuery.data ?? [] : []
+  const watchlist = isAuthenticated ? (watchlistQuery.data ?? []) : []
+  const watchlistGroups = isAuthenticated ? (groupsQuery.data ?? []) : []
   const watchlistCodes = new Set(watchlist.map((item) => item.stockCode))
 
   // 관심종목 등록은 항상 그룹 지정이 필요하다("미분류" 폐지) - 삭제는
@@ -160,16 +163,21 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
   }
 
   return (
-    <div
-      className="fixed inset-0 z-40 flex justify-center bg-black/35 pt-16"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-40 flex justify-center bg-black/35 pt-16" onClick={onClose}>
       <div
         onClick={(event) => event.stopPropagation()}
         className="h-fit max-h-[70vh] w-full max-w-[360px] overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl"
       >
         <div className="mb-4 flex items-center gap-2.5 rounded-xl bg-gray-100 px-3.5 py-2.5">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2" className="shrink-0">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#999"
+            strokeWidth="2"
+            className="shrink-0"
+          >
             <circle cx="11" cy="11" r="7" />
             <path d="m21 21-4.3-4.3" />
           </svg>
@@ -270,6 +278,30 @@ export function SearchOverlay({ open, onClose }: SearchOverlayProps) {
                     }`}
                   />
                 </div>
+              </div>
+            )}
+
+            {/* 장중에만 값이 있다(서버 스냅샷 기준) - 마감 후엔 빈 배열이라 섹션 자체를 숨긴다
+                (가짜 등락률을 채우지 않는다, frontend/CLAUDE.md). */}
+            {hotSectorsQuery.data && hotSectorsQuery.data.length > 0 && (
+              <div className="mb-5">
+                <p className="mb-2 text-xs font-semibold text-gray-400">지금 뜨는 산업</p>
+                <ul className="flex flex-col">
+                  {hotSectorsQuery.data.map((sector, index) => (
+                    <li key={sector.sector} className="flex items-center gap-3 rounded-lg px-2 py-1.5">
+                      <span className="w-3.5 text-xs font-semibold text-gray-300">{index + 1}</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-gray-900">{sector.sector}</p>
+                        <p className="truncate text-xs text-gray-400">
+                          {sector.leaders.map((leader) => leader.stockName).join(' · ')}
+                        </p>
+                      </div>
+                      <span className={`text-sm font-semibold ${changeRateColorClass(sector.changeRate)}`}>
+                        {formatChangeRate(sector.changeRate)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
 

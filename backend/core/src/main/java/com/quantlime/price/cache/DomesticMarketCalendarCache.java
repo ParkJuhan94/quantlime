@@ -2,7 +2,6 @@ package com.quantlime.price.cache;
 
 import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.toss.dto.TossMarketCalendarResponse;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
