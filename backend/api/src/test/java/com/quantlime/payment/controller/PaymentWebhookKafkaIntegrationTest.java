@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.TestPropertySource;
 
 /**
  * {@code PaymentWebhookController} → {@code PaymentService.handleWebhook} →
@@ -43,6 +44,9 @@ import org.springframework.http.MediaType;
  * (event 모듈, 순수 Mockito 단위 테스트)가 이미 검증한다 - "무엇을
  * 자동화된 단위 테스트로, 무엇을 통합 테스트로 검증할지"의 역할 분담이다.
  */
+// 브로커 왕복(발행 → 컨슈머 소비)을 검증하는 유일한 테스트라 application-test.yml이 꺼둔
+// 리스너 컨테이너를 여기서만 다시 켠다(그 파일의 주석 참고)
+@TestPropertySource(properties = "spring.kafka.listener.auto-startup=true")
 @Tag("integration")
 class PaymentWebhookKafkaIntegrationTest extends ApiTestSupport {
 
