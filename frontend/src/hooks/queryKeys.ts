@@ -2,6 +2,7 @@ export const queryKeys = {
   watchlist: ['watchlist'] as const,
   watchlistGroups: ['watchlist', 'groups'] as const,
   me: ['me'] as const,
+  linkedProviders: ['me', 'linked-providers'] as const,
   stockSearch: (q: string, page: number) => ['stocks', 'search', q, page] as const,
   stockDetail: (stockCode: string) => ['stocks', 'detail', stockCode] as const,
   stockPrice: (stockCode: string) => ['stocks', 'price', stockCode] as const,
