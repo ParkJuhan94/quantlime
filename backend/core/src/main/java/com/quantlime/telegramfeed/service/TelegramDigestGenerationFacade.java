@@ -10,10 +10,11 @@ import com.quantlime.telegramfeed.domain.TelegramPostStatus;
 import com.quantlime.telegramfeed.dto.TelegramDigestGenerateResult;
 import com.quantlime.telegramfeed.event.TelegramDigestGenerationRequestedEvent;
 import com.quantlime.telegramfeed.exception.TelegramFeedErrorCode;
-import com.quantlime.telegramfeed.repository.TelegramPostRepository;
+import com.quantlime.telegramfeed.implement.TelegramDigestAppender;
+import com.quantlime.telegramfeed.implement.TelegramPostReader;
 import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.Platform;
-import com.quantlime.videofeed.repository.ChannelRepository;
+import com.quantlime.videofeed.implement.ChannelReader;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.Comparator;
@@ -56,10 +57,10 @@ public class TelegramDigestGenerationFacade {
     private static final String CONTENT_SEPARATOR = "\n\n---\n\n";
 
     private final RedisLockService redisLockService;
-    private final ChannelRepository channelRepository;
-    private final TelegramPostRepository telegramPostRepository;
+    private final ChannelReader channelReader;
+    private final TelegramPostReader telegramPostReader;
     private final PythonEngineClient pythonEngineClient;
-    private final TelegramDigestPersistService telegramDigestPersistService;
+    private final TelegramDigestAppender telegramDigestAppender;
     private final ApplicationEventPublisher eventPublisher;
 
     public Optional<Integer> runAllExclusively() {
@@ -69,7 +70,7 @@ public class TelegramDigestGenerationFacade {
     // 락 없이 발행 로직만 실행 - 테스트에서 직접 호출. 스케줄러/관리자 엔드포인트는
     // 반드시 runAllExclusively()를 통해서만 호출할 것.
     public int publishAll() {
-        List<Channel> channels = channelRepository.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.TELEGRAM);
+        List<Channel> channels = channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.TELEGRAM);
         LocalDate today = LocalDate.now();
         channels.forEach(channel ->
             eventPublisher.publishEvent(new TelegramDigestGenerationRequestedEvent(channel.getId(), today)));
@@ -86,7 +87,7 @@ public class TelegramDigestGenerationFacade {
      * 자신이 실패를 흡수하면 재시도/DLT가 아예 발동하지 않는다).
      */
     public TelegramDigestGenerateResult generateForChannel(Long channelId, LocalDate date) {
-        Channel channel = channelRepository.findById(channelId)
+        Channel channel = channelReader.findById(channelId)
             .orElseThrow(() -> new NotFoundException(TelegramFeedErrorCode.NOT_FOUND_CHANNEL));
         TelegramDigestGenerateResult result = generateForChannel(channel, date);
         // 예전엔 스케줄러의 logSummary가 채널 전체를 모아 한 번에 로그를
@@ -105,7 +106,7 @@ public class TelegramDigestGenerationFacade {
     }
 
     private TelegramDigestGenerateResult generateForChannel(Channel channel, LocalDate date) {
-        List<TelegramPost> posts = telegramPostRepository.findByChannelAndStatusAndPublishedAtBetween(
+        List<TelegramPost> posts = telegramPostReader.findByChannelAndStatusAndPublishedAtBetween(
             channel, TelegramPostStatus.SELECTED, date.atStartOfDay(), date.plusDays(1).atStartOfDay());
         if (posts.isEmpty()) {
             return TelegramDigestGenerateResult.skipped(channel.getName());
@@ -117,7 +118,7 @@ public class TelegramDigestGenerationFacade {
             .collect(Collectors.joining(CONTENT_SEPARATOR));
         SummarizeApiResponse response = pythonEngineClient.summarize(
             new SummarizeApiRequest(null, channel.getName(), combinedContent, "telegram"));
-        telegramDigestPersistService.persistResult(channel, date, response);
+        telegramDigestAppender.persistResult(channel, date, response);
         return TelegramDigestGenerateResult.success(channel.getName(), posts.size());
     }
 }

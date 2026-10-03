@@ -16,13 +16,13 @@ import com.quantlime.telegramfeed.domain.TelegramPostStatus;
 import com.quantlime.telegramfeed.dto.response.TelegramFeedChannelResponse;
 import com.quantlime.telegramfeed.dto.response.TelegramFeedDigestDetailResponse;
 import com.quantlime.telegramfeed.dto.response.TelegramFeedDigestResponse;
-import com.quantlime.telegramfeed.repository.TelegramDigestRepository;
-import com.quantlime.telegramfeed.repository.TelegramDigestTickerRepository;
-import com.quantlime.telegramfeed.repository.TelegramPostRepository;
+import com.quantlime.telegramfeed.implement.TelegramDigestReader;
+import com.quantlime.telegramfeed.implement.TelegramDigestTickerReader;
+import com.quantlime.telegramfeed.implement.TelegramPostReader;
 import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.Platform;
 import com.quantlime.videofeed.domain.TelegramFilterConfig;
-import com.quantlime.videofeed.repository.ChannelRepository;
+import com.quantlime.videofeed.implement.ChannelReader;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -45,16 +45,16 @@ import org.springframework.test.util.ReflectionTestUtils;
 class TelegramFeedServiceTest {
 
     @Mock
-    private TelegramDigestRepository telegramDigestRepository;
+    private ChannelReader channelReader;
 
     @Mock
-    private TelegramDigestTickerRepository telegramDigestTickerRepository;
+    private TelegramPostReader telegramPostReader;
 
     @Mock
-    private TelegramPostRepository telegramPostRepository;
+    private TelegramDigestReader telegramDigestReader;
 
     @Mock
-    private ChannelRepository channelRepository;
+    private TelegramDigestTickerReader telegramDigestTickerReader;
 
     private TelegramFeedService telegramFeedService;
 
@@ -88,8 +88,8 @@ class TelegramFeedServiceTest {
     }
 
     private TelegramFeedService newService() {
-        return new TelegramFeedService(telegramDigestRepository, telegramDigestTickerRepository,
-            telegramPostRepository, channelRepository, new ObjectMapper());
+        return new TelegramFeedService(channelReader, telegramPostReader, telegramDigestReader,
+            telegramDigestTickerReader, new ObjectMapper());
     }
 
     @Test
@@ -102,14 +102,14 @@ class TelegramFeedServiceTest {
         TelegramDigest digest1 = digestOf(1L, channel, date, "요약1");
         TelegramDigest digest2 = digestOf(2L, channel, date.minusDays(1), "요약2");
         Pageable pageable = PageRequest.of(0, 10);
-        given(telegramDigestRepository.findDigests(null, null, null, pageable))
+        given(telegramDigestReader.findDigests(null, null, null, pageable))
             .willReturn(new SliceImpl<>(List.of(digest1, digest2)));
-        given(telegramDigestTickerRepository.findByTelegramDigest_IdIn(List.of(1L, 2L)))
+        given(telegramDigestTickerReader.findByTelegramDigest_IdIn(List.of(1L, 2L)))
             .willReturn(List.of(TelegramDigestTicker.of(digest1, "AAPL", "애플", "BULLISH", BigDecimal.valueOf(0.8))));
         // 다이제스트별 반복 조회(N+1) 대신 페이지 전체 날짜 범위를 한 번에
         // 집계하는 쿼리로 바뀌었다(2026-08-19) - digest1(date) 소속 글 1건만
         // 반환해, digest2(date-1일)는 소스 글 0건으로 집계되는지도 함께 검증한다.
-        given(telegramPostRepository.findChannelIdAndPublishedAtForCounting(
+        given(telegramPostReader.findChannelIdAndPublishedAtForCounting(
             eq(List.of(1L)), eq(TelegramPostStatus.SELECTED), any(), any()))
             .willReturn(List.<Object[]>of(new Object[]{1L, date.atTime(9, 0)}));
 
@@ -139,14 +139,14 @@ class TelegramFeedServiceTest {
         Pageable pageable = PageRequest.of(0, 10);
         Slice<TelegramDigest> emptySlice = new SliceImpl<>(List.of());
         LocalDate date = LocalDate.of(2026, 8, 14);
-        given(telegramDigestRepository.findDigests(eq("AAPL"), eq(1L), eq(date), eq(pageable)))
+        given(telegramDigestReader.findDigests(eq("AAPL"), eq(1L), eq(date), eq(pageable)))
             .willReturn(emptySlice);
 
         // when
         telegramFeedService.getDigests("AAPL", 1L, date, pageable);
 
         // then
-        verify(telegramDigestRepository).findDigests("AAPL", 1L, date, pageable);
+        verify(telegramDigestReader).findDigests("AAPL", 1L, date, pageable);
     }
 
     @Test
@@ -156,7 +156,7 @@ class TelegramFeedServiceTest {
         telegramFeedService = newService();
         Channel channel = channelOf();
         ReflectionTestUtils.setField(channel, "id", 1L);
-        given(channelRepository.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.TELEGRAM))
+        given(channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.TELEGRAM))
             .willReturn(List.of(channel));
 
         // when
@@ -174,10 +174,10 @@ class TelegramFeedServiceTest {
         Channel channel = channelOf();
         LocalDate date = LocalDate.of(2026, 8, 15);
         TelegramDigest digest = digestOf(1L, channel, date, "요약1");
-        given(telegramDigestRepository.findByIdWithChannel(1L)).willReturn(Optional.of(digest));
-        given(telegramDigestTickerRepository.findByTelegramDigest(digest))
+        given(telegramDigestReader.findByIdWithChannel(1L)).willReturn(Optional.of(digest));
+        given(telegramDigestTickerReader.findByTelegramDigest(digest))
             .willReturn(List.of(TelegramDigestTicker.of(digest, "AAPL", "애플", "BULLISH", BigDecimal.valueOf(0.8))));
-        given(telegramPostRepository.findByChannelAndStatusAndPublishedAtBetween(
+        given(telegramPostReader.findByChannelAndStatusAndPublishedAtBetween(
             eq(channel), eq(TelegramPostStatus.SELECTED), any(), any()))
             .willReturn(List.of(
                 TelegramPost.of(channel, "insidertracking/1", 1L, "본문", date.atTime(9, 0), 10L, LocalDateTime.now(), false)));
@@ -201,9 +201,9 @@ class TelegramFeedServiceTest {
         telegramFeedService = newService();
         Channel channel = channelOf();
         TelegramDigest digest = digestOfWithoutMacroPoints(1L, channel, LocalDate.of(2026, 8, 15), "요약1");
-        given(telegramDigestRepository.findByIdWithChannel(1L)).willReturn(Optional.of(digest));
-        given(telegramDigestTickerRepository.findByTelegramDigest(digest)).willReturn(List.of());
-        given(telegramPostRepository.findByChannelAndStatusAndPublishedAtBetween(
+        given(telegramDigestReader.findByIdWithChannel(1L)).willReturn(Optional.of(digest));
+        given(telegramDigestTickerReader.findByTelegramDigest(digest)).willReturn(List.of());
+        given(telegramPostReader.findByChannelAndStatusAndPublishedAtBetween(
             eq(channel), eq(TelegramPostStatus.SELECTED), any(), any()))
             .willReturn(List.of());
 
@@ -219,7 +219,7 @@ class TelegramFeedServiceTest {
     void getDigestDetail_notFound_throwsNotFoundException() {
         // given
         telegramFeedService = newService();
-        given(telegramDigestRepository.findByIdWithChannel(999L)).willReturn(Optional.empty());
+        given(telegramDigestReader.findByIdWithChannel(999L)).willReturn(Optional.empty());
 
         // when & then
         assertThatThrownBy(() -> telegramFeedService.getDigestDetail(999L))

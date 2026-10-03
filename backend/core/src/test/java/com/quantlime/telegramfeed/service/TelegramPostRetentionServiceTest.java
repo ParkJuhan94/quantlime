@@ -11,6 +11,9 @@ import com.quantlime.telegramfeed.domain.TelegramDigest;
 import com.quantlime.telegramfeed.domain.TelegramDigestTicker;
 import com.quantlime.telegramfeed.domain.TelegramPost;
 import com.quantlime.telegramfeed.dto.TelegramRetentionResult;
+import com.quantlime.telegramfeed.implement.TelegramDigestReader;
+import com.quantlime.telegramfeed.implement.TelegramPostReader;
+import com.quantlime.telegramfeed.implement.TelegramPostRemover;
 import com.quantlime.telegramfeed.repository.TelegramDigestRepository;
 import com.quantlime.telegramfeed.repository.TelegramDigestTickerRepository;
 import com.quantlime.telegramfeed.repository.TelegramPostRepository;
@@ -54,10 +57,11 @@ class TelegramPostRetentionServiceTest extends DataJpaTestSupport {
 
     @BeforeEach
     void setUp() {
-        TelegramPostRetentionDeleteService telegramPostRetentionDeleteService = new TelegramPostRetentionDeleteService(
+        TelegramPostRemover telegramPostRemover = new TelegramPostRemover(
             telegramPostRepository, telegramDigestRepository, telegramDigestTickerRepository);
         telegramPostRetentionService = new TelegramPostRetentionService(
-            null, telegramPostRepository, telegramDigestRepository, telegramPostRetentionDeleteService);
+            null, new TelegramPostReader(telegramPostRepository),
+            new TelegramDigestReader(telegramDigestRepository), telegramPostRemover);
     }
 
     private Channel channelOf(String handle) {
@@ -132,10 +136,11 @@ class TelegramPostRetentionServiceTest extends DataJpaTestSupport {
     void runExclusively_whenLockAcquired_returnsDeletedCount() {
         // given
         RedisLockService redisLockService = mock(RedisLockService.class);
-        TelegramPostRetentionDeleteService telegramPostRetentionDeleteService = new TelegramPostRetentionDeleteService(
+        TelegramPostRemover telegramPostRemover = new TelegramPostRemover(
             telegramPostRepository, telegramDigestRepository, telegramDigestTickerRepository);
         TelegramPostRetentionService serviceWithLock = new TelegramPostRetentionService(
-            redisLockService, telegramPostRepository, telegramDigestRepository, telegramPostRetentionDeleteService);
+            redisLockService, new TelegramPostReader(telegramPostRepository),
+            new TelegramDigestReader(telegramDigestRepository), telegramPostRemover);
         Channel channel = channelOf("handle-old");
         seedPost(channel, 1L, LocalDateTime.now().minusDays(15));
         given(redisLockService.runExclusively(any(), any(), any())).willAnswer(invocation -> {
@@ -156,10 +161,11 @@ class TelegramPostRetentionServiceTest extends DataJpaTestSupport {
     void runExclusively_whenLockNotAcquired_skipsCleanup() {
         // given
         RedisLockService redisLockService = mock(RedisLockService.class);
-        TelegramPostRetentionDeleteService telegramPostRetentionDeleteService = new TelegramPostRetentionDeleteService(
+        TelegramPostRemover telegramPostRemover = new TelegramPostRemover(
             telegramPostRepository, telegramDigestRepository, telegramDigestTickerRepository);
         TelegramPostRetentionService serviceWithLock = new TelegramPostRetentionService(
-            redisLockService, telegramPostRepository, telegramDigestRepository, telegramPostRetentionDeleteService);
+            redisLockService, new TelegramPostReader(telegramPostRepository),
+            new TelegramDigestReader(telegramDigestRepository), telegramPostRemover);
         Channel channel = channelOf("handle-old");
         seedPost(channel, 1L, LocalDateTime.now().minusDays(15));
         given(redisLockService.runExclusively(any(), any(), any())).willReturn(Optional.empty());

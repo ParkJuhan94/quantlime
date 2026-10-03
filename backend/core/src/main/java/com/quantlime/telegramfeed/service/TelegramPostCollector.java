@@ -8,7 +8,7 @@ import com.quantlime.infra.telegram.dto.TelegramPreviewPage;
 import com.quantlime.telegramfeed.dto.CollectedTelegramPost;
 import com.quantlime.telegramfeed.dto.TelegramChannelMeta;
 import com.quantlime.telegramfeed.dto.TelegramCollectionOutcome;
-import com.quantlime.telegramfeed.repository.TelegramPostRepository;
+import com.quantlime.telegramfeed.implement.TelegramPostReader;
 import com.quantlime.videofeed.domain.Channel;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -36,12 +36,12 @@ public class TelegramPostCollector {
     private static final int MAX_PAGES_PER_RUN = 5;
 
     private final TelegramWebPreviewClient telegramWebPreviewClient;
-    private final TelegramPostRepository telegramPostRepository;
+    private final TelegramPostReader telegramPostReader;
     private final TelegramApiProperties telegramApiProperties;
 
     public TelegramCollectionOutcome collect(Channel channel) {
         String handle = channel.getExternalChannelId();
-        return telegramPostRepository.findMaxMessageIdByChannel(channel)
+        return telegramPostReader.findMaxMessageIdByChannel(channel)
             .map(cursor -> collectIncremental(handle, cursor))
             .orElseGet(() -> collectInitial(handle));
     }

@@ -1,4 +1,4 @@
-package com.quantlime.telegramfeed.service;
+package com.quantlime.telegramfeed.implement;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -23,13 +23,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
-class TelegramPostPersistServiceTest {
+class TelegramPostAppenderTest {
 
     @Mock
     private TelegramPostRepository telegramPostRepository;
 
     @InjectMocks
-    private TelegramPostPersistService telegramPostPersistService;
+    private TelegramPostAppender telegramPostAppender;
 
     @Test
     @DisplayName("[이미 저장된 external_post_id는 건너뛰고 신규 글만 적재한다(스케줄러 중복 실행 방어)]")
@@ -45,7 +45,7 @@ class TelegramPostPersistServiceTest {
         given(telegramPostRepository.existsByExternalPostId("testhandle/2")).willReturn(false);
 
         // when
-        int insertedCount = telegramPostPersistService.upsertAll(channel, List.of(existing, fresh));
+        int insertedCount = telegramPostAppender.upsertAll(channel, List.of(existing, fresh));
 
         // then
         assertThat(insertedCount).isEqualTo(1);

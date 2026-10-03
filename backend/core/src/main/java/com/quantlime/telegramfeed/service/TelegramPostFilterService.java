@@ -2,7 +2,7 @@ package com.quantlime.telegramfeed.service;
 
 import com.quantlime.telegramfeed.domain.TelegramPost;
 import com.quantlime.telegramfeed.domain.TelegramPostStatus;
-import com.quantlime.telegramfeed.repository.TelegramPostRepository;
+import com.quantlime.telegramfeed.implement.TelegramPostReader;
 import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.TelegramFilterConfig;
 import java.time.LocalDateTime;
@@ -34,12 +34,12 @@ public class TelegramPostFilterService {
     // 동일 값 유지(공유 설정 파일이 없는 프로젝트 관례).
     private static final int RETENTION_DAYS = 14;
 
-    private final TelegramPostRepository telegramPostRepository;
+    private final TelegramPostReader telegramPostReader;
 
     @Transactional
     public void applyFilters(Channel channel) {
         List<TelegramPost> discovered =
-            telegramPostRepository.findByChannelAndStatus(channel, TelegramPostStatus.DISCOVERED);
+            telegramPostReader.findByChannelAndStatus(channel, TelegramPostStatus.DISCOVERED);
         TelegramFilterConfig config = channel.getTelegramFilterConfig();
         for (TelegramPost post : discovered) {
             classify(post, channel, config);

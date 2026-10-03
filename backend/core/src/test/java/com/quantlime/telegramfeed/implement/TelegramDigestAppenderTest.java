@@ -1,4 +1,4 @@
-package com.quantlime.telegramfeed.service;
+package com.quantlime.telegramfeed.implement;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -29,7 +29,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
-class TelegramDigestPersistServiceTest {
+class TelegramDigestAppenderTest {
 
     @Mock
     private TelegramDigestRepository telegramDigestRepository;
@@ -40,15 +40,15 @@ class TelegramDigestPersistServiceTest {
     @Mock
     private StockRepository stockRepository;
 
-    private TelegramDigestPersistService telegramDigestPersistService;
+    private TelegramDigestAppender telegramDigestAppender;
 
     private Channel channelOf() {
         return Channel.ofTelegram("insidertracking", "테스트 채널", 30,
             new TelegramFilterConfig(300, List.of()));
     }
 
-    private TelegramDigestPersistService newService() {
-        return new TelegramDigestPersistService(
+    private TelegramDigestAppender newService() {
+        return new TelegramDigestAppender(
             telegramDigestRepository, telegramDigestTickerRepository, stockRepository, new ObjectMapper());
     }
 
@@ -56,7 +56,7 @@ class TelegramDigestPersistServiceTest {
     @DisplayName("[해당 채널×날짜에 다이제스트가 없으면 새로 생성하고, 실제 종목마스터에 있는 태깅 종목만 정규화한다]")
     void persistResult_noExistingDigest_createsNewAndSavesValidTickers() {
         // given
-        telegramDigestPersistService = newService();
+        telegramDigestAppender = newService();
         Channel channel = channelOf();
         LocalDate date = LocalDate.of(2026, 8, 15);
         given(telegramDigestRepository.findByChannelAndDigestDate(channel, date)).willReturn(Optional.empty());
@@ -72,7 +72,7 @@ class TelegramDigestPersistServiceTest {
             "고지", "gemini-3.5-flash-lite", 100, 50);
 
         // when
-        telegramDigestPersistService.persistResult(channel, date, response);
+        telegramDigestAppender.persistResult(channel, date, response);
 
         // then
         ArgumentCaptor<TelegramDigest> digestCaptor = ArgumentCaptor.forClass(TelegramDigest.class);
@@ -87,7 +87,7 @@ class TelegramDigestPersistServiceTest {
     @DisplayName("[해당 채널×날짜에 이미 다이제스트가 있으면 신규 생성 없이 덮어쓰고, 기존 태깅 종목을 전부 지운 뒤 새로 채운다]")
     void persistResult_existingDigest_overwritesAndReplacesTickers() {
         // given
-        telegramDigestPersistService = newService();
+        telegramDigestAppender = newService();
         Channel channel = channelOf();
         LocalDate date = LocalDate.of(2026, 8, 15);
         TelegramDigest existing = TelegramDigest.of(channel, date, "gemini-3.5-flash-lite",
@@ -101,7 +101,7 @@ class TelegramDigestPersistServiceTest {
             "고지", "gemini-3.5-flash-lite", 200, 80);
 
         // when
-        telegramDigestPersistService.persistResult(channel, date, response);
+        telegramDigestAppender.persistResult(channel, date, response);
 
         // then
         verify(telegramDigestRepository, never()).save(any());
@@ -114,7 +114,7 @@ class TelegramDigestPersistServiceTest {
     @DisplayName("[실제 종목마스터에 없는(환각) 종목코드는 TelegramDigestTicker로 저장하지 않고 건너뛴다]")
     void persistResult_hallucinatedTickerCode_isSkipped() {
         // given
-        telegramDigestPersistService = newService();
+        telegramDigestAppender = newService();
         Channel channel = channelOf();
         LocalDate date = LocalDate.of(2026, 8, 15);
         given(telegramDigestRepository.findByChannelAndDigestDate(channel, date)).willReturn(Optional.empty());
@@ -126,7 +126,7 @@ class TelegramDigestPersistServiceTest {
             "고지", "gemini-3.5-flash-lite", 100, 50);
 
         // when
-        telegramDigestPersistService.persistResult(channel, date, response);
+        telegramDigestAppender.persistResult(channel, date, response);
 
         // then
         verify(telegramDigestTickerRepository, never()).save(any());

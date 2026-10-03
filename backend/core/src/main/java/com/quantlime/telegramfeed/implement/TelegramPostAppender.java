@@ -1,4 +1,4 @@
-package com.quantlime.telegramfeed.service;
+package com.quantlime.telegramfeed.implement;
 
 import com.quantlime.telegramfeed.domain.TelegramPost;
 import com.quantlime.telegramfeed.dto.CollectedTelegramPost;
@@ -19,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class TelegramPostPersistService {
+public class TelegramPostAppender {
 
     private final TelegramPostRepository telegramPostRepository;
 

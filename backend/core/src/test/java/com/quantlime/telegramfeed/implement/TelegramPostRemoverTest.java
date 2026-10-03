@@ -1,4 +1,4 @@
-package com.quantlime.telegramfeed.service;
+package com.quantlime.telegramfeed.implement;
 
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
@@ -19,7 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
-class TelegramPostRetentionDeleteServiceTest {
+class TelegramPostRemoverTest {
 
     @Mock
     private TelegramPostRepository telegramPostRepository;
@@ -31,7 +31,7 @@ class TelegramPostRetentionDeleteServiceTest {
     private TelegramDigestTickerRepository telegramDigestTickerRepository;
 
     @InjectMocks
-    private TelegramPostRetentionDeleteService service;
+    private TelegramPostRemover service;
 
     @Test
     @DisplayName("[글 삭제는 글 테이블만 배치 삭제한다(자식 테이블 없음)]")

@@ -5,7 +5,7 @@ import static org.mockito.BDDMockito.given;
 
 import com.quantlime.telegramfeed.domain.TelegramPost;
 import com.quantlime.telegramfeed.domain.TelegramPostStatus;
-import com.quantlime.telegramfeed.repository.TelegramPostRepository;
+import com.quantlime.telegramfeed.implement.TelegramPostReader;
 import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.TelegramFilterConfig;
 import java.time.LocalDateTime;
@@ -23,7 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class TelegramPostFilterServiceTest {
 
     @Mock
-    private TelegramPostRepository telegramPostRepository;
+    private TelegramPostReader telegramPostReader;
 
     @InjectMocks
     private TelegramPostFilterService telegramPostFilterService;
@@ -35,7 +35,7 @@ class TelegramPostFilterServiceTest {
         Channel channel = channelOf(new TelegramFilterConfig(50, List.of()));
         TelegramPost post = postOf(channel, "충분히 긴 본문이지만 보존기간을 넘긴 글입니다".repeat(5),
             LocalDateTime.now().minusDays(15));
-        given(telegramPostRepository.findByChannelAndStatus(channel, TelegramPostStatus.DISCOVERED))
+        given(telegramPostReader.findByChannelAndStatus(channel, TelegramPostStatus.DISCOVERED))
             .willReturn(List.of(post));
 
         // when
@@ -51,7 +51,7 @@ class TelegramPostFilterServiceTest {
         // given
         Channel channel = channelOf(new TelegramFilterConfig(300, List.of()));
         TelegramPost post = postOf(channel, "짧은 속보", LocalDateTime.now());
-        given(telegramPostRepository.findByChannelAndStatus(channel, TelegramPostStatus.DISCOVERED))
+        given(telegramPostReader.findByChannelAndStatus(channel, TelegramPostStatus.DISCOVERED))
             .willReturn(List.of(post));
 
         // when
@@ -67,7 +67,7 @@ class TelegramPostFilterServiceTest {
         // given
         Channel channel = channelOf(new TelegramFilterConfig(10, List.of("광고")));
         TelegramPost post = postOf(channel, "이것은 광고성 게시물입니다 자세히 보세요", LocalDateTime.now());
-        given(telegramPostRepository.findByChannelAndStatus(channel, TelegramPostStatus.DISCOVERED))
+        given(telegramPostReader.findByChannelAndStatus(channel, TelegramPostStatus.DISCOVERED))
             .willReturn(List.of(post));
 
         // when
@@ -83,7 +83,7 @@ class TelegramPostFilterServiceTest {
         // given
         Channel channel = channelOf(new TelegramFilterConfig(5, List.of()));
         TelegramPost post = postOf(channel, "충분히 긴 정상 게시물입니다", LocalDateTime.now());
-        given(telegramPostRepository.findByChannelAndStatus(channel, TelegramPostStatus.DISCOVERED))
+        given(telegramPostReader.findByChannelAndStatus(channel, TelegramPostStatus.DISCOVERED))
             .willReturn(List.of(post));
 
         // when
@@ -101,7 +101,7 @@ class TelegramPostFilterServiceTest {
         TelegramPost post1 = postOf(channel, "이것은 아주 길고 상세한 분석 게시물입니다 훨씬 더 깁니다", LocalDateTime.now());
         TelegramPost post2 = postOf(channel, "짧은 편인 게시물", LocalDateTime.now());
         TelegramPost post3 = postOf(channel, "세 번째 게시물입니다", LocalDateTime.now());
-        given(telegramPostRepository.findByChannelAndStatus(channel, TelegramPostStatus.DISCOVERED))
+        given(telegramPostReader.findByChannelAndStatus(channel, TelegramPostStatus.DISCOVERED))
             .willReturn(List.of(post1, post2, post3));
 
         // when

@@ -6,9 +6,11 @@ import com.quantlime.telegramfeed.dto.TelegramChannelMeta;
 import com.quantlime.telegramfeed.dto.TelegramCollectResult;
 import com.quantlime.telegramfeed.dto.TelegramCollectionOutcome;
 import com.quantlime.telegramfeed.exception.TelegramFeedErrorCode;
+import com.quantlime.telegramfeed.implement.TelegramPostAppender;
 import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.Platform;
-import com.quantlime.videofeed.repository.ChannelRepository;
+import com.quantlime.videofeed.implement.ChannelAppender;
+import com.quantlime.videofeed.implement.ChannelReader;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -33,9 +35,10 @@ public class TelegramCollectionFacade {
     private static final Duration LOCK_TTL = Duration.ofMinutes(30);
 
     private final RedisLockService redisLockService;
-    private final ChannelRepository channelRepository;
+    private final ChannelReader channelReader;
+    private final ChannelAppender channelAppender;
     private final TelegramPostCollector telegramPostCollector;
-    private final TelegramPostPersistService telegramPostPersistService;
+    private final TelegramPostAppender telegramPostAppender;
     private final TelegramPostFilterService telegramPostFilterService;
 
     public Optional<List<TelegramCollectResult>> runAllExclusively() {
@@ -46,7 +49,7 @@ public class TelegramCollectionFacade {
         // Platform.TELEGRAM으로 한정 - FeedCollectionFacade가 P7-0에서
         // Platform.YOUTUBE로 한정한 것과 대칭. 이 파사드는 TelegramPostCollector만
         // 쓰므로 유튜브 채널이 섞여 들어오면 안 된다.
-        List<Channel> channels = channelRepository.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.TELEGRAM);
+        List<Channel> channels = channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.TELEGRAM);
         List<TelegramCollectResult> results = new ArrayList<>();
         for (Channel channel : channels) {
             try {
@@ -61,7 +64,7 @@ public class TelegramCollectionFacade {
 
     private TelegramCollectResult collectChannel(Channel channel) {
         TelegramCollectionOutcome outcome = telegramPostCollector.collect(channel);
-        int insertedCount = telegramPostPersistService.upsertAll(channel, outcome.posts());
+        int insertedCount = telegramPostAppender.upsertAll(channel, outcome.posts());
         telegramPostFilterService.applyFilters(channel);
         updateChannelMeta(channel.getId(), outcome.channelMeta());
         return TelegramCollectResult.success(channel.getName(), insertedCount);
@@ -78,12 +81,12 @@ public class TelegramCollectionFacade {
     // 깨진 채로 남기 때문(값이 실제로 바뀐 경우에만 write).
     @Transactional
     void updateChannelMeta(Long channelId, TelegramChannelMeta meta) {
-        Channel channel = channelRepository.findById(channelId)
+        Channel channel = channelReader.findById(channelId)
             .orElseThrow(() -> new NotFoundException(TelegramFeedErrorCode.NOT_FOUND_CHANNEL));
         channel.updateLastCollectedAt(LocalDateTime.now());
         if (meta != null && meta.photoUrl() != null && !meta.photoUrl().equals(channel.getProfileImageUrl())) {
             channel.updateProfileImageUrl(meta.photoUrl());
         }
-        channelRepository.save(channel);
+        channelAppender.save(channel);
     }
 }

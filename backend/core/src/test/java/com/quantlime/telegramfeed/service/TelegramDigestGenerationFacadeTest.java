@@ -19,11 +19,12 @@ import com.quantlime.telegramfeed.domain.TelegramPost;
 import com.quantlime.telegramfeed.domain.TelegramPostStatus;
 import com.quantlime.telegramfeed.dto.TelegramDigestGenerateResult;
 import com.quantlime.telegramfeed.event.TelegramDigestGenerationRequestedEvent;
-import com.quantlime.telegramfeed.repository.TelegramPostRepository;
+import com.quantlime.telegramfeed.implement.TelegramDigestAppender;
+import com.quantlime.telegramfeed.implement.TelegramPostReader;
 import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.Platform;
 import com.quantlime.videofeed.domain.TelegramFilterConfig;
-import com.quantlime.videofeed.repository.ChannelRepository;
+import com.quantlime.videofeed.implement.ChannelReader;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -55,16 +56,16 @@ class TelegramDigestGenerationFacadeTest {
     private RedisLockService redisLockService;
 
     @Mock
-    private ChannelRepository channelRepository;
+    private ChannelReader channelReader;
 
     @Mock
-    private TelegramPostRepository telegramPostRepository;
+    private TelegramPostReader telegramPostReader;
 
     @Mock
     private PythonEngineClient pythonEngineClient;
 
     @Mock
-    private TelegramDigestPersistService telegramDigestPersistService;
+    private TelegramDigestAppender telegramDigestAppender;
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
@@ -90,7 +91,7 @@ class TelegramDigestGenerationFacadeTest {
         // given
         Channel channel1 = channelOf(1L, "insidertracking");
         Channel channel2 = channelOf(2L, "donmaek");
-        given(channelRepository.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.TELEGRAM))
+        given(channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.TELEGRAM))
             .willReturn(List.of(channel1, channel2));
 
         // when
@@ -121,7 +122,7 @@ class TelegramDigestGenerationFacadeTest {
     void runAllExclusively_whenLockAcquired_returnsPublishedCount() {
         // given
         Channel channel = channelOf(1L, "insidertracking");
-        given(channelRepository.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.TELEGRAM))
+        given(channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.TELEGRAM))
             .willReturn(List.of(channel));
         given(redisLockService.runExclusively(any(), any(), any())).willAnswer(invocation -> {
             Supplier<Integer> task = invocation.getArgument(2);
@@ -141,10 +142,10 @@ class TelegramDigestGenerationFacadeTest {
         // given
         Channel channel = channelOf(1L, "insidertracking");
         LocalDate today = LocalDate.now();
-        given(channelRepository.findById(1L)).willReturn(Optional.of(channel));
+        given(channelReader.findById(1L)).willReturn(Optional.of(channel));
         TelegramPost earlier = postOf(channel, 1L, "아침 게시글", LocalDateTime.of(2026, 8, 15, 8, 0));
         TelegramPost later = postOf(channel, 2L, "오후 게시글", LocalDateTime.of(2026, 8, 15, 14, 0));
-        given(telegramPostRepository.findByChannelAndStatusAndPublishedAtBetween(
+        given(telegramPostReader.findByChannelAndStatusAndPublishedAtBetween(
             eq(channel), eq(TelegramPostStatus.SELECTED), any(), any()))
             .willReturn(List.of(later, earlier));
         SummarizeApiResponse response = new SummarizeApiResponse(
@@ -159,7 +160,7 @@ class TelegramDigestGenerationFacadeTest {
         // then
         assertThat(result.success()).isTrue();
         assertThat(result.sourcePostCount()).isEqualTo(2);
-        verify(telegramDigestPersistService).persistResult(eq(channel), eq(today), eq(response));
+        verify(telegramDigestAppender).persistResult(eq(channel), eq(today), eq(response));
     }
 
     @Test
@@ -168,8 +169,8 @@ class TelegramDigestGenerationFacadeTest {
         // given
         Channel channel = channelOf(1L, "insidertracking");
         LocalDate today = LocalDate.now();
-        given(channelRepository.findById(1L)).willReturn(Optional.of(channel));
-        given(telegramPostRepository.findByChannelAndStatusAndPublishedAtBetween(
+        given(channelReader.findById(1L)).willReturn(Optional.of(channel));
+        given(telegramPostReader.findByChannelAndStatusAndPublishedAtBetween(
             eq(channel), eq(TelegramPostStatus.SELECTED), any(), any()))
             .willReturn(List.of());
 
@@ -179,14 +180,14 @@ class TelegramDigestGenerationFacadeTest {
         // then
         assertThat(result.success()).isTrue();
         assertThat(result.reason()).isEqualTo("NO_ELIGIBLE_POSTS");
-        verifyNoInteractions(pythonEngineClient, telegramDigestPersistService);
+        verifyNoInteractions(pythonEngineClient, telegramDigestAppender);
     }
 
     @Test
     @DisplayName("[generateForChannel - 존재하지 않는 채널이면 NotFoundException을 던진다]")
     void generateForChannel_channelNotFound_throws() {
         // given
-        given(channelRepository.findById(99L)).willReturn(Optional.empty());
+        given(channelReader.findById(99L)).willReturn(Optional.empty());
 
         // when & then
         assertThatThrownBy(() -> telegramDigestGenerationFacade.generateForChannel(99L, LocalDate.now()))
@@ -198,8 +199,8 @@ class TelegramDigestGenerationFacadeTest {
     void generateForChannel_summarizeFails_propagatesException() {
         // given
         Channel channel = channelOf(1L, "failing");
-        given(channelRepository.findById(1L)).willReturn(Optional.of(channel));
-        given(telegramPostRepository.findByChannelAndStatusAndPublishedAtBetween(
+        given(channelReader.findById(1L)).willReturn(Optional.of(channel));
+        given(telegramPostReader.findByChannelAndStatusAndPublishedAtBetween(
             eq(channel), eq(TelegramPostStatus.SELECTED), any(), any()))
             .willReturn(List.of(postOf(channel, 1L, "본문", LocalDateTime.now())));
         given(pythonEngineClient.summarize(new SummarizeApiRequest(null, "테스트 채널", "본문", "telegram")))
@@ -208,6 +209,6 @@ class TelegramDigestGenerationFacadeTest {
         // when & then
         assertThatThrownBy(() -> telegramDigestGenerationFacade.generateForChannel(1L, LocalDate.now()))
             .isInstanceOf(ExternalApiException.class);
-        verifyNoInteractions(telegramDigestPersistService);
+        verifyNoInteractions(telegramDigestAppender);
     }
 }

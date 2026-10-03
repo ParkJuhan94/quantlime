@@ -12,7 +12,7 @@ public interface TelegramDigestTickerRepository extends JpaRepository<TelegramDi
     List<TelegramDigestTicker> findByTelegramDigest_IdIn(List<Long> telegramDigestIds);
 
     // 다이제스트 재생성(upsert) 시 이전 태깅 종목을 지우고 새로 채우는 용도 -
-    // 같은 트랜잭션 내 호출(TelegramDigestPersistService)이라 파생 삭제
+    // 같은 트랜잭션 내 호출(TelegramDigestAppender)이라 파생 삭제
     // 쿼리의 트랜잭션 미상속 문제(전역 CLAUDE.md 참고)가 적용되지 않는다.
     void deleteByTelegramDigest(TelegramDigest telegramDigest);
 
