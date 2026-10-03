@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willAnswer;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -22,7 +23,10 @@ import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.DivergenceApiR
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.StockScoreSeriesApiResponse;
 import com.quantlime.infra.python.exception.PythonEngineErrorCode;
 import com.quantlime.market.domain.RankingPeriod;
+import com.quantlime.price.OverseasDailyPriceFixture;
 import com.quantlime.price.domain.DomesticDailyPrice;
+import com.quantlime.price.domain.StockLiquidity;
+import com.quantlime.price.repository.OverseasDailyPriceRepository;
 import com.quantlime.price.repository.StockLiquidityRepository;
 import com.quantlime.price.service.DomesticDailyPriceService;
 import com.quantlime.score.cache.ScoreRankingCacheStore;
@@ -36,6 +40,10 @@ import com.quantlime.score.repository.ScoreRepository;
 import com.quantlime.stock.StockFixture;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.StockMasterService;
+import com.quantlime.user.UserFixture;
+import com.quantlime.user.domain.User;
+import com.quantlime.watchlist.WatchlistGroupFixture;
+import com.quantlime.watchlist.domain.Watchlist;
 import com.quantlime.watchlist.repository.WatchlistRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -54,6 +62,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -67,6 +76,9 @@ class ScoreServiceTest {
 
     @Mock
     private DomesticDailyPriceService domesticDailyPriceService;
+
+    @Mock
+    private OverseasDailyPriceRepository overseasDailyPriceRepository;
 
     @Mock
     private PythonEngineClient pythonEngineClient;
@@ -420,6 +432,151 @@ class ScoreServiceTest {
 
         // then
         verify(scorePersistenceService, never()).applyNormalization(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("[해외 단건 재계산은 해외 가격으로 퀀트 엔진을 호출하고 결과 저장을 위임한다]")
+    void recalculateOverseasScore_callsPythonAndDelegatesPersistence() {
+        // given
+        given(overseasDailyPriceRepository.findByStockCodeInAndTradeDateBetweenOrderByTradeDateDesc(
+            anyList(), any(), any()))
+            .willReturn(List.of(OverseasDailyPriceFixture.createDailyPrice("AAPL", LocalDate.of(2026, 7, 3))));
+        ScoreSeriesBatchApiResponse response = new ScoreSeriesBatchApiResponse(List.of(successResponse("AAPL", 77.0)));
+        given(pythonEngineClient.calculateScoreSeries(any(ScoreBatchApiRequest.class))).willReturn(response);
+
+        // when
+        scoreService.recalculateOverseasScore("AAPL");
+
+        // then
+        verify(scorePersistenceService).saveAll(response.scores());
+    }
+
+    @Test
+    @DisplayName("[해외 재계산은 대상이 비면 아무것도 호출하지 않고, 가격 이력이 없으면 퀀트 엔진을 호출하지 않는다]")
+    void recalculateOverseasScores_emptyOrNoHistory_skips() {
+        scoreService.recalculateOverseasScores(List.of());
+        verify(overseasDailyPriceRepository, never())
+            .findByStockCodeInAndTradeDateBetweenOrderByTradeDateDesc(anyList(), any(), any());
+
+        given(overseasDailyPriceRepository.findByStockCodeInAndTradeDateBetweenOrderByTradeDateDesc(
+            anyList(), any(), any())).willReturn(List.of());
+        scoreService.recalculateOverseasScores(List.of("AAPL"));
+
+        verify(pythonEngineClient, never()).calculateScoreSeries(any());
+        verify(scorePersistenceService, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("[해외 재계산도 청크(100개)를 넘으면 나눠 호출하고 한 청크 실패가 나머지를 막지 않는다]")
+    void recalculateOverseasScores_exceedsChunkSize_isolatesFailure() {
+        // given: 101개 -> 100 + 1. 첫 청크 실패, 두 번째 청크 성공
+        List<String> codes = new ArrayList<>();
+        for (int i = 0; i < 100; i++) {
+            codes.add("US%03d".formatted(i));
+        }
+        codes.add("AAPL");
+        given(overseasDailyPriceRepository.findByStockCodeInAndTradeDateBetweenOrderByTradeDateDesc(
+            anyList(), any(), any()))
+            .willReturn(List.of(OverseasDailyPriceFixture.createDailyPrice("AAPL", LocalDate.of(2026, 7, 3))));
+        given(pythonEngineClient.calculateScoreSeries(any(ScoreBatchApiRequest.class)))
+            .willThrow(new ExternalApiException(PythonEngineErrorCode.SCORE_CALCULATION_FAILED))
+            .willReturn(new ScoreSeriesBatchApiResponse(List.of(successResponse("AAPL", 70.0))));
+
+        // when
+        scoreService.recalculateOverseasScores(codes);
+
+        // then
+        verify(pythonEngineClient, times(2)).calculateScoreSeries(any());
+        verify(scorePersistenceService, times(1)).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("[엔진 응답에서 종목이 누락되면 누락 건수를 메트릭으로 남기고 받은 결과는 그대로 저장한다]")
+    void recalculate_missingFromResponse_countsMetricAndStillSaves() {
+        // given: 두 종목을 요청했는데 응답엔 한 종목뿐
+        given(domesticDailyPriceService.getDailyPrices(anyList(), any(), any()))
+            .willReturn(List.of(domesticDailyPrice(STOCK_CODE), domesticDailyPrice("000660")));
+        ScoreSeriesBatchApiResponse response =
+            new ScoreSeriesBatchApiResponse(List.of(successResponse(STOCK_CODE, 70.0)));
+        given(pythonEngineClient.calculateScoreSeries(any(ScoreBatchApiRequest.class))).willReturn(response);
+
+        // when
+        scoreService.recalculateDomesticScores(List.of(STOCK_CODE, "000660"));
+
+        // then
+        verify(scorePersistenceService).saveAll(response.scores());
+        assertThat(meterRegistry.counter("score.batch.missing-from-response").count()).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("[스코어 재구성은 먼저 from 이후를 지운 뒤 국내/해외로 나눠 각자의 가격 소스로 다시 계산한다]")
+    void rebuildScoresFrom_deletesFirst_thenRecalculatesDomesticAndOverseasSeparately() {
+        // given
+        LocalDate from = LocalDate.of(2026, 1, 1);
+        given(stockMasterService.getAllListedStocks()).willReturn(List.of(
+            StockFixture.createStock(STOCK_CODE, "삼성전자"), StockFixture.createOverseasStock("AAPL", "Apple")));
+        given(domesticDailyPriceService.getDailyPrices(anyList(), any(), any())).willReturn(List.of());
+        given(overseasDailyPriceRepository.findByStockCodeInAndTradeDateBetweenOrderByTradeDateDesc(
+            anyList(), any(), any())).willReturn(List.of());
+
+        // when
+        scoreService.rebuildScoresFrom(from);
+
+        // then: 삭제가 가장 먼저, 국내 가격은 국내 코드만, 해외 가격은 해외 코드만 조회한다
+        InOrder order = inOrder(scorePersistenceService, domesticDailyPriceService, overseasDailyPriceRepository);
+        order.verify(scorePersistenceService).deleteFrom(from);
+        order.verify(domesticDailyPriceService).getDailyPrices(eq(List.of(STOCK_CODE)), any(), any());
+        order.verify(overseasDailyPriceRepository)
+            .findByStockCodeInAndTradeDateBetweenOrderByTradeDateDesc(eq(List.of("AAPL")), any(), any());
+    }
+
+    private Score latestScore(String stockCode, double composite) {
+        Score score = Score.of(stockCode, LocalDate.of(2026, 9, 30), 60.0, 40.0, composite, null, null,
+            Divergence.of(false, null), false);
+        return score;
+    }
+
+    private Watchlist watchlistOf(Stock stock) {
+        User user = UserFixture.createUser();
+        return Watchlist.of(user, stock, WatchlistGroupFixture.createWatchlistGroup(user), 0);
+    }
+
+    @Test
+    @DisplayName("[대시보드는 관심종목 중 scope에 맞는 종목만 최신 스코어를 조회해 시장 구분·거래대금과 함께 돌려준다]")
+    void getDashboardScores_filtersByScope_andMapsOverseasAndLiquidity() {
+        // given
+        Stock samsung = StockFixture.createStock(STOCK_CODE, "삼성전자");
+        Stock apple = StockFixture.createOverseasStock("AAPL", "Apple");
+        given(watchlistRepository.findAllWithStockByUserId(1L)).willReturn(List.of(watchlistOf(samsung), watchlistOf(apple)));
+        given(scoreRepository.findLatestScoresByStockCodesOrderByCompositeScoreDesc(anyList()))
+            .willAnswer(invocation -> ((List<String>) invocation.getArgument(0)).stream()
+                .map(code -> latestScore(code, 80.0)).toList());
+        given(stockLiquidityRepository.findAllByStockCodeIn(anyList())).willAnswer(invocation ->
+            ((List<String>) invocation.getArgument(0)).stream()
+                .map(code -> StockLiquidity.of(code, LocalDate.now(), 3_000_000_000.0, 0, true)).toList());
+
+        // when
+        List<ScoreRankingResponse> domestic = scoreService.getDashboardScores(1L, "domestic");
+        List<ScoreRankingResponse> overseas = scoreService.getDashboardScores(1L, "overseas");
+        List<ScoreRankingResponse> all = scoreService.getDashboardScores(1L, "all");
+
+        // then
+        assertThat(domestic).extracting(ScoreRankingResponse::stockCode).containsExactly(STOCK_CODE);
+        assertThat(domestic.get(0).overseas()).isFalse();
+        assertThat(overseas).extracting(ScoreRankingResponse::stockCode).containsExactly("AAPL");
+        assertThat(overseas.get(0).overseas()).isTrue();
+        assertThat(overseas.get(0).avgTradingValue()).isEqualTo(3_000_000_000.0);
+        assertThat(all).extracting(ScoreRankingResponse::stockCode).containsExactlyInAnyOrder(STOCK_CODE, "AAPL");
+    }
+
+    @Test
+    @DisplayName("[관심종목이 비어 있으면 대시보드는 빈 목록이다]")
+    void getDashboardScores_emptyWatchlist_returnsEmpty() {
+        given(watchlistRepository.findAllWithStockByUserId(1L)).willReturn(List.of());
+        given(scoreRepository.findLatestScoresByStockCodesOrderByCompositeScoreDesc(anyList())).willReturn(List.of());
+        given(stockLiquidityRepository.findAllByStockCodeIn(anyList())).willReturn(List.of());
+
+        assertThat(scoreService.getDashboardScores(1L, "all")).isEmpty();
     }
 
     private DomesticDailyPrice domesticDailyPrice(LocalDate tradeDate) {
