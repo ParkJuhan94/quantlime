@@ -2,8 +2,9 @@ package com.quantlime.telegramfeed.service;
 
 import com.quantlime.common.lock.RedisLockService;
 import com.quantlime.telegramfeed.dto.TelegramRetentionResult;
-import com.quantlime.telegramfeed.repository.TelegramDigestRepository;
-import com.quantlime.telegramfeed.repository.TelegramPostRepository;
+import com.quantlime.telegramfeed.implement.TelegramDigestReader;
+import com.quantlime.telegramfeed.implement.TelegramPostReader;
+import com.quantlime.telegramfeed.implement.TelegramPostRemover;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -26,9 +27,9 @@ public class TelegramPostRetentionService {
     private static final Duration LOCK_TTL = Duration.ofMinutes(10);
 
     private final RedisLockService redisLockService;
-    private final TelegramPostRepository telegramPostRepository;
-    private final TelegramDigestRepository telegramDigestRepository;
-    private final TelegramPostRetentionDeleteService telegramPostRetentionDeleteService;
+    private final TelegramPostReader telegramPostReader;
+    private final TelegramDigestReader telegramDigestReader;
+    private final TelegramPostRemover telegramPostRemover;
 
     /**
      * 락을 잡은 채로 deleteOlderThanRetention()을 실행한다.
@@ -44,15 +45,15 @@ public class TelegramPostRetentionService {
     // (VideoRetentionService와 동일 패턴).
     public TelegramRetentionResult deleteOlderThanRetention() {
         LocalDateTime postCutoff = LocalDate.now().minusDays(RETENTION_DAYS).atStartOfDay();
-        List<Long> postIds = telegramPostRepository.findIdsByPublishedAtBefore(postCutoff);
+        List<Long> postIds = telegramPostReader.findIdsByPublishedAtBefore(postCutoff);
         if (!postIds.isEmpty()) {
-            telegramPostRetentionDeleteService.deletePostBatch(postIds);
+            telegramPostRemover.deletePostBatch(postIds);
         }
 
         LocalDate digestCutoff = LocalDate.now().minusDays(RETENTION_DAYS);
-        List<Long> digestIds = telegramDigestRepository.findIdsByDigestDateBefore(digestCutoff);
+        List<Long> digestIds = telegramDigestReader.findIdsByDigestDateBefore(digestCutoff);
         if (!digestIds.isEmpty()) {
-            telegramPostRetentionDeleteService.deleteDigestBatch(digestIds);
+            telegramPostRemover.deleteDigestBatch(digestIds);
         }
 
         log.info("보존 기간({}일) 초과 텔레그램 데이터 삭제 완료: 글삭제건수={}, 다이제스트삭제건수={}, "

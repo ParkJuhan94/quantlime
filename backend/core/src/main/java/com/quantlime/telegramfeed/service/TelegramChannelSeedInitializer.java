@@ -3,7 +3,8 @@ package com.quantlime.telegramfeed.service;
 import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.Platform;
 import com.quantlime.videofeed.domain.TelegramFilterConfig;
-import com.quantlime.videofeed.repository.ChannelRepository;
+import com.quantlime.videofeed.implement.ChannelAppender;
+import com.quantlime.videofeed.implement.ChannelReader;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +29,8 @@ public class TelegramChannelSeedInitializer implements ApplicationRunner {
 
     private static final List<String> DEFAULT_CONTENT_EXCLUDE = List.of("광고", "제휴", "이벤트", "쿠폰");
 
-    private final ChannelRepository channelRepository;
+    private final ChannelReader channelReader;
+    private final ChannelAppender channelAppender;
 
     // 채널별로 독립된 exists 체크 + 단건 save라 하나의 트랜잭션으로 묶을
     // 필요가 없다(ChannelSeedInitializer.run()과 동일한 이유).
@@ -45,16 +47,16 @@ public class TelegramChannelSeedInitializer implements ApplicationRunner {
             new TelegramFilterConfig(300, DEFAULT_CONTENT_EXCLUDE));
     }
 
-    // channelRepository.save() 자체가 Spring Data 리포지토리 프록시를 통해
+    // channelAppender.save() 자체가 Spring Data 리포지토리 프록시를 통해
     // 독립적으로 트랜잭셔널하므로, run()에서 self-invocation되는 이 메서드에
     // 별도로 @Transactional을 붙일 필요가 없다(ChannelSeedInitializer와
     // 동일한 패턴·이유).
     void seedIfAbsent(String handle, String name, int priority, TelegramFilterConfig filterConfig) {
-        if (channelRepository.existsByPlatformAndExternalChannelId(Platform.TELEGRAM, handle)) {
+        if (channelReader.existsByPlatformAndExternalChannelId(Platform.TELEGRAM, handle)) {
             return;
         }
         Channel channel = Channel.ofTelegram(handle, name, priority, filterConfig);
-        channelRepository.save(channel);
+        channelAppender.save(channel);
         log.info("텔레그램 채널 시딩 완료: name={}, handle={}", name, handle);
     }
 }

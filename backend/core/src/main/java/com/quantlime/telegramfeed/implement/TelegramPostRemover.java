@@ -1,4 +1,4 @@
-package com.quantlime.telegramfeed.service;
+package com.quantlime.telegramfeed.implement;
 
 import com.quantlime.telegramfeed.repository.TelegramDigestRepository;
 import com.quantlime.telegramfeed.repository.TelegramDigestTickerRepository;
@@ -23,7 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 @RequiredArgsConstructor
-public class TelegramPostRetentionDeleteService {
+public class TelegramPostRemover {
 
     private final TelegramPostRepository telegramPostRepository;
     private final TelegramDigestRepository telegramDigestRepository;

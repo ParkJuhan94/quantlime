@@ -35,7 +35,7 @@ import org.springframework.web.client.RestClient;
  * 2026-08-17). {@link #summarize}가 텔레그램 다이제스트 재생성 중(재시도까지
  * 소진 후) 던지는 예외도 동일 정책을 따른다 -
  * {@code TelegramDigestGenerationFacade.generateForChannel}이 이 예외를 잡고
- * {@code TelegramDigestPersistService.persistResult}를 아예 호출하지 않으므로,
+ * {@code TelegramDigestAppender.persistResult}를 아예 호출하지 않으므로,
  * 그날 갱신은 실패해도 직전 다이제스트(어제/오전 값)가 그대로 서빙된다
  * (2026-08-19 확인 - Gemini 무료 티어 쿼터가 유튜브와 21/20으로 근접해 있어
  * 실제로 걸릴 수 있는 경로).

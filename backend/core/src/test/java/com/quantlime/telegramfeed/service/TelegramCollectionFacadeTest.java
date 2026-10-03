@@ -8,10 +8,12 @@ import com.quantlime.telegramfeed.dto.CollectedTelegramPost;
 import com.quantlime.telegramfeed.dto.TelegramChannelMeta;
 import com.quantlime.telegramfeed.dto.TelegramCollectResult;
 import com.quantlime.telegramfeed.dto.TelegramCollectionOutcome;
+import com.quantlime.telegramfeed.implement.TelegramPostAppender;
 import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.Platform;
 import com.quantlime.videofeed.domain.TelegramFilterConfig;
-import com.quantlime.videofeed.repository.ChannelRepository;
+import com.quantlime.videofeed.implement.ChannelAppender;
+import com.quantlime.videofeed.implement.ChannelReader;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -31,13 +33,16 @@ class TelegramCollectionFacadeTest {
     private com.quantlime.common.lock.RedisLockService redisLockService;
 
     @Mock
-    private ChannelRepository channelRepository;
+    private ChannelReader channelReader;
+
+    @Mock
+    private ChannelAppender channelAppender;
 
     @Mock
     private TelegramPostCollector telegramPostCollector;
 
     @Mock
-    private TelegramPostPersistService telegramPostPersistService;
+    private TelegramPostAppender telegramPostAppender;
 
     @Mock
     private TelegramPostFilterService telegramPostFilterService;
@@ -57,12 +62,12 @@ class TelegramCollectionFacadeTest {
     void runAll_collectsOnlyTelegramChannels() {
         // given
         Channel channel = channelOf(1L, "handle1");
-        given(channelRepository.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.TELEGRAM))
+        given(channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.TELEGRAM))
             .willReturn(List.of(channel));
         TelegramCollectionOutcome outcome = new TelegramCollectionOutcome(List.of(), null);
         given(telegramPostCollector.collect(channel)).willReturn(outcome);
-        given(telegramPostPersistService.upsertAll(channel, outcome.posts())).willReturn(0);
-        given(channelRepository.findById(1L)).willReturn(java.util.Optional.of(channel));
+        given(telegramPostAppender.upsertAll(channel, outcome.posts())).willReturn(0);
+        given(channelReader.findById(1L)).willReturn(java.util.Optional.of(channel));
 
         // when
         List<TelegramCollectResult> results = telegramCollectionFacade.runAll();
@@ -79,15 +84,15 @@ class TelegramCollectionFacadeTest {
         // given
         Channel failingChannel = channelOf(1L, "failing");
         Channel okChannel = channelOf(2L, "ok");
-        given(channelRepository.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.TELEGRAM))
+        given(channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.TELEGRAM))
             .willReturn(List.of(failingChannel, okChannel));
         given(telegramPostCollector.collect(failingChannel)).willThrow(new RuntimeException("스크래핑 실패"));
         TelegramCollectionOutcome okOutcome = new TelegramCollectionOutcome(
             List.of(new CollectedTelegramPost("ok/1", 1L, "본문", LocalDateTime.now(), 10L, false)),
             new TelegramChannelMeta("OK 채널", "https://cdn/photo.jpg"));
         given(telegramPostCollector.collect(okChannel)).willReturn(okOutcome);
-        given(telegramPostPersistService.upsertAll(okChannel, okOutcome.posts())).willReturn(1);
-        given(channelRepository.findById(2L)).willReturn(java.util.Optional.of(okChannel));
+        given(telegramPostAppender.upsertAll(okChannel, okOutcome.posts())).willReturn(1);
+        given(channelReader.findById(2L)).willReturn(java.util.Optional.of(okChannel));
 
         // when
         List<TelegramCollectResult> results = telegramCollectionFacade.runAll();
@@ -105,7 +110,7 @@ class TelegramCollectionFacadeTest {
     void updateChannelMeta_updatesPhotoOnlyWhenChanged() {
         // given
         Channel channel = channelOf(1L, "handle1");
-        given(channelRepository.findById(1L)).willReturn(java.util.Optional.of(channel));
+        given(channelReader.findById(1L)).willReturn(java.util.Optional.of(channel));
         TelegramChannelMeta meta = new TelegramChannelMeta("새 채널명", "https://cdn/new-photo.jpg");
 
         // when
@@ -114,7 +119,7 @@ class TelegramCollectionFacadeTest {
         // then
         assertThat(channel.getLastCollectedAt()).isNotNull();
         assertThat(channel.getProfileImageUrl()).isEqualTo("https://cdn/new-photo.jpg");
-        verify(channelRepository).save(channel);
+        verify(channelAppender).save(channel);
     }
 
     @Test
@@ -122,7 +127,7 @@ class TelegramCollectionFacadeTest {
     void updateChannelMeta_nullMeta_stillUpdatesLastCollectedAt() {
         // given
         Channel channel = channelOf(1L, "handle1");
-        given(channelRepository.findById(1L)).willReturn(java.util.Optional.of(channel));
+        given(channelReader.findById(1L)).willReturn(java.util.Optional.of(channel));
 
         // when
         telegramCollectionFacade.updateChannelMeta(1L, null);
@@ -130,6 +135,6 @@ class TelegramCollectionFacadeTest {
         // then
         assertThat(channel.getLastCollectedAt()).isNotNull();
         assertThat(channel.getProfileImageUrl()).isNull();
-        verify(channelRepository).save(channel);
+        verify(channelAppender).save(channel);
     }
 }

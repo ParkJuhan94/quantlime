@@ -39,6 +39,10 @@ public class ChannelReader {
         return channelRepository.findByPlatformAndProfileImageUrlIsNull(platform);
     }
 
+    public List<Channel> findByPlatformOrderByPriorityAsc(Platform platform) {
+        return channelRepository.findByPlatformOrderByPriorityAsc(platform);
+    }
+
     public Optional<Channel> findById(Long id) {
         return channelRepository.findById(id);
     }

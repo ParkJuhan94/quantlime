@@ -12,11 +12,11 @@ import com.quantlime.telegramfeed.dto.response.TelegramFeedChannelResponse;
 import com.quantlime.telegramfeed.dto.response.TelegramFeedDigestDetailResponse;
 import com.quantlime.telegramfeed.dto.response.TelegramFeedDigestResponse;
 import com.quantlime.telegramfeed.exception.TelegramFeedErrorCode;
-import com.quantlime.telegramfeed.repository.TelegramDigestRepository;
-import com.quantlime.telegramfeed.repository.TelegramDigestTickerRepository;
-import com.quantlime.telegramfeed.repository.TelegramPostRepository;
+import com.quantlime.telegramfeed.implement.TelegramDigestReader;
+import com.quantlime.telegramfeed.implement.TelegramDigestTickerReader;
+import com.quantlime.telegramfeed.implement.TelegramPostReader;
 import com.quantlime.videofeed.domain.Platform;
-import com.quantlime.videofeed.repository.ChannelRepository;
+import com.quantlime.videofeed.implement.ChannelReader;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Comparator;
@@ -36,20 +36,20 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class TelegramFeedService {
 
-    private final TelegramDigestRepository telegramDigestRepository;
-    private final TelegramDigestTickerRepository telegramDigestTickerRepository;
-    private final TelegramPostRepository telegramPostRepository;
-    private final ChannelRepository channelRepository;
+    private final ChannelReader channelReader;
+    private final TelegramPostReader telegramPostReader;
+    private final TelegramDigestReader telegramDigestReader;
+    private final TelegramDigestTickerReader telegramDigestTickerReader;
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
     public Slice<TelegramFeedDigestResponse> getDigests(String tickerCode, Long channelId, LocalDate date, Pageable pageable) {
-        Slice<TelegramDigest> digests = telegramDigestRepository.findDigests(tickerCode, channelId, date, pageable);
+        Slice<TelegramDigest> digests = telegramDigestReader.findDigests(tickerCode, channelId, date, pageable);
 
         List<Long> digestIds = digests.getContent().stream().map(TelegramDigest::getId).toList();
         Map<Long, String> summaryByDigestId = toSummaryTextMap(digests.getContent());
         Map<Long, List<TelegramDigestTicker>> tickersByDigestId =
-            groupByDigestId(telegramDigestTickerRepository.findByTelegramDigest_IdIn(digestIds));
+            groupByDigestId(telegramDigestTickerReader.findByTelegramDigest_IdIn(digestIds));
         Map<String, Integer> sourcePostCountByChannelAndDate = countSourcePostsByDigest(digests.getContent());
 
         return digests.map(digest -> TelegramFeedMapper.toDigestResponse(
@@ -64,16 +64,16 @@ public class TelegramFeedService {
     // .getChannels()가 Platform.YOUTUBE로 한정한 것과 대칭).
     @Transactional(readOnly = true)
     public List<TelegramFeedChannelResponse> getChannels() {
-        return channelRepository.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.TELEGRAM).stream()
+        return channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.TELEGRAM).stream()
             .map(TelegramFeedMapper::toFeedChannelResponse)
             .toList();
     }
 
     @Transactional(readOnly = true)
     public TelegramFeedDigestDetailResponse getDigestDetail(Long telegramDigestId) {
-        TelegramDigest digest = telegramDigestRepository.findByIdWithChannel(telegramDigestId)
+        TelegramDigest digest = telegramDigestReader.findByIdWithChannel(telegramDigestId)
             .orElseThrow(() -> new NotFoundException(TelegramFeedErrorCode.NOT_FOUND_POST));
-        List<TelegramDigestTicker> tickers = telegramDigestTickerRepository.findByTelegramDigest(digest);
+        List<TelegramDigestTicker> tickers = telegramDigestTickerReader.findByTelegramDigest(digest);
         List<String> sourcePostUrls = findSourcePosts(digest).stream()
             .map(this::toPostUrl)
             .toList();
@@ -102,7 +102,7 @@ public class TelegramFeedService {
         LocalDate maxDate = digests.stream().map(TelegramDigest::getDigestDate)
             .max(Comparator.naturalOrder()).orElseThrow();
 
-        List<Object[]> rows = telegramPostRepository.findChannelIdAndPublishedAtForCounting(
+        List<Object[]> rows = telegramPostReader.findChannelIdAndPublishedAtForCounting(
             channelIds, TelegramPostStatus.SELECTED, minDate.atStartOfDay(), maxDate.plusDays(1).atStartOfDay());
 
         Map<String, Integer> countByChannelAndDate = new HashMap<>();
@@ -120,7 +120,7 @@ public class TelegramFeedService {
 
     private List<TelegramPost> findSourcePosts(TelegramDigest digest) {
         LocalDate date = digest.getDigestDate();
-        return telegramPostRepository.findByChannelAndStatusAndPublishedAtBetween(
+        return telegramPostReader.findByChannelAndStatusAndPublishedAtBetween(
                 digest.getChannel(), TelegramPostStatus.SELECTED, date.atStartOfDay(), date.plusDays(1).atStartOfDay())
             .stream()
             .sorted(Comparator.comparing(TelegramPost::getPublishedAt))

@@ -7,7 +7,7 @@ import static org.mockito.Mockito.verify;
 import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.ChannelFilterConfig;
 import com.quantlime.videofeed.domain.Platform;
-import com.quantlime.videofeed.repository.ChannelRepository;
+import com.quantlime.videofeed.implement.ChannelReader;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -22,7 +22,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class TelegramChannelQueryServiceTest {
 
     @Mock
-    private ChannelRepository channelRepository;
+    private ChannelReader channelReader;
 
     @InjectMocks
     private TelegramChannelQueryService service;
@@ -33,10 +33,10 @@ class TelegramChannelQueryServiceTest {
         // given
         Channel channel = Channel.of(Platform.TELEGRAM, "tg", "tg", "텔레그램 채널", 10,
             new ChannelFilterConfig(0, 0.0, 0, List.of(), List.of()));
-        given(channelRepository.findByPlatformOrderByPriorityAsc(Platform.TELEGRAM)).willReturn(List.of(channel));
+        given(channelReader.findByPlatformOrderByPriorityAsc(Platform.TELEGRAM)).willReturn(List.of(channel));
 
         // when & then
         assertThat(service.findAllOrderByPriority()).containsExactly(channel);
-        verify(channelRepository).findByPlatformOrderByPriorityAsc(Platform.TELEGRAM);
+        verify(channelReader).findByPlatformOrderByPriorityAsc(Platform.TELEGRAM);
     }
 }

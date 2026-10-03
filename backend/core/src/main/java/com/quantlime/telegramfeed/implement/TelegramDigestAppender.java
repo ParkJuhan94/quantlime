@@ -1,4 +1,4 @@
-package com.quantlime.telegramfeed.service;
+package com.quantlime.telegramfeed.implement;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.quantlime.infra.python.dto.SummarizeApiResponse;
@@ -27,7 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class TelegramDigestPersistService {
+public class TelegramDigestAppender {
 
     private final TelegramDigestRepository telegramDigestRepository;
     private final TelegramDigestTickerRepository telegramDigestTickerRepository;
