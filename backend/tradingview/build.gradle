@@ -1,0 +1,8 @@
+dependencies {
+    implementation project(':common')
+    implementation project(':client-support')
+
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    // TradingViewApiClient의 @CircuitBreaker 등 애너테이션
+    implementation 'io.github.resilience4j:resilience4j-annotations'
+}
