@@ -5,7 +5,8 @@ import com.quantlime.infra.toss.dto.TossCandleResponse;
 import com.quantlime.infra.toss.dto.TossPriceMapper;
 import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.price.dto.DailyCandleSaveResult;
-import com.quantlime.price.repository.OverseasDailyPriceRepository;
+import com.quantlime.price.implement.DailyPriceAppender;
+import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.price.util.DailyPriceSettlementPolicy;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -40,7 +41,8 @@ public class OverseasDailyPriceBackfillService {
     // 문제를 피하기 위함, 2026-08-04 국내에서 실제 발견).
     private static final int FULL_REBACKFILL_TARGET_DAYS = 400;
 
-    private final OverseasDailyPriceRepository overseasDailyPriceRepository;
+    private final DailyPriceReader dailyPriceReader;
+    private final DailyPriceAppender dailyPriceAppender;
     private final TossApiClient tossApiClient;
 
     /**
@@ -78,7 +80,7 @@ public class OverseasDailyPriceBackfillService {
      * 묶지 않는다(DomesticDailyPriceService.backfillHistoryIfNeeded와 동일한 이유).
      */
     public void backfillHistoryIfNeeded(String stockCode, int targetDays) {
-        long existingCount = overseasDailyPriceRepository.countByStockCode(stockCode);
+        long existingCount = dailyPriceReader.countOverseas(stockCode);
         if (existingCount >= targetDays) {
             log.debug("해외 이력 백필 불필요: stockCode={}, 기존건수={}", stockCode, existingCount);
             return;
@@ -174,11 +176,11 @@ public class OverseasDailyPriceBackfillService {
                 restatementDetected |= outcome.restatementDetected();
                 continue;
             }
-            if (overseasDailyPriceRepository.existsByStockCodeAndTradeDate(stockCode, tradeDate)) {
+            if (dailyPriceReader.existsOverseas(stockCode, tradeDate)) {
                 continue;
             }
             try {
-                overseasDailyPriceRepository.save(TossPriceMapper.toOverseasDailyPrice(stockCode, candle));
+                dailyPriceAppender.saveOverseas(TossPriceMapper.toOverseasDailyPrice(stockCode, candle));
                 saved++;
             } catch (DataIntegrityViolationException e) {
                 log.debug("해외 이력 백필 중복 저장 스킵: stockCode={}, date={}", stockCode, tradeDate);
@@ -189,7 +191,7 @@ public class OverseasDailyPriceBackfillService {
 
     private UpsertOutcome upsertCandle(String stockCode, LocalDate tradeDate,
                                         TossCandleResponse.TossCandle candle, boolean detectRestatement) {
-        return overseasDailyPriceRepository.findByStockCodeAndTradeDate(stockCode, tradeDate)
+        return dailyPriceReader.findOverseas(stockCode, tradeDate)
             .map(existing -> {
                 double open = Double.parseDouble(candle.openPrice());
                 double high = Double.parseDouble(candle.highPrice());
@@ -202,12 +204,12 @@ public class OverseasDailyPriceBackfillService {
                 boolean restated = detectRestatement && DailyPriceSettlementPolicy.isRestatement(
                     existing.getClosePrice(), close, DailyPriceSettlementPolicy.OVERSEAS_RESTATEMENT_THRESHOLD);
                 existing.updateOhlcv(open, high, low, close, volume);
-                overseasDailyPriceRepository.save(existing);
+                dailyPriceAppender.saveOverseas(existing);
                 return UpsertOutcome.updated(restated);
             })
             .orElseGet(() -> {
                 try {
-                    overseasDailyPriceRepository.save(TossPriceMapper.toOverseasDailyPrice(stockCode, candle));
+                    dailyPriceAppender.saveOverseas(TossPriceMapper.toOverseasDailyPrice(stockCode, candle));
                     return UpsertOutcome.inserted();
                 } catch (DataIntegrityViolationException e) {
                     log.debug("해외 당일/재확정 시세 동시 저장 충돌 스킵: stockCode={}, date={}", stockCode, tradeDate);

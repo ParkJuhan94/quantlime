@@ -2,7 +2,7 @@ package com.quantlime.price.service;
 
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.dto.PriceJumpReport;
-import com.quantlime.price.repository.DomesticDailyPriceRepository;
+import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.price.util.DailyPriceSettlementPolicy;
 import com.quantlime.price.util.PriceJumpDetector;
 import com.quantlime.price.util.PriceJumpDetector.PricePoint;
@@ -35,7 +35,7 @@ public class DailyPriceIntegrityService {
     private static final long INTER_STOCK_DELAY_MS = 150;
 
     private final StockMasterService stockMasterService;
-    private final DomesticDailyPriceRepository domesticDailyPriceRepository;
+    private final DailyPriceReader dailyPriceReader;
     private final DomesticDailyPriceService domesticDailyPriceService;
 
     /**
@@ -52,8 +52,8 @@ public class DailyPriceIntegrityService {
 
         List<PriceJumpReport> jumps = new ArrayList<>();
         for (List<String> chunk : partition(stockCodes, SCAN_CHUNK_SIZE)) {
-            List<DomesticDailyPrice> prices = domesticDailyPriceRepository
-                .findByStockCodeInAndTradeDateBetweenOrderByTradeDateDesc(chunk, from, LocalDate.now());
+            List<DomesticDailyPrice> prices = dailyPriceReader
+                .findDomesticBetweenForCodes(chunk, from, LocalDate.now());
             Map<String, List<DomesticDailyPrice>> byStockCode = prices.stream()
                 .collect(Collectors.groupingBy(DomesticDailyPrice::getStockCode));
             for (Map.Entry<String, List<DomesticDailyPrice>> entry : byStockCode.entrySet()) {

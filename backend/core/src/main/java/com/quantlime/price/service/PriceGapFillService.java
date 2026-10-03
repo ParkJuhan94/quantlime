@@ -2,8 +2,7 @@ package com.quantlime.price.service;
 
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
-import com.quantlime.price.repository.DomesticDailyPriceRepository;
-import com.quantlime.price.repository.OverseasDailyPriceRepository;
+import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.price.util.DailyPriceSettlementPolicy;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -41,8 +40,7 @@ public class PriceGapFillService {
     // 여유분 며칠을 더 조회하는 편이 안전하다(중복은 존재 여부 체크로 스킵됨).
     private static final int GAP_BUFFER_DAYS = 5;
 
-    private final DomesticDailyPriceRepository domesticDailyPriceRepository;
-    private final OverseasDailyPriceRepository overseasDailyPriceRepository;
+    private final DailyPriceReader dailyPriceReader;
     private final DomesticDailyPriceService domesticDailyPriceService;
     private final OverseasDailyPriceBackfillService overseasDailyPriceBackfillService;
 
@@ -61,8 +59,8 @@ public class PriceGapFillService {
      * null로 둔다).
      */
     public GapFillOutcome fillDomesticGap(String stockCode) {
-        Optional<DomesticDailyPrice> latest = domesticDailyPriceRepository
-            .findTopByStockCodeOrderByTradeDateDesc(stockCode);
+        Optional<DomesticDailyPrice> latest = dailyPriceReader
+            .findLatestDomestic(stockCode);
         if (latest.isEmpty()) {
             domesticDailyPriceService.backfillHistoryIfNeeded(stockCode, DEEP_BACKFILL_TARGET_DAYS);
             return GapFillOutcome.apiCalled();
@@ -123,8 +121,8 @@ public class PriceGapFillService {
 
     /** @see #fillDomesticGap(String) 국내와 동일한 계약(calledApi/latestTradeDate). */
     public GapFillOutcome fillOverseasGap(String stockCode) {
-        Optional<LocalDate> latestTradeDate = overseasDailyPriceRepository
-            .findTopByStockCodeOrderByTradeDateDesc(stockCode)
+        Optional<LocalDate> latestTradeDate = dailyPriceReader
+            .findLatestOverseas(stockCode)
             .map(OverseasDailyPrice::getTradeDate);
         if (latestTradeDate.isEmpty()) {
             overseasDailyPriceBackfillService.backfillHistoryIfNeeded(stockCode, DEEP_BACKFILL_TARGET_DAYS);

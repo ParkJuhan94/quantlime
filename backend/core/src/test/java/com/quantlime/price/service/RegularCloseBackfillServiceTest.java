@@ -13,7 +13,8 @@ import com.quantlime.infra.toss.dto.TossCandleResponse;
 import com.quantlime.market.cache.DomesticListedStockCache;
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.dto.RegularCloseBackfillResult;
-import com.quantlime.price.repository.DomesticDailyPriceRepository;
+import com.quantlime.price.implement.DailyPriceAppender;
+import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.stock.StockFixture;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -34,7 +35,10 @@ class RegularCloseBackfillServiceTest {
     private static final String STOCK_CODE = "005930";
 
     @Mock
-    private DomesticDailyPriceRepository domesticDailyPriceRepository;
+    private DailyPriceReader dailyPriceReader;
+
+    @Mock
+    private DailyPriceAppender dailyPriceAppender;
 
     @Mock
     private DomesticListedStockCache domesticListedStockCache;
@@ -52,7 +56,7 @@ class RegularCloseBackfillServiceTest {
         LocalDate tradeDate = LocalDate.now().minusDays(1);
         DomesticDailyPrice unconfirmed = DomesticDailyPrice.of(
             STOCK_CODE, tradeDate, 70000L, 71000L, 69000L, 70800L, 1_000_000L);
-        given(domesticDailyPriceRepository.findByStockCodeAndTradeDateBetweenOrderByTradeDateDesc(
+        given(dailyPriceReader.findDomesticBetween(
             eq(STOCK_CODE), any(), any())).willReturn(List.of(unconfirmed));
         // before는 KST 15:30을 UTC(Z 표기)로 변환해 넘긴다 - TossApiClient
         // .get1MinuteCandleBefore는 +09:00처럼 +가 든 값을 있는 그대로도, 미리
@@ -68,7 +72,7 @@ class RegularCloseBackfillServiceTest {
 
         // then
         assertThat(result).isEqualTo(RegularCloseBackfillResult.of(1, 0, 0));
-        verify(domesticDailyPriceRepository).save(unconfirmed);
+        verify(dailyPriceAppender).saveDomestic(unconfirmed);
         assertThat(unconfirmed.getClosePrice()).isEqualTo(70500L);
         assertThat(unconfirmed.isRegularCloseConfirmed()).isTrue();
     }
@@ -81,7 +85,7 @@ class RegularCloseBackfillServiceTest {
         DomesticDailyPrice confirmed = DomesticDailyPrice.of(
             STOCK_CODE, tradeDate, 70000L, 71000L, 69000L, 70500L, 1_000_000L);
         confirmed.confirmRegularClose(70500L);
-        given(domesticDailyPriceRepository.findByStockCodeAndTradeDateBetweenOrderByTradeDateDesc(
+        given(dailyPriceReader.findDomesticBetween(
             eq(STOCK_CODE), any(), any())).willReturn(List.of(confirmed));
 
         // when
@@ -90,7 +94,7 @@ class RegularCloseBackfillServiceTest {
         // then
         assertThat(result).isEqualTo(RegularCloseBackfillResult.of(0, 0, 0));
         verify(tossApiClient, never()).get1MinuteCandleBefore(anyString(), anyString());
-        verify(domesticDailyPriceRepository, never()).save(any());
+        verify(dailyPriceAppender, never()).saveDomestic(any());
     }
 
     @Test
@@ -100,7 +104,7 @@ class RegularCloseBackfillServiceTest {
         LocalDate tradeDate = LocalDate.now().minusDays(1);
         DomesticDailyPrice unconfirmed = DomesticDailyPrice.of(
             STOCK_CODE, tradeDate, 70000L, 71000L, 69000L, 70800L, 0L);
-        given(domesticDailyPriceRepository.findByStockCodeAndTradeDateBetweenOrderByTradeDateDesc(
+        given(dailyPriceReader.findDomesticBetween(
             eq(STOCK_CODE), any(), any())).willReturn(List.of(unconfirmed));
         given(tossApiClient.get1MinuteCandleBefore(eq(STOCK_CODE), anyString()))
             .willReturn(new TossCandleResponse(new TossCandleResponse.TossCandlePageResult(List.of(), null)));
@@ -110,7 +114,7 @@ class RegularCloseBackfillServiceTest {
 
         // then
         assertThat(result).isEqualTo(RegularCloseBackfillResult.of(0, 1, 0));
-        verify(domesticDailyPriceRepository, never()).save(any());
+        verify(dailyPriceAppender, never()).saveDomestic(any());
     }
 
     @Test
@@ -120,7 +124,7 @@ class RegularCloseBackfillServiceTest {
         LocalDate tradeDate = LocalDate.now().minusDays(1);
         DomesticDailyPrice unconfirmed = DomesticDailyPrice.of(
             STOCK_CODE, tradeDate, 70000L, 71000L, 69000L, 70800L, 0L);
-        given(domesticDailyPriceRepository.findByStockCodeAndTradeDateBetweenOrderByTradeDateDesc(
+        given(dailyPriceReader.findDomesticBetween(
             eq(STOCK_CODE), any(), any())).willReturn(List.of(unconfirmed));
         given(tossApiClient.get1MinuteCandleBefore(eq(STOCK_CODE), anyString()))
             .willThrow(new RuntimeException("boom"));
@@ -130,7 +134,7 @@ class RegularCloseBackfillServiceTest {
 
         // then
         assertThat(result).isEqualTo(RegularCloseBackfillResult.of(0, 0, 1));
-        verify(domesticDailyPriceRepository, never()).save(any());
+        verify(dailyPriceAppender, never()).saveDomestic(any());
     }
 
     @Test
@@ -138,7 +142,7 @@ class RegularCloseBackfillServiceTest {
     void backfill_noStockCodesGiven_usesDomesticListedStockCache() {
         // given
         given(domesticListedStockCache.get()).willReturn(List.of(StockFixture.createStock()));
-        given(domesticDailyPriceRepository.findByStockCodeAndTradeDateBetweenOrderByTradeDateDesc(
+        given(dailyPriceReader.findDomesticBetween(
             anyString(), any(), any())).willReturn(List.of());
 
         // when

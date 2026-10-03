@@ -12,7 +12,8 @@ import static org.mockito.Mockito.verify;
 import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.toss.dto.TossCandleResponse;
 import com.quantlime.price.domain.OverseasDailyPrice;
-import com.quantlime.price.repository.OverseasDailyPriceRepository;
+import com.quantlime.price.implement.DailyPriceAppender;
+import com.quantlime.price.implement.DailyPriceReader;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -37,7 +38,10 @@ class OverseasDailyPriceBackfillServiceTest {
     private static final String STOCK_CODE = "AAPL";
 
     @Mock
-    private OverseasDailyPriceRepository overseasDailyPriceRepository;
+    private DailyPriceReader dailyPriceReader;
+
+    @Mock
+    private DailyPriceAppender dailyPriceAppender;
 
     @Mock
     private TossApiClient tossApiClient;
@@ -49,7 +53,7 @@ class OverseasDailyPriceBackfillServiceTest {
     @DisplayName("[이미 목표치만큼 쌓여있으면 API를 호출하지 않는다]")
     void backfillHistoryIfNeeded_alreadySufficient_skipsApiCall() {
         // given
-        given(overseasDailyPriceRepository.countByStockCode(STOCK_CODE)).willReturn(200L);
+        given(dailyPriceReader.countOverseas(STOCK_CODE)).willReturn(200L);
 
         // when
         overseasDailyPriceBackfillService.backfillHistoryIfNeeded(STOCK_CODE, 200);
@@ -62,7 +66,7 @@ class OverseasDailyPriceBackfillServiceTest {
     @DisplayName("[부족하면 1페이지(count=200) 조회로 채운다]")
     void backfillHistoryIfNeeded_insufficientSinglePage_fetchesOnce() {
         // given
-        given(overseasDailyPriceRepository.countByStockCode(STOCK_CODE)).willReturn(0L);
+        given(dailyPriceReader.countOverseas(STOCK_CODE)).willReturn(0L);
         TossCandleResponse page = candlePage(200, "2026-06-01", null);
         given(tossApiClient.getDailyCandles(STOCK_CODE, 200, null)).willReturn(page);
 
@@ -71,14 +75,14 @@ class OverseasDailyPriceBackfillServiceTest {
 
         // then
         verify(tossApiClient, times(1)).getDailyCandles(eq(STOCK_CODE), eq(200), any());
-        verify(overseasDailyPriceRepository, times(200)).save(any(OverseasDailyPrice.class));
+        verify(dailyPriceAppender, times(200)).saveOverseas(any(OverseasDailyPrice.class));
     }
 
     @Test
     @DisplayName("[한 페이지로 부족하면 nextBefore로 다음 페이지를 조회한다]")
     void backfillHistoryIfNeeded_multiplePages_paginatesUntilTargetReached() {
         // given
-        given(overseasDailyPriceRepository.countByStockCode(STOCK_CODE)).willReturn(0L);
+        given(dailyPriceReader.countOverseas(STOCK_CODE)).willReturn(0L);
         TossCandleResponse firstPage = candlePage(200, "2026-06-01", "cursor-1");
         TossCandleResponse secondPage = candlePage(50, "2025-11-01", null);
         given(tossApiClient.getDailyCandles(STOCK_CODE, 200, null)).willReturn(firstPage);
@@ -89,14 +93,14 @@ class OverseasDailyPriceBackfillServiceTest {
 
         // then
         verify(tossApiClient, times(2)).getDailyCandles(eq(STOCK_CODE), eq(200), any());
-        verify(overseasDailyPriceRepository, times(250)).save(any(OverseasDailyPrice.class));
+        verify(dailyPriceAppender, times(250)).saveOverseas(any(OverseasDailyPrice.class));
     }
 
     @Test
     @DisplayName("[반환 개수가 페이지 크기보다 적으면 더 이상 이력이 없다고 보고 중단한다]")
     void backfillHistoryIfNeeded_shortPage_stopsEvenIfTargetNotReached() {
         // given
-        given(overseasDailyPriceRepository.countByStockCode(STOCK_CODE)).willReturn(0L);
+        given(dailyPriceReader.countOverseas(STOCK_CODE)).willReturn(0L);
         TossCandleResponse shortPage = candlePage(30, "2026-06-01", "cursor-1");
         given(tossApiClient.getDailyCandles(STOCK_CODE, 200, null)).willReturn(shortPage);
 
@@ -105,24 +109,24 @@ class OverseasDailyPriceBackfillServiceTest {
 
         // then
         verify(tossApiClient, times(1)).getDailyCandles(anyString(), anyInt(), any());
-        verify(overseasDailyPriceRepository, times(30)).save(any(OverseasDailyPrice.class));
+        verify(dailyPriceAppender, times(30)).saveOverseas(any(OverseasDailyPrice.class));
     }
 
     @Test
     @DisplayName("[이미 저장된 날짜는 다시 저장하지 않는다]")
     void backfillHistoryIfNeeded_existingDate_skipsSave() {
         // given
-        given(overseasDailyPriceRepository.countByStockCode(STOCK_CODE)).willReturn(0L);
+        given(dailyPriceReader.countOverseas(STOCK_CODE)).willReturn(0L);
         TossCandleResponse page = candlePage(3, "2026-01-01", null);
         given(tossApiClient.getDailyCandles(STOCK_CODE, 200, null)).willReturn(page);
-        given(overseasDailyPriceRepository.existsByStockCodeAndTradeDate(eq(STOCK_CODE), any()))
+        given(dailyPriceReader.existsOverseas(eq(STOCK_CODE), any()))
             .willReturn(true);
 
         // when
         overseasDailyPriceBackfillService.backfillHistoryIfNeeded(STOCK_CODE, 200);
 
         // then
-        verify(overseasDailyPriceRepository, never()).save(any(OverseasDailyPrice.class));
+        verify(dailyPriceAppender, never()).saveOverseas(any(OverseasDailyPrice.class));
     }
 
     @Test
@@ -133,7 +137,7 @@ class OverseasDailyPriceBackfillServiceTest {
         // 스냅샷/수정주가 재조정을 놓치지 않는다(국내 DomesticDailyPriceService와 동일 정책)
         TossCandleResponse page = candlePage(20, "2026-06-01", null);
         given(tossApiClient.getDailyCandles(eq(STOCK_CODE), eq(20), any())).willReturn(page);
-        given(overseasDailyPriceRepository.existsByStockCodeAndTradeDate(eq(STOCK_CODE), any()))
+        given(dailyPriceReader.existsOverseas(eq(STOCK_CODE), any()))
             .willReturn(false);
 
         // when
@@ -141,7 +145,7 @@ class OverseasDailyPriceBackfillServiceTest {
 
         // then
         verify(tossApiClient, times(1)).getDailyCandles(eq(STOCK_CODE), eq(20), any());
-        verify(overseasDailyPriceRepository, times(20)).save(any(OverseasDailyPrice.class));
+        verify(dailyPriceAppender, times(20)).saveOverseas(any(OverseasDailyPrice.class));
     }
 
     // Rate Limit(429) 재시도는 2026-08-01부터 TossApiClient.getDailyCandles

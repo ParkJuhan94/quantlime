@@ -3,6 +3,7 @@ package com.quantlime.price.implement;
 import com.quantlime.price.domain.StockLiquidity;
 import com.quantlime.price.repository.StockLiquidityRepository;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -12,6 +13,10 @@ import org.springframework.stereotype.Component;
 public class StockLiquidityReader {
 
     private final StockLiquidityRepository stockLiquidityRepository;
+
+    public Optional<StockLiquidity> findByStockCode(String stockCode) {
+        return stockLiquidityRepository.findByStockCode(stockCode);
+    }
 
     public List<StockLiquidity> findAllByStockCodes(List<String> stockCodes) {
         return stockLiquidityRepository.findAllByStockCodeIn(stockCodes);
