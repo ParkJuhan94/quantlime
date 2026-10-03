@@ -17,7 +17,7 @@ public interface ScoreRepository extends JpaRepository<Score, Long>, ScoreQueryR
     Optional<Score> findTopByStockCodeOrderByScoreDateDesc(String stockCode);
 
     // 가격 소급 복구 후 오염된 과거 스코어를 일괄 정리하는 복구 전용 쿼리
-    // (ScorePersistenceService.deleteFrom). score_version이 없어 "지우고
+    // (ScoreAppender.deleteFrom). score_version이 없어 "지우고
     // 다시 만들기"가 유일하고 가장 정확한 복구 방법이다.
     @Modifying
     @Query("delete from Score s where s.scoreDate >= :from")

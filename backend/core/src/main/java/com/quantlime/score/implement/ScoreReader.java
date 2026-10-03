@@ -2,9 +2,11 @@ package com.quantlime.score.implement;
 
 import com.quantlime.score.domain.Score;
 import com.quantlime.score.repository.ScoreRepository;
+import com.quantlime.stock.domain.MarketType;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -25,5 +27,21 @@ public class ScoreReader {
 
     public List<Score> findLatestScores(List<String> stockCodes) {
         return scoreRepository.findLatestScoresByStockCodesOrderByCompositeScoreDesc(stockCodes);
+    }
+
+    public Optional<Score> findTopByStockCodeOrderByScoreDateDesc(String stockCode) {
+        return scoreRepository.findTopByStockCodeOrderByScoreDateDesc(stockCode);
+    }
+
+    public List<Score> findLatestScoresForNormalization(List<MarketType> marketTypes) {
+        return scoreRepository.findLatestScoresForNormalization(marketTypes);
+    }
+
+    public List<Score> findLatestScoresOnOrBefore(List<String> stockCodes, LocalDate date) {
+        return scoreRepository.findLatestScoresOnOrBefore(stockCodes, date);
+    }
+
+    public List<Score> findTopScoresOrderByCompositeScoreDesc(int limit, List<MarketType> marketTypes) {
+        return scoreRepository.findTopScoresOrderByCompositeScoreDesc(limit, marketTypes);
     }
 }

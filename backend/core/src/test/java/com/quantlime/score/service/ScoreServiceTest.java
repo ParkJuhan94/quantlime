@@ -26,8 +26,8 @@ import com.quantlime.market.domain.RankingPeriod;
 import com.quantlime.price.OverseasDailyPriceFixture;
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.StockLiquidity;
-import com.quantlime.price.repository.OverseasDailyPriceRepository;
-import com.quantlime.price.repository.StockLiquidityRepository;
+import com.quantlime.price.implement.DailyPriceReader;
+import com.quantlime.price.implement.StockLiquidityReader;
 import com.quantlime.price.service.DomesticDailyPriceService;
 import com.quantlime.score.cache.ScoreRankingCacheStore;
 import com.quantlime.score.domain.Divergence;
@@ -36,7 +36,8 @@ import com.quantlime.score.domain.Quadrant;
 import com.quantlime.score.domain.Score;
 import com.quantlime.score.dto.response.ScoreRankingResponse;
 import com.quantlime.score.dto.response.ScoreResponse;
-import com.quantlime.score.repository.ScoreRepository;
+import com.quantlime.score.implement.ScoreAppender;
+import com.quantlime.score.implement.ScoreReader;
 import com.quantlime.stock.StockFixture;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.StockMasterService;
@@ -44,7 +45,7 @@ import com.quantlime.user.UserFixture;
 import com.quantlime.user.domain.User;
 import com.quantlime.watchlist.WatchlistGroupFixture;
 import com.quantlime.watchlist.domain.Watchlist;
-import com.quantlime.watchlist.repository.WatchlistRepository;
+import com.quantlime.watchlist.implement.WatchlistReader;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.LocalDate;
@@ -78,22 +79,22 @@ class ScoreServiceTest {
     private DomesticDailyPriceService domesticDailyPriceService;
 
     @Mock
-    private OverseasDailyPriceRepository overseasDailyPriceRepository;
+    private DailyPriceReader dailyPriceReader;
 
     @Mock
     private PythonEngineClient pythonEngineClient;
 
     @Mock
-    private ScorePersistenceService scorePersistenceService;
+    private ScoreAppender scoreAppender;
 
     @Mock
-    private ScoreRepository scoreRepository;
+    private ScoreReader scoreReader;
 
     @Mock
-    private StockLiquidityRepository stockLiquidityRepository;
+    private StockLiquidityReader stockLiquidityReader;
 
     @Mock
-    private WatchlistRepository watchlistRepository;
+    private WatchlistReader watchlistReader;
 
     @Mock
     private StockMasterService stockMasterService;
@@ -119,7 +120,7 @@ class ScoreServiceTest {
 
         // then
         verify(pythonEngineClient, never()).calculateScoreSeries(any());
-        verify(scorePersistenceService, never()).saveAll(any());
+        verify(scoreAppender, never()).saveAll(any());
     }
 
     @Test
@@ -137,7 +138,7 @@ class ScoreServiceTest {
         scoreService.recalculateDomesticScore(STOCK_CODE);
 
         // then
-        verify(scorePersistenceService).saveAll(response.scores());
+        verify(scoreAppender).saveAll(response.scores());
     }
 
     @Test
@@ -152,7 +153,7 @@ class ScoreServiceTest {
         // when & then: 예외는 상위(WatchlistService/스케줄러)에서 잡으므로 여기선 전파돼야 함
         assertThatThrownBy(() -> scoreService.recalculateDomesticScore(STOCK_CODE))
             .isInstanceOf(ExternalApiException.class);
-        verify(scorePersistenceService, never()).saveAll(any());
+        verify(scoreAppender, never()).saveAll(any());
     }
 
     @Test
@@ -186,7 +187,7 @@ class ScoreServiceTest {
         scoreService.recalculateAllListedScores();
 
         // then
-        verify(scorePersistenceService).saveAll(response.scores());
+        verify(scoreAppender).saveAll(response.scores());
     }
 
     @Test
@@ -237,7 +238,7 @@ class ScoreServiceTest {
 
         // then
         verify(pythonEngineClient, times(2)).calculateScoreSeries(any());
-        verify(scorePersistenceService, times(1)).saveAll(any());
+        verify(scoreAppender, times(1)).saveAll(any());
     }
 
     @Test
@@ -246,7 +247,7 @@ class ScoreServiceTest {
         // given
         Score score = Score.of(STOCK_CODE, LocalDate.now(), 80.0, 40.0, 65.0,
             null, null, Divergence.of(false, null), false);
-        given(scoreRepository.findTopByStockCodeOrderByScoreDateDesc(STOCK_CODE))
+        given(scoreReader.findTopByStockCodeOrderByScoreDateDesc(STOCK_CODE))
             .willReturn(Optional.of(score));
 
         // when
@@ -263,7 +264,7 @@ class ScoreServiceTest {
         // given
         Score score = Score.of(STOCK_CODE, LocalDate.now(), 80.0, 40.0, 65.0,
             null, Quadrant.TREND_UP_OVERSOLD, Divergence.of(false, null), false);
-        given(scoreRepository.findTopByStockCodeOrderByScoreDateDesc(STOCK_CODE))
+        given(scoreReader.findTopByStockCodeOrderByScoreDateDesc(STOCK_CODE))
             .willReturn(Optional.of(score));
 
         // when
@@ -277,7 +278,7 @@ class ScoreServiceTest {
     @DisplayName("[저장된 스코어가 없으면 예외가 발생한다]")
     void getScore_notFound_throwsNotFoundException() {
         // given
-        given(scoreRepository.findTopByStockCodeOrderByScoreDateDesc(STOCK_CODE))
+        given(scoreReader.findTopByStockCodeOrderByScoreDateDesc(STOCK_CODE))
             .willReturn(Optional.empty());
 
         // when & then
@@ -296,7 +297,7 @@ class ScoreServiceTest {
         // 캐시 미스면 limit과 무관하게 항상 캐시 상한(50건, ScoreController의
         // @Max(50)과 맞춘 값)만큼 조회해 캐싱한 뒤 요청받은 limit만큼 자른다
         // (2026-09 성능 감사 - ScoreRankingCacheStore 참고).
-        given(scoreRepository.findTopScoresOrderByCompositeScoreDesc(50, null)).willReturn(List.of(score));
+        given(scoreReader.findTopScoresOrderByCompositeScoreDesc(50, null)).willReturn(List.of(score));
         given(stockMasterService.getStocksByCodesInOrder(List.of(STOCK_CODE))).willReturn(List.of(stock));
 
         // when
@@ -321,8 +322,8 @@ class ScoreServiceTest {
         Score baseA = Score.of("A", today.minusDays(7), 50.0, 40.0, 60.0, null, null, Divergence.of(false, null), false);
         Score baseB = Score.of("B", today.minusDays(7), 50.0, 40.0, 65.0, null, null, Divergence.of(false, null), false);
         given(scoreRankingCacheStore.find("all:1w")).willReturn(Optional.empty());
-        given(scoreRepository.findLatestScoresForNormalization(null)).willReturn(List.of(latestA, latestB, latestC));
-        given(scoreRepository.findLatestScoresOnOrBefore(List.of("A", "B", "C"), today.minusDays(7)))
+        given(scoreReader.findLatestScoresForNormalization(null)).willReturn(List.of(latestA, latestB, latestC));
+        given(scoreReader.findLatestScoresOnOrBefore(List.of("A", "B", "C"), today.minusDays(7)))
             .willReturn(List.of(baseA, baseB));
         given(stockMasterService.getStocksByCodesInOrder(List.of("A", "B"))).willReturn(List.of(
             StockFixture.createStock("A", "에이"), StockFixture.createStock("B", "비")));
@@ -357,7 +358,7 @@ class ScoreServiceTest {
             cached.set(invocation.getArgument(1));
             return null;
         }).given(scoreRankingCacheStore).save(eq("all"), any());
-        given(scoreRepository.findTopScoresOrderByCompositeScoreDesc(50, null)).willReturn(List.of(score));
+        given(scoreReader.findTopScoresOrderByCompositeScoreDesc(50, null)).willReturn(List.of(score));
         given(stockMasterService.getStocksByCodesInOrder(List.of(STOCK_CODE))).willReturn(List.of(stock));
 
         int concurrency = 20;
@@ -390,7 +391,7 @@ class ScoreServiceTest {
 
         // then: 20개 스레드가 동시에 캐시 미스로 진입해도 실제 DB 조회·
         // 캐시 저장은 각각 정확히 1회뿐이다.
-        verify(scoreRepository, times(1)).findTopScoresOrderByCompositeScoreDesc(50, null);
+        verify(scoreReader, times(1)).findTopScoresOrderByCompositeScoreDesc(50, null);
         verify(scoreRankingCacheStore, times(1)).save(eq("all"), any());
     }
 
@@ -400,7 +401,7 @@ class ScoreServiceTest {
         // given
         Score latest = Score.of(STOCK_CODE, LocalDate.now(), 60.0, 40.0, 50.0, null,
             null, Divergence.of(false, null), false);
-        given(scoreRepository.findLatestScoresForNormalization(anyList())).willReturn(List.of(latest));
+        given(scoreReader.findLatestScoresForNormalization(anyList())).willReturn(List.of(latest));
         CrossSectionNormalizeApiResponse response = new CrossSectionNormalizeApiResponse(
             "2026-10-01", "domestic", true,
             List.of(new CrossSectionNormalizeApiResponse.NormalizedItemApiResponse(
@@ -412,7 +413,7 @@ class ScoreServiceTest {
 
         // then: HTTP 응답을 기다리는 동안 DB 커넥션을 쥐지 않도록 쓰기 트랜잭션은
         // 저장 빈(applyNormalization)에만 있어야 한다 - 회귀하면 이 단언이 깨진다.
-        verify(scorePersistenceService).applyNormalization(anyList(), eq(PeerGroup.DOMESTIC), eq(response.items()));
+        verify(scoreAppender).applyNormalization(anyList(), eq(PeerGroup.DOMESTIC), eq(response.items()));
         assertThat(ScoreService.class.getMethod("normalizeCrossSection", PeerGroup.class)
             .isAnnotationPresent(org.springframework.transaction.annotation.Transactional.class)).isFalse();
     }
@@ -423,7 +424,7 @@ class ScoreServiceTest {
         // given
         Score latest = Score.of(STOCK_CODE, LocalDate.now(), 60.0, 40.0, 50.0, null,
             null, Divergence.of(false, null), false);
-        given(scoreRepository.findLatestScoresForNormalization(anyList())).willReturn(List.of(latest));
+        given(scoreReader.findLatestScoresForNormalization(anyList())).willReturn(List.of(latest));
         given(pythonEngineClient.normalizeCrossSection(any()))
             .willReturn(new CrossSectionNormalizeApiResponse("2026-10-01", "domestic", false, List.of()));
 
@@ -431,14 +432,14 @@ class ScoreServiceTest {
         scoreService.normalizeCrossSection(PeerGroup.DOMESTIC);
 
         // then
-        verify(scorePersistenceService, never()).applyNormalization(any(), any(), any());
+        verify(scoreAppender, never()).applyNormalization(any(), any(), any());
     }
 
     @Test
     @DisplayName("[해외 단건 재계산은 해외 가격으로 퀀트 엔진을 호출하고 결과 저장을 위임한다]")
     void recalculateOverseasScore_callsPythonAndDelegatesPersistence() {
         // given
-        given(overseasDailyPriceRepository.findByStockCodeInAndTradeDateBetweenOrderByTradeDateDesc(
+        given(dailyPriceReader.findOverseasByCodesBetweenDesc(
             anyList(), any(), any()))
             .willReturn(List.of(OverseasDailyPriceFixture.createDailyPrice("AAPL", LocalDate.of(2026, 7, 3))));
         ScoreSeriesBatchApiResponse response = new ScoreSeriesBatchApiResponse(List.of(successResponse("AAPL", 77.0)));
@@ -448,22 +449,22 @@ class ScoreServiceTest {
         scoreService.recalculateOverseasScore("AAPL");
 
         // then
-        verify(scorePersistenceService).saveAll(response.scores());
+        verify(scoreAppender).saveAll(response.scores());
     }
 
     @Test
     @DisplayName("[해외 재계산은 대상이 비면 아무것도 호출하지 않고, 가격 이력이 없으면 퀀트 엔진을 호출하지 않는다]")
     void recalculateOverseasScores_emptyOrNoHistory_skips() {
         scoreService.recalculateOverseasScores(List.of());
-        verify(overseasDailyPriceRepository, never())
-            .findByStockCodeInAndTradeDateBetweenOrderByTradeDateDesc(anyList(), any(), any());
+        verify(dailyPriceReader, never())
+            .findOverseasByCodesBetweenDesc(anyList(), any(), any());
 
-        given(overseasDailyPriceRepository.findByStockCodeInAndTradeDateBetweenOrderByTradeDateDesc(
+        given(dailyPriceReader.findOverseasByCodesBetweenDesc(
             anyList(), any(), any())).willReturn(List.of());
         scoreService.recalculateOverseasScores(List.of("AAPL"));
 
         verify(pythonEngineClient, never()).calculateScoreSeries(any());
-        verify(scorePersistenceService, never()).saveAll(any());
+        verify(scoreAppender, never()).saveAll(any());
     }
 
     @Test
@@ -475,7 +476,7 @@ class ScoreServiceTest {
             codes.add("US%03d".formatted(i));
         }
         codes.add("AAPL");
-        given(overseasDailyPriceRepository.findByStockCodeInAndTradeDateBetweenOrderByTradeDateDesc(
+        given(dailyPriceReader.findOverseasByCodesBetweenDesc(
             anyList(), any(), any()))
             .willReturn(List.of(OverseasDailyPriceFixture.createDailyPrice("AAPL", LocalDate.of(2026, 7, 3))));
         given(pythonEngineClient.calculateScoreSeries(any(ScoreBatchApiRequest.class)))
@@ -487,7 +488,7 @@ class ScoreServiceTest {
 
         // then
         verify(pythonEngineClient, times(2)).calculateScoreSeries(any());
-        verify(scorePersistenceService, times(1)).saveAll(any());
+        verify(scoreAppender, times(1)).saveAll(any());
     }
 
     @Test
@@ -504,7 +505,7 @@ class ScoreServiceTest {
         scoreService.recalculateDomesticScores(List.of(STOCK_CODE, "000660"));
 
         // then
-        verify(scorePersistenceService).saveAll(response.scores());
+        verify(scoreAppender).saveAll(response.scores());
         assertThat(meterRegistry.counter("score.batch.missing-from-response").count()).isEqualTo(1.0);
     }
 
@@ -516,18 +517,18 @@ class ScoreServiceTest {
         given(stockMasterService.getAllListedStocks()).willReturn(List.of(
             StockFixture.createStock(STOCK_CODE, "삼성전자"), StockFixture.createOverseasStock("AAPL", "Apple")));
         given(domesticDailyPriceService.getDailyPrices(anyList(), any(), any())).willReturn(List.of());
-        given(overseasDailyPriceRepository.findByStockCodeInAndTradeDateBetweenOrderByTradeDateDesc(
+        given(dailyPriceReader.findOverseasByCodesBetweenDesc(
             anyList(), any(), any())).willReturn(List.of());
 
         // when
         scoreService.rebuildScoresFrom(from);
 
         // then: 삭제가 가장 먼저, 국내 가격은 국내 코드만, 해외 가격은 해외 코드만 조회한다
-        InOrder order = inOrder(scorePersistenceService, domesticDailyPriceService, overseasDailyPriceRepository);
-        order.verify(scorePersistenceService).deleteFrom(from);
+        InOrder order = inOrder(scoreAppender, domesticDailyPriceService, dailyPriceReader);
+        order.verify(scoreAppender).deleteFrom(from);
         order.verify(domesticDailyPriceService).getDailyPrices(eq(List.of(STOCK_CODE)), any(), any());
-        order.verify(overseasDailyPriceRepository)
-            .findByStockCodeInAndTradeDateBetweenOrderByTradeDateDesc(eq(List.of("AAPL")), any(), any());
+        order.verify(dailyPriceReader)
+            .findOverseasByCodesBetweenDesc(eq(List.of("AAPL")), any(), any());
     }
 
     private Score latestScore(String stockCode, double composite) {
@@ -547,11 +548,11 @@ class ScoreServiceTest {
         // given
         Stock samsung = StockFixture.createStock(STOCK_CODE, "삼성전자");
         Stock apple = StockFixture.createOverseasStock("AAPL", "Apple");
-        given(watchlistRepository.findAllWithStockByUserId(1L)).willReturn(List.of(watchlistOf(samsung), watchlistOf(apple)));
-        given(scoreRepository.findLatestScoresByStockCodesOrderByCompositeScoreDesc(anyList()))
+        given(watchlistReader.findAllWithStockByUserId(1L)).willReturn(List.of(watchlistOf(samsung), watchlistOf(apple)));
+        given(scoreReader.findLatestScores(anyList()))
             .willAnswer(invocation -> ((List<String>) invocation.getArgument(0)).stream()
                 .map(code -> latestScore(code, 80.0)).toList());
-        given(stockLiquidityRepository.findAllByStockCodeIn(anyList())).willAnswer(invocation ->
+        given(stockLiquidityReader.findAllByStockCodes(anyList())).willAnswer(invocation ->
             ((List<String>) invocation.getArgument(0)).stream()
                 .map(code -> StockLiquidity.of(code, LocalDate.now(), 3_000_000_000.0, 0, true)).toList());
 
@@ -572,9 +573,9 @@ class ScoreServiceTest {
     @Test
     @DisplayName("[관심종목이 비어 있으면 대시보드는 빈 목록이다]")
     void getDashboardScores_emptyWatchlist_returnsEmpty() {
-        given(watchlistRepository.findAllWithStockByUserId(1L)).willReturn(List.of());
-        given(scoreRepository.findLatestScoresByStockCodesOrderByCompositeScoreDesc(anyList())).willReturn(List.of());
-        given(stockLiquidityRepository.findAllByStockCodeIn(anyList())).willReturn(List.of());
+        given(watchlistReader.findAllWithStockByUserId(1L)).willReturn(List.of());
+        given(scoreReader.findLatestScores(anyList())).willReturn(List.of());
+        given(stockLiquidityReader.findAllByStockCodes(anyList())).willReturn(List.of());
 
         assertThat(scoreService.getDashboardScores(1L, "all")).isEmpty();
     }
