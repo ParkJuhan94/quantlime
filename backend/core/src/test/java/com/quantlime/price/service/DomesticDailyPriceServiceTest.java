@@ -13,7 +13,8 @@ import static org.mockito.Mockito.verify;
 import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.toss.dto.TossCandleResponse;
 import com.quantlime.price.domain.DomesticDailyPrice;
-import com.quantlime.price.repository.DomesticDailyPriceRepository;
+import com.quantlime.price.implement.DailyPriceAppender;
+import com.quantlime.price.implement.DailyPriceReader;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -38,7 +39,10 @@ class DomesticDailyPriceServiceTest {
     private static final int MIN_LOOKBACK_CANDLES = 20;
 
     @Mock
-    private DomesticDailyPriceRepository domesticDailyPriceRepository;
+    private DailyPriceReader dailyPriceReader;
+
+    @Mock
+    private DailyPriceAppender dailyPriceAppender;
 
     @Mock
     private TossApiClient tossApiClient;
@@ -53,18 +57,18 @@ class DomesticDailyPriceServiceTest {
         LocalDate start = LocalDate.now().minusDays(25);
         TossCandleResponse page = candlePage(3, start, null);
         given(tossApiClient.getDailyCandles(eq(STOCK_CODE), eq(MIN_LOOKBACK_CANDLES), any())).willReturn(page);
-        given(domesticDailyPriceRepository.existsByStockCodeAndTradeDate(eq(STOCK_CODE), eq(start)))
+        given(dailyPriceReader.existsDomestic(eq(STOCK_CODE), eq(start)))
             .willReturn(false);
-        given(domesticDailyPriceRepository.existsByStockCodeAndTradeDate(eq(STOCK_CODE), eq(start.minusDays(1))))
+        given(dailyPriceReader.existsDomestic(eq(STOCK_CODE), eq(start.minusDays(1))))
             .willReturn(false);
-        given(domesticDailyPriceRepository.existsByStockCodeAndTradeDate(eq(STOCK_CODE), eq(start.minusDays(2))))
+        given(dailyPriceReader.existsDomestic(eq(STOCK_CODE), eq(start.minusDays(2))))
             .willReturn(true);
 
         // when
         domesticDailyPriceService.refreshRecent(STOCK_CODE);
 
         // then: 이미 있던 하루를 제외한 2건만 저장
-        verify(domesticDailyPriceRepository, times(2)).save(any(DomesticDailyPrice.class));
+        verify(dailyPriceAppender, times(2)).saveDomestic(any(DomesticDailyPrice.class));
     }
 
     @Test
@@ -74,20 +78,20 @@ class DomesticDailyPriceServiceTest {
         LocalDate outsideWindow = LocalDate.now().minusDays(25);
         TossCandleResponse page = candlePage(1, outsideWindow, null);
         given(tossApiClient.getDailyCandles(eq(STOCK_CODE), eq(MIN_LOOKBACK_CANDLES), any())).willReturn(page);
-        given(domesticDailyPriceRepository.existsByStockCodeAndTradeDate(anyString(), any())).willReturn(true);
+        given(dailyPriceReader.existsDomestic(anyString(), any())).willReturn(true);
 
         // when
         domesticDailyPriceService.refreshRecent(STOCK_CODE);
 
         // then
-        verify(domesticDailyPriceRepository, never()).save(any(DomesticDailyPrice.class));
+        verify(dailyPriceAppender, never()).saveDomestic(any(DomesticDailyPrice.class));
     }
 
     @Test
     @DisplayName("[이미 목표치만큼 쌓여있으면 API를 호출하지 않는다]")
     void backfillHistoryIfNeeded_alreadySufficient_skipsApiCall() {
         // given
-        given(domesticDailyPriceRepository.countByStockCode(STOCK_CODE)).willReturn(200L);
+        given(dailyPriceReader.countDomestic(STOCK_CODE)).willReturn(200L);
 
         // when
         domesticDailyPriceService.backfillHistoryIfNeeded(STOCK_CODE, 200);
@@ -100,7 +104,7 @@ class DomesticDailyPriceServiceTest {
     @DisplayName("[부족하면 1페이지(count=200) 조회로 채운다]")
     void backfillHistoryIfNeeded_insufficientSinglePage_fetchesOnce() {
         // given: 기존 0건, 1페이지에서 정확히 목표치(200개)를 반환(전부 윈도우 밖 과거)
-        given(domesticDailyPriceRepository.countByStockCode(STOCK_CODE)).willReturn(0L);
+        given(dailyPriceReader.countDomestic(STOCK_CODE)).willReturn(0L);
         TossCandleResponse page = candlePage(200, LocalDate.now().minusDays(100), null);
         given(tossApiClient.getDailyCandles(STOCK_CODE, 200, null)).willReturn(page);
 
@@ -109,14 +113,14 @@ class DomesticDailyPriceServiceTest {
 
         // then
         verify(tossApiClient, times(1)).getDailyCandles(eq(STOCK_CODE), eq(200), any());
-        verify(domesticDailyPriceRepository, times(200)).save(any(DomesticDailyPrice.class));
+        verify(dailyPriceAppender, times(200)).saveDomestic(any(DomesticDailyPrice.class));
     }
 
     @Test
     @DisplayName("[한 페이지로 부족하면 nextBefore로 다음 페이지를 조회한다]")
     void backfillHistoryIfNeeded_multiplePages_paginatesUntilTargetReached() {
         // given: 목표 250일 - 첫 페이지가 가득 차도(200개) 아직 부족해 두번째 페이지(50개)까지 조회
-        given(domesticDailyPriceRepository.countByStockCode(STOCK_CODE)).willReturn(0L);
+        given(dailyPriceReader.countDomestic(STOCK_CODE)).willReturn(0L);
         TossCandleResponse firstPage = candlePage(200, LocalDate.now().minusDays(100), "cursor-1");
         TossCandleResponse secondPage = candlePage(50, LocalDate.now().minusDays(300), null);
         given(tossApiClient.getDailyCandles(STOCK_CODE, 200, null)).willReturn(firstPage);
@@ -127,14 +131,14 @@ class DomesticDailyPriceServiceTest {
 
         // then
         verify(tossApiClient, times(2)).getDailyCandles(eq(STOCK_CODE), eq(200), any());
-        verify(domesticDailyPriceRepository, times(250)).save(any(DomesticDailyPrice.class));
+        verify(dailyPriceAppender, times(250)).saveDomestic(any(DomesticDailyPrice.class));
     }
 
     @Test
     @DisplayName("[반환 개수가 페이지 크기보다 적으면 더 이상 이력이 없다고 보고 중단한다]")
     void backfillHistoryIfNeeded_shortPage_stopsEvenIfTargetNotReached() {
         // given: 상장한 지 얼마 안 된 종목처럼 30개만 반환(200개 미만)
-        given(domesticDailyPriceRepository.countByStockCode(STOCK_CODE)).willReturn(0L);
+        given(dailyPriceReader.countDomestic(STOCK_CODE)).willReturn(0L);
         TossCandleResponse shortPage = candlePage(30, LocalDate.now().minusDays(100), "cursor-1");
         given(tossApiClient.getDailyCandles(STOCK_CODE, 200, null)).willReturn(shortPage);
 
@@ -143,24 +147,24 @@ class DomesticDailyPriceServiceTest {
 
         // then: 짧은 페이지를 받으면 더 조회하지 않고 종료
         verify(tossApiClient, times(1)).getDailyCandles(anyString(), anyInt(), any());
-        verify(domesticDailyPriceRepository, times(30)).save(any(DomesticDailyPrice.class));
+        verify(dailyPriceAppender, times(30)).saveDomestic(any(DomesticDailyPrice.class));
     }
 
     @Test
     @DisplayName("[재확정 윈도우 밖 - 이미 저장된 날짜는 다시 저장하지 않는다]")
     void backfillHistoryIfNeeded_existingDate_skipsSave() {
         // given
-        given(domesticDailyPriceRepository.countByStockCode(STOCK_CODE)).willReturn(0L);
+        given(dailyPriceReader.countDomestic(STOCK_CODE)).willReturn(0L);
         TossCandleResponse page = candlePage(3, LocalDate.now().minusDays(100), null);
         given(tossApiClient.getDailyCandles(STOCK_CODE, 200, null)).willReturn(page);
-        given(domesticDailyPriceRepository.existsByStockCodeAndTradeDate(eq(STOCK_CODE), any()))
+        given(dailyPriceReader.existsDomestic(eq(STOCK_CODE), any()))
             .willReturn(true);
 
         // when
         domesticDailyPriceService.backfillHistoryIfNeeded(STOCK_CODE, 200);
 
         // then
-        verify(domesticDailyPriceRepository, never()).save(any(DomesticDailyPrice.class));
+        verify(dailyPriceAppender, never()).saveDomestic(any(DomesticDailyPrice.class));
     }
 
     @Test
@@ -172,15 +176,15 @@ class DomesticDailyPriceServiceTest {
             STOCK_CODE, today, 70000L, 70500L, 69500L, 70200L, 500000L);
         TossCandleResponse page = candlePage(1, today, null);
         given(tossApiClient.getDailyCandles(eq(STOCK_CODE), eq(MIN_LOOKBACK_CANDLES), any())).willReturn(page);
-        given(domesticDailyPriceRepository.findByStockCodeAndTradeDate(STOCK_CODE, today))
+        given(dailyPriceReader.findDomestic(STOCK_CODE, today))
             .willReturn(Optional.of(existingIntradaySnapshot));
 
         // when: 장 마감 배치가 확정 종가로 재수집
         domesticDailyPriceService.refreshRecent(STOCK_CODE);
 
         // then: exists 체크로 스킵하는 게 아니라 기존 행을 확정 종가로 갱신 후 저장
-        verify(domesticDailyPriceRepository, never()).existsByStockCodeAndTradeDate(anyString(), any());
-        verify(domesticDailyPriceRepository, times(1)).save(existingIntradaySnapshot);
+        verify(dailyPriceReader, never()).existsDomestic(anyString(), any());
+        verify(dailyPriceAppender, times(1)).saveDomestic(existingIntradaySnapshot);
         assertThat(existingIntradaySnapshot.getClosePrice()).isEqualTo(70500L);
     }
 
@@ -196,15 +200,15 @@ class DomesticDailyPriceServiceTest {
         TossCandleResponse page = candlePage(1, withinWindow, null,
             "204000", "211000", "201500", "209500", "31000000");
         given(tossApiClient.getDailyCandles(eq(STOCK_CODE), eq(MIN_LOOKBACK_CANDLES), any())).willReturn(page);
-        given(domesticDailyPriceRepository.findByStockCodeAndTradeDate(STOCK_CODE, withinWindow))
+        given(dailyPriceReader.findDomestic(STOCK_CODE, withinWindow))
             .willReturn(Optional.of(intradaySnapshot));
 
         // when
         domesticDailyPriceService.refreshRecent(STOCK_CODE);
 
         // then
-        verify(domesticDailyPriceRepository, never()).existsByStockCodeAndTradeDate(anyString(), any());
-        verify(domesticDailyPriceRepository, times(1)).save(intradaySnapshot);
+        verify(dailyPriceReader, never()).existsDomestic(anyString(), any());
+        verify(dailyPriceAppender, times(1)).saveDomestic(intradaySnapshot);
         assertThat(intradaySnapshot.getVolume()).isEqualTo(31_000_000L);
         assertThat(intradaySnapshot.getClosePrice()).isEqualTo(209500L);
     }
@@ -220,14 +224,14 @@ class DomesticDailyPriceServiceTest {
         TossCandleResponse page = candlePage(1, withinWindow, null,
             "70000", "71000", "69000", "70500", "1000000");
         given(tossApiClient.getDailyCandles(eq(STOCK_CODE), eq(MIN_LOOKBACK_CANDLES), any())).willReturn(page);
-        given(domesticDailyPriceRepository.findByStockCodeAndTradeDate(STOCK_CODE, withinWindow))
+        given(dailyPriceReader.findDomestic(STOCK_CODE, withinWindow))
             .willReturn(Optional.of(unchanged));
 
         // when
         domesticDailyPriceService.refreshRecent(STOCK_CODE);
 
         // then
-        verify(domesticDailyPriceRepository, never()).save(any(DomesticDailyPrice.class));
+        verify(dailyPriceAppender, never()).saveDomestic(any(DomesticDailyPrice.class));
     }
 
     @Test
@@ -243,14 +247,14 @@ class DomesticDailyPriceServiceTest {
         TossCandleResponse page = candlePage(1, today, null,
             "71000", "72500", "70800", "72300", "1500000");
         given(tossApiClient.getDailyCandles(eq(STOCK_CODE), eq(MIN_LOOKBACK_CANDLES), any())).willReturn(page);
-        given(domesticDailyPriceRepository.findByStockCodeAndTradeDate(STOCK_CODE, today))
+        given(dailyPriceReader.findDomestic(STOCK_CODE, today))
             .willReturn(Optional.of(confirmed));
 
         // when
         domesticDailyPriceService.refreshRecent(STOCK_CODE);
 
         // then
-        verify(domesticDailyPriceRepository, times(1)).save(confirmed);
+        verify(dailyPriceAppender, times(1)).saveDomestic(confirmed);
         assertThat(confirmed.getClosePrice()).isEqualTo(71000L);
         assertThat(confirmed.getHighPrice()).isEqualTo(72500L);
         assertThat(confirmed.getVolume()).isEqualTo(1_500_000L);
@@ -269,14 +273,14 @@ class DomesticDailyPriceServiceTest {
         TossCandleResponse page = candlePage(1, today, null,
             "70000", "71000", "69000", "99999", "1000000");
         given(tossApiClient.getDailyCandles(eq(STOCK_CODE), eq(MIN_LOOKBACK_CANDLES), any())).willReturn(page);
-        given(domesticDailyPriceRepository.findByStockCodeAndTradeDate(STOCK_CODE, today))
+        given(dailyPriceReader.findDomestic(STOCK_CODE, today))
             .willReturn(Optional.of(confirmed));
 
         // when
         domesticDailyPriceService.refreshRecent(STOCK_CODE);
 
         // then
-        verify(domesticDailyPriceRepository, never()).save(any(DomesticDailyPrice.class));
+        verify(dailyPriceAppender, never()).saveDomestic(any(DomesticDailyPrice.class));
     }
 
     @Test
@@ -290,7 +294,7 @@ class DomesticDailyPriceServiceTest {
         TossCandleResponse page = candlePage(1, withinWindow, null,
             "2200", "2300", "2180", "2240", "500000");
         given(tossApiClient.getDailyCandles(eq(STOCK_CODE), eq(MIN_LOOKBACK_CANDLES), any())).willReturn(page);
-        given(domesticDailyPriceRepository.findByStockCodeAndTradeDate(STOCK_CODE, withinWindow))
+        given(dailyPriceReader.findDomestic(STOCK_CODE, withinWindow))
             .willReturn(Optional.of(staleSplitPrice));
         // 재백필(overwriteAll=true) 경로 - 빈 페이지를 반환해 곧바로 종료시킨다
         given(tossApiClient.getDailyCandles(eq(STOCK_CODE), eq(200), eq(null)))
@@ -313,7 +317,7 @@ class DomesticDailyPriceServiceTest {
         TossCandleResponse page = candlePage(1, withinWindow, null,
             "70000", "71000", "69500", "70500", "1000000");
         given(tossApiClient.getDailyCandles(eq(STOCK_CODE), eq(MIN_LOOKBACK_CANDLES), any())).willReturn(page);
-        given(domesticDailyPriceRepository.findByStockCodeAndTradeDate(STOCK_CODE, withinWindow))
+        given(dailyPriceReader.findDomestic(STOCK_CODE, withinWindow))
             .willReturn(Optional.of(existing));
 
         // when
@@ -337,9 +341,9 @@ class DomesticDailyPriceServiceTest {
                 candle(d2, "2000", "2100", "1980", "2040", "500000")
             ), null));
         given(tossApiClient.getDailyCandles(eq(STOCK_CODE), eq(200), eq(null))).willReturn(page);
-        given(domesticDailyPriceRepository.findByStockCodeAndTradeDate(eq(STOCK_CODE), eq(d1)))
+        given(dailyPriceReader.findDomestic(eq(STOCK_CODE), eq(d1)))
             .willReturn(Optional.of(DomesticDailyPrice.of(STOCK_CODE, d1, 220L, 230L, 218L, 224L, 0L)));
-        given(domesticDailyPriceRepository.findByStockCodeAndTradeDate(eq(STOCK_CODE), eq(d2)))
+        given(dailyPriceReader.findDomestic(eq(STOCK_CODE), eq(d2)))
             .willReturn(Optional.empty());
 
         // when
@@ -363,14 +367,14 @@ class DomesticDailyPriceServiceTest {
         DomesticDailyPrice protectedPrice = DomesticDailyPrice.of(STOCK_CODE, d1, 220L, 230L, 218L, 224L, 0L);
         protectedPrice.confirmRegularClose(224L);
         given(tossApiClient.getDailyCandles(eq(STOCK_CODE), eq(200), eq(null))).willReturn(page);
-        given(domesticDailyPriceRepository.findByStockCodeAndTradeDate(STOCK_CODE, d1))
+        given(dailyPriceReader.findDomestic(STOCK_CODE, d1))
             .willReturn(Optional.of(protectedPrice));
 
         // when
         domesticDailyPriceService.rebackfillAdjustedHistory(STOCK_CODE);
 
         // then
-        verify(domesticDailyPriceRepository, times(1)).save(protectedPrice);
+        verify(dailyPriceAppender, times(1)).saveDomestic(protectedPrice);
         assertThat(protectedPrice.getClosePrice()).isEqualTo(2240L);
         assertThat(protectedPrice.isRegularCloseConfirmed()).isFalse();
     }

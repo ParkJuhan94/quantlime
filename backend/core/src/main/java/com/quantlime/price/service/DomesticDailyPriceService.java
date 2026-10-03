@@ -6,7 +6,8 @@ import com.quantlime.infra.toss.dto.TossCandleResponse;
 import com.quantlime.infra.toss.dto.TossPriceMapper;
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.dto.DailyCandleSaveResult;
-import com.quantlime.price.repository.DomesticDailyPriceRepository;
+import com.quantlime.price.implement.DailyPriceAppender;
+import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.price.util.DailyPriceSettlementPolicy;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -39,7 +40,8 @@ public class DomesticDailyPriceService {
     // 주석 참고.
     private static final int FULL_REBACKFILL_TARGET_DAYS = 400;
 
-    private final DomesticDailyPriceRepository domesticDailyPriceRepository;
+    private final DailyPriceReader dailyPriceReader;
+    private final DailyPriceAppender dailyPriceAppender;
     private final TossApiClient tossApiClient;
 
     public void refreshRecent(String stockCode) {
@@ -84,8 +86,8 @@ public class DomesticDailyPriceService {
 
     @Transactional(readOnly = true)
     public List<DomesticDailyPrice> getDailyPrices(String stockCode, LocalDate start, LocalDate end) {
-        return domesticDailyPriceRepository
-            .findByStockCodeAndTradeDateBetweenOrderByTradeDateDesc(stockCode, start, end);
+        return dailyPriceReader
+            .findDomesticBetween(stockCode, start, end);
     }
 
     /**
@@ -98,8 +100,8 @@ public class DomesticDailyPriceService {
         if (stockCodes.isEmpty()) {
             return List.of();
         }
-        return domesticDailyPriceRepository
-            .findByStockCodeInAndTradeDateBetweenOrderByTradeDateDesc(stockCodes, start, end);
+        return dailyPriceReader
+            .findDomesticBetweenForCodes(stockCodes, start, end);
     }
 
     /**
@@ -115,7 +117,7 @@ public class DomesticDailyPriceService {
     }
 
     public void backfillHistoryIfNeeded(String stockCode, int targetDays) {
-        long existingCount = domesticDailyPriceRepository.countByStockCode(stockCode);
+        long existingCount = dailyPriceReader.countDomestic(stockCode);
         if (existingCount >= targetDays) {
             log.debug("이력 백필 불필요: stockCode={}, 기존건수={}", stockCode, existingCount);
             return;
@@ -246,11 +248,11 @@ public class DomesticDailyPriceService {
                 restatementDetected |= outcome.restatementDetected();
                 continue;
             }
-            if (domesticDailyPriceRepository.existsByStockCodeAndTradeDate(stockCode, tradeDate)) {
+            if (dailyPriceReader.existsDomestic(stockCode, tradeDate)) {
                 continue;
             }
             try {
-                domesticDailyPriceRepository.save(TossPriceMapper.toDailyPrice(stockCode, candle));
+                dailyPriceAppender.saveDomestic(TossPriceMapper.toDailyPrice(stockCode, candle));
                 saved++;
             } catch (DataIntegrityViolationException e) {
                 log.debug("이력 백필 중복 저장 스킵: stockCode={}, date={}", stockCode, tradeDate);
@@ -270,7 +272,7 @@ public class DomesticDailyPriceService {
      */
     private UpsertOutcome upsertCandle(String stockCode, LocalDate tradeDate,
                                         TossCandleResponse.TossCandle candle, boolean overwriteAll) {
-        return domesticDailyPriceRepository.findByStockCodeAndTradeDate(stockCode, tradeDate)
+        return dailyPriceReader.findDomestic(stockCode, tradeDate)
             .map(existing -> {
                 long open = Long.parseLong(candle.openPrice());
                 long high = Long.parseLong(candle.highPrice());
@@ -288,7 +290,7 @@ public class DomesticDailyPriceService {
                         return UpsertOutcome.unchanged();
                     }
                     existing.updateOhlcvKeepingClose(open, high, low, volume);
-                    domesticDailyPriceRepository.save(existing);
+                    dailyPriceAppender.saveDomestic(existing);
                     return UpsertOutcome.updated(false);
                 }
 
@@ -303,12 +305,12 @@ public class DomesticDailyPriceService {
                 boolean restated = detectRestatement && DailyPriceSettlementPolicy.isRestatement(
                     existing.getClosePrice(), close, DailyPriceSettlementPolicy.DOMESTIC_RESTATEMENT_THRESHOLD);
                 existing.updateOhlcv(open, high, low, close, volume);
-                domesticDailyPriceRepository.save(existing);
+                dailyPriceAppender.saveDomestic(existing);
                 return UpsertOutcome.updated(restated);
             })
             .orElseGet(() -> {
                 try {
-                    domesticDailyPriceRepository.save(TossPriceMapper.toDailyPrice(stockCode, candle));
+                    dailyPriceAppender.saveDomestic(TossPriceMapper.toDailyPrice(stockCode, candle));
                     return UpsertOutcome.inserted();
                 } catch (DataIntegrityViolationException e) {
                     log.debug("당일/재확정 시세 동시 저장 충돌 스킵: stockCode={}, date={}", stockCode, tradeDate);

@@ -3,6 +3,7 @@ package com.quantlime.price.implement;
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.price.dto.DomesticStockTradingValue;
+import com.quantlime.price.dto.LiquiditySnapshot;
 import com.quantlime.price.dto.OverseasStockTradingValue;
 import com.quantlime.price.repository.DomesticDailyPriceRepository;
 import com.quantlime.price.repository.OverseasDailyPriceRepository;
@@ -50,5 +51,75 @@ public class DailyPriceReader {
     public Optional<LocalDate> findLatestOverseasTradeDate(String stockCode) {
         return overseasDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(stockCode)
             .map(OverseasDailyPrice::getTradeDate);
+    }
+
+    // ---- 국내 일봉 조회
+
+    public Optional<DomesticDailyPrice> findDomestic(String stockCode, LocalDate tradeDate) {
+        return domesticDailyPriceRepository.findByStockCodeAndTradeDate(stockCode, tradeDate);
+    }
+
+    public boolean existsDomestic(String stockCode, LocalDate tradeDate) {
+        return domesticDailyPriceRepository.existsByStockCodeAndTradeDate(stockCode, tradeDate);
+    }
+
+    public long countDomestic(String stockCode) {
+        return domesticDailyPriceRepository.countByStockCode(stockCode);
+    }
+
+    public Optional<DomesticDailyPrice> findLatestDomestic(String stockCode) {
+        return domesticDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(stockCode);
+    }
+
+    /** 기간 내 일봉, 최신순. */
+    public List<DomesticDailyPrice> findDomesticBetween(String stockCode, LocalDate from, LocalDate to) {
+        return domesticDailyPriceRepository
+            .findByStockCodeAndTradeDateBetweenOrderByTradeDateDesc(stockCode, from, to);
+    }
+
+    public List<DomesticDailyPrice> findDomesticBetweenForCodes(
+        List<String> stockCodes, LocalDate from, LocalDate to) {
+        return domesticDailyPriceRepository
+            .findByStockCodeInAndTradeDateBetweenOrderByTradeDateDesc(stockCodes, from, to);
+    }
+
+    /** 종목별로 {@code date} 이전의 가장 최근 일봉. */
+    public List<DomesticDailyPrice> findDomesticLatestBefore(List<String> stockCodes, LocalDate date) {
+        return domesticDailyPriceRepository.findLatestBeforeDate(stockCodes, date);
+    }
+
+    public List<LiquiditySnapshot> findDomesticLiquiditySnapshot(LocalDate since) {
+        return domesticDailyPriceRepository.findLiquiditySnapshot(since);
+    }
+
+    // ---- 해외 일봉 조회
+
+    public Optional<OverseasDailyPrice> findOverseas(String stockCode, LocalDate tradeDate) {
+        return overseasDailyPriceRepository.findByStockCodeAndTradeDate(stockCode, tradeDate);
+    }
+
+    public boolean existsOverseas(String stockCode, LocalDate tradeDate) {
+        return overseasDailyPriceRepository.existsByStockCodeAndTradeDate(stockCode, tradeDate);
+    }
+
+    public long countOverseas(String stockCode) {
+        return overseasDailyPriceRepository.countByStockCode(stockCode);
+    }
+
+    public Optional<OverseasDailyPrice> findLatestOverseas(String stockCode) {
+        return overseasDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(stockCode);
+    }
+
+    public List<OverseasDailyPrice> findOverseasBetween(String stockCode, LocalDate from, LocalDate to) {
+        return overseasDailyPriceRepository
+            .findByStockCodeAndTradeDateBetweenOrderByTradeDateDesc(stockCode, from, to);
+    }
+
+    public List<OverseasDailyPrice> findOverseasLatestBefore(List<String> stockCodes, LocalDate date) {
+        return overseasDailyPriceRepository.findLatestBeforeDate(stockCodes, date);
+    }
+
+    public List<LiquiditySnapshot> findOverseasLiquiditySnapshot(LocalDate since) {
+        return overseasDailyPriceRepository.findLiquiditySnapshot(since);
     }
 }

@@ -10,7 +10,7 @@ import static org.mockito.Mockito.verify;
 
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.dto.PriceJumpReport;
-import com.quantlime.price.repository.DomesticDailyPriceRepository;
+import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.stock.StockFixture;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.StockMasterService;
@@ -34,7 +34,7 @@ class DailyPriceIntegrityServiceTest {
     private StockMasterService stockMasterService;
 
     @Mock
-    private DomesticDailyPriceRepository domesticDailyPriceRepository;
+    private DailyPriceReader dailyPriceReader;
 
     @Mock
     private DomesticDailyPriceService domesticDailyPriceService;
@@ -57,7 +57,7 @@ class DailyPriceIntegrityServiceTest {
         givenStocks(StockFixture.createStock("005930", "삼성전자"),
             StockFixture.createOverseasStock("AAPL", "Apple"));
         // 리포지토리는 tradeDate 내림차순으로 돌려준다 - 서비스가 오름차순으로 다시 정렬해야 한다
-        given(domesticDailyPriceRepository.findByStockCodeInAndTradeDateBetweenOrderByTradeDateDesc(
+        given(dailyPriceReader.findDomesticBetweenForCodes(
             anyList(), any(), any())).willReturn(List.of(
                 price("005930", FROM.plusDays(2), 200L),
                 price("005930", FROM.plusDays(1), 1000L),
@@ -70,7 +70,7 @@ class DailyPriceIntegrityServiceTest {
         assertThat(jumps).hasSize(1);
         assertThat(jumps.get(0).stockCode()).isEqualTo("005930");
         assertThat(jumps.get(0).tradeDate()).isEqualTo(FROM.plusDays(2));
-        verify(domesticDailyPriceRepository).findByStockCodeInAndTradeDateBetweenOrderByTradeDateDesc(
+        verify(dailyPriceReader).findDomesticBetweenForCodes(
             List.of("005930"), FROM, LocalDate.now());
     }
 
@@ -78,7 +78,7 @@ class DailyPriceIntegrityServiceTest {
     @DisplayName("[스캔 결과가 없으면 빈 리스트]")
     void scanDomesticJumps_noJumps_returnsEmpty() {
         givenStocks(StockFixture.createStock("005930", "삼성전자"));
-        given(domesticDailyPriceRepository.findByStockCodeInAndTradeDateBetweenOrderByTradeDateDesc(
+        given(dailyPriceReader.findDomesticBetweenForCodes(
             anyList(), any(), any())).willReturn(List.of(
                 price("005930", FROM.plusDays(1), 1010L), price("005930", FROM, 1000L)));
 
@@ -89,7 +89,7 @@ class DailyPriceIntegrityServiceTest {
     @DisplayName("[dryRun=true면 스캔 결과만 반환하고 재백필(외부 API)은 호출하지 않는다]")
     void repairDomesticAdjusted_dryRun_doesNotRebackfill() {
         givenStocks(StockFixture.createStock("005930", "삼성전자"));
-        given(domesticDailyPriceRepository.findByStockCodeInAndTradeDateBetweenOrderByTradeDateDesc(
+        given(dailyPriceReader.findDomesticBetweenForCodes(
             anyList(), any(), any())).willReturn(List.of(
                 price("005930", FROM.plusDays(1), 200L), price("005930", FROM, 1000L)));
 
@@ -104,7 +104,7 @@ class DailyPriceIntegrityServiceTest {
     void repairDomesticAdjusted_rebackfillsEachAffectedStockOnce_isolatingFailures() {
         // given: A는 점프 2회, B는 점프 1회
         givenStocks(StockFixture.createStock("A00001", "A"), StockFixture.createStock("B00002", "B"));
-        given(domesticDailyPriceRepository.findByStockCodeInAndTradeDateBetweenOrderByTradeDateDesc(
+        given(dailyPriceReader.findDomesticBetweenForCodes(
             anyList(), any(), any())).willReturn(List.of(
                 price("A00001", FROM, 1000L), price("A00001", FROM.plusDays(1), 200L),
                 price("A00001", FROM.plusDays(2), 1000L),
@@ -131,14 +131,14 @@ class DailyPriceIntegrityServiceTest {
             stocks[i] = StockFixture.createStock(String.format("%06d", i), "S" + i);
         }
         givenStocks(stocks);
-        given(domesticDailyPriceRepository.findByStockCodeInAndTradeDateBetweenOrderByTradeDateDesc(
+        given(dailyPriceReader.findDomesticBetweenForCodes(
             anyList(), any(), any())).willReturn(List.of());
 
         // when
         service.scanDomesticJumps(FROM);
 
         // then: 100 + 100 + 50 = 3번 조회
-        verify(domesticDailyPriceRepository, org.mockito.Mockito.times(3))
-            .findByStockCodeInAndTradeDateBetweenOrderByTradeDateDesc(anyList(), any(), any());
+        verify(dailyPriceReader, org.mockito.Mockito.times(3))
+            .findDomesticBetweenForCodes(anyList(), any(), any());
     }
 }

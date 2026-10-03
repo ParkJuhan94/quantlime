@@ -5,7 +5,8 @@ import com.quantlime.infra.toss.dto.TossCandleResponse;
 import com.quantlime.market.cache.DomesticListedStockCache;
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.dto.RegularCloseBackfillResult;
-import com.quantlime.price.repository.DomesticDailyPriceRepository;
+import com.quantlime.price.implement.DailyPriceAppender;
+import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.price.util.DailyPriceSettlementPolicy;
 import com.quantlime.stock.domain.Stock;
 import java.time.LocalDate;
@@ -38,7 +39,8 @@ public class RegularCloseBackfillService {
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final LocalTime REGULAR_CLOSE_TIME = LocalTime.of(15, 30);
 
-    private final DomesticDailyPriceRepository domesticDailyPriceRepository;
+    private final DailyPriceReader dailyPriceReader;
+    private final DailyPriceAppender dailyPriceAppender;
     private final DomesticListedStockCache domesticListedStockCache;
     private final TossApiClient tossApiClient;
 
@@ -56,8 +58,8 @@ public class RegularCloseBackfillService {
         int skipped = 0;
         int failed = 0;
         for (String stockCode : targets) {
-            List<DomesticDailyPrice> candidates = domesticDailyPriceRepository
-                .findByStockCodeAndTradeDateBetweenOrderByTradeDateDesc(stockCode, windowStart, today.minusDays(1))
+            List<DomesticDailyPrice> candidates = dailyPriceReader
+                .findDomesticBetween(stockCode, windowStart, today.minusDays(1))
                 .stream()
                 .filter(price -> !price.isRegularCloseConfirmed())
                 .toList();
@@ -99,7 +101,7 @@ public class RegularCloseBackfillService {
             }
             long regularClose = Long.parseLong(candles.get(0).closePrice());
             price.confirmRegularClose(regularClose);
-            domesticDailyPriceRepository.save(price);
+            dailyPriceAppender.saveDomestic(price);
             return BackfillOutcome.CONFIRMED;
         } catch (Exception e) {
             log.warn("정규장 종가 백필 실패, 스킵: stockCode={}, date={}, error={}",

@@ -6,8 +6,7 @@ import com.quantlime.price.dto.mapper.PriceMapper;
 import com.quantlime.price.dto.response.CurrentPriceResponse;
 import com.quantlime.price.dto.response.DailyChartResponse;
 import com.quantlime.price.dto.response.PriceSnapshot;
-import com.quantlime.price.repository.DomesticDailyPriceRepository;
-import com.quantlime.price.repository.OverseasDailyPriceRepository;
+import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.StockMasterService;
 import java.time.LocalDate;
@@ -28,8 +27,7 @@ public class StockPriceService {
 
     private final StockMasterService stockMasterService;
     private final DomesticDailyPriceService domesticDailyPriceService;
-    private final DomesticDailyPriceRepository domesticDailyPriceRepository;
-    private final OverseasDailyPriceRepository overseasDailyPriceRepository;
+    private final DailyPriceReader dailyPriceReader;
     private final PriceCacheStore priceCacheStore;
 
     /**
@@ -87,10 +85,10 @@ public class StockPriceService {
     // 애프터마켓까지 반영된 값을 그대로 전일종가로 쓰면 등락률이 어긋나
     // 별도 리졸버(DomesticPreviousCloseResolver, 삭제됨)가 필요했다.
     private CurrentPriceResponse domesticFallback(String stockCode) {
-        return domesticDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(stockCode)
+        return dailyPriceReader.findLatestDomestic(stockCode)
             .map(latestClose -> {
-                Double previousClose = domesticDailyPriceRepository
-                    .findLatestBeforeDate(List.of(stockCode), latestClose.getTradeDate())
+                Double previousClose = dailyPriceReader
+                    .findDomesticLatestBefore(List.of(stockCode), latestClose.getTradeDate())
                     .stream()
                     .findFirst()
                     .map(price -> price.getClosePrice().doubleValue())
@@ -104,10 +102,10 @@ public class StockPriceService {
     }
 
     private CurrentPriceResponse overseasFallback(String stockCode) {
-        return overseasDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(stockCode)
+        return dailyPriceReader.findLatestOverseas(stockCode)
             .map(latestClose -> {
-                Double previousClose = overseasDailyPriceRepository
-                    .findLatestBeforeDate(List.of(stockCode), latestClose.getTradeDate())
+                Double previousClose = dailyPriceReader
+                    .findOverseasLatestBefore(List.of(stockCode), latestClose.getTradeDate())
                     .stream()
                     .findFirst()
                     .map(OverseasDailyPrice::getClosePrice)
@@ -130,8 +128,8 @@ public class StockPriceService {
         LocalDate start = end.minusDays(days);
 
         if (!stock.getMarketType().isDomestic()) {
-            return overseasDailyPriceRepository
-                .findByStockCodeAndTradeDateBetweenOrderByTradeDateDesc(stockCode, start, end).stream()
+            return dailyPriceReader
+                .findOverseasBetween(stockCode, start, end).stream()
                 .map(PriceMapper::toDailyChartResponse)
                 .toList();
         }

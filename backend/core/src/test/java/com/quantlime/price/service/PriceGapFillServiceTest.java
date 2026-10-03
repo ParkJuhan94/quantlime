@@ -10,8 +10,7 @@ import static org.mockito.Mockito.verify;
 
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
-import com.quantlime.price.repository.DomesticDailyPriceRepository;
-import com.quantlime.price.repository.OverseasDailyPriceRepository;
+import com.quantlime.price.implement.DailyPriceReader;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -34,10 +33,7 @@ class PriceGapFillServiceTest {
     private static final String OVERSEAS_STOCK_CODE = "AAPL";
 
     @Mock
-    private DomesticDailyPriceRepository domesticDailyPriceRepository;
-
-    @Mock
-    private OverseasDailyPriceRepository overseasDailyPriceRepository;
+    private DailyPriceReader dailyPriceReader;
 
     @Mock
     private DomesticDailyPriceService domesticDailyPriceService;
@@ -52,7 +48,7 @@ class PriceGapFillServiceTest {
     @DisplayName("[저장된 이력이 없으면 국내는 깊은 백필로 최초 적재한다]")
     void fillDomesticGap_noExistingHistory_deepBackfill() {
         // given
-        given(domesticDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(STOCK_CODE))
+        given(dailyPriceReader.findLatestDomestic(STOCK_CODE))
             .willReturn(Optional.empty());
 
         // when
@@ -73,7 +69,7 @@ class PriceGapFillServiceTest {
     @DisplayName("[오늘 행이 있어도 확정 시각(20:00) 전이면 다시 조회한다]")
     void fillDomesticGap_todayUnsettled_refetchesEvenWithNoGap() {
         // given: updatedAt이 null(미영속 픽스처) - 미확정으로 취급된다
-        given(domesticDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(STOCK_CODE))
+        given(dailyPriceReader.findLatestDomestic(STOCK_CODE))
             .willReturn(Optional.of(domesticDailyPrice(LocalDate.now())));
 
         // when
@@ -92,7 +88,7 @@ class PriceGapFillServiceTest {
         DomesticDailyPrice settled = domesticDailyPrice(LocalDate.now());
         ReflectionTestUtils.setField(settled, "updatedAt",
             LocalDateTime.of(LocalDate.now(), LocalTime.of(20, 5)));
-        given(domesticDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(STOCK_CODE))
+        given(dailyPriceReader.findLatestDomestic(STOCK_CODE))
             .willReturn(Optional.of(settled));
 
         // when
@@ -114,7 +110,7 @@ class PriceGapFillServiceTest {
         // 가드가 재조회를 막는다
         DomesticDailyPrice recentlyRefreshed = domesticDailyPrice(LocalDate.now());
         ReflectionTestUtils.setField(recentlyRefreshed, "updatedAt", LocalDateTime.now().minusMinutes(5));
-        given(domesticDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(STOCK_CODE))
+        given(dailyPriceReader.findLatestDomestic(STOCK_CODE))
             .willReturn(Optional.of(recentlyRefreshed));
 
         // when
@@ -129,7 +125,7 @@ class PriceGapFillServiceTest {
     @DisplayName("[최근 며칠만 비어 있으면 그 갭만큼만 단일 호출로 채운다]")
     void fillDomesticGap_smallGap_collectsExactGapOnly() {
         // given: 5일 전까지만 저장돼 있음
-        given(domesticDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(STOCK_CODE))
+        given(dailyPriceReader.findLatestDomestic(STOCK_CODE))
             .willReturn(Optional.of(domesticDailyPrice(LocalDate.now().minusDays(5))));
 
         // when
@@ -146,7 +142,7 @@ class PriceGapFillServiceTest {
     @DisplayName("[갭이 단일 호출 한도를 넘으면 깊은 백필로 대체한다]")
     void fillDomesticGap_largeGap_fallsBackToDeepBackfill() {
         // given: 1년 넘게 비어있는 종목(장기 다운타임 등)
-        given(domesticDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(STOCK_CODE))
+        given(dailyPriceReader.findLatestDomestic(STOCK_CODE))
             .willReturn(Optional.of(domesticDailyPrice(LocalDate.now().minusDays(400))));
 
         // when
@@ -161,7 +157,7 @@ class PriceGapFillServiceTest {
     @DisplayName("[해외 종목도 저장된 이력이 없으면 깊은 백필로 최초 적재한다]")
     void fillOverseasGap_noExistingHistory_deepBackfill() {
         // given
-        given(overseasDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(OVERSEAS_STOCK_CODE))
+        given(dailyPriceReader.findLatestOverseas(OVERSEAS_STOCK_CODE))
             .willReturn(Optional.empty());
 
         // when
@@ -177,7 +173,7 @@ class PriceGapFillServiceTest {
     @DisplayName("[해외 종목은 갭이 작으면 그 갭만큼만 단일 호출(refreshRecent)로 채운다]")
     void fillOverseasGap_smallGap_collectsRecentPricesOnce() {
         // given: 3일 전까지만 저장돼 있음
-        given(overseasDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(OVERSEAS_STOCK_CODE))
+        given(dailyPriceReader.findLatestOverseas(OVERSEAS_STOCK_CODE))
             .willReturn(Optional.of(overseasDailyPrice(LocalDate.now().minusDays(3))));
 
         // when
@@ -195,7 +191,7 @@ class PriceGapFillServiceTest {
     @DisplayName("[해외 종목도 갭이 단일 호출 한도(200일, 국내와 동일)를 넘으면 깊은 백필로 대체한다]")
     void fillOverseasGap_largeGap_fallsBackToDeepBackfill() {
         // given
-        given(overseasDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(OVERSEAS_STOCK_CODE))
+        given(dailyPriceReader.findLatestOverseas(OVERSEAS_STOCK_CODE))
             .willReturn(Optional.of(overseasDailyPrice(LocalDate.now().minusDays(400))));
 
         // when

@@ -13,8 +13,7 @@ import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.price.dto.response.CurrentPriceResponse;
 import com.quantlime.price.dto.response.DailyChartResponse;
 import com.quantlime.price.dto.response.PriceSnapshot;
-import com.quantlime.price.repository.DomesticDailyPriceRepository;
-import com.quantlime.price.repository.OverseasDailyPriceRepository;
+import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.stock.StockFixture;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.StockMasterService;
@@ -41,10 +40,7 @@ class StockPriceServiceTest {
     private DomesticDailyPriceService domesticDailyPriceService;
 
     @Mock
-    private DomesticDailyPriceRepository domesticDailyPriceRepository;
-
-    @Mock
-    private OverseasDailyPriceRepository overseasDailyPriceRepository;
+    private DailyPriceReader dailyPriceReader;
 
     @Mock
     private PriceCacheStore priceCacheStore;
@@ -55,8 +51,8 @@ class StockPriceServiceTest {
 
     @BeforeEach
     void setUp() {
-        stockPriceService = new StockPriceService(stockMasterService, domesticDailyPriceService, domesticDailyPriceRepository,
-            overseasDailyPriceRepository, priceCacheStore);
+        stockPriceService = new StockPriceService(
+            stockMasterService, domesticDailyPriceService, dailyPriceReader, priceCacheStore);
     }
 
     @Test
@@ -73,7 +69,7 @@ class StockPriceServiceTest {
 
         // then
         assertThat(response.price()).isEqualTo(70000.0);
-        verify(domesticDailyPriceRepository, never()).findTopByStockCodeOrderByTradeDateDesc(stockCode);
+        verify(dailyPriceReader, never()).findLatestDomestic(stockCode);
     }
 
     @Test
@@ -97,9 +93,9 @@ class StockPriceServiceTest {
             stockCode, latestTradeDate.minusDays(1), 90L, 105L, 85L, 100L, 900L);
         given(stockMasterService.getStockByCode(stockCode)).willReturn(stock);
         given(priceCacheStore.find(stockCode)).willReturn(Optional.empty());
-        given(domesticDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(stockCode))
+        given(dailyPriceReader.findLatestDomestic(stockCode))
             .willReturn(Optional.of(latestClose));
-        given(domesticDailyPriceRepository.findLatestBeforeDate(List.of(stockCode), latestTradeDate))
+        given(dailyPriceReader.findDomesticLatestBefore(List.of(stockCode), latestTradeDate))
             .willReturn(List.of(previousClose));
 
         // when
@@ -123,9 +119,9 @@ class StockPriceServiceTest {
             stockCode, latestTradeDate.minusDays(1), 90.0, 105.0, 85.0, 100.0, 900L);
         given(stockMasterService.getStockByCode(stockCode)).willReturn(overseasStock);
         given(priceCacheStore.find(stockCode)).willReturn(Optional.empty());
-        given(overseasDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(stockCode))
+        given(dailyPriceReader.findLatestOverseas(stockCode))
             .willReturn(Optional.of(latestClose));
-        given(overseasDailyPriceRepository.findLatestBeforeDate(List.of(stockCode), latestTradeDate))
+        given(dailyPriceReader.findOverseasLatestBefore(List.of(stockCode), latestTradeDate))
             .willReturn(List.of(previousClose));
 
         // when
@@ -144,7 +140,7 @@ class StockPriceServiceTest {
         String stockCode = stock.getStockCode();
         given(stockMasterService.getStockByCode(stockCode)).willReturn(stock);
         given(priceCacheStore.find(stockCode)).willReturn(Optional.empty());
-        given(domesticDailyPriceRepository.findTopByStockCodeOrderByTradeDateDesc(stockCode))
+        given(dailyPriceReader.findLatestDomestic(stockCode))
             .willReturn(Optional.empty());
 
         // when
@@ -185,7 +181,7 @@ class StockPriceServiceTest {
         given(stockMasterService.getStockByCode(stockCode)).willReturn(overseasStock);
         OverseasDailyPrice overseasDailyPrice = OverseasDailyPriceFixture.createDailyPrice(
             stockCode, LocalDate.now());
-        given(overseasDailyPriceRepository.findByStockCodeAndTradeDateBetweenOrderByTradeDateDesc(
+        given(dailyPriceReader.findOverseasBetween(
             ArgumentMatchers.eq(stockCode), ArgumentMatchers.any(), ArgumentMatchers.any()))
             .willReturn(List.of(overseasDailyPrice));
 

@@ -2,9 +2,9 @@ package com.quantlime.price.service;
 
 import com.quantlime.price.domain.StockLiquidity;
 import com.quantlime.price.dto.LiquiditySnapshot;
-import com.quantlime.price.repository.DomesticDailyPriceRepository;
-import com.quantlime.price.repository.OverseasDailyPriceRepository;
-import com.quantlime.price.repository.StockLiquidityRepository;
+import com.quantlime.price.implement.DailyPriceReader;
+import com.quantlime.price.implement.StockLiquidityAppender;
+import com.quantlime.price.implement.StockLiquidityReader;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -48,18 +48,18 @@ public class StockLiquidityService {
     @Value("${score-liquidity.max-zero-volume-days:5}")
     private int maxZeroVolumeDays;
 
-    private final DomesticDailyPriceRepository domesticDailyPriceRepository;
-    private final OverseasDailyPriceRepository overseasDailyPriceRepository;
-    private final StockLiquidityRepository stockLiquidityRepository;
+    private final DailyPriceReader dailyPriceReader;
+    private final StockLiquidityReader stockLiquidityReader;
+    private final StockLiquidityAppender stockLiquidityAppender;
 
     @Transactional
     public void refreshDomestic(LocalDate since) {
-        upsertSnapshots(domesticDailyPriceRepository.findLiquiditySnapshot(since), minAvgTradingValueDomestic);
+        upsertSnapshots(dailyPriceReader.findDomesticLiquiditySnapshot(since), minAvgTradingValueDomestic);
     }
 
     @Transactional
     public void refreshOverseas(LocalDate since) {
-        upsertSnapshots(overseasDailyPriceRepository.findLiquiditySnapshot(since), minAvgTradingValueOverseas);
+        upsertSnapshots(dailyPriceReader.findOverseasLiquiditySnapshot(since), minAvgTradingValueOverseas);
     }
 
     private void upsertSnapshots(List<LiquiditySnapshot> snapshots, double minAvgTradingValue) {
@@ -69,10 +69,10 @@ public class StockLiquidityService {
             boolean liquid = snapshot.avgTradingValue() != null
                 && snapshot.avgTradingValue() >= minAvgTradingValue
                 && zeroVolumeDays < maxZeroVolumeDays;
-            stockLiquidityRepository.findByStockCode(snapshot.stockCode())
+            stockLiquidityReader.findByStockCode(snapshot.stockCode())
                 .ifPresentOrElse(
                     existing -> existing.updateFrom(asOf, snapshot.avgTradingValue(), zeroVolumeDays, liquid),
-                    () -> stockLiquidityRepository.save(StockLiquidity.of(
+                    () -> stockLiquidityAppender.save(StockLiquidity.of(
                         snapshot.stockCode(), asOf, snapshot.avgTradingValue(), zeroVolumeDays, liquid)));
         }
         log.info("유동성 스냅샷 갱신 완료: 종목수={}", snapshots.size());
