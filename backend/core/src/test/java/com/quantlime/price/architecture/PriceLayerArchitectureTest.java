@@ -20,10 +20,11 @@ import org.junit.jupiter.api.Test;
  * (PriceCacheConfig, 정규장 종가 캡처·해외 관심종목 스케줄러를 Reader/Appender로 정리한 뒤).
  * {@code realtime}은 Repository를 쓰지 않아 별도 규칙이 없다.
  *
- * <p>외부 연동 클라이언트(Toss) 참조 금지 규칙은 아직 넣지 않았다 - 일봉 백필
- * 서비스들이 외부 API 호출과 영속 저장을 한 흐름으로 묶는 수집기 성격이라, 그
- * 규칙까지 걸려면 수집 전용 구현 컴포넌트(Collector)를 따로 도입하는 별도
- * 리팩터링이 필요하다.
+ * <p>외부 연동 클라이언트(Toss) 참조도 막는다 - 패턴 {@code com.quantlime.infra.*}는 한 단계
+ * 하위 패키지에 직접 속한 클래스(클라이언트·Config·Properties)만 매칭하고 응답
+ * DTO({@code ..dto..})·예외({@code ..exception..})는 데이터일 뿐이라 허용한다. 수집 흐름은
+ * {@code implement}의 {@code *DailyPriceCollector}/{@code RegularCloseCollector}/
+ * {@code MinuteChartCollector}가 맡는다.
  */
 @Tag("unit")
 class PriceLayerArchitectureTest {
@@ -77,6 +78,17 @@ class PriceLayerArchitectureTest {
             .that().resideInAnyPackage(
                 "com.quantlime.price.cache..", "com.quantlime.price.scheduler..", "com.quantlime.price.config..")
             .should().dependOnClassesThat().resideInAPackage("..repository..");
+
+        rule.check(priceClasses);
+    }
+
+    @Test
+    @DisplayName("[Business(service)는 외부 연동 클라이언트(infra)를 직접 참조하지 않는다 - 구현 상세는 "
+        + "Implementation(implement)의 Collector로 감춘다. 응답 DTO/예외는 데이터라 예외로 둔다]")
+    void serviceMustNotAccessInfraClientDirectly() {
+        ArchRule rule = noClasses()
+            .that().resideInAPackage("com.quantlime.price.service..")
+            .should().dependOnClassesThat().resideInAPackage("com.quantlime.infra.*");
 
         rule.check(priceClasses);
     }

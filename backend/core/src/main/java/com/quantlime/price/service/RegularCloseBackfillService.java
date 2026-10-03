@@ -1,17 +1,13 @@
 package com.quantlime.price.service;
 
-import com.quantlime.infra.toss.TossApiClient;
-import com.quantlime.infra.toss.dto.TossCandleResponse;
 import com.quantlime.market.cache.DomesticListedStockCache;
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.dto.RegularCloseBackfillResult;
-import com.quantlime.price.implement.DailyPriceAppender;
 import com.quantlime.price.implement.DailyPriceReader;
+import com.quantlime.price.implement.RegularCloseCollector;
 import com.quantlime.price.util.DailyPriceSettlementPolicy;
 import com.quantlime.stock.domain.Stock;
 import java.time.LocalDate;
-import java.time.LocalTime;
-import java.time.ZoneId;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,13 +32,10 @@ import org.springframework.stereotype.Service;
 public class RegularCloseBackfillService {
 
     private static final int DEFAULT_BACKFILL_DAYS = DailyPriceSettlementPolicy.RESETTLEMENT_WINDOW_DAYS;
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-    private static final LocalTime REGULAR_CLOSE_TIME = LocalTime.of(15, 30);
 
     private final DailyPriceReader dailyPriceReader;
-    private final DailyPriceAppender dailyPriceAppender;
     private final DomesticListedStockCache domesticListedStockCache;
-    private final TossApiClient tossApiClient;
+    private final RegularCloseCollector regularCloseCollector;
 
     public RegularCloseBackfillResult backfill(List<String> stockCodes, Integer days) {
         List<String> targets = (stockCodes == null || stockCodes.isEmpty())
@@ -71,7 +64,7 @@ public class RegularCloseBackfillService {
             // "네트워크 왕복시간 + 페이싱 간격"이 중복으로 더해져 그만큼
             // 느려지기만 한다(2026-09-22 발견 - 제거로 왕복시간만큼 단축).
             for (DomesticDailyPrice price : candidates) {
-                BackfillOutcome outcome = backfillOne(stockCode, price);
+                RegularCloseCollector.Outcome outcome = regularCloseCollector.backfillOne(stockCode, price);
                 switch (outcome) {
                     case CONFIRMED -> confirmed++;
                     case SKIPPED -> skipped++;
@@ -84,33 +77,4 @@ public class RegularCloseBackfillService {
         return RegularCloseBackfillResult.of(confirmed, skipped, failed);
     }
 
-    private BackfillOutcome backfillOne(String stockCode, DomesticDailyPrice price) {
-        // KST +09:00 오프셋 대신 UTC(Z)로 변환해 넘긴다 - TossApiClient
-        // .get1MinuteCandleBefore 클라이언트로는 쿼리스트링에 리터럴 +를 보내지도,
-        // %2B로 사전 인코딩해 보내지도 못한다(실측 확인, 그 메서드 javadoc 참고).
-        // +가 아예 없는 Z 표기를 쓰면 이 문제 자체를 피할 수 있다.
-        String before = price.getTradeDate().atTime(REGULAR_CLOSE_TIME)
-            .atZone(KST).toInstant().toString();
-        try {
-            TossCandleResponse response = tossApiClient.get1MinuteCandleBefore(stockCode, before);
-            List<TossCandleResponse.TossCandle> candles = response.result().candles();
-            if (candles == null || candles.isEmpty()) {
-                log.debug("정규장 종가 백필 스킵(1분봉 없음, 거래정지 등): stockCode={}, date={}",
-                    stockCode, price.getTradeDate());
-                return BackfillOutcome.SKIPPED;
-            }
-            long regularClose = Long.parseLong(candles.get(0).closePrice());
-            price.confirmRegularClose(regularClose);
-            dailyPriceAppender.saveDomestic(price);
-            return BackfillOutcome.CONFIRMED;
-        } catch (Exception e) {
-            log.warn("정규장 종가 백필 실패, 스킵: stockCode={}, date={}, error={}",
-                stockCode, price.getTradeDate(), e.getMessage());
-            return BackfillOutcome.FAILED;
-        }
-    }
-
-    private enum BackfillOutcome {
-        CONFIRMED, SKIPPED, FAILED
-    }
 }
