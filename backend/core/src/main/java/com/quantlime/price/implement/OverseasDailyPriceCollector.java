@@ -3,6 +3,7 @@ package com.quantlime.price.implement;
 import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.toss.dto.TossCandleResponse;
 import com.quantlime.infra.toss.dto.TossPriceMapper;
+import com.quantlime.price.domain.CandleReconcileResult;
 import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.price.dto.DailyCandleSaveResult;
 import com.quantlime.price.util.DailyPriceSettlementPolicy;
@@ -174,19 +175,15 @@ public class OverseasDailyPriceCollector {
                                         TossCandleResponse.TossCandle candle, boolean detectRestatement) {
         return dailyPriceReader.findOverseas(stockCode, tradeDate)
             .map(existing -> {
-                double open = Double.parseDouble(candle.openPrice());
-                double high = Double.parseDouble(candle.highPrice());
-                double low = Double.parseDouble(candle.lowPrice());
-                double close = Double.parseDouble(candle.closePrice());
-                long volume = Long.parseLong(candle.volume());
-                if (isUnchanged(existing, open, high, low, close, volume)) {
+                CandleReconcileResult result = existing.reconcile(
+                    Double.parseDouble(candle.openPrice()), Double.parseDouble(candle.highPrice()),
+                    Double.parseDouble(candle.lowPrice()), Double.parseDouble(candle.closePrice()),
+                    Long.parseLong(candle.volume()), detectRestatement);
+                if (result == CandleReconcileResult.UNCHANGED) {
                     return UpsertOutcome.unchanged();
                 }
-                boolean restated = detectRestatement && DailyPriceSettlementPolicy.isRestatement(
-                    existing.getClosePrice(), close, DailyPriceSettlementPolicy.OVERSEAS_RESTATEMENT_THRESHOLD);
-                existing.updateOhlcv(open, high, low, close, volume);
                 dailyPriceAppender.saveOverseas(existing);
-                return UpsertOutcome.updated(restated);
+                return UpsertOutcome.updated(result == CandleReconcileResult.RESTATED);
             })
             .orElseGet(() -> {
                 try {
@@ -197,13 +194,6 @@ public class OverseasDailyPriceCollector {
                     return UpsertOutcome.unchanged();
                 }
             });
-    }
-
-    private boolean isUnchanged(OverseasDailyPrice existing, double open, double high,
-                                double low, double close, long volume) {
-        return existing.getOpenPrice() == open && existing.getHighPrice() == high
-            && existing.getLowPrice() == low && existing.getClosePrice() == close
-            && existing.getVolume() == volume;
     }
 
     private record UpsertOutcome(boolean created, boolean restatementDetected) {

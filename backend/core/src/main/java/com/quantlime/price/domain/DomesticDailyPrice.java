@@ -3,6 +3,7 @@ package com.quantlime.price.domain;
 import static lombok.AccessLevel.PROTECTED;
 
 import com.quantlime.common.domain.TimeBaseEntity;
+import com.quantlime.price.util.DailyPriceSettlementPolicy;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -142,6 +143,48 @@ public class DomesticDailyPrice extends TimeBaseEntity {
         Assert.notNull(closePrice, "정규장 종가는 필수입니다.");
         this.closePrice = closePrice;
         this.regularCloseConfirmed = true;
+    }
+
+    /**
+     * 새로 받은 캔들을 이 행에 반영하는 규칙을 한곳에 둔다.
+     * <ul>
+     *   <li>정규장 종가가 확정된 행은 close를 NXT 포함 캔들로 덮어쓰지 않고 O/H/L/V만 갱신한다.
+     *       단 {@code overwriteAll}(수정주가 소급 재백필)은 예외 - 분할/병합은 과거 전체 가격을
+     *       비율로 바꾸는 사건이라 보호된 값도 이미 틀려, 일반 경로로 전체를 덮어쓰고 보호 플래그를
+     *       해제한다.</li>
+     *   <li>값이 그대로면 갱신하지 않는다(재확정 윈도우로 매 스윕 재조회되는 확정 거래일의 불필요한
+     *       UPDATE 방지).</li>
+     *   <li>{@code overwriteAll}이 아니면 종가 변동이 재조정 임계값 이상인지 감지한다
+     *       ({@code overwriteAll} 경로에서 감지하면 재백필이 자기 자신을 다시 부른다).</li>
+     * </ul>
+     */
+    public CandleReconcileResult reconcile(Long openPrice, Long highPrice, Long lowPrice,
+                                           Long closePrice, Long volume, boolean overwriteAll) {
+        if (!overwriteAll && isRegularCloseConfirmed()) {
+            if (isUnchangedIgnoringClose(openPrice, highPrice, lowPrice, volume)) {
+                return CandleReconcileResult.UNCHANGED;
+            }
+            updateOhlcvKeepingClose(openPrice, highPrice, lowPrice, volume);
+            return CandleReconcileResult.UPDATED;
+        }
+        if (isUnchanged(openPrice, highPrice, lowPrice, closePrice, volume)) {
+            return CandleReconcileResult.UNCHANGED;
+        }
+        boolean restated = !overwriteAll && DailyPriceSettlementPolicy.isRestatement(
+            this.closePrice, closePrice, DailyPriceSettlementPolicy.DOMESTIC_RESTATEMENT_THRESHOLD);
+        updateOhlcv(openPrice, highPrice, lowPrice, closePrice, volume);
+        return restated ? CandleReconcileResult.RESTATED : CandleReconcileResult.UPDATED;
+    }
+
+    private boolean isUnchanged(Long open, Long high, Long low, Long close, Long volume) {
+        return this.openPrice.equals(open) && this.highPrice.equals(high)
+            && this.lowPrice.equals(low) && this.closePrice.equals(close)
+            && this.volume.equals(volume);
+    }
+
+    private boolean isUnchangedIgnoringClose(Long open, Long high, Long low, Long volume) {
+        return this.openPrice.equals(open) && this.highPrice.equals(high)
+            && this.lowPrice.equals(low) && this.volume.equals(volume);
     }
 
     /**

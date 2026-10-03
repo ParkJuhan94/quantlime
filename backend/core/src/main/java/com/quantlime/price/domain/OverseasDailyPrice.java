@@ -3,6 +3,7 @@ package com.quantlime.price.domain;
 import static lombok.AccessLevel.PROTECTED;
 
 import com.quantlime.common.domain.TimeBaseEntity;
+import com.quantlime.price.util.DailyPriceSettlementPolicy;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -114,6 +115,24 @@ public class OverseasDailyPrice extends TimeBaseEntity {
         this.lowPrice = lowPrice;
         this.closePrice = closePrice;
         this.volume = volume;
+    }
+
+    /**
+     * {@link DomesticDailyPrice#reconcile}와 대칭 - 해외는 정규장 종가 보호 플래그가 없고, 재조정 판정
+     * 임계값만 다르다(미국은 가격제한폭이 없어 더 넉넉함). {@code detectRestatement=false}는 수정주가
+     * 재백필 경로(감지하면 재백필이 자기 자신을 다시 부름).
+     */
+    public CandleReconcileResult reconcile(Double openPrice, Double highPrice, Double lowPrice,
+                                           Double closePrice, Long volume, boolean detectRestatement) {
+        if (this.openPrice.equals(openPrice) && this.highPrice.equals(highPrice)
+            && this.lowPrice.equals(lowPrice) && this.closePrice.equals(closePrice)
+            && this.volume.equals(volume)) {
+            return CandleReconcileResult.UNCHANGED;
+        }
+        boolean restated = detectRestatement && DailyPriceSettlementPolicy.isRestatement(
+            this.closePrice, closePrice, DailyPriceSettlementPolicy.OVERSEAS_RESTATEMENT_THRESHOLD);
+        updateOhlcv(openPrice, highPrice, lowPrice, closePrice, volume);
+        return restated ? CandleReconcileResult.RESTATED : CandleReconcileResult.UPDATED;
     }
 
     private void validateOverseasDailyPrice(String stockCode, LocalDate tradeDate,
