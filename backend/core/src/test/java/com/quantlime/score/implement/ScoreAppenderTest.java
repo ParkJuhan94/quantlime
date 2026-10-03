@@ -1,4 +1,4 @@
-package com.quantlime.score.service;
+package com.quantlime.score.implement;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -34,7 +34,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
-class ScorePersistenceServiceTest {
+class ScoreAppenderTest {
 
     private static final String STOCK_CODE = "005930";
     private static final LocalDate TODAY = LocalDate.now();
@@ -46,7 +46,7 @@ class ScorePersistenceServiceTest {
     private EntityManager entityManager;
 
     @InjectMocks
-    private ScorePersistenceService scorePersistenceService;
+    private ScoreAppender scoreAppender;
 
     @Test
     @DisplayName("[해당 날짜의 스코어가 없으면 새로 저장한다]")
@@ -56,7 +56,7 @@ class ScorePersistenceServiceTest {
             .willReturn(Optional.empty());
 
         // when
-        scorePersistenceService.saveAll(List.of(successResponse(STOCK_CODE, 82.0)));
+        scoreAppender.saveAll(List.of(successResponse(STOCK_CODE, 82.0)));
 
         // then
         verify(scoreRepository).save(any(Score.class));
@@ -71,7 +71,7 @@ class ScorePersistenceServiceTest {
         given(scoreRepository.findLatestScoresForNormalization(any())).willReturn(List.of(target));
 
         // when
-        scorePersistenceService.applyNormalization(MarketType.domesticValues(), PeerGroup.DOMESTIC,
+        scoreAppender.applyNormalization(MarketType.domesticValues(), PeerGroup.DOMESTIC,
             List.of(new NormalizedItemApiResponse(STOCK_CODE, 70.0, 30.0, 55.0),
                 new NormalizedItemApiResponse("UNKNOWN", 1.0, 1.0, 1.0)));
 
@@ -89,7 +89,7 @@ class ScorePersistenceServiceTest {
         ArgumentCaptor<Score> captor = ArgumentCaptor.forClass(Score.class);
 
         // when
-        scorePersistenceService.saveAll(List.of(successResponse(STOCK_CODE, 82.0)));
+        scoreAppender.saveAll(List.of(successResponse(STOCK_CODE, 82.0)));
 
         // then
         verify(scoreRepository).save(captor.capture());
@@ -106,7 +106,7 @@ class ScorePersistenceServiceTest {
             .willReturn(Optional.of(existing));
 
         // when
-        scorePersistenceService.saveAll(List.of(successResponse(STOCK_CODE, 91.5)));
+        scoreAppender.saveAll(List.of(successResponse(STOCK_CODE, 91.5)));
 
         // then
         assertThat(existing.getCompositeScore()).isEqualTo(91.5);
@@ -135,7 +135,7 @@ class ScorePersistenceServiceTest {
             });
 
         // when: 예외를 던지지 않고 정상적으로 반환되어야 한다
-        scorePersistenceService.saveAll(List.of(
+        scoreAppender.saveAll(List.of(
             successResponse(STOCK_CODE, 70.0),
             successResponse(secondCode, 60.0),
             successResponse(thirdCode, 50.0)));
@@ -160,7 +160,7 @@ class ScorePersistenceServiceTest {
                 new DivergenceApiResponse(false, null), false));
 
         // when: Grade.of()가 ValidationException을 던져도 예외가 전파되지 않아야 한다
-        scorePersistenceService.saveAll(List.of(
+        scoreAppender.saveAll(List.of(
             successResponse(STOCK_CODE, 70.0), invalidGradeResponse));
 
         // then: 첫 번째 종목은 정상 저장된다

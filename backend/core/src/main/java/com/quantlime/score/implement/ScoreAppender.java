@@ -1,4 +1,4 @@
-package com.quantlime.score.service;
+package com.quantlime.score.implement;
 
 import com.quantlime.infra.python.dto.CrossSectionNormalizeApiResponse.NormalizedItemApiResponse;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.DailyScoreSeriesApiResponse;
@@ -18,18 +18,18 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 퀀트 엔진 응답을 {@link Score}로 영속화하는 책임만 따로 분리했다.
- * {@link ScoreService}가 외부 HTTP 호출까지 감싸는 트랜잭션을 만들지 않도록
+ * 퀀트 엔진 응답을 {@link Score}로 영속화하는 구현 레이어(Implementation) 컴포넌트.
+ * {@code ScoreService}가 외부 HTTP 호출까지 감싸는 트랜잭션을 만들지 않도록
  * (커넥션을 불필요하게 오래 붙잡지 않도록) 저장 전용의 별도 빈으로 둔다.
  */
 @Slf4j
-@Service
+@Component
 @RequiredArgsConstructor
-public class ScorePersistenceService {
+public class ScoreAppender {
 
     private final ScoreRepository scoreRepository;
     private final EntityManager entityManager;
@@ -43,7 +43,7 @@ public class ScorePersistenceService {
      * 안 그러면 한 트랜잭션 안에서 관리 엔티티가 계속 누적돼, Hibernate가
      * 쿼리 실행 전 auto-flush 시점마다 세션 내 전체 엔티티를 dirty-check하는
      * 비용이 종목 수에 비례해 커진다. 평소 라이브 경로(종목당 최신 며칠만
-     * upsert)는 세션이 작아 드러나지 않지만, {@link ScoreService#rebuildScoresFrom}
+     * upsert)는 세션이 작아 드러나지 않지만, {@code ScoreService#rebuildScoresFrom}
      * 처럼 종목당 수백 일치 스코어를 통째로 새로 만드는 대량 복구 시나리오에서
      * 실제로 청크 하나가 사실상 멈추는 것을 확인했다(2026-08-04, jstack으로
      * DefaultFlushEntityEventListener.hasDirtyCollections에서 멈춰 있는 것 확인).
@@ -113,7 +113,7 @@ public class ScorePersistenceService {
 
     /**
      * 가격 소급 복구 후 오염된 과거 스코어를 일괄 정리하는 복구 전용 메서드
-     * ({@link ScoreService#rebuildScoresFrom}가 호출). {@code Score}에는
+     * ({@code ScoreService#rebuildScoresFrom}가 호출). {@code Score}에는
      * score_version이 없고 unique가 {stock_code, score_date}뿐이라 "지우고
      * 다시 만들기"가 가장 정확하고 싸다.
      */

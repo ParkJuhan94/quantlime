@@ -56,7 +56,7 @@ public class CrossSectionalBacktestService {
     /**
      * 시장 하나에 대해 (축 2 x horizon 4=)8개 조합을 순차 호출한다. 조합
      * 하나의 실패가 나머지를 막지 않도록 항목별로 예외를 격리한다
-     * (ScorePersistenceService.saveAll과 동일한 패턴). 호출을 조합 단위로
+     * (ScoreAppender.saveAll과 동일한 패턴). 호출을 조합 단위로
      * 좁힌 이유는 quant-engine의 CrossSectionalBacktestRequest 문서 참고
      * (500종목 규모에서 조합을 한 호출에 몰아넣으면 read timeout을 넘김).
      */

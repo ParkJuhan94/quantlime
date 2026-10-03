@@ -11,8 +11,8 @@ import com.quantlime.market.domain.RankingPeriod;
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.price.domain.StockLiquidity;
-import com.quantlime.price.repository.OverseasDailyPriceRepository;
-import com.quantlime.price.repository.StockLiquidityRepository;
+import com.quantlime.price.implement.DailyPriceReader;
+import com.quantlime.price.implement.StockLiquidityReader;
 import com.quantlime.price.service.DomesticDailyPriceService;
 import com.quantlime.score.cache.ScoreRankingCacheStore;
 import com.quantlime.score.domain.PeerGroup;
@@ -22,13 +22,14 @@ import com.quantlime.score.dto.mapper.ScoreRequestMapper;
 import com.quantlime.score.dto.response.ScoreRankingResponse;
 import com.quantlime.score.dto.response.ScoreResponse;
 import com.quantlime.score.exception.ScoreErrorCode;
-import com.quantlime.score.repository.ScoreRepository;
+import com.quantlime.score.implement.ScoreAppender;
+import com.quantlime.score.implement.ScoreReader;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.dto.mapper.StockMapper;
 import com.quantlime.stock.service.StockMasterService;
 import com.quantlime.watchlist.domain.Watchlist;
-import com.quantlime.watchlist.repository.WatchlistRepository;
+import com.quantlime.watchlist.implement.WatchlistReader;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -55,7 +56,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 이 서비스를 부르는 쪽(WatchlistService, 스케줄러)의 책임이다.
  *
  * <p>OHLCV 조회 + 퀀트 엔진 HTTP 호출은 트랜잭션 밖에서 수행한다. 저장만
- * {@link ScorePersistenceService}의 별도 트랜잭션으로 처리해, 외부 호출 왕복
+ * {@link ScoreAppender}의 별도 트랜잭션으로 처리해, 외부 호출 왕복
  * 시간 동안 DB 커넥션을 붙잡지 않는다.
  */
 @Slf4j
@@ -77,12 +78,12 @@ public class ScoreService {
     private static final int SCORE_BATCH_CHUNK_SIZE = 100;
 
     private final DomesticDailyPriceService domesticDailyPriceService;
-    private final OverseasDailyPriceRepository overseasDailyPriceRepository;
+    private final DailyPriceReader dailyPriceReader;
     private final PythonEngineClient pythonEngineClient;
-    private final ScorePersistenceService scorePersistenceService;
-    private final ScoreRepository scoreRepository;
-    private final StockLiquidityRepository stockLiquidityRepository;
-    private final WatchlistRepository watchlistRepository;
+    private final ScoreAppender scoreAppender;
+    private final ScoreReader scoreReader;
+    private final StockLiquidityReader stockLiquidityReader;
+    private final WatchlistReader watchlistReader;
     private final StockMasterService stockMasterService;
     private final ScoreRankingCacheStore scoreRankingCacheStore;
     private final MeterRegistry meterRegistry;
@@ -175,7 +176,7 @@ public class ScoreService {
     /**
      * 가격이 소급 복구된 뒤 오염된 과거 스코어를 정리하는 일회성 트리거 -
      * from 이후 스코어를 전부 지우고 전 상장종목을 다시 계산한다.
-     * {@code Score}엔 score_version이 없고 {@link ScorePersistenceService#saveSeries}가
+     * {@code Score}엔 score_version이 없고 {@link ScoreAppender#saveSeries}가
      * "재확정 윈도우 밖 과거는 존재하면 스킵"이라, 가격만 고쳐서는 그
      * 윈도우보다 오래된 오염 스코어가 영원히 그대로 남는다.
      *
@@ -186,11 +187,11 @@ public class ScoreService {
      *
      * <p>OHLCV 조회 + 퀀트 엔진 HTTP 호출을 트랜잭션 밖에서 수행하는 이
      * 클래스의 원칙(클래스 주석 참고)을 그대로 따르기 위해 이 메서드 자체는
-     * 트랜잭션으로 묶지 않는다 - 삭제만 {@link ScorePersistenceService#deleteFrom}의
+     * 트랜잭션으로 묶지 않는다 - 삭제만 {@link ScoreAppender#deleteFrom}의
      * 별도 트랜잭션으로 처리된다.
      */
     public void rebuildScoresFrom(LocalDate from) {
-        scorePersistenceService.deleteFrom(from);
+        scoreAppender.deleteFrom(from);
 
         List<Stock> stocks = stockMasterService.getAllListedStocks();
         List<String> domesticCodes = stocks.stream()
@@ -218,21 +219,21 @@ public class ScoreService {
 
     @Transactional(readOnly = true)
     public ScoreResponse getScore(String stockCode) {
-        Score score = scoreRepository.findTopByStockCodeOrderByScoreDateDesc(stockCode)
+        Score score = scoreReader.findTopByStockCodeOrderByScoreDateDesc(stockCode)
             .orElseThrow(() -> new NotFoundException(ScoreErrorCode.NOT_FOUND_SCORE));
         return ScoreMapper.toScoreResponse(score);
     }
 
     @Transactional(readOnly = true)
     public List<ScoreRankingResponse> getDashboardScores(Long userId, String scope) {
-        List<Watchlist> watchlist = watchlistRepository.findAllWithStockByUserId(userId);
+        List<Watchlist> watchlist = watchlistReader.findAllWithStockByUserId(userId);
         Map<String, Stock> stockByCode = watchlist.stream()
             .map(Watchlist::getStock)
             .filter(stock -> matchesScope(stock.getMarketType(), scope))
             .collect(Collectors.toMap(Stock::getStockCode, stock -> stock));
 
-        List<Score> latestScores = scoreRepository
-            .findLatestScoresByStockCodesOrderByCompositeScoreDesc(
+        List<Score> latestScores = scoreReader
+            .findLatestScores(
                 stockByCode.keySet().stream().toList());
         Map<String, Double> avgTradingValueByCode = avgTradingValueByStockCode(stockByCode.keySet());
 
@@ -286,12 +287,12 @@ public class ScoreService {
     public List<ScoreRankingResponse> getScoreChangeRanking(
         Long userId, boolean watchlistOnly, int limit, String scope, RankingPeriod period) {
         if (watchlistOnly) {
-            List<String> codes = watchlistRepository.findAllWithStockByUserId(userId).stream()
+            List<String> codes = watchlistReader.findAllWithStockByUserId(userId).stream()
                 .map(Watchlist::getStock)
                 .filter(stock -> matchesScope(stock.getMarketType(), scope))
                 .map(Stock::getStockCode)
                 .toList();
-            List<Score> latest = scoreRepository.findLatestScoresByStockCodesOrderByCompositeScoreDesc(codes);
+            List<Score> latest = scoreReader.findLatestScores(codes);
             return buildScoreChangeRanking(latest, limit, period);
         }
 
@@ -302,7 +303,7 @@ public class ScoreService {
             synchronized (lock) {
                 ranking = scoreRankingCacheStore.find(cacheScope).orElse(null);
                 if (ranking == null) {
-                    List<Score> latest = scoreRepository.findLatestScoresForNormalization(scopeToMarketTypes(scope));
+                    List<Score> latest = scoreReader.findLatestScoresForNormalization(scopeToMarketTypes(scope));
                     ranking = buildScoreChangeRanking(latest, MAX_CACHEABLE_RANKING_SIZE, period);
                     scoreRankingCacheStore.save(cacheScope, ranking);
                 }
@@ -318,7 +319,7 @@ public class ScoreService {
         LocalDate latestDate = latestScores.stream().map(Score::getScoreDate).max(Comparator.naturalOrder()).orElseThrow();
         LocalDate baselineDate = latestDate.minusDays(period.getDays());
         List<String> codes = latestScores.stream().map(Score::getStockCode).toList();
-        Map<String, Score> baselineByCode = scoreRepository.findLatestScoresOnOrBefore(codes, baselineDate).stream()
+        Map<String, Score> baselineByCode = scoreReader.findLatestScoresOnOrBefore(codes, baselineDate).stream()
             .collect(Collectors.toMap(Score::getStockCode, Function.identity(), (a, b) -> a));
 
         record Change(Score score, double delta) {
@@ -359,7 +360,7 @@ public class ScoreService {
     }
 
     private List<ScoreRankingResponse> queryAllStocksScoreRanking(int limit, String scope) {
-        List<Score> latestScores = scoreRepository
+        List<Score> latestScores = scoreReader
             .findTopScoresOrderByCompositeScoreDesc(limit, scopeToMarketTypes(scope));
         List<String> stockCodes = latestScores.stream().map(Score::getStockCode).toList();
         Map<String, Stock> stockByCode = stockMasterService.getStocksByCodesInOrder(stockCodes).stream()
@@ -390,7 +391,7 @@ public class ScoreService {
     }
 
     private Map<String, Double> avgTradingValueByStockCode(Collection<String> stockCodes) {
-        return stockLiquidityRepository.findAllByStockCodeIn(List.copyOf(stockCodes)).stream()
+        return stockLiquidityReader.findAllByStockCodes(List.copyOf(stockCodes)).stream()
             .collect(Collectors.toMap(StockLiquidity::getStockCode, StockLiquidity::getAvgTradingValue20d));
     }
 
@@ -400,7 +401,7 @@ public class ScoreService {
      * 백분위(랭킹 정렬 전용)를 받고, 각 종목의 최신 {@link Score} 행에
      * 반영한다. 이 메서드 자체는 트랜잭션을 만들지 않는다 -
      * 조회(리포지토리 자체 트랜잭션) → quant-engine HTTP 호출 → 저장({@link
-     * ScorePersistenceService#applyNormalization}, 짧은 쓰기 트랜잭션)을
+     * ScoreAppender#applyNormalization}, 짧은 쓰기 트랜잭션)을
      * 분리해, HTTP 응답을 기다리는 동안 DB 커넥션을 붙잡지 않는다. 등급(grade)은 이 경로와 무관하다 - 원점수 계산
      * ({@link #recalculateDomesticScores}/{@link #recalculateOverseasScores})
      * 시점에 quant-engine이 절대점수 기준으로 이미 매겨 저장했으므로, 이
@@ -413,7 +414,7 @@ public class ScoreService {
     public void normalizeCrossSection(PeerGroup peerGroup) {
         List<MarketType> marketTypes = peerGroup == PeerGroup.DOMESTIC
             ? MarketType.domesticValues() : MarketType.overseasValues();
-        List<Score> latestScores = scoreRepository.findLatestScoresForNormalization(marketTypes);
+        List<Score> latestScores = scoreReader.findLatestScoresForNormalization(marketTypes);
         if (latestScores.isEmpty()) {
             log.debug("횡단면 정규화 스킵: 대상 종목 없음, peerGroup={}", peerGroup);
             return;
@@ -429,7 +430,7 @@ public class ScoreService {
             return;
         }
 
-        scorePersistenceService.applyNormalization(marketTypes, peerGroup, response.items());
+        scoreAppender.applyNormalization(marketTypes, peerGroup, response.items());
         log.info("횡단면 정규화 완료: peerGroup={}, 대상종목수={}", peerGroup, latestScores.size());
     }
 
@@ -467,7 +468,7 @@ public class ScoreService {
         ScoreSeriesBatchApiResponse response = pythonEngineClient.calculateScoreSeries(request);
 
         warnIfMissingFromResponse(domesticDailyPricesByStockCode.keySet(), response.scores());
-        scorePersistenceService.saveAll(response.scores());
+        scoreAppender.saveAll(response.scores());
 
         log.info("스코어 재계산 완료: 대상종목수={}", domesticDailyPricesByStockCode.size());
     }
@@ -496,7 +497,7 @@ public class ScoreService {
         ScoreSeriesBatchApiResponse response = pythonEngineClient.calculateScoreSeries(request);
 
         warnIfMissingFromResponse(pricesByStockCode.keySet(), response.scores());
-        scorePersistenceService.saveAll(response.scores());
+        scoreAppender.saveAll(response.scores());
 
         log.info("해외 스코어 재계산 완료: 대상종목수={}", pricesByStockCode.size());
     }
@@ -504,8 +505,8 @@ public class ScoreService {
     private Map<String, List<OverseasDailyPrice>> fetchOverseasOhlcvHistories(List<String> stockCodes) {
         LocalDate end = LocalDate.now();
         LocalDate start = end.minusDays(OHLCV_LOOKBACK_DAYS);
-        return overseasDailyPriceRepository
-            .findByStockCodeInAndTradeDateBetweenOrderByTradeDateDesc(stockCodes, start, end)
+        return dailyPriceReader
+            .findOverseasByCodesBetweenDesc(stockCodes, start, end)
             .stream()
             .collect(Collectors.groupingBy(OverseasDailyPrice::getStockCode));
     }

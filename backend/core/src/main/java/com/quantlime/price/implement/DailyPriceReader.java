@@ -124,6 +124,12 @@ public class DailyPriceReader {
         return overseasDailyPriceRepository.findLatestBeforeDate(stockCodes, date);
     }
 
+    public List<OverseasDailyPrice> findOverseasByCodesBetweenDesc(
+        List<String> stockCodes, LocalDate from, LocalDate to) {
+        return overseasDailyPriceRepository
+            .findByStockCodeInAndTradeDateBetweenOrderByTradeDateDesc(stockCodes, from, to);
+    }
+
     public List<LiquiditySnapshot> findOverseasLiquiditySnapshot(LocalDate since) {
         return overseasDailyPriceRepository.findLiquiditySnapshot(since);
     }

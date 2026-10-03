@@ -63,7 +63,7 @@ public class SubscriptionService {
     // 그 결과를 로컬 DB에 반영하는 것만 책임진다 - PaymentService 안에서
     // 이 메서드를 직접 만들지 않고 별도 빈으로 분리한 이유는 self-invocation
     // 시 @Transactional이 Spring AOP 프록시를 안 거쳐 무시되기 때문
-    // (ScorePersistenceService를 별도 클래스로 분리했던 것과 동일한 이유,
+    // (ScoreAppender를 별도 클래스로 분리했던 것과 동일한 이유,
     // CLAUDE.md Phase 3 작업기록 참고).
     @Transactional
     public Subscription activateOrResubscribe(

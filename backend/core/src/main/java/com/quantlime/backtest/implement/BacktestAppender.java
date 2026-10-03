@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 퀀트 엔진 백테스트 응답을 {@link BacktestResult}로 영속화하는 구현 레이어
  * (Implementation) - {@code BacktestService}가 외부 HTTP 호출까지 감싸는
- * 트랜잭션을 만들지 않도록 저장 전용 빈으로 둔다(ScorePersistenceService와 동일한
+ * 트랜잭션을 만들지 않도록 저장 전용 빈으로 둔다(ScoreAppender와 동일한
  * 이유). 원래 service 패키지의 {@code BacktestPersistenceService}였으나 Repository만
  * 다루는 저장 전용이라 구현 레이어로 옮겼다. 조회는 {@link BacktestReader}가 맡는다.
  */
@@ -30,7 +30,7 @@ public class BacktestAppender {
 
     /**
      * (축, horizon) 행 하나의 저장 실패가 나머지 행 저장까지 막지 않도록
-     * 항목별로 예외를 격리한다(ScorePersistenceService.saveAll과 동일 패턴).
+     * 항목별로 예외를 격리한다(ScoreAppender.saveAll과 동일 패턴).
      */
     @Transactional
     public void saveAll(List<BacktestResult> results) {
