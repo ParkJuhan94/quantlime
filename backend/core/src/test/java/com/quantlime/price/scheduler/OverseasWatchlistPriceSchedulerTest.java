@@ -28,7 +28,7 @@ import com.quantlime.price.realtime.PriceTopicSubscriptionTracker;
 import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
-import com.quantlime.stock.repository.StockRepository;
+import com.quantlime.stock.implement.StockReader;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -67,7 +67,7 @@ class OverseasWatchlistPriceSchedulerTest {
     private PriceCacheStore priceCacheStore;
 
     @Mock
-    private StockRepository stockRepository;
+    private StockReader stockReader;
 
     @Mock
     private SimpMessagingTemplate messagingTemplate;
@@ -222,7 +222,7 @@ class OverseasWatchlistPriceSchedulerTest {
         given(overseasMarketCalendarCache.isMarketOpenNow()).willReturn(true);
         given(overseasWatchlistedStockCodeCache.get()).willReturn(List.of(STOCK_CODE));
         given(overseasPreviousCloseCache.get(List.of(STOCK_CODE))).willReturn(Map.of(STOCK_CODE, 340.0));
-        given(stockRepository.findByStockCodeIn(List.of(STOCK_CODE)))
+        given(stockReader.findByStockCodeIn(List.of(STOCK_CODE)))
             .willReturn(List.of(overseasStock(STOCK_CODE, "Apple")));
         given(tossApiClient.getCurrentPrices(STOCK_CODE)).willReturn(
             new TossPriceResponse(List.of(
@@ -248,7 +248,7 @@ class OverseasWatchlistPriceSchedulerTest {
         given(overseasMarketCalendarCache.isMarketOpenNow()).willReturn(true);
         given(overseasWatchlistedStockCodeCache.get()).willReturn(List.of(STOCK_CODE));
         given(overseasPreviousCloseCache.get(List.of(STOCK_CODE))).willReturn(Map.of());
-        given(stockRepository.findByStockCodeIn(List.of(STOCK_CODE)))
+        given(stockReader.findByStockCodeIn(List.of(STOCK_CODE)))
             .willReturn(List.of(overseasStock(STOCK_CODE, "Apple")));
         given(tossApiClient.getCurrentPrices(STOCK_CODE)).willReturn(
             new TossPriceResponse(List.of(
@@ -268,7 +268,7 @@ class OverseasWatchlistPriceSchedulerTest {
         given(overseasMarketCalendarCache.isMarketOpenNow()).willReturn(true);
         given(overseasWatchlistedStockCodeCache.get()).willReturn(List.of(STOCK_CODE));
         given(overseasPreviousCloseCache.get(List.of(STOCK_CODE))).willReturn(Map.of(STOCK_CODE, 340.0));
-        given(stockRepository.findByStockCodeIn(List.of(STOCK_CODE))).willReturn(List.of());
+        given(stockReader.findByStockCodeIn(List.of(STOCK_CODE))).willReturn(List.of());
         given(tossApiClient.getCurrentPrices(STOCK_CODE)).willReturn(
             new TossPriceResponse(List.of(
                 new TossPriceResponse.TossPrice(STOCK_CODE, "2026-07-29T17:43:12+09:00", "341.43", "USD"))));

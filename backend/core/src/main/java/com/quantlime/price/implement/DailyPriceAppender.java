@@ -4,6 +4,7 @@ import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.price.repository.DomesticDailyPriceRepository;
 import com.quantlime.price.repository.OverseasDailyPriceRepository;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -21,6 +22,10 @@ public class DailyPriceAppender {
 
     public void saveDomestic(DomesticDailyPrice price) {
         domesticDailyPriceRepository.save(price);
+    }
+
+    public void saveAllDomestic(List<DomesticDailyPrice> prices) {
+        domesticDailyPriceRepository.saveAll(prices);
     }
 
     public void saveOverseas(OverseasDailyPrice price) {

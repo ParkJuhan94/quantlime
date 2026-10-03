@@ -26,6 +26,11 @@ public class BacktestReader {
         return backtestResultRepository.findTopByStockCodeOrderByBacktestDateDesc(stockCode);
     }
 
+    /** 가장 최근에 쓰인 일별 스코어 한 건 - 자동 스케줄러가 최신 scoreVersion을 알아내는 용도. */
+    public Optional<BacktestDailyScore> findLatestDailyScore() {
+        return backtestDailyScoreRepository.findTopByOrderByIdDesc();
+    }
+
     /** 한 버전의 (축, horizon)별 결과 - 축·horizon 오름차순. */
     public List<BacktestResult> findResults(String stockCode, String scoreVersion) {
         return backtestResultRepository

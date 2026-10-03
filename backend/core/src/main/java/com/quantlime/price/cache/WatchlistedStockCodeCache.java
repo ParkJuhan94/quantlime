@@ -1,7 +1,7 @@
 package com.quantlime.price.cache;
 
 import com.quantlime.stock.domain.MarketType;
-import com.quantlime.watchlist.repository.WatchlistRepository;
+import com.quantlime.watchlist.implement.WatchlistReader;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -26,14 +26,14 @@ public class WatchlistedStockCodeCache {
 
     private static final int REFRESH_INTERVAL_SECONDS = 30;
 
-    private final WatchlistRepository watchlistRepository;
+    private final WatchlistReader watchlistReader;
     private final List<MarketType> marketTypes;
 
     private volatile List<String> cachedCodes = List.of();
     private volatile Instant lastRefreshedAt = Instant.EPOCH;
 
-    public WatchlistedStockCodeCache(WatchlistRepository watchlistRepository, List<MarketType> marketTypes) {
-        this.watchlistRepository = watchlistRepository;
+    public WatchlistedStockCodeCache(WatchlistReader watchlistReader, List<MarketType> marketTypes) {
+        this.watchlistReader = watchlistReader;
         this.marketTypes = marketTypes;
     }
 
@@ -52,7 +52,7 @@ public class WatchlistedStockCodeCache {
         if (!isStale()) {
             return; // 락 대기 중 다른 스레드가 이미 갱신함
         }
-        cachedCodes = watchlistRepository.findDistinctStockCodesByMarketTypeIn(marketTypes);
+        cachedCodes = watchlistReader.findDistinctStockCodesByMarketTypeIn(marketTypes);
         lastRefreshedAt = Instant.now();
     }
 }

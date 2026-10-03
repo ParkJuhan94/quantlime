@@ -59,6 +59,11 @@ public class DailyPriceReader {
         return domesticDailyPriceRepository.findByStockCodeAndTradeDate(stockCode, tradeDate);
     }
 
+    /** 특정 거래일의 국내 일봉을 종목코드 목록으로 한 번에 조회한다. */
+    public List<DomesticDailyPrice> findDomesticByCodesAndDate(List<String> stockCodes, LocalDate tradeDate) {
+        return domesticDailyPriceRepository.findByStockCodeInAndTradeDate(stockCodes, tradeDate);
+    }
+
     public boolean existsDomestic(String stockCode, LocalDate tradeDate) {
         return domesticDailyPriceRepository.existsByStockCodeAndTradeDate(stockCode, tradeDate);
     }

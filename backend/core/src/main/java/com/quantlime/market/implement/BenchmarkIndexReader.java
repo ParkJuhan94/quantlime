@@ -4,6 +4,7 @@ import com.quantlime.market.domain.BenchmarkIndex;
 import com.quantlime.market.repository.BenchmarkIndexRepository;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -20,6 +21,12 @@ public class BenchmarkIndexReader {
 
     public boolean exists(String indexCode, LocalDate tradeDate) {
         return benchmarkIndexRepository.existsByIndexCodeAndTradeDate(indexCode, tradeDate);
+    }
+
+    /** {@code date} 이전의 가장 최근 종가 행(전일 종가 계산용). */
+    public Optional<BenchmarkIndex> findLatestBefore(String indexCode, LocalDate date) {
+        return benchmarkIndexRepository
+            .findTopByIndexCodeAndTradeDateLessThanOrderByTradeDateDesc(indexCode, date);
     }
 
     public List<BenchmarkIndex> findBetween(String indexCode, LocalDate from, LocalDate to) {

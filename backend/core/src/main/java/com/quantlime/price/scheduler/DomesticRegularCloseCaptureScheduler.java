@@ -6,7 +6,8 @@ import com.quantlime.price.cache.DomesticMarketCalendarCache;
 import com.quantlime.price.cache.PriceCacheStore;
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.dto.response.PriceSnapshot;
-import com.quantlime.price.repository.DomesticDailyPriceRepository;
+import com.quantlime.price.implement.DailyPriceAppender;
+import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.stock.domain.Stock;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -72,7 +73,8 @@ public class DomesticRegularCloseCaptureScheduler {
     private final DomesticMarketCalendarCache domesticMarketCalendarCache;
     private final DomesticListedStockCache domesticListedStockCache;
     private final PriceCacheStore priceCacheStore;
-    private final DomesticDailyPriceRepository domesticDailyPriceRepository;
+    private final DailyPriceReader dailyPriceReader;
+    private final DailyPriceAppender dailyPriceAppender;
 
     @Scheduled(cron = "0 35 15 * * MON-FRI", zone = "Asia/Seoul")
     public void captureRegularClose() {
@@ -117,8 +119,8 @@ public class DomesticRegularCloseCaptureScheduler {
         List<Stock> stocks = domesticListedStockCache.get();
         List<String> stockCodes = stocks.stream().map(Stock::getStockCode).toList();
 
-        Map<String, DomesticDailyPrice> todaysRowByCode = domesticDailyPriceRepository
-            .findByStockCodeInAndTradeDate(stockCodes, today).stream()
+        Map<String, DomesticDailyPrice> todaysRowByCode = dailyPriceReader
+            .findDomesticByCodesAndDate(stockCodes, today).stream()
             .collect(Collectors.toMap(DomesticDailyPrice::getStockCode, Function.identity()));
         Map<String, PriceSnapshot> snapshotByCode = priceCacheStore.findAll(stockCodes);
 
@@ -150,7 +152,7 @@ public class DomesticRegularCloseCaptureScheduler {
         if (toUpdate.isEmpty()) {
             return 0;
         }
-        domesticDailyPriceRepository.saveAll(toUpdate);
+        dailyPriceAppender.saveAllDomestic(toUpdate);
         return toUpdate.size();
     }
 
@@ -168,14 +170,14 @@ public class DomesticRegularCloseCaptureScheduler {
             return 0;
         }
         try {
-            domesticDailyPriceRepository.saveAll(toInsert);
+            dailyPriceAppender.saveAllDomestic(toInsert);
             return toInsert.size();
         } catch (DataIntegrityViolationException e) {
             log.debug("정규장 종가 캡처 신규 행 일괄 저장 충돌 - 종목별 저장으로 폴백: 대상={}건", toInsert.size());
             int captured = 0;
             for (DomesticDailyPrice candidate : toInsert) {
                 try {
-                    domesticDailyPriceRepository.save(candidate);
+                    dailyPriceAppender.saveDomestic(candidate);
                     captured++;
                 } catch (DataIntegrityViolationException individual) {
                     // 동시에 다른 실행이 먼저 오늘 행을 만들었다는 뜻 - 그 값을

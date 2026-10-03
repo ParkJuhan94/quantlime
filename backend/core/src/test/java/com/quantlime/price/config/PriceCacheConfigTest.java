@@ -8,8 +8,7 @@ import static org.mockito.BDDMockito.given;
 import com.quantlime.price.cache.PreviousCloseCache;
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
-import com.quantlime.price.repository.DomesticDailyPriceRepository;
-import com.quantlime.price.repository.OverseasDailyPriceRepository;
+import com.quantlime.price.implement.DailyPriceReader;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -33,10 +32,7 @@ class PriceCacheConfigTest {
     private static final String STOCK_CODE = "005930";
 
     @Mock
-    private DomesticDailyPriceRepository domesticDailyPriceRepository;
-
-    @Mock
-    private OverseasDailyPriceRepository overseasDailyPriceRepository;
+    private DailyPriceReader dailyPriceReader;
 
     private final PriceCacheConfig priceCacheConfig = new PriceCacheConfig();
 
@@ -46,10 +42,10 @@ class PriceCacheConfigTest {
         // given: close_price가 정규장 종가로 직접 확정되므로(2026-09-21,
         // DomesticRegularCloseCaptureScheduler 참고) 해외와 동일하게
         // domestic_daily_price를 바로 조회한다.
-        given(domesticDailyPriceRepository.findLatestBeforeDate(anyList(), any())).willReturn(
+        given(dailyPriceReader.findDomesticLatestBefore(anyList(), any())).willReturn(
             List.of(DomesticDailyPrice.of(
                 STOCK_CODE, LocalDate.now().minusDays(1), 70000L, 70000L, 70000L, 70000L, 0L)));
-        PreviousCloseCache cache = priceCacheConfig.domesticPreviousCloseCache(domesticDailyPriceRepository);
+        PreviousCloseCache cache = priceCacheConfig.domesticPreviousCloseCache(dailyPriceReader);
 
         // when
         Map<String, Double> result = cache.get(List.of(STOCK_CODE));
@@ -62,9 +58,9 @@ class PriceCacheConfigTest {
     @DisplayName("[해외 fetcher는 달러 종가(Double)를 그대로 반환한다]")
     void overseasPreviousCloseCache_passesThroughDouble() {
         // given
-        given(overseasDailyPriceRepository.findLatestBeforeDate(anyList(), any())).willReturn(
+        given(dailyPriceReader.findOverseasLatestBefore(anyList(), any())).willReturn(
             List.of(OverseasDailyPrice.of("AAPL", LocalDate.now().minusDays(1), 185.70, 185.70, 185.70, 185.70, 1_000_000L)));
-        PreviousCloseCache cache = priceCacheConfig.overseasPreviousCloseCache(overseasDailyPriceRepository);
+        PreviousCloseCache cache = priceCacheConfig.overseasPreviousCloseCache(dailyPriceReader);
 
         // when
         Map<String, Double> result = cache.get(List.of("AAPL"));

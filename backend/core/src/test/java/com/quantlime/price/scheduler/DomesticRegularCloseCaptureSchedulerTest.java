@@ -12,7 +12,8 @@ import com.quantlime.price.cache.DomesticMarketCalendarCache;
 import com.quantlime.price.cache.PriceCacheStore;
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.dto.response.PriceSnapshot;
-import com.quantlime.price.repository.DomesticDailyPriceRepository;
+import com.quantlime.price.implement.DailyPriceAppender;
+import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.stock.StockFixture;
 import com.quantlime.stock.domain.Stock;
 import java.time.LocalDate;
@@ -42,7 +43,10 @@ class DomesticRegularCloseCaptureSchedulerTest {
     private PriceCacheStore priceCacheStore;
 
     @Mock
-    private DomesticDailyPriceRepository domesticDailyPriceRepository;
+    private DailyPriceReader dailyPriceReader;
+
+    @Mock
+    private DailyPriceAppender dailyPriceAppender;
 
     @InjectMocks
     private DomesticRegularCloseCaptureScheduler scheduler;
@@ -71,7 +75,7 @@ class DomesticRegularCloseCaptureSchedulerTest {
         given(domesticListedStockCache.get()).willReturn(List.of(stock));
         given(priceCacheStore.findAll(anyList())).willReturn(Map.of(
             stockCode, new PriceSnapshot(stockCode, 71200.0, 1.2, "2026-08-17T15:35:00+09:00")));
-        given(domesticDailyPriceRepository.findByStockCodeInAndTradeDate(anyList(), any()))
+        given(dailyPriceReader.findDomesticByCodesAndDate(anyList(), any()))
             .willReturn(List.of());
 
         // when
@@ -80,7 +84,7 @@ class DomesticRegularCloseCaptureSchedulerTest {
         // then: 소수점 시세는 반올림해 Long으로 저장(국내는 원 단위 정수), O/H/L=종가·
         // 거래량=0인 임시값 - 뒤이은 일봉 배치가 실제 O/H/L/V로 채운다.
         ArgumentCaptor<List<DomesticDailyPrice>> savedCaptor = ArgumentCaptor.forClass(List.class);
-        verify(domesticDailyPriceRepository).saveAll(savedCaptor.capture());
+        verify(dailyPriceAppender).saveAllDomestic(savedCaptor.capture());
         assertThat(savedCaptor.getValue()).hasSize(1);
         DomesticDailyPrice saved = savedCaptor.getValue().get(0);
         assertThat(saved.getStockCode()).isEqualTo(stockCode);
@@ -103,7 +107,7 @@ class DomesticRegularCloseCaptureSchedulerTest {
         given(domesticListedStockCache.get()).willReturn(List.of(stock));
         given(priceCacheStore.findAll(anyList())).willReturn(Map.of(
             stockCode, new PriceSnapshot(stockCode, 71200.0, 1.2, "2026-08-17T15:35:00+09:00")));
-        given(domesticDailyPriceRepository.findByStockCodeInAndTradeDate(anyList(), any()))
+        given(dailyPriceReader.findDomesticByCodesAndDate(anyList(), any()))
             .willReturn(List.of(existing));
 
         // when
@@ -111,7 +115,7 @@ class DomesticRegularCloseCaptureSchedulerTest {
 
         // then
         ArgumentCaptor<List<DomesticDailyPrice>> savedCaptor = ArgumentCaptor.forClass(List.class);
-        verify(domesticDailyPriceRepository).saveAll(savedCaptor.capture());
+        verify(dailyPriceAppender).saveAllDomestic(savedCaptor.capture());
         assertThat(savedCaptor.getValue()).containsExactly(existing);
         assertThat(existing.getClosePrice()).isEqualTo(71200L);
         assertThat(existing.getOpenPrice()).isEqualTo(70000L); // O/H/L/V는 그대로
@@ -125,14 +129,14 @@ class DomesticRegularCloseCaptureSchedulerTest {
         given(domesticMarketCalendarCache.isTradingDayToday()).willReturn(true);
         given(domesticListedStockCache.get()).willReturn(List.of(stock));
         given(priceCacheStore.findAll(anyList())).willReturn(Map.of());
-        given(domesticDailyPriceRepository.findByStockCodeInAndTradeDate(anyList(), any()))
+        given(dailyPriceReader.findDomesticByCodesAndDate(anyList(), any()))
             .willReturn(List.of());
 
         // when
         scheduler.captureRegularClose();
 
         // then
-        verify(domesticDailyPriceRepository, never()).saveAll(any());
+        verify(dailyPriceAppender, never()).saveAllDomestic(any());
     }
 
     @Test
@@ -147,14 +151,14 @@ class DomesticRegularCloseCaptureSchedulerTest {
         given(domesticListedStockCache.get()).willReturn(List.of(stock));
         given(priceCacheStore.findAll(anyList())).willReturn(Map.of(
             stockCode, new PriceSnapshot(stockCode, 71200.0, 1.2, "2026-08-17T15:35:00+09:00")));
-        given(domesticDailyPriceRepository.findByStockCodeInAndTradeDate(anyList(), any()))
+        given(dailyPriceReader.findDomesticByCodesAndDate(anyList(), any()))
             .willReturn(List.of(alreadyConfirmed));
 
         // when
         scheduler.captureRegularClose();
 
         // then
-        verify(domesticDailyPriceRepository, never()).saveAll(any());
+        verify(dailyPriceAppender, never()).saveAllDomestic(any());
     }
 
     @Test
@@ -176,14 +180,14 @@ class DomesticRegularCloseCaptureSchedulerTest {
         given(domesticListedStockCache.get()).willReturn(List.of(stock));
         given(priceCacheStore.findAll(anyList())).willReturn(Map.of(
             stockCode, new PriceSnapshot(stockCode, 71200.0, 1.2, "2026-08-17T15:37:00+09:00")));
-        given(domesticDailyPriceRepository.findByStockCodeInAndTradeDate(anyList(), any()))
+        given(dailyPriceReader.findDomesticByCodesAndDate(anyList(), any()))
             .willReturn(List.of());
 
         // when: 15:37은 안전 시간대(15:35~15:39) 안
         scheduler.captureIfWithinStartupSafeWindow(LocalTime.of(15, 37));
 
         // then
-        verify(domesticDailyPriceRepository).saveAll(any());
+        verify(dailyPriceAppender).saveAllDomestic(any());
     }
 
     @Test
@@ -196,7 +200,7 @@ class DomesticRegularCloseCaptureSchedulerTest {
         // then
         verify(domesticMarketCalendarCache, never()).isTradingDayToday();
         verify(priceCacheStore, never()).findAll(any());
-        verify(domesticDailyPriceRepository, never()).saveAll(any());
+        verify(dailyPriceAppender, never()).saveAllDomestic(any());
     }
 
     @Test
@@ -207,6 +211,6 @@ class DomesticRegularCloseCaptureSchedulerTest {
 
         // then
         verify(domesticMarketCalendarCache, never()).isTradingDayToday();
-        verify(domesticDailyPriceRepository, never()).saveAll(any());
+        verify(dailyPriceAppender, never()).saveAllDomestic(any());
     }
 }
