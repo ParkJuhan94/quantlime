@@ -6,7 +6,8 @@ import com.quantlime.infra.youtube.dto.YoutubePlaylistItemsResponse;
 import com.quantlime.infra.youtube.dto.YoutubeVideosResponse;
 import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.exception.VideoFeedErrorCode;
-import com.quantlime.videofeed.repository.ChannelRepository;
+import com.quantlime.videofeed.implement.ChannelAppender;
+import com.quantlime.videofeed.implement.ChannelReader;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
@@ -37,10 +38,11 @@ public class ChannelVelocityInitializationService {
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
 
     private final YoutubeApiClient youtubeApiClient;
-    private final ChannelRepository channelRepository;
+    private final ChannelReader channelReader;
+    private final ChannelAppender channelAppender;
 
     public BigDecimal initializeMedianVelocity(Long channelId) {
-        Channel channel = channelRepository.findById(channelId)
+        Channel channel = channelReader.findById(channelId)
             .orElseThrow(() -> new NotFoundException(VideoFeedErrorCode.NOT_FOUND_CHANNEL));
 
         List<BigDecimal> velocities = fetchRecentVelocities(channel.getUploadsPlaylistId());
@@ -112,9 +114,9 @@ public class ChannelVelocityInitializationService {
         // 않는다 - findById로 가져온 엔티티가 트랜잭션 없이 곧바로 detached 상태가 돼
         // updateMedianVelocity() 변경분이 그냥 버려지던 버그가 있었다. save()를 명시적으로
         // 호출해 리포지토리 메서드 자체의 트랜잭션 경계로 merge/update가 실제 반영되게 함.
-        Channel channel = channelRepository.findById(channelId)
+        Channel channel = channelReader.findById(channelId)
             .orElseThrow(() -> new NotFoundException(VideoFeedErrorCode.NOT_FOUND_CHANNEL));
         channel.updateMedianVelocity(median);
-        channelRepository.save(channel);
+        channelAppender.save(channel);
     }
 }

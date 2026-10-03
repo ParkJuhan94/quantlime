@@ -16,8 +16,8 @@ import com.quantlime.videofeed.domain.Platform;
 import com.quantlime.videofeed.domain.Transcript;
 import com.quantlime.videofeed.domain.Video;
 import com.quantlime.videofeed.dto.request.TranscriptImportRequest;
-import com.quantlime.videofeed.repository.TranscriptRepository;
-import com.quantlime.videofeed.repository.VideoRepository;
+import com.quantlime.videofeed.implement.TranscriptReader;
+import com.quantlime.videofeed.implement.VideoReader;
 import java.net.ConnectException;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -36,16 +36,16 @@ import org.springframework.web.client.ResourceAccessException;
 class LocalTranscriptSyncServiceTest {
 
     @Mock
-    private VideoRepository videoRepository;
+    private VideoReader videoReader;
 
     @Mock
-    private TranscriptRepository transcriptRepository;
+    private TranscriptReader transcriptReader;
 
     @Mock
     private SyncApiClient syncApiClient;
 
     private LocalTranscriptSyncService service(String apiKey, String prodApiBase) {
-        return new LocalTranscriptSyncService(videoRepository, transcriptRepository, syncApiClient,
+        return new LocalTranscriptSyncService(videoReader, transcriptReader, syncApiClient,
             new SyncProperties(apiKey, prodApiBase));
     }
 
@@ -62,20 +62,20 @@ class LocalTranscriptSyncServiceTest {
         service("key", "").syncOne(1L);
         service(null, null).syncOne(1L);
 
-        verifyNoInteractions(videoRepository, transcriptRepository, syncApiClient);
+        verifyNoInteractions(videoReader, transcriptReader, syncApiClient);
     }
 
     @Test
     @DisplayName("[영상이나 자막이 없으면 전송하지 않고 스킵한다]")
     void syncOne_missingVideoOrTranscript_skips() {
         // 영상 없음
-        given(videoRepository.findById(1L)).willReturn(Optional.empty());
+        given(videoReader.findById(1L)).willReturn(Optional.empty());
         service("key", "https://prod").syncOne(1L);
 
         // 영상은 있으나 자막 없음
         Video video = video();
-        given(videoRepository.findById(2L)).willReturn(Optional.of(video));
-        given(transcriptRepository.findByVideo(video)).willReturn(Optional.empty());
+        given(videoReader.findById(2L)).willReturn(Optional.of(video));
+        given(transcriptReader.findByVideo(video)).willReturn(Optional.empty());
         service("key", "https://prod").syncOne(2L);
 
         verify(syncApiClient, never()).pushTranscript(any());
@@ -87,8 +87,8 @@ class LocalTranscriptSyncServiceTest {
         // given
         Video video = video();
         Transcript transcript = Transcript.of(video, "youtube", "ko", "자막 본문", 5);
-        given(videoRepository.findById(1L)).willReturn(Optional.of(video));
-        given(transcriptRepository.findByVideo(video)).willReturn(Optional.of(transcript));
+        given(videoReader.findById(1L)).willReturn(Optional.of(video));
+        given(transcriptReader.findByVideo(video)).willReturn(Optional.of(transcript));
 
         // when
         service("key", "https://prod").syncOne(1L);
@@ -110,8 +110,8 @@ class LocalTranscriptSyncServiceTest {
         // given
         Video video = video();
         Transcript transcript = Transcript.of(video, "youtube", "ko", "본문", 2);
-        given(videoRepository.findById(1L)).willReturn(Optional.of(video));
-        given(transcriptRepository.findByVideo(video)).willReturn(Optional.of(transcript));
+        given(videoReader.findById(1L)).willReturn(Optional.of(video));
+        given(transcriptReader.findByVideo(video)).willReturn(Optional.of(transcript));
         willThrow(new ResourceAccessException("I/O error", new ConnectException("Connection refused")))
             .given(syncApiClient).pushTranscript(any());
 
@@ -124,8 +124,8 @@ class LocalTranscriptSyncServiceTest {
     void syncOne_otherFailure_isSwallowed() {
         Video video = video();
         Transcript transcript = Transcript.of(video, "youtube", "ko", "본문", 2);
-        given(videoRepository.findById(1L)).willReturn(Optional.of(video));
-        given(transcriptRepository.findByVideo(video)).willReturn(Optional.of(transcript));
+        given(videoReader.findById(1L)).willReturn(Optional.of(video));
+        given(transcriptReader.findByVideo(video)).willReturn(Optional.of(transcript));
         willThrow(new IllegalStateException("500")).given(syncApiClient).pushTranscript(any());
 
         assertThatCode(() -> service("key", "https://prod").syncOne(1L)).doesNotThrowAnyException();

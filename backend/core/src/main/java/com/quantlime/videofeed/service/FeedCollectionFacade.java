@@ -8,7 +8,9 @@ import com.quantlime.videofeed.domain.Video;
 import com.quantlime.videofeed.dto.CollectResult;
 import com.quantlime.videofeed.dto.CollectedVideo;
 import com.quantlime.videofeed.exception.VideoFeedErrorCode;
-import com.quantlime.videofeed.repository.ChannelRepository;
+import com.quantlime.videofeed.implement.ChannelAppender;
+import com.quantlime.videofeed.implement.ChannelReader;
+import com.quantlime.videofeed.implement.VideoAppender;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -39,9 +41,10 @@ public class FeedCollectionFacade {
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
 
     private final RedisLockService redisLockService;
-    private final ChannelRepository channelRepository;
+    private final ChannelReader channelReader;
+    private final ChannelAppender channelAppender;
     private final YoutubeVideoCollector youtubeVideoCollector;
-    private final VideoPersistService videoPersistService;
+    private final VideoAppender videoAppender;
     private final VideoFilterService videoFilterService;
 
     /**
@@ -63,7 +66,7 @@ public class FeedCollectionFacade {
         // Platform.YOUTUBE로 한정 - 텔레그램 채널(Phase 8 P7)이 channel 테이블에
         // 섞여 들어와도 이 파사드는 YoutubeVideoCollector만 쓰므로 반드시 플랫폼을
         // 걸러야 한다(안 걸렀을 때의 실제 파급 효과는 ChannelRepository 주석 참고).
-        List<Channel> channels = channelRepository.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.YOUTUBE);
+        List<Channel> channels = channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.YOUTUBE);
         List<CollectResult> results = new ArrayList<>();
         for (Channel channel : channels) {
             try {
@@ -77,7 +80,7 @@ public class FeedCollectionFacade {
     }
 
     public void reevaluatePendingReview() {
-        List<Channel> channels = channelRepository.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.YOUTUBE);
+        List<Channel> channels = channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.YOUTUBE);
         for (Channel channel : channels) {
             try {
                 reevaluateChannelPendingReview(channel);
@@ -105,7 +108,7 @@ public class FeedCollectionFacade {
 
     private CollectResult collectChannel(Channel channel) {
         List<CollectedVideo> collected = youtubeVideoCollector.collect(channel);
-        int insertedCount = videoPersistService.upsertAll(channel, collected);
+        int insertedCount = videoAppender.upsertAll(channel, collected);
         videoFilterService.applyFilters(channel);
         updateLastCollectedAt(channel.getId());
         return CollectResult.success(channel.getName(), insertedCount);
@@ -113,7 +116,7 @@ public class FeedCollectionFacade {
 
     // updateLastCollectedAt(Long)이 collectChannel -> runAll -> runAllExclusively로
     // self-invocation되는 경로뿐이라 위 @Transactional은 프록시를 안 타 무시된다
-    // (VideoRetentionDeleteService와 동일 원인) - findById는 SimpleJpaRepository
+    // (VideoRemover와 동일 원인) - findById는 SimpleJpaRepository
     // 내장 메서드라 그 자체로 트랜잭셔널이지만, 반환된 엔티티는 곧바로 detached되므로
     // save()를 명시적으로 호출해야 변경분이 실제로 반영된다(그렇지 않으면 조용히
     // 버려짐, 2026-08-10 발견 - ChannelVelocityInitializationService.persistMedianVelocity와
@@ -121,9 +124,9 @@ public class FeedCollectionFacade {
     // @Transactional과 무관하게 자체적으로 트랜잭셔널함).
     @Transactional
     void updateLastCollectedAt(Long channelId) {
-        Channel channel = channelRepository.findById(channelId)
+        Channel channel = channelReader.findById(channelId)
             .orElseThrow(() -> new NotFoundException(VideoFeedErrorCode.NOT_FOUND_CHANNEL));
         channel.updateLastCollectedAt(LocalDateTime.now(SEOUL));
-        channelRepository.save(channel);
+        channelAppender.save(channel);
     }
 }

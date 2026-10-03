@@ -1,4 +1,4 @@
-package com.quantlime.videofeed.service;
+package com.quantlime.videofeed.implement;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
@@ -23,13 +23,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
-class VideoPersistServiceTest {
+class VideoAppenderTest {
 
     @Mock
     private VideoRepository videoRepository;
 
     @InjectMocks
-    private VideoPersistService videoPersistService;
+    private VideoAppender videoAppender;
 
     @Test
     @DisplayName("[이미 저장된 external_video_id는 건너뛰고 신규 영상만 적재한다(스케줄러 중복 실행 방어)]")
@@ -43,7 +43,7 @@ class VideoPersistServiceTest {
         given(videoRepository.existsByExternalVideoId("video-2")).willReturn(false);
 
         // when
-        int insertedCount = videoPersistService.upsertAll(channel, List.of(existing, fresh));
+        int insertedCount = videoAppender.upsertAll(channel, List.of(existing, fresh));
 
         // then
         assertThat(insertedCount).isEqualTo(1);

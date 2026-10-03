@@ -8,8 +8,9 @@ import com.quantlime.videofeed.domain.Transcript;
 import com.quantlime.videofeed.domain.Video;
 import com.quantlime.videofeed.domain.VideoStatus;
 import com.quantlime.videofeed.exception.VideoFeedErrorCode;
-import com.quantlime.videofeed.repository.TranscriptRepository;
-import com.quantlime.videofeed.repository.VideoRepository;
+import com.quantlime.videofeed.implement.SummaryAppender;
+import com.quantlime.videofeed.implement.TranscriptReader;
+import com.quantlime.videofeed.implement.VideoReader;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,13 +26,13 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class SummaryProcessingService {
 
-    private final VideoRepository videoRepository;
-    private final TranscriptRepository transcriptRepository;
+    private final VideoReader videoReader;
+    private final TranscriptReader transcriptReader;
     private final PythonEngineClient pythonEngineClient;
-    private final SummaryPersistService summaryPersistService;
+    private final SummaryAppender summaryAppender;
 
     public void processVideo(Long videoId) {
-        Video video = videoRepository.findByIdWithChannel(videoId).orElse(null);
+        Video video = videoReader.findByIdWithChannel(videoId).orElse(null);
         if (video == null) {
             log.warn("요약 처리 대상 영상을 찾을 수 없음(삭제됐을 수 있음) - 스킵: videoId={}", videoId);
             return;
@@ -41,15 +42,15 @@ public class SummaryProcessingService {
             return;
         }
         try {
-            Transcript transcript = transcriptRepository.findByVideo(video)
+            Transcript transcript = transcriptReader.findByVideo(video)
                 .orElseThrow(() -> new NotFoundException(VideoFeedErrorCode.NOT_FOUND_TRANSCRIPT));
             SummarizeApiResponse response = pythonEngineClient.summarize(new SummarizeApiRequest(
                 video.getTitle(), video.getChannel().getName(), transcript.getContent()));
-            summaryPersistService.persistResult(video.getId(), response);
+            summaryAppender.persistResult(video.getId(), response);
         } catch (Exception e) {
             log.error("AI 요약 생성 실패: videoId={}, title={}, reason={}",
                 video.getId(), video.getTitle(), e.getMessage(), e);
-            summaryPersistService.markSummarizeFailed(video.getId(), e.getMessage());
+            summaryAppender.markSummarizeFailed(video.getId(), e.getMessage());
             throw e;
         }
     }

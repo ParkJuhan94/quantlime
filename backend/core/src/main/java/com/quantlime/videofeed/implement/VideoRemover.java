@@ -1,4 +1,4 @@
-package com.quantlime.videofeed.service;
+package com.quantlime.videofeed.implement;
 
 import com.quantlime.videofeed.repository.SummaryRepository;
 import com.quantlime.videofeed.repository.TranscriptRepository;
@@ -14,7 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
  * this::deleteVideosOlderThanRetention로 self-invocation되는 경로(runExclusively)를
  * 갖고 있어 그 메서드 자체엔 @Transactional을 붙일 수 없다(프록시를 안 타 무시됨) -
  * 실제 삭제 실행만 별도 빈으로 분리해 정상적으로 프록시를 타게 한다
- * (SummaryPersistService/TranscriptPersistService와 동일한 이유의 동일 패턴).
+ * (SummaryAppender/TranscriptAppender와 동일한 이유의 동일 패턴).
  *
  * <p>video_ticker/summary/transcript의 deleteByVideo_IdIn은 JpaRepository가
  * 기본 제공하는 메서드가 아니라 직접 선언한 파생 삭제 쿼리라, SimpleJpaRepository의
@@ -35,13 +35,13 @@ import org.springframework.transaction.annotation.Transactional;
  * 기반, 실제 프록시 체인 경유)로 직접 되돌려 검증해보니 이 앱에서는
  * package-private이어도 트랜잭션이 정상적으로 열려 재현되지 않았다 - 즉 이
  * 가시성 자체가 실제 버그를 일으키진 않는다(추정이 틀렸음을 테스트로 확인).
- * 그래도 public을 유지하는 건 TranscriptPersistService/SummaryPersistService와
+ * 그래도 public을 유지하는 건 TranscriptAppender/SummaryAppender와
  * 동일한 패턴을 지켜 향후 Spring 버전이 바뀌어 이 동작이 실제로 달라지더라도
  * 안전하게 하기 위한 방어적 선택이다.
  */
 @Service
 @RequiredArgsConstructor
-public class VideoRetentionDeleteService {
+public class VideoRemover {
 
     private final VideoRepository videoRepository;
     private final TranscriptRepository transcriptRepository;

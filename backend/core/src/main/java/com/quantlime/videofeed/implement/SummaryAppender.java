@@ -1,4 +1,4 @@
-package com.quantlime.videofeed.service;
+package com.quantlime.videofeed.implement;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.quantlime.common.exception.NotFoundException;
@@ -21,14 +21,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * AI 요약 결과(외부 I/O)와 영속화를 분리한 짧은 트랜잭션 계층
- * (TranscriptPersistService와 동일한 이유로 호출부인
+ * (TranscriptAppender와 동일한 이유로 호출부인
  * SummaryCollectionFacade와 별도 빈으로 둔다 - self-invocation
  * @Transactional 우회 버그 재발 방지, docs/CHANGELOG.md 2026-07-27 참고).
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class SummaryPersistService {
+public class SummaryAppender {
 
     private final VideoRepository videoRepository;
     private final SummaryRepository summaryRepository;

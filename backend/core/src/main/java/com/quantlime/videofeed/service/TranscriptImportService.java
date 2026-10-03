@@ -5,7 +5,8 @@ import com.quantlime.videofeed.domain.Video;
 import com.quantlime.videofeed.domain.VideoStatus;
 import com.quantlime.videofeed.dto.TranscriptImportResult;
 import com.quantlime.videofeed.dto.request.TranscriptImportRequest;
-import com.quantlime.videofeed.repository.VideoRepository;
+import com.quantlime.videofeed.implement.TranscriptAppender;
+import com.quantlime.videofeed.implement.VideoReader;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,7 +16,7 @@ import org.springframework.stereotype.Service;
 /**
  * 로컬에서 미리 수집한 자막을 운영 DB에 반영한다(2026-09 - youtube-transcript-api가
  * 운영 서버(AWS) IP를 차단해 직접 수집이 막힌 것에 대한 대응). 실제 저장은
- * {@link TranscriptPersistService}(정규 자막 수집 경로와 동일)에 위임해, 저장
+ * {@link TranscriptAppender}(정규 자막 수집 경로와 동일)에 위임해, 저장
  * 로직·이벤트 발행이 두 경로에서 갈라지지 않게 한다 - 이 서비스는 그 앞단에서
  * "가져와도 되는 영상인가"만 판단한다.
  *
@@ -31,15 +32,15 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class TranscriptImportService {
 
-    private final VideoRepository videoRepository;
-    private final TranscriptPersistService transcriptPersistService;
+    private final VideoReader videoReader;
+    private final TranscriptAppender transcriptAppender;
 
     public List<TranscriptImportResult> importAll(TranscriptImportRequest request) {
         return request.items().stream().map(this::importOne).toList();
     }
 
     private TranscriptImportResult importOne(TranscriptImportRequest.Item item) {
-        Video video = videoRepository.findByExternalVideoId(item.externalVideoId()).orElse(null);
+        Video video = videoReader.findByExternalVideoId(item.externalVideoId()).orElse(null);
         if (video == null) {
             return TranscriptImportResult.notFound(item.externalVideoId());
         }
@@ -52,7 +53,7 @@ public class TranscriptImportService {
         }
 
         try {
-            transcriptPersistService.persistResult(video.getId(),
+            transcriptAppender.persistResult(video.getId(),
                 new TranscribeApiResponse(true, item.source(), item.lang(), item.content(), item.charCount(), null));
         } catch (DataIntegrityViolationException e) {
             // 이 판정(status 조회)과 실제 저장 사이에 정규 파이프라인(Kafka

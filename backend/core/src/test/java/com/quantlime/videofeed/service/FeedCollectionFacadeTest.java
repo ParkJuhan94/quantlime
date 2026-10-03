@@ -11,7 +11,8 @@ import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.ChannelFilterConfig;
 import com.quantlime.videofeed.domain.Platform;
 import com.quantlime.videofeed.domain.Video;
-import com.quantlime.videofeed.repository.ChannelRepository;
+import com.quantlime.videofeed.implement.ChannelReader;
+import com.quantlime.videofeed.implement.VideoAppender;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -32,13 +33,13 @@ class FeedCollectionFacadeTest {
     private RedisLockService redisLockService;
 
     @Mock
-    private ChannelRepository channelRepository;
+    private ChannelReader channelReader;
 
     @Mock
     private YoutubeVideoCollector youtubeVideoCollector;
 
     @Mock
-    private VideoPersistService videoPersistService;
+    private VideoAppender videoAppender;
 
     @Mock
     private VideoFilterService videoFilterService;
@@ -64,7 +65,7 @@ class FeedCollectionFacadeTest {
     void reevaluatePendingReview_withCandidates_fetchesFreshViewCountsBeforeReevaluating() {
         // given
         Channel channel = channelOf(1L);
-        given(channelRepository.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.YOUTUBE)).willReturn(List.of(channel));
+        given(channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.YOUTUBE)).willReturn(List.of(channel));
         Video candidate = videoOf(channel, 10L, "vid-pending");
         given(videoFilterService.findReevaluationCandidates(channel)).willReturn(List.of(candidate));
         Map<String, Long> freshViewCounts = Map.of("vid-pending", 5000L);
@@ -83,7 +84,7 @@ class FeedCollectionFacadeTest {
     void reevaluatePendingReview_noCandidates_skipsApiCall() {
         // given
         Channel channel = channelOf(1L);
-        given(channelRepository.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.YOUTUBE)).willReturn(List.of(channel));
+        given(channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.YOUTUBE)).willReturn(List.of(channel));
         given(videoFilterService.findReevaluationCandidates(channel)).willReturn(List.of());
 
         // when
@@ -100,7 +101,7 @@ class FeedCollectionFacadeTest {
         // given
         Channel failingChannel = channelOf(1L);
         Channel okChannel = channelOf(2L);
-        given(channelRepository.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.YOUTUBE))
+        given(channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.YOUTUBE))
             .willReturn(List.of(failingChannel, okChannel));
         given(videoFilterService.findReevaluationCandidates(failingChannel))
             .willThrow(new RuntimeException("유튜브 API 장애"));

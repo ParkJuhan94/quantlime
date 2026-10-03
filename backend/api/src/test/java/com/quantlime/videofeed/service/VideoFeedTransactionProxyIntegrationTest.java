@@ -13,6 +13,7 @@ import com.quantlime.videofeed.domain.Transcript;
 import com.quantlime.videofeed.domain.Video;
 import com.quantlime.videofeed.domain.VideoTicker;
 import com.quantlime.videofeed.dto.CollectedVideo;
+import com.quantlime.videofeed.implement.VideoAppender;
 import com.quantlime.videofeed.repository.ChannelRepository;
 import com.quantlime.videofeed.repository.SummaryRepository;
 import com.quantlime.videofeed.repository.TranscriptRepository;
@@ -44,12 +45,12 @@ import org.springframework.boot.test.mock.mockito.MockBean;
  *
  * <p>이 클래스로 두 지점을 직접 되돌려 검증한 결과:
  * <ul>
- *   <li>{@code runExclusively_...}: VideoRetentionDeleteService.deleteBatch()를
+ *   <li>{@code runExclusively_...}: VideoRemover.deleteBatch()를
  *       일부러 package-private으로 되돌려도 예외 없이 삭제가 성공했다 - "package-private이면
  *       AnnotationTransactionAttributeSource의 publicMethodsOnly 기본값 때문에
  *       @Transactional이 무시될 것"이라는 추정이 이 앱에서는 틀렸다는 뜻이다
- *       (VideoRetentionDeleteService 클래스 javadoc 참고). 그래도 public은 유지한다
- *       (TranscriptPersistService/SummaryPersistService와의 패턴 일관성 +
+ *       (VideoRemover 클래스 javadoc 참고). 그래도 public은 유지한다
+ *       (TranscriptAppender/SummaryAppender와의 패턴 일관성 +
  *       향후 Spring 버전 변경에 대한 방어).
  *   <li>{@code runAll_...}: FeedCollectionFacade.updateLastCollectedAt()에서
  *       channelRepository.save(channel) 호출을 일부러 제거하면 실제로 테스트가
@@ -87,7 +88,7 @@ class VideoFeedTransactionProxyIntegrationTest extends ApiTestSupport {
     private YoutubeVideoCollector youtubeVideoCollector;
 
     @MockBean
-    private VideoPersistService videoPersistService;
+    private VideoAppender videoAppender;
 
     @MockBean
     private VideoFilterService videoFilterService;
@@ -129,7 +130,7 @@ class VideoFeedTransactionProxyIntegrationTest extends ApiTestSupport {
         // given
         Channel channel = seedChannel("collect");
         given(youtubeVideoCollector.collect(any())).willReturn(List.<CollectedVideo>of());
-        given(videoPersistService.upsertAll(any(), any())).willReturn(0);
+        given(videoAppender.upsertAll(any(), any())).willReturn(0);
 
         // when
         feedCollectionFacade.runAll();

@@ -7,7 +7,7 @@ import static org.mockito.Mockito.when;
 import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.ChannelFilterConfig;
 import com.quantlime.videofeed.domain.Platform;
-import com.quantlime.videofeed.repository.ChannelRepository;
+import com.quantlime.videofeed.implement.ChannelReader;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,22 +19,22 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class ChannelQueryServiceTest {
 
     @Mock
-    private ChannelRepository channelRepository;
+    private ChannelReader channelReader;
 
     @Test
     @DisplayName("[채널 목록을 우선순위 오름차순으로 조회한다]")
     void findAllOrderByPriority_returnsChannelsFromRepository() {
         // given
-        ChannelQueryService channelQueryService = new ChannelQueryService(channelRepository);
+        ChannelQueryService channelQueryService = new ChannelQueryService(channelReader);
         Channel channel = Channel.of(Platform.YOUTUBE, "UCF8AeLlUbEpKju6v1H6p8Eg", "UUF8AeLlUbEpKju6v1H6p8Eg",
             "한국경제TV", 10, new ChannelFilterConfig(300, 1.5, 5, List.of(), List.of()));
-        when(channelRepository.findAllByOrderByPriorityAsc()).thenReturn(List.of(channel));
+        when(channelReader.findAllByOrderByPriorityAsc()).thenReturn(List.of(channel));
 
         // when
         List<Channel> result = channelQueryService.findAllOrderByPriority();
 
         // then
         assertThat(result).containsExactly(channel);
-        verify(channelRepository).findAllByOrderByPriorityAsc();
+        verify(channelReader).findAllByOrderByPriorityAsc();
     }
 }

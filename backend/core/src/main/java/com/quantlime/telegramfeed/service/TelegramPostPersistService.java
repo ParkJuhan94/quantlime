@@ -12,7 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * DB 쓰기만 담당(외부 I/O 없음) - VideoPersistService와 동일 원칙. 같은
+ * DB 쓰기만 담당(외부 I/O 없음) - VideoAppender와 동일 원칙. 같은
  * 글이 두 번 수집돼도 external_post_id UNIQUE + 저장 전 존재 확인으로
  * 멱등하게 방어한다.
  */

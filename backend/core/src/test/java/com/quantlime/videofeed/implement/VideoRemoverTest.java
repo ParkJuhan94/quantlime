@@ -1,4 +1,4 @@
-package com.quantlime.videofeed.service;
+package com.quantlime.videofeed.implement;
 
 import static org.mockito.Mockito.inOrder;
 
@@ -18,7 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
-class VideoRetentionDeleteServiceTest {
+class VideoRemoverTest {
 
     @Mock
     private VideoRepository videoRepository;
@@ -33,7 +33,7 @@ class VideoRetentionDeleteServiceTest {
     private VideoTickerRepository videoTickerRepository;
 
     @InjectMocks
-    private VideoRetentionDeleteService service;
+    private VideoRemover service;
 
     @Test
     @DisplayName("[자식(티커→요약→자막)을 먼저 지우고 마지막에 영상을 지운다 - FK 위반 방지 순서]")
