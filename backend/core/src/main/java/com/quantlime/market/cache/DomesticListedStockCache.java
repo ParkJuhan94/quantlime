@@ -3,7 +3,7 @@ package com.quantlime.market.cache;
 import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
-import com.quantlime.stock.repository.StockRepository;
+import com.quantlime.stock.implement.StockReader;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -38,7 +38,7 @@ public class DomesticListedStockCache {
 
     private static final int REFRESH_INTERVAL_SECONDS = 600;
 
-    private final StockRepository stockRepository;
+    private final StockReader stockReader;
 
     private volatile List<Stock> cachedStocks = List.of();
     private volatile Instant lastRefreshedAt = Instant.EPOCH;
@@ -58,7 +58,7 @@ public class DomesticListedStockCache {
         if (!isStale()) {
             return; // 락 대기 중 다른 스레드가 이미 갱신함
         }
-        cachedStocks = stockRepository.findByListingStatusAndMarketTypeInAndPriceUnsupportedFalse(
+        cachedStocks = stockReader.findByListingStatusAndMarketTypeInAndPriceUnsupportedFalse(
             ListingStatus.LISTED, MarketType.domesticValues());
         lastRefreshedAt = Instant.now();
     }

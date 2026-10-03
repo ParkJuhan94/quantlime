@@ -18,7 +18,7 @@ import com.quantlime.stock.StockFixture;
 import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
-import com.quantlime.stock.repository.StockRepository;
+import com.quantlime.stock.implement.StockReader;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -36,7 +36,7 @@ class TossMarketRankingCacheTest {
     private TossApiClient tossApiClient;
 
     @Mock
-    private StockRepository stockRepository;
+    private StockReader stockReader;
 
     @InjectMocks
     private TossMarketRankingCache tossMarketRankingCache;
@@ -90,7 +90,7 @@ class TossMarketRankingCacheTest {
     void get_convertsChangeRateFromFractionToPercentage() {
         // given: 0.0125 = 1.25%
         Stock stock = StockFixture.createStock("005930", "삼성전자");
-        given(stockRepository.findByStockCodeIn(anyList())).willReturn(List.of(stock));
+        given(stockReader.findByStockCodeIn(anyList())).willReturn(List.of(stock));
         given(tossApiClient.getRankings("TOP_GAINERS", "KR", "1d", 100)).willReturn(
             responseOf(new RankingItem(1, "005930", "KRW",
                 new RankingPrice("56500", "55800", "0.0125"), "18432100", "1041436650000")));
@@ -113,7 +113,7 @@ class TossMarketRankingCacheTest {
     void get_nasdaqStock_logoUrlHasSuffix() {
         // given
         Stock stock = Stock.of("AAPL", "APPLE INC", MarketType.NASDAQ, ListingStatus.LISTED, "720", "애플");
-        given(stockRepository.findByStockCodeIn(anyList())).willReturn(List.of(stock));
+        given(stockReader.findByStockCodeIn(anyList())).willReturn(List.of(stock));
         given(tossApiClient.getRankings("TOP_GAINERS", "US", "1d", 100)).willReturn(
             responseOf(new RankingItem(1, "AAPL", "USD",
                 new RankingPrice("220.0", "218.0", "0.0092"), "1000", "220000000")));
@@ -131,8 +131,8 @@ class TossMarketRankingCacheTest {
     @Test
     @DisplayName("[로컬 stock 테이블에 없는 심볼은 이름 자리에 심볼 원문을 그대로 보여주고 로고 URL은 null이다]")
     void get_symbolNotInLocalStockTable_fallsBackToSymbolAsName() {
-        // given: 해외 상위 종목이 백테스트 유니버스 밖인 경우를 재현 - stockRepository가 빈 목록 반환
-        given(stockRepository.findByStockCodeIn(anyList())).willReturn(List.of());
+        // given: 해외 상위 종목이 백테스트 유니버스 밖인 경우를 재현 - stockReader가 빈 목록 반환
+        given(stockReader.findByStockCodeIn(anyList())).willReturn(List.of());
         given(tossApiClient.getRankings("TOP_GAINERS", "US", "1d", 100)).willReturn(
             responseOf(new RankingItem(1, "AMIX", "USD",
                 new RankingPrice("4.48", "2.75", "0.629"), "875663", "6029751898")));
@@ -155,7 +155,7 @@ class TossMarketRankingCacheTest {
     void get_domesticSymbolNotInLocalStockTable_isExcludedFromRanking() {
         // given: 삼성전자(로컬 존재)와 ETF 코드(로컬 미존재)가 함께 응답됨
         Stock stock = StockFixture.createStock("005930", "삼성전자");
-        given(stockRepository.findByStockCodeIn(anyList())).willReturn(List.of(stock));
+        given(stockReader.findByStockCodeIn(anyList())).willReturn(List.of(stock));
         given(tossApiClient.getRankings("MARKET_TRADING_AMOUNT", "KR", "1d", 100)).willReturn(
             responseOf(
                 new RankingItem(1, "005930", "KRW",

@@ -16,6 +16,9 @@ import org.junit.jupiter.api.Test;
  * 상위 레이어를 모름)을 {@code com.quantlime.market} 패키지에 한해 고정한다
  * ({@code PaymentLayerArchitectureTest}와 같은 패턴, 구현 레이어 분리 직후).
  *
+ * <p>{@code cache}/{@code scheduler}/{@code config}도 Repository 직접 참조를 막는다
+ * (MarketIndexCache·DomesticListedStockCache·TossMarketRankingCache를 Reader로 정리한 뒤).
+ *
  * <p>외부 연동 클라이언트(Naver/Toss) 참조 금지 규칙은 아직 넣지 않았다 -
  * {@code BenchmarkIndexBackfillService}/{@code InvestorTradingBackfillService}가
  * 외부 API 호출과 영속 저장을 한 흐름으로 묶는 수집기 성격이라, 그 규칙까지 걸려면
@@ -64,6 +67,18 @@ class MarketLayerArchitectureTest {
             .that().resideInAPackage("com.quantlime.market.repository..")
             .should().dependOnClassesThat().resideInAnyPackage(
                 "com.quantlime.market.service..", "com.quantlime.market.implement..");
+
+        rule.check(marketClasses);
+    }
+
+    @Test
+    @DisplayName("[캐시·스케줄러·설정(cache/scheduler/config)도 Data Access(repository)를 직접 참조하지 않는다 - "
+        + "구현 레이어(implement)의 Reader/Appender를 거친다]")
+    void cacheSchedulerConfigMustNotAccessRepositoryDirectly() {
+        ArchRule rule = noClasses()
+            .that().resideInAnyPackage(
+                "com.quantlime.market.cache..", "com.quantlime.market.scheduler..", "com.quantlime.market.config..")
+            .should().dependOnClassesThat().resideInAPackage("..repository..");
 
         rule.check(marketClasses);
     }

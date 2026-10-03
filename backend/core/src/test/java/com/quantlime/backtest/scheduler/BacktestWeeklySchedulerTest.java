@@ -15,7 +15,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.quantlime.backtest.domain.BacktestDailyScore;
-import com.quantlime.backtest.repository.BacktestDailyScoreRepository;
+import com.quantlime.backtest.implement.BacktestReader;
 import com.quantlime.backtest.service.BacktestDatasetPreparationService;
 import com.quantlime.backtest.service.BacktestUniverseService;
 import com.quantlime.backtest.service.CrossSectionalBacktestService;
@@ -49,7 +49,7 @@ class BacktestWeeklySchedulerTest {
     private CrossSectionalBacktestService crossSectionalBacktestService;
 
     @Mock
-    private BacktestDailyScoreRepository backtestDailyScoreRepository;
+    private BacktestReader backtestReader;
 
     @InjectMocks
     private BacktestWeeklyScheduler scheduler;
@@ -67,7 +67,7 @@ class BacktestWeeklySchedulerTest {
         lockAcquired();
         BacktestDailyScore latest = mock(BacktestDailyScore.class);
         given(latest.getScoreVersion()).willReturn("v3.0");
-        given(backtestDailyScoreRepository.findTopByOrderByIdDesc()).willReturn(Optional.of(latest));
+        given(backtestReader.findLatestDailyScore()).willReturn(Optional.of(latest));
 
         // when
         scheduler.runWeeklyBacktest();
@@ -84,7 +84,7 @@ class BacktestWeeklySchedulerTest {
     void runWeeklyBacktest_noScoreVersion_skipsCrossSectional() {
         // given
         lockAcquired();
-        given(backtestDailyScoreRepository.findTopByOrderByIdDesc()).willReturn(Optional.empty());
+        given(backtestReader.findLatestDailyScore()).willReturn(Optional.empty());
 
         // when
         scheduler.runWeeklyBacktest();

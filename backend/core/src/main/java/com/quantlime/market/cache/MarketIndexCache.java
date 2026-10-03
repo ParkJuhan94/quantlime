@@ -14,7 +14,7 @@ import com.quantlime.market.domain.BenchmarkIndex;
 import com.quantlime.market.domain.OverseasIndexCode;
 import com.quantlime.market.dto.response.MarketIndexResponse;
 import com.quantlime.market.exception.MarketErrorCode;
-import com.quantlime.market.repository.BenchmarkIndexRepository;
+import com.quantlime.market.implement.BenchmarkIndexReader;
 import com.quantlime.price.cache.DomesticMarketCalendarCache;
 import com.quantlime.price.util.ChangeRateCalculator;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -79,7 +79,7 @@ public class MarketIndexCache {
     private final UpbitApiClient upbitApiClient;
     private final NaverFinanceApiClient naverFinanceApiClient;
     private final TradingViewApiClient tradingViewApiClient;
-    private final BenchmarkIndexRepository benchmarkIndexRepository;
+    private final BenchmarkIndexReader benchmarkIndexReader;
     private final DomesticMarketCalendarCache domesticMarketCalendarCache;
     private final MeterRegistry meterRegistry;
 
@@ -300,8 +300,8 @@ public class MarketIndexCache {
             return null;
         }
         double value = Double.parseDouble(lastPrice);
-        Double previousClose = benchmarkIndexRepository
-            .findTopByIndexCodeAndTradeDateLessThanOrderByTradeDateDesc(indexCode, LocalDate.now())
+        Double previousClose = benchmarkIndexReader
+            .findLatestBefore(indexCode, LocalDate.now())
             .map(BenchmarkIndex::getClosePrice)
             .orElse(null);
         Double changeAmount = previousClose == null ? null : value - previousClose;

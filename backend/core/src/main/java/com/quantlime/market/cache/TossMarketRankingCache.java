@@ -6,7 +6,7 @@ import com.quantlime.market.domain.RankingPeriod;
 import com.quantlime.market.dto.response.MarketRankingResponse;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.dto.mapper.StockMapper;
-import com.quantlime.stock.repository.StockRepository;
+import com.quantlime.stock.implement.StockReader;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -62,7 +62,7 @@ public class TossMarketRankingCache {
     public static final String SCOPE_OVERSEAS = "overseas";
 
     private final TossApiClient tossApiClient;
-    private final StockRepository stockRepository;
+    private final StockReader stockReader;
 
     private final Map<CacheKey, CachedEntry> cache = new ConcurrentHashMap<>();
 
@@ -109,7 +109,7 @@ public class TossMarketRankingCache {
             return List.of();
         }
 
-        Map<String, Stock> stockByCode = stockRepository
+        Map<String, Stock> stockByCode = stockReader
             .findByStockCodeIn(rankings.stream().map(TossRankingResponse.RankingItem::symbol).toList())
             .stream()
             .collect(Collectors.toMap(Stock::getStockCode, Function.identity(), (a, b) -> a));

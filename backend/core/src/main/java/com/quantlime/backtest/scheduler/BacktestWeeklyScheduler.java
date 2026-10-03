@@ -1,7 +1,7 @@
 package com.quantlime.backtest.scheduler;
 
 import com.quantlime.backtest.domain.BacktestDailyScore;
-import com.quantlime.backtest.repository.BacktestDailyScoreRepository;
+import com.quantlime.backtest.implement.BacktestReader;
 import com.quantlime.backtest.service.BacktestDatasetPreparationService;
 import com.quantlime.backtest.service.BacktestUniverseService;
 import com.quantlime.backtest.service.CrossSectionalBacktestService;
@@ -39,7 +39,7 @@ public class BacktestWeeklyScheduler {
     private final BacktestDatasetPreparationService backtestDatasetPreparationService;
     private final BacktestUniverseService backtestUniverseService;
     private final CrossSectionalBacktestService crossSectionalBacktestService;
-    private final BacktestDailyScoreRepository backtestDailyScoreRepository;
+    private final BacktestReader backtestReader;
 
     @Scheduled(cron = "0 0 21 * * FRI", zone = "Asia/Seoul")
     public void runWeeklyBacktest() {
@@ -60,7 +60,7 @@ public class BacktestWeeklyScheduler {
         backtestDatasetPreparationService.prepareDataset();
         backtestUniverseService.runUniverse(false);
 
-        String scoreVersion = backtestDailyScoreRepository.findTopByOrderByIdDesc()
+        String scoreVersion = backtestReader.findLatestDailyScore()
             .map(BacktestDailyScore::getScoreVersion)
             .orElse(null);
         if (scoreVersion == null) {

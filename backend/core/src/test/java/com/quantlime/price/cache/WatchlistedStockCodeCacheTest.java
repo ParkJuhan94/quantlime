@@ -6,7 +6,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.quantlime.stock.domain.MarketType;
-import com.quantlime.watchlist.repository.WatchlistRepository;
+import com.quantlime.watchlist.implement.WatchlistReader;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,20 +30,20 @@ import org.springframework.test.util.ReflectionTestUtils;
 class WatchlistedStockCodeCacheTest {
 
     @Mock
-    private WatchlistRepository watchlistRepository;
+    private WatchlistReader watchlistReader;
 
     private WatchlistedStockCodeCache watchlistedStockCodeCache;
 
     @BeforeEach
     void setUp() {
-        watchlistedStockCodeCache = new WatchlistedStockCodeCache(watchlistRepository, MarketType.domesticValues());
+        watchlistedStockCodeCache = new WatchlistedStockCodeCache(watchlistReader, MarketType.domesticValues());
     }
 
     @Test
     @DisplayName("[첫 조회 시 DB를 조회해 캐싱한다]")
     void get_firstCall_fetchesFromRepository() {
         // given
-        given(watchlistRepository.findDistinctStockCodesByMarketTypeIn(MarketType.domesticValues()))
+        given(watchlistReader.findDistinctStockCodesByMarketTypeIn(MarketType.domesticValues()))
             .willReturn(List.of("005930"));
 
         // when
@@ -51,14 +51,14 @@ class WatchlistedStockCodeCacheTest {
 
         // then
         assertThat(result).containsExactly("005930");
-        verify(watchlistRepository, times(1)).findDistinctStockCodesByMarketTypeIn(MarketType.domesticValues());
+        verify(watchlistReader, times(1)).findDistinctStockCodesByMarketTypeIn(MarketType.domesticValues());
     }
 
     @Test
     @DisplayName("[TTL 이내 재조회는 DB를 다시 조회하지 않고 캐시를 반환한다]")
     void get_withinTtl_doesNotRefetch() {
         // given
-        given(watchlistRepository.findDistinctStockCodesByMarketTypeIn(MarketType.domesticValues()))
+        given(watchlistReader.findDistinctStockCodesByMarketTypeIn(MarketType.domesticValues()))
             .willReturn(List.of("005930"));
 
         // when: 짧은 시간 내 두 번 호출
@@ -66,14 +66,14 @@ class WatchlistedStockCodeCacheTest {
         watchlistedStockCodeCache.get();
 
         // then: DB 조회는 최초 1회만
-        verify(watchlistRepository, times(1)).findDistinctStockCodesByMarketTypeIn(MarketType.domesticValues());
+        verify(watchlistReader, times(1)).findDistinctStockCodesByMarketTypeIn(MarketType.domesticValues());
     }
 
     @Test
     @DisplayName("[TTL이 지나면 다시 DB를 조회한다]")
     void get_afterTtlExpired_refetches() {
         // given
-        given(watchlistRepository.findDistinctStockCodesByMarketTypeIn(MarketType.domesticValues()))
+        given(watchlistReader.findDistinctStockCodesByMarketTypeIn(MarketType.domesticValues()))
             .willReturn(List.of("005930"))
             .willReturn(List.of("005930", "000660"));
         watchlistedStockCodeCache.get();
@@ -85,6 +85,6 @@ class WatchlistedStockCodeCacheTest {
 
         // then
         assertThat(result).containsExactly("005930", "000660");
-        verify(watchlistRepository, times(2)).findDistinctStockCodesByMarketTypeIn(MarketType.domesticValues());
+        verify(watchlistReader, times(2)).findDistinctStockCodesByMarketTypeIn(MarketType.domesticValues());
     }
 }

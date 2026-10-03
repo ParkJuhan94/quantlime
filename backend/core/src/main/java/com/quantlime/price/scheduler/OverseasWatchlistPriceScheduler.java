@@ -16,7 +16,7 @@ import com.quantlime.price.realtime.PriceTopicSubscriptionTracker;
 import com.quantlime.price.util.ChangeRateCalculator;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.dto.mapper.StockMapper;
-import com.quantlime.stock.repository.StockRepository;
+import com.quantlime.stock.implement.StockReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -84,7 +84,7 @@ public class OverseasWatchlistPriceScheduler {
     private final MarketRankingCache overseasMarketRankingCache;
     private final TossApiClient tossApiClient;
     private final PriceCacheStore priceCacheStore;
-    private final StockRepository stockRepository;
+    private final StockReader stockReader;
     private final SimpMessagingTemplate messagingTemplate;
     private final PriceRelayLeaderGate priceRelayLeaderGate;
     private final PriceTopicSubscriptionTracker priceTopicSubscriptionTracker;
@@ -118,7 +118,7 @@ public class OverseasWatchlistPriceScheduler {
         // 참고) Stock 메타데이터를 한 번만 조회해둔다 - 전종목 스윕(domestic)의
         // DomesticListedStockCache와 달리 해외는 관심종목만 대상이라(규모가
         // 작음) 캐시 없이 매 틱 직접 조회해도 무해하다.
-        Map<String, Stock> stockByCode = stockRepository.findByStockCodeIn(stockCodes).stream()
+        Map<String, Stock> stockByCode = stockReader.findByStockCodeIn(stockCodes).stream()
             .collect(Collectors.toMap(Stock::getStockCode, Function.identity(), (a, b) -> a));
 
         List<MarketRankingResponse> ranking = new ArrayList<>();

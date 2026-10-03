@@ -25,7 +25,7 @@ import com.quantlime.infra.upbit.UpbitApiClient;
 import com.quantlime.infra.upbit.dto.UpbitTicker;
 import com.quantlime.market.domain.BenchmarkIndex;
 import com.quantlime.market.dto.response.MarketIndexResponse;
-import com.quantlime.market.repository.BenchmarkIndexRepository;
+import com.quantlime.market.implement.BenchmarkIndexReader;
 import com.quantlime.price.cache.DomesticMarketCalendarCache;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -60,7 +60,7 @@ class MarketIndexCacheTest {
     private TradingViewApiClient tradingViewApiClient;
 
     @Mock
-    private BenchmarkIndexRepository benchmarkIndexRepository;
+    private BenchmarkIndexReader benchmarkIndexReader;
 
     @Mock
     private DomesticMarketCalendarCache domesticMarketCalendarCache;
@@ -148,10 +148,10 @@ class MarketIndexCacheTest {
             new TossMarketIndicatorPriceResponse(List.of(
                 new TossMarketIndicatorPriceResponse.MarketIndicatorPrice("KOSPI", null, "7284.41"),
                 new TossMarketIndicatorPriceResponse.MarketIndicatorPrice("KOSDAQ", null, "829.43"))));
-        given(benchmarkIndexRepository.findTopByIndexCodeAndTradeDateLessThanOrderByTradeDateDesc(
+        given(benchmarkIndexReader.findLatestBefore(
             eq("KOSPI"), any(LocalDate.class)))
             .willReturn(Optional.of(benchmarkIndex("KOSPI", 6856.83)));
-        given(benchmarkIndexRepository.findTopByIndexCodeAndTradeDateLessThanOrderByTradeDateDesc(
+        given(benchmarkIndexReader.findLatestBefore(
             eq("KOSDAQ"), any(LocalDate.class)))
             .willReturn(Optional.of(benchmarkIndex("KOSDAQ", 800.00)));
         given(domesticMarketCalendarCache.isMarketOpenNow()).willReturn(true);
@@ -177,7 +177,7 @@ class MarketIndexCacheTest {
             new TossMarketIndicatorPriceResponse(List.of(
                 new TossMarketIndicatorPriceResponse.MarketIndicatorPrice("KOSPI", null, "7284.41"),
                 new TossMarketIndicatorPriceResponse.MarketIndicatorPrice("KOSDAQ", null, "829.43"))));
-        given(benchmarkIndexRepository.findTopByIndexCodeAndTradeDateLessThanOrderByTradeDateDesc(any(), any()))
+        given(benchmarkIndexReader.findLatestBefore(any(), any()))
             .willReturn(Optional.empty());
         given(domesticMarketCalendarCache.isMarketOpenNow()).willReturn(false);
 

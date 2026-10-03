@@ -16,9 +16,9 @@ import org.junit.jupiter.api.Test;
  * 상위 레이어를 모름)을 {@code com.quantlime.price} 패키지에 한해 고정한다
  * ({@code MarketLayerArchitectureTest}와 같은 패턴, 구현 레이어 분리 직후).
  *
- * <p>검사 범위는 {@code service}/{@code implement}/{@code repository} 레이어다 -
- * {@code config}(PriceCacheConfig의 전일종가 조회), {@code scheduler}, {@code cache},
- * {@code realtime}은 이번 정리 대상이 아니라 규칙 밖이다.
+ * <p>{@code cache}/{@code scheduler}/{@code config}도 Repository 직접 참조를 막는다
+ * (PriceCacheConfig, 정규장 종가 캡처·해외 관심종목 스케줄러를 Reader/Appender로 정리한 뒤).
+ * {@code realtime}은 Repository를 쓰지 않아 별도 규칙이 없다.
  *
  * <p>외부 연동 클라이언트(Toss) 참조 금지 규칙은 아직 넣지 않았다 - 일봉 백필
  * 서비스들이 외부 API 호출과 영속 저장을 한 흐름으로 묶는 수집기 성격이라, 그
@@ -65,6 +65,18 @@ class PriceLayerArchitectureTest {
             .that().resideInAPackage("com.quantlime.price.repository..")
             .should().dependOnClassesThat().resideInAnyPackage(
                 "com.quantlime.price.service..", "com.quantlime.price.implement..");
+
+        rule.check(priceClasses);
+    }
+
+    @Test
+    @DisplayName("[캐시·스케줄러·설정(cache/scheduler/config)도 Data Access(repository)를 직접 참조하지 않는다 - "
+        + "구현 레이어(implement)의 Reader/Appender를 거친다]")
+    void cacheSchedulerConfigMustNotAccessRepositoryDirectly() {
+        ArchRule rule = noClasses()
+            .that().resideInAnyPackage(
+                "com.quantlime.price.cache..", "com.quantlime.price.scheduler..", "com.quantlime.price.config..")
+            .should().dependOnClassesThat().resideInAPackage("..repository..");
 
         rule.check(priceClasses);
     }
