@@ -45,30 +45,34 @@ groups:
           summary: "Redis가 다운됨"
           description: "redis-exporter가 2분 이상 Redis에 연결하지 못하고 있습니다 - 로그인/재발급/구독 결제 락이 fail-closed로 막힙니다(RefreshTokenStore/RedisLockService/PaymentService 참고)."
 
-      # frontend(nginx)는 별도 /metrics가 없어 cAdvisor가 보는 컨테이너
-      # 생존 신호(container_last_seen)로 대체한다 - 전용 exporter 추가 없이
-      # 기존 스크랩 대상만으로 커버.
+      # frontend(nginx)는 별도 /metrics가 없어 scripts/report-container-metrics.sh가 1분마다
+      # 내보내는 컨테이너 생존 지표(quantlime_container_up)로 대체한다 - 전용 exporter 추가 없이
+      # 기존 스크랩 대상(node-exporter textfile collector)만으로 커버. 컨테이너가 정지됐거나(up==0)
+      # 아예 사라진(absent) 경우 모두 잡는다(absent 쪽은 node-exporter가 있을 때만 - 로컬엔 없어서
+      # absent()가 상시 발화하는 걸 막는다). 이전엔 cAdvisor의 container_last_seen을 썼으나
+      # Docker 29에서 cAdvisor가 컨테이너 이름을 못 읽어 알림이 조용히 죽어 있었다(2026-10-03).
       - alert: FrontendDown
-        expr: time() - container_last_seen{name="quantlime-prod-frontend"} > 60
-        for: 2m
+        expr: quantlime_container_up{name="quantlime-prod-frontend"} == 0 or (absent(quantlime_container_up{name="quantlime-prod-frontend"}) and on() up{job="node-exporter"} == 1)
+        for: 3m
         labels:
           severity: critical
         annotations:
-          summary: "frontend(nginx) 컨테이너가 응답하지 않음"
-          description: "cAdvisor가 1분 이상 frontend 컨테이너를 보지 못했습니다 - 80포트로 들어오는 모든 요청(정적/API 프록시/WS)이 도달 불가 상태일 수 있습니다."
+          summary: "frontend(nginx) 컨테이너가 실행 중이 아님"
+          description: "frontend 컨테이너가 3분 이상 정지(또는 목록에서 사라짐) 상태입니다 - 80포트로 들어오는 모든 요청(정적/API 프록시/WS)이 도달 불가 상태일 수 있습니다. 지표는 1분 주기 스냅샷이라 감지에 최대 1~2분 지연이 있습니다."
 
-      # Redpanda(Kafka 브로커)도 같은 이유로 cAdvisor 생존 신호를 쓴다. 브로커가 죽으면
+      # Redpanda(Kafka 브로커)도 같은 생존 지표를 쓴다. 브로커가 죽으면
       # kafkaTemplate.send가 결과 확인 없이 실패해 이벤트가 조용히 유실되고 컨슈머도 멈추는데,
       # 백엔드 헬스체크에는 Kafka가 포함돼 있지 않아 다른 알림으로는 보이지 않는다
       # (2026-10-01 Kafka 점검). restart: on-failure:5를 소진하고 멈춘 경우도 여기서 잡힌다.
+      # (2026-10-03 EC2에서 redpanda를 실제로 정지시켰을 때도 옛 cAdvisor 기반 규칙은 울리지 않았다)
       - alert: RedpandaDown
-        expr: time() - container_last_seen{name="quantlime-prod-redpanda"} > 60
-        for: 2m
+        expr: quantlime_container_up{name="quantlime-prod-redpanda"} == 0 or (absent(quantlime_container_up{name="quantlime-prod-redpanda"}) and on() up{job="node-exporter"} == 1)
+        for: 3m
         labels:
           severity: critical
         annotations:
-          summary: "Redpanda(Kafka 브로커) 컨테이너가 응답하지 않음"
-          description: "cAdvisor가 1분 이상 redpanda 컨테이너를 보지 못했습니다 - 이벤트 발행이 조용히 유실되고 컨슈머(가격 갱신/구독 갱신/결제 웹훅/자막·요약/텔레그램 다이제스트)가 멈춘 상태일 수 있습니다."
+          summary: "Redpanda(Kafka 브로커) 컨테이너가 실행 중이 아님"
+          description: "redpanda 컨테이너가 3분 이상 정지(또는 목록에서 사라짐) 상태입니다 - 이벤트 발행이 조용히 유실되고 컨슈머(가격 갱신/구독 갱신/결제 웹훅/자막·요약/텔레그램 다이제스트)가 멈춘 상태일 수 있습니다."
 
       # restart: on-failure:5(도커 자체 재시작)와 autoheal(healthcheck 기반
       # 강제 재시작)이 반복적으로 발동하는 상황 - 둘 다 "복구는 됐지만
@@ -76,13 +80,26 @@ groups:
       # 있다(재시작이 매번 빠르게 성공하면 up==0 구간이 짧아 for 조건을
       # 못 채움).
       - alert: ContainerRestartLoop
-        expr: changes(container_start_time_seconds{name=~"quantlime-prod-.+"}[30m]) > 2
+        expr: changes(quantlime_container_start_time_seconds{name=~"quantlime-prod-.+"}[30m]) > 2
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: "컨테이너 재시작 루프 감지: {{ $labels.name }}"
           description: "{{ $labels.name }}이(가) 최근 30분간 3회 이상 재시작했습니다 - restart:on-failure 또는 autoheal이 반복 발동 중일 수 있습니다."
+
+      # 위 세 알림(FrontendDown/RedpandaDown/ContainerRestartLoop)이 기대는 지표는 호스트 크론
+      # (scripts/report-container-metrics.sh)이 쓰는 파일이라, 크론이 멈추면 마지막 값이 그대로 남아
+      # 알림이 "정상"으로 보인다 - 갱신 시각을 직접 감시해 그 사각지대를 막는다
+      # (MysqlBackupStale과 같은 패턴). 지표가 한 번도 없으면(예: 로컬) 평가되지 않아 발동 안 함.
+      - alert: ContainerMetricsStale
+        expr: time() - quantlime_container_metrics_last_success_timestamp_seconds > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "컨테이너 지표 갱신이 5분 이상 멈춤"
+          description: "scripts/report-container-metrics.sh 크론이 5분 이상 성공하지 못했습니다(logs/report-container-metrics.log 확인, `crontab -l | grep container-metrics`) - FrontendDown/RedpandaDown/ContainerRestartLoop이 낡은 값을 보고 있을 수 있습니다."
 
   # --- 외부 관점(blackbox 프로브, 운영 전용 - 로컬엔 job이 없어 발동 안 함) ---
   - name: quantlime-external
