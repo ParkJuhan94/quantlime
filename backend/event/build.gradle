@@ -7,6 +7,8 @@ plugins {
 
 dependencies {
     implementation project(':core')
+    // KafkaDltNotifier가 SlackWebhookClient를 직접 쓴다(slack이 core 밖 모듈로 분리돼 core를 통해선 안 보임)
+    implementation project(':slack')
 
     // kotlin-reflect가 있어야 Spring이 Kotlin nullable 파라미터(String?)를
     // optional로 인식한다(DLT 핸들러의 exceptionMessage 헤더).

@@ -9,6 +9,8 @@ dependencies {
     implementation project(':client-support')
     implementation project(':tosspayments')
     testImplementation(testFixtures(project(':core')))
+    // FeedbackControllerTest가 SlackWebhookClient를 @MockBean으로 쓴다(slack이 core 밖 모듈이라 core를 통해선 안 보임)
+    testImplementation project(':slack')
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
