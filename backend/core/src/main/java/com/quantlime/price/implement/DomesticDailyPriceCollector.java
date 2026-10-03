@@ -4,6 +4,7 @@ import com.quantlime.common.util.SleepUtil;
 import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.toss.dto.TossCandleResponse;
 import com.quantlime.infra.toss.dto.TossPriceMapper;
+import com.quantlime.price.domain.CandleReconcileResult;
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.dto.DailyCandleSaveResult;
 import com.quantlime.price.util.DailyPriceSettlementPolicy;
@@ -217,48 +218,26 @@ public class DomesticDailyPriceCollector {
      * 갱신 분기는 dirty checking에 기대지 않고 명시적으로 save()한다 -
      * 이 클래스의 쓰기 메서드는 전부 @Transactional이 아니라 건별로
      * 커밋되므로, findBy로 읽어온 엔티티가 이미 detached 상태일 수 있어
-     * 트랜잭션 종료 시 자동 flush를 보장할 수 없다.
+     * 트랜잭션 종료 시 자동 flush를 보장할 수 없다. 기존 행에 캔들을 어떻게 반영할지의
+     * 규칙(정규장 종가 보호, 값 동일 시 생략, 재조정 감지)은 {@link DomesticDailyPrice#reconcile}이
+     * 갖고 있고, 여기서는 그 결과대로 저장만 한다.
      *
-     * @param detectRestatement false면 재조정 감지를 하지 않는다 -
-     *     overwriteAll(재백필) 경로에서 무한 재귀를 막기 위함.
+     * @param overwriteAll true면 수정주가 재백필 경로 - 종가 보호를 풀고 재조정 감지를 하지 않는다
+     *     (감지하면 재백필이 자기 자신을 무한히 다시 호출한다).
      */
     private UpsertOutcome upsertCandle(String stockCode, LocalDate tradeDate,
                                         TossCandleResponse.TossCandle candle, boolean overwriteAll) {
         return dailyPriceReader.findDomestic(stockCode, tradeDate)
             .map(existing -> {
-                long open = Long.parseLong(candle.openPrice());
-                long high = Long.parseLong(candle.highPrice());
-                long low = Long.parseLong(candle.lowPrice());
-                long close = Long.parseLong(candle.closePrice());
-                long volume = Long.parseLong(candle.volume());
-
-                // 정규장 종가가 이미 확정된 행은 close를 NXT 포함 캔들로 덮어쓰지
-                // 않는다 - O/H/L/V만 최신화한다. overwriteAll(수정주가 재백필)은
-                // 예외 - 분할/병합은 과거 전체 가격을 비율로 바꾸는 사건이라
-                // 보호된 값도 그 시점엔 이미 틀렸으므로 아래 일반 경로로 전체
-                // 덮어쓴다(DomesticDailyPrice#updateOhlcv가 보호 플래그도 해제).
-                if (!overwriteAll && existing.isRegularCloseConfirmed()) {
-                    if (isUnchangedIgnoringClose(existing, open, high, low, volume)) {
-                        return UpsertOutcome.unchanged();
-                    }
-                    existing.updateOhlcvKeepingClose(open, high, low, volume);
-                    dailyPriceAppender.saveDomestic(existing);
-                    return UpsertOutcome.updated(false);
-                }
-
-                // 값이 동일하면 save() 자체를 생략한다 - 재확정 윈도우 도입으로
-                // 종목당 MIN_LOOKBACK_CANDLES개씩 매 스윕 재조회되는데, 이미
-                // 확정된 과거 거래일은 대부분 값이 그대로라 불필요한 UPDATE가
-                // 매번 반복되는 걸 막는다.
-                if (isUnchanged(existing, open, high, low, close, volume)) {
+                CandleReconcileResult result = existing.reconcile(
+                    Long.parseLong(candle.openPrice()), Long.parseLong(candle.highPrice()),
+                    Long.parseLong(candle.lowPrice()), Long.parseLong(candle.closePrice()),
+                    Long.parseLong(candle.volume()), overwriteAll);
+                if (result == CandleReconcileResult.UNCHANGED) {
                     return UpsertOutcome.unchanged();
                 }
-                boolean detectRestatement = !overwriteAll;
-                boolean restated = detectRestatement && DailyPriceSettlementPolicy.isRestatement(
-                    existing.getClosePrice(), close, DailyPriceSettlementPolicy.DOMESTIC_RESTATEMENT_THRESHOLD);
-                existing.updateOhlcv(open, high, low, close, volume);
                 dailyPriceAppender.saveDomestic(existing);
-                return UpsertOutcome.updated(restated);
+                return UpsertOutcome.updated(result == CandleReconcileResult.RESTATED);
             })
             .orElseGet(() -> {
                 try {
@@ -269,17 +248,6 @@ public class DomesticDailyPriceCollector {
                     return UpsertOutcome.unchanged();
                 }
             });
-    }
-
-    private boolean isUnchanged(DomesticDailyPrice existing, long open, long high, long low, long close, long volume) {
-        return existing.getOpenPrice() == open && existing.getHighPrice() == high
-            && existing.getLowPrice() == low && existing.getClosePrice() == close
-            && existing.getVolume() == volume;
-    }
-
-    private boolean isUnchangedIgnoringClose(DomesticDailyPrice existing, long open, long high, long low, long volume) {
-        return existing.getOpenPrice() == open && existing.getHighPrice() == high
-            && existing.getLowPrice() == low && existing.getVolume() == volume;
     }
 
     private record UpsertOutcome(boolean created, boolean restatementDetected) {

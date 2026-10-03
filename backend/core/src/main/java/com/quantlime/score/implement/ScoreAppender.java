@@ -3,9 +3,9 @@ package com.quantlime.score.implement;
 import com.quantlime.infra.python.dto.CrossSectionNormalizeApiResponse.NormalizedItemApiResponse;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.DailyScoreSeriesApiResponse;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.StockScoreSeriesApiResponse;
-import com.quantlime.price.util.DailyPriceSettlementPolicy;
 import com.quantlime.score.domain.PeerGroup;
 import com.quantlime.score.domain.Score;
+import com.quantlime.score.domain.ScoreSeriesPolicy;
 import com.quantlime.score.dto.mapper.ScoreMapper;
 import com.quantlime.score.repository.ScoreRepository;
 import com.quantlime.stock.domain.MarketType;
@@ -66,7 +66,7 @@ public class ScoreAppender {
     /**
      * 종목 하나의 날짜별 스코어 시계열을 upsert한다 - 가장 최근 날짜(보통
      * 오늘/최신 거래일)는 재계산마다 항상 값을 덮어쓰고, 재확정 윈도우
-     * ({@link DailyPriceSettlementPolicy#RESETTLEMENT_WINDOW_DAYS}) 안의
+     * ({@link ScoreSeriesPolicy}) 안의
      * 날짜도 마찬가지로 항상 덮어쓴다 - 가격이 그 윈도우 안에서 사후
      * 보정될 수 있는데(같은 정책, DomesticDailyPriceService 참고) 스코어만
      * "과거는 존재하면 스킵"이면 고쳐진 가격이 스코어에 영영 반영되지
@@ -88,7 +88,7 @@ public class ScoreAppender {
                 continue;
             }
             LocalDate scoreDate = LocalDate.parse(row.date());
-            if (scoreDate.equals(latestDate) || DailyPriceSettlementPolicy.isWithinWindow(scoreDate, today)) {
+            if (ScoreSeriesPolicy.shouldOverwrite(scoreDate, latestDate, today)) {
                 upsert(stockCode, scoreDate, row);
             } else if (!scoreRepository.existsByStockCodeAndScoreDate(stockCode, scoreDate)) {
                 create(stockCode, scoreDate, row);
