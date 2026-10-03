@@ -16,6 +16,7 @@ import com.quantlime.videofeed.domain.Platform;
 import com.quantlime.videofeed.domain.Transcript;
 import com.quantlime.videofeed.domain.Video;
 import com.quantlime.videofeed.dto.request.TranscriptImportRequest;
+import com.quantlime.videofeed.implement.ProdTranscriptSyncer;
 import com.quantlime.videofeed.implement.TranscriptReader;
 import com.quantlime.videofeed.implement.VideoReader;
 import java.net.ConnectException;
@@ -45,8 +46,8 @@ class LocalTranscriptSyncServiceTest {
     private SyncApiClient syncApiClient;
 
     private LocalTranscriptSyncService service(String apiKey, String prodApiBase) {
-        return new LocalTranscriptSyncService(videoReader, transcriptReader, syncApiClient,
-            new SyncProperties(apiKey, prodApiBase));
+        return new LocalTranscriptSyncService(videoReader, transcriptReader,
+            new ProdTranscriptSyncer(syncApiClient, new SyncProperties(apiKey, prodApiBase)));
     }
 
     private Video video() {

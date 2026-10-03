@@ -13,6 +13,7 @@ import com.quantlime.videofeed.domain.Platform;
 import com.quantlime.videofeed.domain.Video;
 import com.quantlime.videofeed.implement.ChannelReader;
 import com.quantlime.videofeed.implement.VideoAppender;
+import com.quantlime.videofeed.implement.YoutubeVideoCollector;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;

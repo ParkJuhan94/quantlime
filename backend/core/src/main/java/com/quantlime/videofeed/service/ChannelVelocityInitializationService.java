@@ -1,23 +1,14 @@
 package com.quantlime.videofeed.service;
 
 import com.quantlime.common.exception.NotFoundException;
-import com.quantlime.infra.youtube.YoutubeApiClient;
-import com.quantlime.infra.youtube.dto.YoutubePlaylistItemsResponse;
-import com.quantlime.infra.youtube.dto.YoutubeVideosResponse;
 import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.exception.VideoFeedErrorCode;
 import com.quantlime.videofeed.implement.ChannelAppender;
 import com.quantlime.videofeed.implement.ChannelReader;
+import com.quantlime.videofeed.implement.YoutubeMetadataCollector;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -35,9 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class ChannelVelocityInitializationService {
 
     private static final int SAMPLE_SIZE = 30;
-    private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
 
-    private final YoutubeApiClient youtubeApiClient;
+    private final YoutubeMetadataCollector youtubeMetadataCollector;
     private final ChannelReader channelReader;
     private final ChannelAppender channelAppender;
 
@@ -45,52 +35,12 @@ public class ChannelVelocityInitializationService {
         Channel channel = channelReader.findById(channelId)
             .orElseThrow(() -> new NotFoundException(VideoFeedErrorCode.NOT_FOUND_CHANNEL));
 
-        List<BigDecimal> velocities = fetchRecentVelocities(channel.getUploadsPlaylistId());
+        List<BigDecimal> velocities = youtubeMetadataCollector.fetchRecentVelocities(channel.getUploadsPlaylistId(), SAMPLE_SIZE);
         BigDecimal median = median(velocities);
         persistMedianVelocity(channel.getId(), median);
         log.info("중앙값 업로드 속도 산정 완료: channel={}, median={}, sampleSize={}",
             channel.getName(), median, velocities.size());
         return median;
-    }
-
-    private List<BigDecimal> fetchRecentVelocities(String uploadsPlaylistId) {
-        // playlistItems.list maxResults=50(1u)이 최신순으로 오므로 상위
-        // 30개만 잘라 쓰면 페이지네이션 없이 1회 호출로 충분하다.
-        YoutubePlaylistItemsResponse playlistResponse = youtubeApiClient.getPlaylistItems(uploadsPlaylistId, null);
-        List<YoutubePlaylistItemsResponse.Item> items = playlistResponse.items().stream()
-            .limit(SAMPLE_SIZE)
-            .toList();
-        if (items.isEmpty()) {
-            return List.of();
-        }
-
-        List<String> videoIds = items.stream()
-            .map(item -> item.snippet().resourceId().videoId())
-            .toList();
-        YoutubeVideosResponse videosResponse = youtubeApiClient.getVideos(videoIds);
-        Map<String, YoutubeVideosResponse.Item> detailsById = new HashMap<>();
-        for (YoutubeVideosResponse.Item item : videosResponse.items()) {
-            detailsById.put(item.id(), item);
-        }
-
-        return items.stream()
-            .map(item -> toVelocity(item, detailsById.get(item.snippet().resourceId().videoId())))
-            .filter(Objects::nonNull)
-            .toList();
-    }
-
-    private BigDecimal toVelocity(YoutubePlaylistItemsResponse.Item item, YoutubeVideosResponse.Item details) {
-        if (details == null || details.statistics() == null || details.statistics().viewCount() == null) {
-            return null;
-        }
-        long viewCount = Long.parseLong(details.statistics().viewCount());
-        LocalDateTime publishedAt = Instant.parse(item.snippet().publishedAt()).atZone(SEOUL).toLocalDateTime();
-        // publishedAt이 SEOUL로 zone-strip된 값이라 bare LocalDateTime.now()(JVM
-        // 기본 타임존)와 비교하면 안 된다 - 프로덕션은 Dockerfile의 TZ=Asia/Seoul
-        // 고정 덕에 우연히 맞았지만, CI(ubuntu-latest 기본 UTC)에서 9시간이 밀려
-        // hoursSincePublish가 10→1로 잘못 계산되는 걸 실제로 재현해 확인함(2026-09-10).
-        long hoursSincePublish = Math.max(Duration.between(publishedAt, LocalDateTime.now(SEOUL)).toHours(), 1);
-        return BigDecimal.valueOf(viewCount).divide(BigDecimal.valueOf(hoursSincePublish), 4, RoundingMode.HALF_UP);
     }
 
     private BigDecimal median(List<BigDecimal> values) {

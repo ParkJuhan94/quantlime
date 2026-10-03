@@ -1,4 +1,4 @@
-package com.quantlime.videofeed.service;
+package com.quantlime.videofeed.implement;
 
 import com.quantlime.infra.youtube.YoutubeApiClient;
 import com.quantlime.infra.youtube.dto.YoutubePlaylistItemsResponse;

@@ -11,6 +11,7 @@ import com.quantlime.videofeed.exception.VideoFeedErrorCode;
 import com.quantlime.videofeed.implement.ChannelAppender;
 import com.quantlime.videofeed.implement.ChannelReader;
 import com.quantlime.videofeed.implement.VideoAppender;
+import com.quantlime.videofeed.implement.YoutubeVideoCollector;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;

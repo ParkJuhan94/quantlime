@@ -14,6 +14,7 @@ import com.quantlime.videofeed.domain.Video;
 import com.quantlime.videofeed.domain.VideoTicker;
 import com.quantlime.videofeed.dto.CollectedVideo;
 import com.quantlime.videofeed.implement.VideoAppender;
+import com.quantlime.videofeed.implement.YoutubeVideoCollector;
 import com.quantlime.videofeed.repository.ChannelRepository;
 import com.quantlime.videofeed.repository.SummaryRepository;
 import com.quantlime.videofeed.repository.TranscriptRepository;
