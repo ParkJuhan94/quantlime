@@ -1,22 +1,10 @@
 package com.quantlime.market.service;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyDouble;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
-import com.quantlime.infra.naver.NaverFinanceApiClient;
-import com.quantlime.infra.naver.dto.NaverIndexCandleResponse;
 import com.quantlime.market.domain.OverseasIndexCode;
-import com.quantlime.market.implement.BenchmarkIndexAppender;
-import com.quantlime.market.implement.BenchmarkIndexReader;
-import java.time.LocalDate;
-import java.util.List;
-import java.util.stream.IntStream;
+import com.quantlime.market.implement.BenchmarkIndexCollector;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -25,144 +13,48 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+/** 어떤 지수를 갱신할지(순회 대상)만 검증한다 - 수집·저장 자체는 BenchmarkIndexCollectorTest. */
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
 class BenchmarkIndexBackfillServiceTest {
 
-    private static final String INDEX_CODE = "KOSPI";
-
     @Mock
-    private BenchmarkIndexReader benchmarkIndexReader;
-
-    @Mock
-    private BenchmarkIndexAppender benchmarkIndexAppender;
-
-    @Mock
-    private NaverFinanceApiClient naverFinanceApiClient;
+    private BenchmarkIndexCollector benchmarkIndexCollector;
 
     @InjectMocks
     private BenchmarkIndexBackfillService benchmarkIndexBackfillService;
 
     @Test
-    @DisplayName("[기존 이력이 목표 일수 이상이면 API를 호출하지 않는다]")
-    void backfillIfNeeded_alreadySufficient_doesNotCallApi() {
-        // given
-        given(benchmarkIndexReader.count(INDEX_CODE)).willReturn(400L);
-
-        // when
-        benchmarkIndexBackfillService.backfillIfNeeded(INDEX_CODE, 400);
-
-        // then
-        verify(naverFinanceApiClient, never()).getIndexPrices(any(), anyInt(), anyInt());
-    }
-
-    @Test
-    @DisplayName("[짧은 페이지(마지막 페이지)를 받으면 백필을 종료한다]")
-    void backfillIfNeeded_shortPage_stopsAfterFirstPage() {
-        // given
-        given(benchmarkIndexReader.count(INDEX_CODE)).willReturn(0L);
-        given(naverFinanceApiClient.getIndexPrices(eq(INDEX_CODE), eq(60), eq(1)))
-            .willReturn(page(10, "2026-07-16"));
-        given(benchmarkIndexReader.exists(eq(INDEX_CODE), any()))
-            .willReturn(false);
-
-        // when
-        benchmarkIndexBackfillService.backfillIfNeeded(INDEX_CODE, 400);
-
-        // then: 10건(<60) 받았으니 page=2는 호출하지 않는다
-        verify(naverFinanceApiClient, times(1)).getIndexPrices(any(), anyInt(), anyInt());
-        verify(benchmarkIndexAppender, times(10)).append(any(), any(), anyDouble(), anyDouble(), anyDouble(), anyDouble());
-    }
-
-    @Test
-    @DisplayName("[이미 저장된 거래일은 다시 저장하지 않는다]")
-    void backfillIfNeeded_existingDate_skipsSave() {
-        // given
-        given(benchmarkIndexReader.count(INDEX_CODE)).willReturn(0L);
-        given(naverFinanceApiClient.getIndexPrices(eq(INDEX_CODE), eq(60), eq(1)))
-            .willReturn(page(5, "2026-07-16"));
-        given(benchmarkIndexReader.exists(eq(INDEX_CODE), eq(LocalDate.parse("2026-07-16"))))
-            .willReturn(true);
-        given(benchmarkIndexReader.exists(eq(INDEX_CODE), eq(LocalDate.parse("2026-07-15"))))
-            .willReturn(false);
-        given(benchmarkIndexReader.exists(eq(INDEX_CODE), eq(LocalDate.parse("2026-07-14"))))
-            .willReturn(false);
-        given(benchmarkIndexReader.exists(eq(INDEX_CODE), eq(LocalDate.parse("2026-07-13"))))
-            .willReturn(false);
-        given(benchmarkIndexReader.exists(eq(INDEX_CODE), eq(LocalDate.parse("2026-07-12"))))
-            .willReturn(false);
-
-        // when
-        benchmarkIndexBackfillService.backfillIfNeeded(INDEX_CODE, 400);
-
-        // then: 5건 중 1건(07-16)은 이미 존재해 4건만 저장
-        verify(benchmarkIndexAppender, times(4)).append(any(), any(), anyDouble(), anyDouble(), anyDouble(), anyDouble());
-    }
-
-    @Test
-    @DisplayName("[refreshRecentIfNeeded는 이미 목표치가 쌓여 있어도 최신 페이지를 조회한다 - "
-        + "backfillIfNeeded와 달리 기존 건수 체크로 스킵하지 않는다(2026-07-30 실제 버그: "
-        + "이 스킵 로직 때문에 KOSPI 벤치마크가 2주째 최신화되지 않아 등락률이 틀어졌었음)]")
-    void refreshRecentIfNeeded_alwaysFetchesLatestPageRegardlessOfExistingCount() {
-        // given: countByIndexCode를 스텁하지 않음 - 호출되면 안 됨을 아래에서 검증
-        given(naverFinanceApiClient.getIndexPrices(eq("KOSPI"), eq(60))).willReturn(page(2, "2026-07-30"));
-        given(naverFinanceApiClient.getIndexPrices(eq("KOSDAQ"), eq(60))).willReturn(page(1, "2026-07-30"));
-        given(naverFinanceApiClient.getWorldIndexPrices(any(), eq(60))).willReturn(List.of());
-        given(benchmarkIndexReader.exists(any(), any())).willReturn(false);
-
-        // when
+    @DisplayName("[refreshRecentIfNeeded는 국내(KOSPI/KOSDAQ)와 해외(NASDAQ/SP500) 4개 지수를 모두 갱신한다]")
+    void refreshRecentIfNeeded_refreshesAllDomesticAndOverseasIndices() {
         benchmarkIndexBackfillService.refreshRecentIfNeeded();
 
-        // then: 목표건수 체크(countByIndexCode) 없이 바로 최신 페이지를 저장
-        verify(benchmarkIndexReader, never()).count(any());
-        verify(benchmarkIndexAppender, times(2)).append(eq("KOSPI"), any(), anyDouble(), anyDouble(), anyDouble(), anyDouble());
-        verify(benchmarkIndexAppender, times(1)).append(eq("KOSDAQ"), any(), anyDouble(), anyDouble(), anyDouble(), anyDouble());
+        verify(benchmarkIndexCollector).refreshRecentDomestic("KOSPI");
+        verify(benchmarkIndexCollector).refreshRecentDomestic("KOSDAQ");
+        verify(benchmarkIndexCollector).refreshRecentWorld("NASDAQ", OverseasIndexCode.NASDAQ);
+        verify(benchmarkIndexCollector).refreshRecentWorld("SP500", OverseasIndexCode.SP500);
+        verifyNoMoreInteractions(benchmarkIndexCollector);
     }
 
     @Test
-    @DisplayName("[refreshRecentIfNeeded는 이미 저장된 날짜는 다시 저장하지 않는다]")
-    void refreshRecentIfNeeded_existingDate_skipsSave() {
-        // given
-        given(naverFinanceApiClient.getIndexPrices(eq("KOSPI"), eq(60))).willReturn(page(2, "2026-07-30"));
-        given(naverFinanceApiClient.getIndexPrices(eq("KOSDAQ"), eq(60))).willReturn(page(2, "2026-07-30"));
-        given(naverFinanceApiClient.getWorldIndexPrices(any(), eq(60))).willReturn(List.of());
-        given(benchmarkIndexReader.exists(any(), any())).willReturn(true);
+    @DisplayName("[backfillAllIfNeeded는 4개 지수를 목표 400일로 백필한다]")
+    void backfillAllIfNeeded_backfillsAllIndicesToTargetDays() {
+        benchmarkIndexBackfillService.backfillAllIfNeeded();
 
-        // when
-        benchmarkIndexBackfillService.refreshRecentIfNeeded();
-
-        // then
-        verify(benchmarkIndexAppender, never()).append(any(), any(), anyDouble(), anyDouble(), anyDouble(), anyDouble());
+        verify(benchmarkIndexCollector).backfillDomestic("KOSPI", 400);
+        verify(benchmarkIndexCollector).backfillDomestic("KOSDAQ", 400);
+        verify(benchmarkIndexCollector).backfillWorld("NASDAQ", OverseasIndexCode.NASDAQ, 400);
+        verify(benchmarkIndexCollector).backfillWorld("SP500", OverseasIndexCode.SP500, 400);
+        verifyNoMoreInteractions(benchmarkIndexCollector);
     }
 
     @Test
-    @DisplayName("[refreshRecentIfNeeded는 해외 지수(나스닥/S&P500)도 목표건수 체크 없이 최신 페이지를 갱신한다 - "
-        + "국내만 고쳐졌던 2026-07-30 수정에서 해외가 빠져 NASDAQ/SP500 벤치마크가 계속 갭인 채로 "
-        + "남아있던 걸 2026-07-31에 마저 수정]")
-    void refreshRecentIfNeeded_alwaysFetchesLatestOverseasPageRegardlessOfExistingCount() {
-        // given: 국내는 빈 페이지로 스텁, 해외만 검증 대상
-        given(naverFinanceApiClient.getIndexPrices(any(), eq(60))).willReturn(List.of());
-        given(naverFinanceApiClient.getWorldIndexPrices(eq(OverseasIndexCode.NASDAQ.getReutersCode()), eq(60)))
-            .willReturn(page(2, "2026-07-31"));
-        given(naverFinanceApiClient.getWorldIndexPrices(eq(OverseasIndexCode.SP500.getReutersCode()), eq(60)))
-            .willReturn(page(1, "2026-07-31"));
-        given(benchmarkIndexReader.exists(any(), any())).willReturn(false);
+    @DisplayName("[개별 지수 백필 진입점은 Collector로 그대로 위임한다]")
+    void backfillEntryPoints_delegateToCollector() {
+        benchmarkIndexBackfillService.backfillIfNeeded("KOSPI", 100);
+        benchmarkIndexBackfillService.backfillOverseasIfNeeded("NASDAQ", OverseasIndexCode.NASDAQ, 50);
 
-        // when
-        benchmarkIndexBackfillService.refreshRecentIfNeeded();
-
-        // then
-        verify(benchmarkIndexReader, never()).count(any());
-        verify(benchmarkIndexAppender, times(2)).append(eq("NASDAQ"), any(), anyDouble(), anyDouble(), anyDouble(), anyDouble());
-        verify(benchmarkIndexAppender, times(1)).append(eq("SP500"), any(), anyDouble(), anyDouble(), anyDouble(), anyDouble());
-    }
-
-    /** localTradedAt이 startDate부터 하루씩 과거로 내려가는 candle 목록. */
-    private List<NaverIndexCandleResponse> page(int size, String startDate) {
-        LocalDate start = LocalDate.parse(startDate);
-        return IntStream.range(0, size)
-            .mapToObj(i -> new NaverIndexCandleResponse(
-                start.minusDays(i).toString(), "2,800.00", "2,790.00", "2,810.00", "2,780.00"))
-            .toList();
+        verify(benchmarkIndexCollector).backfillDomestic("KOSPI", 100);
+        verify(benchmarkIndexCollector).backfillWorld("NASDAQ", OverseasIndexCode.NASDAQ, 50);
     }
 }

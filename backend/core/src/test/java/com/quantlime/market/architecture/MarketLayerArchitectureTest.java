@@ -19,10 +19,10 @@ import org.junit.jupiter.api.Test;
  * <p>{@code cache}/{@code scheduler}/{@code config}도 Repository 직접 참조를 막는다
  * (MarketIndexCache·DomesticListedStockCache·TossMarketRankingCache를 Reader로 정리한 뒤).
  *
- * <p>외부 연동 클라이언트(Naver/Toss) 참조 금지 규칙은 아직 넣지 않았다 -
- * {@code BenchmarkIndexBackfillService}/{@code InvestorTradingBackfillService}가
- * 외부 API 호출과 영속 저장을 한 흐름으로 묶는 수집기 성격이라, 그 규칙까지 걸려면
- * 수집 전용 구현 컴포넌트(Collector)를 따로 도입하는 별도 리팩터링이 필요하다.
+ * <p>외부 연동 클라이언트(Naver/Toss) 참조도 막는다 - 패턴 {@code com.quantlime.infra.*}는 한
+ * 단계 하위 패키지에 직접 속한 클래스(클라이언트·Config·Properties)만 매칭하고 응답
+ * DTO({@code ..dto..})·예외({@code ..exception..})는 데이터일 뿐이라 허용한다. 수집 흐름은
+ * {@code implement}의 {@code BenchmarkIndexCollector}/{@code InvestorTradingCollector}가 맡는다.
  *
  * <p>다른 도메인의 Repository도 {@code ..repository..}로 함께 막는다 - market 서비스가
  * price/score 데이터를 읽을 땐 각 도메인의 {@code implement}(Reader)를 거친다.
@@ -79,6 +79,17 @@ class MarketLayerArchitectureTest {
             .that().resideInAnyPackage(
                 "com.quantlime.market.cache..", "com.quantlime.market.scheduler..", "com.quantlime.market.config..")
             .should().dependOnClassesThat().resideInAPackage("..repository..");
+
+        rule.check(marketClasses);
+    }
+
+    @Test
+    @DisplayName("[Business(service)는 외부 연동 클라이언트(infra)를 직접 참조하지 않는다 - 구현 상세는 "
+        + "Implementation(implement)의 Collector로 감춘다. 응답 DTO/예외는 데이터라 예외로 둔다]")
+    void serviceMustNotAccessInfraClientDirectly() {
+        ArchRule rule = noClasses()
+            .that().resideInAPackage("com.quantlime.market.service..")
+            .should().dependOnClassesThat().resideInAPackage("com.quantlime.infra.*");
 
         rule.check(marketClasses);
     }

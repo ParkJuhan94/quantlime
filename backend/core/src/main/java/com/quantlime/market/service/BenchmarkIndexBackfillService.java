@@ -1,47 +1,23 @@
 package com.quantlime.market.service;
 
-import com.quantlime.infra.naver.NaverFinanceApiClient;
-import com.quantlime.infra.naver.dto.NaverIndexCandleResponse;
 import com.quantlime.market.domain.OverseasIndexCode;
-import com.quantlime.market.implement.BenchmarkIndexAppender;
-import com.quantlime.market.implement.BenchmarkIndexReader;
-import java.time.LocalDate;
-import java.time.OffsetDateTime;
-import java.time.format.DateTimeParseException;
+import com.quantlime.market.implement.BenchmarkIndexCollector;
 import java.util.List;
 import java.util.Map;
-import java.util.function.IntFunction;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 /**
- * 백테스트 초과수익률 계산의 벤치마크 기준선(국내+해외 지수 일별 종가 이력)을
- * 영속 백필한다. 네이버 금융 비공식 API는 pageSize 상한이 60이지만 page를
- * 늘리며 호출하면 끊김 없이 더 과거로 이어진다(실제 호출로 확인,
- * NaverFinanceApiClient.getIndexPrices 참고) - Toss 캔들의 count/before
- * 커서 페이지네이션과 달리 page 번호 증가 방식이라는 점만 다르고, 구조는
- * DomesticDailyPriceService.backfillHistoryIfNeeded와 동일하다.
+ * 백테스트 초과수익률 계산의 벤치마크 기준선(국내+해외 지수 일별 종가 이력)을 어떤
+ * 지수에 대해 언제 갱신할지 정한다 - 외부 호출·페이지 루프·저장은
+ * {@link BenchmarkIndexCollector}가 맡는다.
  *
- * <p>해외(나스닥/S&amp;P500)는 홈 화면 지수카드가 쓰는 것과 같은 데이터
- * 소스(OverseasIndexChartCache/NaverFinanceApiClient.getWorldIndexPrices)를
- * 재사용하되, 그쪽은 60초 TTL 캐시일 뿐 영속 저장을 안 해서 백테스트용
- * 영속 이력은 이 서비스가 별도로 쌓는다. 홈 화면 실시간 지수 표시
- * ({@code MarketIndexCache}/{@code DomesticIndexChartCache})는 2026-07-30 세션에서
- * 토스 공식 API(market-indicators)로 이관됐지만, 그건 이 클래스와 별개
- * 캐시 계층이다 - 이 백테스트 벤치마크 백필은 국내/해외 모두 계속
- * 네이버 소스를 쓴다(토스 시장 지표 심볼 카탈로그는 국내 지수·국채만
- * 지원해 해외는 애초에 대상이 아니었고, 국내도 아직 이관하지 않았다).
- *
- * <p>종목 일봉(Toss {@code /api/v1/candles})과 달리 이 지수는 NXT가
- * 반영되지 않아 장 마감(15:30) 이후면 그대로 확정값이다 - 종목 일봉은
- * NXT 애프터마켓(~20:00)까지 계속 갱신돼 16:00 수집분도 미확정 스냅샷이라
- * 재확정 윈도우/20:10 배치가 별도로 필요하지만(CLAUDE.md §10, §7 "실행
- * 시점" 참고), 이 지수 백필은 그 정책과 무관하게 15:30 이후 실행만으로
- * 충분하다.
+ * <p>홈 화면 실시간 지수 표시({@code MarketIndexCache}/{@code DomesticIndexChartCache})는
+ * 2026-07-30 세션에서 토스 공식 API(market-indicators)로 이관됐지만, 그건 이 클래스와
+ * 별개 캐시 계층이다 - 이 백테스트 벤치마크 백필은 국내/해외 모두 계속 네이버 소스를
+ * 쓴다(토스 시장 지표 심볼 카탈로그는 국내 지수·국채만 지원해 해외는 애초에 대상이
+ * 아니었고, 국내도 아직 이관하지 않았다).
  */
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class BenchmarkIndexBackfillService {
@@ -57,17 +33,8 @@ public class BenchmarkIndexBackfillService {
         "SP500", OverseasIndexCode.SP500
     );
     private static final int BACKFILL_TARGET_DAYS = 400;
-    // 네이버 금융 비공식 API는 pageSize가 60을 넘으면 400을 반환한다
-    // (DomesticIndexChartCache와 동일하게 확인된 제약).
-    private static final int PAGE_SIZE = 60;
-    private static final long API_DELAY_MS = 200;
-    // 정상 종료 조건(짧은 페이지)에 못 미치는 이상 응답이 반복돼도 무한
-    // 루프에 빠지지 않도록 하는 안전장치 - 400일 목표엔 page 7개면 충분.
-    private static final int MAX_PAGES = 20;
 
-    private final BenchmarkIndexReader benchmarkIndexReader;
-    private final BenchmarkIndexAppender benchmarkIndexAppender;
-    private final NaverFinanceApiClient naverFinanceApiClient;
+    private final BenchmarkIndexCollector benchmarkIndexCollector;
 
     public void backfillAllIfNeeded() {
         for (String indexCode : DOMESTIC_INDEX_CODES) {
@@ -78,132 +45,22 @@ public class BenchmarkIndexBackfillService {
     }
 
     public void backfillIfNeeded(String indexCode, int targetDays) {
-        backfill(indexCode, targetDays,
-            page -> naverFinanceApiClient.getIndexPrices(indexCode, PAGE_SIZE, page));
+        benchmarkIndexCollector.backfillDomestic(indexCode, targetDays);
     }
 
     public void backfillOverseasIfNeeded(String indexCode, OverseasIndexCode overseasIndexCode, int targetDays) {
-        backfill(indexCode, targetDays,
-            page -> naverFinanceApiClient.getWorldIndexPrices(overseasIndexCode.getReutersCode(), PAGE_SIZE, page));
+        benchmarkIndexCollector.backfillWorld(indexCode, overseasIndexCode, targetDays);
     }
 
     /**
-     * 국내+해외 지수의 최신 종가만 갱신한다 - {@link #backfillAllIfNeeded}는
-     * "이미 목표치만큼 쌓였으면 스킵"하는 1회성 딥백필 로직이라, 400일치가
-     * 이미 있으면 그 뒤로 며칠이 지나든 최신 종가를 영원히 갱신하지 않는다
-     * (2026-07-30 실제로 겪은 버그 - 이 메서드가 매일 트리거에 물려 있었는데도
-     * KOSPI 벤치마크가 2주 전 날짜에 멈춰 있었고, 그 stale 종가를
-     * {@code MarketIndexCache}가 "전일 종가"로 잘못 사용해 등락률이 완전히
-     * 틀어졌다). 항상 최신 페이지(1페이지=최근 60일) 하나만 조회해 신규
-     * 거래일만 저장한다 - {@link PriceGapFillService}가 딥백필과 별개로
-     * "최근 갭만" 채우는 것과 동일한 설계.
-     *
-     * <p>이 수정은 최초 국내 지수(코스피/코스닥)에만 적용됐고 해외
-     * (NASDAQ/SP500)는 빠져 있어 동일 증상(백테스트 벤치마크가 며칠씩
-     * 갭인 채로 멈춤)이 남아있던 것을 2026-07-31에 마저 수정했다 - 토스
-     * 신규 API 검토 중 실제 DB에서 해외 지수만 8거래일 갭이 벌어진 걸
-     * 발견함.
+     * 국내+해외 지수의 최신 종가만 갱신한다(매일 트리거에 물린 경로) - "이미 목표치만큼
+     * 쌓였으면 스킵"하는 {@link #backfillAllIfNeeded}와 달리 항상 최신 페이지를 조회한다
+     * (스킵 로직 때문에 벤치마크가 며칠씩 갭인 채로 멈췄던 2026-07-30·07-31 버그 참고).
      */
     public void refreshRecentIfNeeded() {
         for (String indexCode : DOMESTIC_INDEX_CODES) {
-            List<NaverIndexCandleResponse> candles = naverFinanceApiClient.getIndexPrices(indexCode, PAGE_SIZE);
-            int saved = saveNewCandles(indexCode, candles);
-            log.info("국내 지수 벤치마크 최신 갭필 완료: indexCode={}, 신규저장={}건", indexCode, saved);
+            benchmarkIndexCollector.refreshRecentDomestic(indexCode);
         }
-        OVERSEAS_INDEX_CODES.forEach((indexCode, overseasIndexCode) -> {
-            List<NaverIndexCandleResponse> candles =
-                naverFinanceApiClient.getWorldIndexPrices(overseasIndexCode.getReutersCode(), PAGE_SIZE);
-            int saved = saveNewCandles(indexCode, candles);
-            log.info("해외 지수 벤치마크 최신 갭필 완료: indexCode={}, 신규저장={}건", indexCode, saved);
-        });
-    }
-
-    private void backfill(String indexCode, int targetDays, IntFunction<List<NaverIndexCandleResponse>> fetchPage) {
-        long existingCount = benchmarkIndexReader.count(indexCode);
-        if (existingCount >= targetDays) {
-            log.debug("벤치마크 이력 백필 불필요: indexCode={}, 기존건수={}", indexCode, existingCount);
-            return;
-        }
-
-        log.info("벤치마크 이력 백필 시작: indexCode={}, 목표={}일, 기존={}건",
-            indexCode, targetDays, existingCount);
-
-        int savedCount = 0;
-        for (int page = 1; page <= MAX_PAGES && existingCount + savedCount < targetDays; page++) {
-            List<NaverIndexCandleResponse> candles = fetchPage.apply(page);
-            if (candles == null || candles.isEmpty()) {
-                break;
-            }
-
-            savedCount += saveNewCandles(indexCode, candles);
-
-            boolean lastPage = candles.size() < PAGE_SIZE;
-            if (lastPage) {
-                break;
-            }
-            if (!sleepBeforeNextPage(indexCode)) {
-                return;
-            }
-        }
-
-        log.info("벤치마크 이력 백필 완료: indexCode={}, 신규저장={}건", indexCode, savedCount);
-    }
-
-    /**
-     * 백필 루프 전체를 하나의 트랜잭션으로 묶지 않는다(DomesticDailyPriceService.
-     * backfillHistoryIfNeeded와 동일한 이유 - 외부 API 왕복·딜레이가 여러
-     * 번 있어 저장은 건별로 커밋된다). 같은 클래스 내 self-invocation이라
-     * @Transactional을 붙여도 프록시를 안 타 무의미하므로 애초에 두지 않는다.
-     */
-    private int saveNewCandles(String indexCode, List<NaverIndexCandleResponse> candles) {
-        int saved = 0;
-        for (NaverIndexCandleResponse candle : candles) {
-            LocalDate tradeDate = parseTradeDate(candle.localTradedAt());
-            if (benchmarkIndexReader.exists(indexCode, tradeDate)) {
-                continue;
-            }
-            try {
-                benchmarkIndexAppender.append(
-                    indexCode,
-                    tradeDate,
-                    parseNumber(candle.openPrice()),
-                    parseNumber(candle.highPrice()),
-                    parseNumber(candle.lowPrice()),
-                    parseNumber(candle.closePrice()));
-                saved++;
-            } catch (DataIntegrityViolationException e) {
-                log.debug("벤치마크 이력 중복 저장 스킵: indexCode={}, date={}", indexCode, tradeDate);
-            }
-        }
-        return saved;
-    }
-
-    private double parseNumber(String raw) {
-        return Double.parseDouble(raw.replace(",", ""));
-    }
-
-    /**
-     * 국내 지수는 localTradedAt이 "2026-07-15" 순수 날짜지만, 해외지수는
-     * "2026-07-14T17:15:59-04:00"처럼 타임존 오프셋이 붙은 전체 일시로 온다
-     * (OverseasIndexChartCache와 동일하게 확인된 차이) - 순수 날짜 파싱이
-     * 실패하면 오프셋 일시로 재시도한다.
-     */
-    private LocalDate parseTradeDate(String localTradedAt) {
-        try {
-            return LocalDate.parse(localTradedAt);
-        } catch (DateTimeParseException e) {
-            return OffsetDateTime.parse(localTradedAt).toLocalDate();
-        }
-    }
-
-    private boolean sleepBeforeNextPage(String indexCode) {
-        try {
-            Thread.sleep(API_DELAY_MS);
-            return true;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            log.warn("벤치마크 이력 백필 중단: 인터럽트 발생, indexCode={}", indexCode);
-            return false;
-        }
+        OVERSEAS_INDEX_CODES.forEach(benchmarkIndexCollector::refreshRecentWorld);
     }
 }
