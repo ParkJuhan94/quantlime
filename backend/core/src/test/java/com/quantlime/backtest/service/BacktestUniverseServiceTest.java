@@ -8,7 +8,7 @@ import static org.mockito.Mockito.verify;
 
 import com.quantlime.backtest.domain.BacktestAxis;
 import com.quantlime.backtest.domain.BacktestResult;
-import com.quantlime.backtest.repository.BacktestResultRepository;
+import com.quantlime.backtest.implement.BacktestReader;
 import com.quantlime.market.service.DomesticUniverseSelectionService;
 import com.quantlime.market.service.OverseasUniverseSelectionService;
 import java.time.LocalDate;
@@ -36,7 +36,7 @@ class BacktestUniverseServiceTest {
     private BacktestService backtestService;
 
     @Mock
-    private BacktestResultRepository backtestResultRepository;
+    private BacktestReader backtestReader;
 
     @InjectMocks
     private BacktestUniverseService backtestUniverseService;
@@ -49,7 +49,7 @@ class BacktestUniverseServiceTest {
             .willReturn(List.of("005930", "000660"));
         given(overseasUniverseSelectionService.selectAndBackfillUniverse())
             .willReturn(List.of("AAPL"));
-        given(backtestResultRepository.findTopByStockCodeOrderByBacktestDateDesc(org.mockito.ArgumentMatchers.any()))
+        given(backtestReader.findLatestResult(org.mockito.ArgumentMatchers.any()))
             .willReturn(Optional.empty());
 
         // when
@@ -72,7 +72,7 @@ class BacktestUniverseServiceTest {
         BacktestResult ranToday = BacktestResult.of(
             "005930", BacktestAxis.TREND, 5, "v2.1", LocalDate.now(),
             300, 0.1, -0.1, 0.3, 0.05, 0.1, List.of());
-        given(backtestResultRepository.findTopByStockCodeOrderByBacktestDateDesc(eq("005930")))
+        given(backtestReader.findLatestResult(eq("005930")))
             .willReturn(Optional.of(ranToday));
 
         // when
@@ -93,7 +93,7 @@ class BacktestUniverseServiceTest {
         BacktestResult ranYesterday = BacktestResult.of(
             "005930", BacktestAxis.TREND, 5, "v2.1", LocalDate.now().minusDays(1),
             300, 0.1, -0.1, 0.3, 0.05, 0.1, List.of());
-        given(backtestResultRepository.findTopByStockCodeOrderByBacktestDateDesc(eq("005930")))
+        given(backtestReader.findLatestResult(eq("005930")))
             .willReturn(Optional.of(ranYesterday));
 
         // when
@@ -111,7 +111,7 @@ class BacktestUniverseServiceTest {
             .willReturn(List.of("005930", "000660"));
         given(overseasUniverseSelectionService.selectAndBackfillUniverse())
             .willReturn(List.of());
-        given(backtestResultRepository.findTopByStockCodeOrderByBacktestDateDesc(org.mockito.ArgumentMatchers.any()))
+        given(backtestReader.findLatestResult(org.mockito.ArgumentMatchers.any()))
             .willReturn(Optional.empty());
         org.mockito.Mockito.doThrow(new RuntimeException("퀀트 엔진 실패"))
             .when(backtestService).runBacktest("005930");

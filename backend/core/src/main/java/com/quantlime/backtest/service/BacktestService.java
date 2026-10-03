@@ -6,18 +6,18 @@ import com.quantlime.backtest.dto.mapper.BacktestMapper;
 import com.quantlime.backtest.dto.mapper.BacktestRequestMapper;
 import com.quantlime.backtest.dto.response.BacktestResponse;
 import com.quantlime.backtest.exception.BacktestErrorCode;
-import com.quantlime.backtest.repository.BacktestDailyScoreRepository;
-import com.quantlime.backtest.repository.BacktestResultRepository;
+import com.quantlime.backtest.implement.BacktestAppender;
+import com.quantlime.backtest.implement.BacktestReader;
 import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.common.exception.ValidationException;
 import com.quantlime.infra.python.PythonEngineClient;
 import com.quantlime.infra.python.dto.BacktestApiRequest;
 import com.quantlime.infra.python.dto.BacktestApiResponse;
 import com.quantlime.market.domain.BenchmarkIndex;
-import com.quantlime.market.repository.BenchmarkIndexRepository;
+import com.quantlime.market.implement.BenchmarkIndexReader;
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
-import com.quantlime.price.repository.OverseasDailyPriceRepository;
+import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.price.service.DomesticDailyPriceService;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
@@ -63,12 +63,11 @@ public class BacktestService {
 
     private final StockMasterService stockMasterService;
     private final DomesticDailyPriceService domesticDailyPriceService;
-    private final OverseasDailyPriceRepository overseasDailyPriceRepository;
-    private final BenchmarkIndexRepository benchmarkIndexRepository;
+    private final BacktestReader backtestReader;
+    private final BenchmarkIndexReader benchmarkIndexReader;
+    private final DailyPriceReader dailyPriceReader;
     private final PythonEngineClient pythonEngineClient;
-    private final BacktestPersistenceService backtestPersistenceService;
-    private final BacktestResultRepository backtestResultRepository;
-    private final BacktestDailyScoreRepository backtestDailyScoreRepository;
+    private final BacktestAppender backtestAppender;
 
     public void runBacktest(String stockCode) {
         Stock stock = stockMasterService.getStockByCode(stockCode);
@@ -79,8 +78,8 @@ public class BacktestService {
 
         LocalDate end = LocalDate.now();
         LocalDate start = end.minusDays(OHLCV_LOOKBACK_CALENDAR_DAYS);
-        List<BenchmarkIndex> benchmarkPrices = benchmarkIndexRepository
-            .findByIndexCodeAndTradeDateBetweenOrderByTradeDateAsc(benchmarkIndexCode, start, end);
+        List<BenchmarkIndex> benchmarkPrices = benchmarkIndexReader
+            .findBetween(benchmarkIndexCode, start, end);
 
         BacktestApiRequest request = stock.getMarketType().isDomestic()
             ? toDomesticRequest(stockCode, start, end, benchmarkPrices)
@@ -88,10 +87,10 @@ public class BacktestService {
         BacktestApiResponse response = pythonEngineClient.runBacktest(request);
 
         List<BacktestResult> results = BacktestMapper.toBacktestResults(response, end);
-        backtestPersistenceService.saveAll(results);
+        backtestAppender.saveAll(results);
 
         List<BacktestDailyScore> dailyScores = BacktestMapper.toBacktestDailyScores(response);
-        backtestPersistenceService.replaceDailyScores(stockCode, response.scoreVersion(), dailyScores);
+        backtestAppender.replaceDailyScores(stockCode, response.scoreVersion(), dailyScores);
 
         log.info("백테스트 완료: stockCode={}, scoreVersion={}, sampleDays={}",
             stockCode, response.scoreVersion(), response.sampleDays());
@@ -108,8 +107,8 @@ public class BacktestService {
 
     private BacktestApiRequest toOverseasRequest(
         String stockCode, LocalDate start, LocalDate end, List<BenchmarkIndex> benchmarkPrices) {
-        List<OverseasDailyPrice> overseasDailyPrices = overseasDailyPriceRepository
-            .findByStockCodeAndTradeDateBetweenOrderByTradeDateDesc(stockCode, start, end);
+        List<OverseasDailyPrice> overseasDailyPrices = dailyPriceReader
+            .findOverseasBetween(stockCode, start, end);
         if (overseasDailyPrices.isEmpty() || benchmarkPrices.isEmpty()) {
             throw new ValidationException(BacktestErrorCode.INSUFFICIENT_HISTORY);
         }
@@ -118,14 +117,14 @@ public class BacktestService {
 
     @Transactional(readOnly = true)
     public BacktestResponse getBacktestResult(String stockCode) {
-        String latestVersion = backtestResultRepository.findTopByStockCodeOrderByBacktestDateDesc(stockCode)
+        String latestVersion = backtestReader.findLatestResult(stockCode)
             .orElseThrow(() -> new NotFoundException(BacktestErrorCode.NOT_FOUND_BACKTEST_RESULT))
             .getScoreVersion();
 
-        List<BacktestResult> results = backtestResultRepository
-            .findByStockCodeAndScoreVersionOrderByAxisAscHorizonDaysAsc(stockCode, latestVersion);
-        List<BacktestDailyScore> dailyScores = backtestDailyScoreRepository
-            .findByStockCodeAndScoreVersionOrderByTradeDateAsc(stockCode, latestVersion);
+        List<BacktestResult> results = backtestReader
+            .findResults(stockCode, latestVersion);
+        List<BacktestDailyScore> dailyScores = backtestReader
+            .findDailyScores(stockCode, latestVersion);
         return BacktestMapper.toBacktestResponse(stockCode, latestVersion, results, dailyScores);
     }
 }

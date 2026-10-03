@@ -1,4 +1,4 @@
-package com.quantlime.backtest.service;
+package com.quantlime.backtest.implement;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -28,7 +28,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
-class BacktestPersistenceServiceTest {
+class BacktestAppenderTest {
 
     private static final String STOCK_CODE = "005930";
 
@@ -42,7 +42,7 @@ class BacktestPersistenceServiceTest {
     private CrossSectionalBacktestResultRepository crossSectionalBacktestResultRepository;
 
     @InjectMocks
-    private BacktestPersistenceService backtestPersistenceService;
+    private BacktestAppender backtestAppender;
 
     @Test
     @DisplayName("[해당 (축, horizon, 버전) 조합이 없으면 새로 저장한다]")
@@ -53,7 +53,7 @@ class BacktestPersistenceServiceTest {
             .willReturn(Optional.empty());
 
         // when
-        backtestPersistenceService.saveAll(List.of(result(5, 0.1)));
+        backtestAppender.saveAll(List.of(result(5, 0.1)));
 
         // then
         verify(backtestResultRepository).save(any(BacktestResult.class));
@@ -71,7 +71,7 @@ class BacktestPersistenceServiceTest {
             .willReturn(Optional.of(existing));
 
         // when
-        backtestPersistenceService.saveAll(List.of(result(5, 0.3)));
+        backtestAppender.saveAll(List.of(result(5, 0.3)));
 
         // then
         assertThat(existing.getRankIc()).isEqualTo(0.3);
@@ -95,7 +95,7 @@ class BacktestPersistenceServiceTest {
             });
 
         // when: 예외가 전파되지 않아야 함
-        backtestPersistenceService.saveAll(List.of(result(5, 0.1), result(10, 0.2), result(20, 0.3)));
+        backtestAppender.saveAll(List.of(result(5, 0.1), result(10, 0.2), result(20, 0.3)));
 
         // then: 3건 모두 저장 시도(10일은 실패하지만 5/20일은 성공)
         verify(backtestResultRepository, times(3)).save(any(BacktestResult.class));
@@ -109,7 +109,7 @@ class BacktestPersistenceServiceTest {
             BacktestDailyScore.of(STOCK_CODE, "v2.1", LocalDate.now(), 70000.0, 60.0, 55.0, null, null));
 
         // when
-        backtestPersistenceService.replaceDailyScores(STOCK_CODE, "v2.1", dailyScores);
+        backtestAppender.replaceDailyScores(STOCK_CODE, "v2.1", dailyScores);
 
         // then
         verify(backtestDailyScoreRepository).deleteByStockCodeAndScoreVersion(STOCK_CODE, "v2.1");

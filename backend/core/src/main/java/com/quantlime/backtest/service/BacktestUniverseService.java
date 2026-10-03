@@ -1,6 +1,6 @@
 package com.quantlime.backtest.service;
 
-import com.quantlime.backtest.repository.BacktestResultRepository;
+import com.quantlime.backtest.implement.BacktestReader;
 import com.quantlime.market.service.DomesticUniverseSelectionService;
 import com.quantlime.market.service.OverseasUniverseSelectionService;
 import java.time.LocalDate;
@@ -33,7 +33,7 @@ public class BacktestUniverseService {
     private final DomesticUniverseSelectionService domesticUniverseSelectionService;
     private final OverseasUniverseSelectionService overseasUniverseSelectionService;
     private final BacktestService backtestService;
-    private final BacktestResultRepository backtestResultRepository;
+    private final BacktestReader backtestReader;
 
     public void runUniverse() {
         runUniverse(false);
@@ -79,7 +79,7 @@ public class BacktestUniverseService {
     }
 
     private boolean isAlreadyBacktestedToday(String stockCode) {
-        return backtestResultRepository.findTopByStockCodeOrderByBacktestDateDesc(stockCode)
+        return backtestReader.findLatestResult(stockCode)
             .map(result -> !result.getBacktestDate().isBefore(LocalDate.now()))
             .orElse(false);
     }

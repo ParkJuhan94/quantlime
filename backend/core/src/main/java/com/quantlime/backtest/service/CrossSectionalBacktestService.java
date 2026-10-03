@@ -6,13 +6,14 @@ import com.quantlime.backtest.domain.BacktestSampleSplit;
 import com.quantlime.backtest.domain.CrossSectionalBacktestResult;
 import com.quantlime.backtest.dto.mapper.CrossSectionalBacktestMapper;
 import com.quantlime.backtest.exception.BacktestErrorCode;
-import com.quantlime.backtest.repository.BacktestDailyScoreRepository;
+import com.quantlime.backtest.implement.BacktestAppender;
+import com.quantlime.backtest.implement.BacktestReader;
 import com.quantlime.common.exception.ValidationException;
 import com.quantlime.infra.python.PythonEngineClient;
 import com.quantlime.infra.python.dto.CrossSectionalBacktestApiRequest;
 import com.quantlime.infra.python.dto.CrossSectionalBacktestApiResponse;
 import com.quantlime.market.domain.BenchmarkIndex;
-import com.quantlime.market.repository.BenchmarkIndexRepository;
+import com.quantlime.market.implement.BenchmarkIndexReader;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.StockMasterService;
@@ -51,10 +52,10 @@ public class CrossSectionalBacktestService {
     private static final int LOOKBACK_CALENDAR_DAYS = 750;
 
     private final StockMasterService stockMasterService;
-    private final BacktestDailyScoreRepository backtestDailyScoreRepository;
-    private final BenchmarkIndexRepository benchmarkIndexRepository;
+    private final BacktestReader backtestReader;
+    private final BenchmarkIndexReader benchmarkIndexReader;
     private final PythonEngineClient pythonEngineClient;
-    private final BacktestPersistenceService backtestPersistenceService;
+    private final BacktestAppender backtestAppender;
 
     /**
      * 시장 하나에 대해 (축 2 x horizon 4=)8개 조합을 순차 호출한다. 조합
@@ -78,8 +79,8 @@ public class CrossSectionalBacktestService {
             return;
         }
 
-        Map<String, List<BacktestDailyScore>> dailyScoresByStock = backtestDailyScoreRepository
-            .findByStockCodeInAndScoreVersionOrderByStockCodeAscTradeDateAsc(stockCodes, scoreVersion)
+        Map<String, List<BacktestDailyScore>> dailyScoresByStock = backtestReader
+            .findDailyScoresByStocks(stockCodes, scoreVersion)
             .stream()
             .collect(Collectors.groupingBy(BacktestDailyScore::getStockCode));
         if (dailyScoresByStock.isEmpty()) {
@@ -89,8 +90,8 @@ public class CrossSectionalBacktestService {
 
         LocalDate end = LocalDate.now();
         LocalDate start = end.minusDays(LOOKBACK_CALENDAR_DAYS);
-        List<BenchmarkIndex> benchmarkPrices = benchmarkIndexRepository
-            .findByIndexCodeAndTradeDateBetweenOrderByTradeDateAsc(benchmarkIndexCode, start, end);
+        List<BenchmarkIndex> benchmarkPrices = benchmarkIndexReader
+            .findBetween(benchmarkIndexCode, start, end);
 
         for (BacktestAxis axis : BacktestAxis.values()) {
             for (int horizonDays : HORIZONS) {
@@ -115,7 +116,7 @@ public class CrossSectionalBacktestService {
             CrossSectionalBacktestApiResponse response = pythonEngineClient.runCrossSectionalBacktest(request);
             CrossSectionalBacktestResult result = CrossSectionalBacktestMapper.toResult(
                 market, axis, BacktestSampleSplit.FULL, LocalDate.now(), response);
-            backtestPersistenceService.saveCrossSectional(result);
+            backtestAppender.saveCrossSectional(result);
             log.info("횡단면 백테스트 완료: market={}, axis={}, horizonDays={}, meanIc={}, nDates={}",
                 market, axis, horizonDays, result.getMeanIc(), result.getSampleDates());
         } catch (Exception e) {
