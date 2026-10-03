@@ -6,8 +6,9 @@ import com.quantlime.user.service.UserService;
 import com.quantlime.watchlist.domain.Watchlist;
 import com.quantlime.watchlist.domain.WatchlistGroup;
 import com.quantlime.watchlist.exception.WatchlistErrorCode;
-import com.quantlime.watchlist.repository.WatchlistGroupRepository;
-import com.quantlime.watchlist.repository.WatchlistRepository;
+import com.quantlime.watchlist.implement.WatchlistGroupAppender;
+import com.quantlime.watchlist.implement.WatchlistGroupReader;
+import com.quantlime.watchlist.implement.WatchlistReader;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,19 +28,20 @@ public class WatchlistGroupService {
     private static final String DEFAULT_GROUP_NAME = "기본";
 
     private final UserService userService;
-    private final WatchlistGroupRepository watchlistGroupRepository;
-    private final WatchlistRepository watchlistRepository;
+    private final WatchlistGroupReader watchlistGroupReader;
+    private final WatchlistGroupAppender watchlistGroupAppender;
+    private final WatchlistReader watchlistReader;
 
     @Transactional(readOnly = true)
     public List<WatchlistGroup> getGroups(Long userId) {
-        return watchlistGroupRepository.findAllByUser_IdOrderBySortOrderAsc(userId);
+        return watchlistGroupReader.findAllByUser_IdOrderBySortOrderAsc(userId);
     }
 
     @Transactional
     public WatchlistGroup createGroup(Long userId, String name) {
         User user = userService.getById(userId);
-        int nextSortOrder = (int) watchlistGroupRepository.countByUser_Id(userId);
-        WatchlistGroup group = watchlistGroupRepository.save(WatchlistGroup.of(user, name, nextSortOrder));
+        int nextSortOrder = (int) watchlistGroupReader.countByUser_Id(userId);
+        WatchlistGroup group = watchlistGroupAppender.save(WatchlistGroup.of(user, name, nextSortOrder));
         log.info("관심 그룹 생성 완료: userId={}, groupId={}, name={}", userId, group.getId(), name);
         return group;
     }
@@ -56,12 +58,12 @@ public class WatchlistGroupService {
         WatchlistGroup group = getOwnedGroup(userId, groupId);
         // 그룹에 속한 관심 종목 자체는 삭제하지 않고 기본 그룹으로 옮긴다
         // ("미분류" 폐지 이후로는 어떤 경우에도 그룹 없는 상태를 만들지 않음).
-        List<Watchlist> members = watchlistRepository.findAllByUser_IdAndGroup_Id(userId, groupId);
+        List<Watchlist> members = watchlistReader.findAllByUser_IdAndGroup_Id(userId, groupId);
         if (!members.isEmpty()) {
             WatchlistGroup fallback = resolveFallbackGroup(userId, group);
             members.forEach(member -> member.assignToGroup(fallback));
         }
-        watchlistGroupRepository.delete(group);
+        watchlistGroupAppender.delete(group);
         log.info("관심 그룹 삭제 완료: userId={}, groupId={}, 기본 그룹으로 이동된 종목 수={}",
             userId, groupId, members.size());
     }
@@ -78,8 +80,8 @@ public class WatchlistGroupService {
             return fallback;
         }
         User user = userService.getById(userId);
-        int nextSortOrder = (int) watchlistGroupRepository.countByUser_Id(userId);
-        return watchlistGroupRepository.save(WatchlistGroup.of(user, DEFAULT_GROUP_NAME, nextSortOrder));
+        int nextSortOrder = (int) watchlistGroupReader.countByUser_Id(userId);
+        return watchlistGroupAppender.save(WatchlistGroup.of(user, DEFAULT_GROUP_NAME, nextSortOrder));
     }
 
     /**
@@ -89,11 +91,11 @@ public class WatchlistGroupService {
      */
     @Transactional
     public WatchlistGroup findOrCreateDefaultGroup(Long userId) {
-        return watchlistGroupRepository.findByUser_IdAndName(userId, DEFAULT_GROUP_NAME)
+        return watchlistGroupReader.findByUser_IdAndName(userId, DEFAULT_GROUP_NAME)
             .orElseGet(() -> {
                 User user = userService.getById(userId);
-                int nextSortOrder = (int) watchlistGroupRepository.countByUser_Id(userId);
-                WatchlistGroup created = watchlistGroupRepository.save(
+                int nextSortOrder = (int) watchlistGroupReader.countByUser_Id(userId);
+                WatchlistGroup created = watchlistGroupAppender.save(
                     WatchlistGroup.of(user, DEFAULT_GROUP_NAME, nextSortOrder));
                 log.info("기본 그룹 자동 생성: userId={}, groupId={}", userId, created.getId());
                 return created;
@@ -102,7 +104,7 @@ public class WatchlistGroupService {
 
     @Transactional
     public void reorderGroups(Long userId, List<Long> groupIds) {
-        List<WatchlistGroup> groups = watchlistGroupRepository.findAllByUser_IdOrderBySortOrderAsc(userId);
+        List<WatchlistGroup> groups = watchlistGroupReader.findAllByUser_IdOrderBySortOrderAsc(userId);
         Map<Long, WatchlistGroup> groupById = new HashMap<>();
         groups.forEach(group -> groupById.put(group.getId(), group));
 
@@ -116,7 +118,7 @@ public class WatchlistGroupService {
 
     // WatchlistService(등록/이동 시 그룹 소유권 검증)에서도 재사용한다.
     public WatchlistGroup getOwnedGroup(Long userId, Long groupId) {
-        return watchlistGroupRepository.findByIdAndUser_Id(groupId, userId)
+        return watchlistGroupReader.findByIdAndUser_Id(groupId, userId)
             .orElseThrow(() -> new NotFoundException(WatchlistErrorCode.NOT_FOUND_WATCHLIST_GROUP));
     }
 }

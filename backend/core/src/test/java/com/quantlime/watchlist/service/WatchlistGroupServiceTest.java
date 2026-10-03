@@ -14,6 +14,9 @@ import com.quantlime.user.domain.User;
 import com.quantlime.user.service.UserService;
 import com.quantlime.watchlist.domain.Watchlist;
 import com.quantlime.watchlist.domain.WatchlistGroup;
+import com.quantlime.watchlist.implement.WatchlistGroupAppender;
+import com.quantlime.watchlist.implement.WatchlistGroupReader;
+import com.quantlime.watchlist.implement.WatchlistReader;
 import com.quantlime.watchlist.repository.WatchlistGroupRepository;
 import com.quantlime.watchlist.repository.WatchlistRepository;
 import java.util.List;
@@ -23,7 +26,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -43,7 +45,6 @@ class WatchlistGroupServiceTest {
     @Mock
     private WatchlistRepository watchlistRepository;
 
-    @InjectMocks
     private WatchlistGroupService service;
 
     private User user;
@@ -51,6 +52,10 @@ class WatchlistGroupServiceTest {
     @BeforeEach
     void setUp() {
         user = UserFixture.createUser();
+        service = new WatchlistGroupService(userService,
+            new WatchlistGroupReader(watchlistGroupRepository),
+            new WatchlistGroupAppender(watchlistGroupRepository),
+            new WatchlistReader(watchlistRepository));
     }
 
     private WatchlistGroup group(long id, String name, int sortOrder) {
