@@ -9,6 +9,7 @@ import com.quantlime.telegramfeed.dto.TelegramChannelMeta;
 import com.quantlime.telegramfeed.dto.TelegramCollectResult;
 import com.quantlime.telegramfeed.dto.TelegramCollectionOutcome;
 import com.quantlime.telegramfeed.implement.TelegramPostAppender;
+import com.quantlime.telegramfeed.implement.TelegramPostCollector;
 import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.Platform;
 import com.quantlime.videofeed.domain.TelegramFilterConfig;

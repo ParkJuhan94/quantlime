@@ -2,8 +2,6 @@ package com.quantlime.telegramfeed.service;
 
 import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.common.lock.RedisLockService;
-import com.quantlime.infra.python.PythonEngineClient;
-import com.quantlime.infra.python.dto.SummarizeApiRequest;
 import com.quantlime.infra.python.dto.SummarizeApiResponse;
 import com.quantlime.telegramfeed.domain.TelegramPost;
 import com.quantlime.telegramfeed.domain.TelegramPostStatus;
@@ -11,16 +9,15 @@ import com.quantlime.telegramfeed.dto.TelegramDigestGenerateResult;
 import com.quantlime.telegramfeed.event.TelegramDigestGenerationRequestedEvent;
 import com.quantlime.telegramfeed.exception.TelegramFeedErrorCode;
 import com.quantlime.telegramfeed.implement.TelegramDigestAppender;
+import com.quantlime.telegramfeed.implement.TelegramDigestGenerator;
 import com.quantlime.telegramfeed.implement.TelegramPostReader;
 import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.Platform;
 import com.quantlime.videofeed.implement.ChannelReader;
 import java.time.Duration;
 import java.time.LocalDate;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -54,12 +51,11 @@ public class TelegramDigestGenerationFacade {
     // 빨리 끝난다 - TTL을 30분에서 5분으로 줄여 락이 불필요하게 오래 남지
     // 않게 한다.
     private static final Duration LOCK_TTL = Duration.ofMinutes(5);
-    private static final String CONTENT_SEPARATOR = "\n\n---\n\n";
 
     private final RedisLockService redisLockService;
     private final ChannelReader channelReader;
     private final TelegramPostReader telegramPostReader;
-    private final PythonEngineClient pythonEngineClient;
+    private final TelegramDigestGenerator telegramDigestGenerator;
     private final TelegramDigestAppender telegramDigestAppender;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -112,12 +108,7 @@ public class TelegramDigestGenerationFacade {
             return TelegramDigestGenerateResult.skipped(channel.getName());
         }
 
-        String combinedContent = posts.stream()
-            .sorted(Comparator.comparing(TelegramPost::getPublishedAt))
-            .map(TelegramPost::getContent)
-            .collect(Collectors.joining(CONTENT_SEPARATOR));
-        SummarizeApiResponse response = pythonEngineClient.summarize(
-            new SummarizeApiRequest(null, channel.getName(), combinedContent, "telegram"));
+        SummarizeApiResponse response = telegramDigestGenerator.generate(channel, posts);
         telegramDigestAppender.persistResult(channel, date, response);
         return TelegramDigestGenerateResult.success(channel.getName(), posts.size());
     }

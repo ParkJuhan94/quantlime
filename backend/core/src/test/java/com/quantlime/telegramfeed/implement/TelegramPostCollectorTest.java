@@ -1,4 +1,4 @@
-package com.quantlime.telegramfeed.service;
+package com.quantlime.telegramfeed.implement;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -14,7 +14,6 @@ import com.quantlime.infra.telegram.TelegramWebPreviewClient;
 import com.quantlime.infra.telegram.dto.TelegramPreviewMessage;
 import com.quantlime.infra.telegram.dto.TelegramPreviewPage;
 import com.quantlime.telegramfeed.dto.TelegramCollectionOutcome;
-import com.quantlime.telegramfeed.implement.TelegramPostReader;
 import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.ChannelFilterConfig;
 import com.quantlime.videofeed.domain.Platform;

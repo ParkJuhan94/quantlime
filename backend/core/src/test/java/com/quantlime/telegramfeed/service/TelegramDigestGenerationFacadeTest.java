@@ -20,6 +20,7 @@ import com.quantlime.telegramfeed.domain.TelegramPostStatus;
 import com.quantlime.telegramfeed.dto.TelegramDigestGenerateResult;
 import com.quantlime.telegramfeed.event.TelegramDigestGenerationRequestedEvent;
 import com.quantlime.telegramfeed.implement.TelegramDigestAppender;
+import com.quantlime.telegramfeed.implement.TelegramDigestGenerator;
 import com.quantlime.telegramfeed.implement.TelegramPostReader;
 import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.Platform;
@@ -30,11 +31,11 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
@@ -70,8 +71,15 @@ class TelegramDigestGenerationFacadeTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
-    @InjectMocks
     private TelegramDigestGenerationFacade telegramDigestGenerationFacade;
+
+    // 대상 선정·저장(service)과 엔진 호출(implement)을 함께 검증한다 - 엔진 클라이언트만 mock.
+    @BeforeEach
+    void setUpService() {
+        telegramDigestGenerationFacade = new TelegramDigestGenerationFacade(
+            redisLockService, channelReader, telegramPostReader,
+            new TelegramDigestGenerator(pythonEngineClient), telegramDigestAppender, eventPublisher);
+    }
 
     private Channel channelOf(Long id, String handle) {
         Channel channel = Channel.ofTelegram(handle, "테스트 채널", 30,

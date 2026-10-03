@@ -21,8 +21,10 @@ import org.junit.jupiter.api.Test;
  * 옮겼다. 채널은 videofeed와 공유하는 엔티티라 videofeed의 {@code ChannelReader}/
  * {@code ChannelAppender}를 쓴다.
  *
- * <p>외부 연동 클라이언트(텔레그램 웹 프리뷰/Gemini 등) 참조 금지 규칙은 넣지 않았다 -
- * 수집·다이제스트 서비스가 외부 호출 흐름을 조립하는 성격이라 별도 설계가 필요하다.
+ * <p>외부 연동 클라이언트(텔레그램 웹 프리뷰/Python 엔진)·그 Properties 참조도 막는다 - 패턴
+ * {@code com.quantlime.infra.*}는 한 단계 하위 패키지에 직접 속한 클래스만 매칭하고 응답
+ * DTO({@code ..dto..})는 데이터일 뿐이라 허용한다. 외부 호출은 {@code implement}의
+ * {@code TelegramPostCollector}/{@code TelegramDigestGenerator}가 맡는다.
  */
 @Tag("unit")
 class TelegramFeedLayerArchitectureTest {
@@ -64,6 +66,17 @@ class TelegramFeedLayerArchitectureTest {
             .that().resideInAPackage("com.quantlime.telegramfeed.repository..")
             .should().dependOnClassesThat().resideInAnyPackage(
                 "com.quantlime.telegramfeed.service..", "com.quantlime.telegramfeed.implement..");
+
+        rule.check(telegramfeedClasses);
+    }
+
+    @Test
+    @DisplayName("[Business(service)는 외부 연동 클라이언트(infra)를 직접 참조하지 않는다 - 구현 상세는 "
+        + "Implementation(implement)의 Collector/Generator로 감춘다. 응답 DTO/예외는 데이터라 예외로 둔다]")
+    void serviceMustNotAccessInfraClientDirectly() {
+        ArchRule rule = noClasses()
+            .that().resideInAPackage("com.quantlime.telegramfeed.service..")
+            .should().dependOnClassesThat().resideInAPackage("com.quantlime.infra.*");
 
         rule.check(telegramfeedClasses);
     }
