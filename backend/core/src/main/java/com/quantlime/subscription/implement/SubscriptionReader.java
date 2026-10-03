@@ -2,8 +2,10 @@ package com.quantlime.subscription.implement;
 
 import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.subscription.domain.Subscription;
+import com.quantlime.subscription.domain.SubscriptionStatus;
 import com.quantlime.subscription.exception.SubscriptionErrorCode;
 import com.quantlime.subscription.repository.SubscriptionRepository;
+import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -27,5 +29,9 @@ public class SubscriptionReader {
 
     public Optional<Subscription> findByUserId(Long userId) {
         return subscriptionRepository.findByUser_Id(userId);
+    }
+
+    public List<Long> findAllUserIdsByStatus(SubscriptionStatus status) {
+        return subscriptionRepository.findAllUserIdsByStatus(status);
     }
 }

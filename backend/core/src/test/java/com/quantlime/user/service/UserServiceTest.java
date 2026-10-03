@@ -14,14 +14,18 @@ import com.quantlime.user.UserFixture;
 import com.quantlime.user.domain.OAuthProvider;
 import com.quantlime.user.domain.User;
 import com.quantlime.user.domain.UserSocialAccount;
+import com.quantlime.user.implement.UserAppender;
+import com.quantlime.user.implement.UserReader;
+import com.quantlime.user.implement.UserSocialAccountAppender;
+import com.quantlime.user.implement.UserSocialAccountReader;
 import com.quantlime.user.repository.UserRepository;
 import com.quantlime.user.repository.UserSocialAccountRepository;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -35,8 +39,15 @@ class UserServiceTest {
     @Mock
     private UserSocialAccountRepository userSocialAccountRepository;
 
-    @InjectMocks
     private UserService service;
+
+    @BeforeEach
+    void setUp() {
+        service = new UserService(
+            new UserReader(userRepository), new UserAppender(userRepository),
+            new UserSocialAccountReader(userSocialAccountRepository),
+            new UserSocialAccountAppender(userSocialAccountRepository));
+    }
 
     private final OAuthUserInfo info =
         new OAuthUserInfo(OAuthProvider.GOOGLE, "pid-1", "new@example.com", "새닉네임", "http://img");

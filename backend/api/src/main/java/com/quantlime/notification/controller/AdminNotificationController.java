@@ -3,7 +3,7 @@ package com.quantlime.notification.controller;
 import com.quantlime.notification.domain.NotificationType;
 import com.quantlime.notification.dto.request.BroadcastNotificationRequest;
 import com.quantlime.notification.service.FcmPushService;
-import com.quantlime.user.repository.UserRepository;
+import com.quantlime.user.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -26,13 +26,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminNotificationController {
 
     private final FcmPushService fcmPushService;
-    private final UserRepository userRepository;
+    private final UserService userService;
 
     @PostMapping("/broadcast")
     @Operation(summary = "전체 사용자 공지 발송")
     @ApiResponse(useReturnTypeSchema = true)
     public ResponseEntity<Void> broadcast(@Valid @RequestBody BroadcastNotificationRequest request) {
-        List<Long> allUserIds = userRepository.findAllIds();
+        List<Long> allUserIds = userService.getAllUserIds();
         fcmPushService.sendToUsers(allUserIds, NotificationType.ADMIN_NOTICE,
             request.title(), request.content(), request.linkUrl());
         return ResponseEntity.accepted().build();

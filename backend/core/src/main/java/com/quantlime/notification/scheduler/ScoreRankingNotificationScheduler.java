@@ -6,7 +6,7 @@ import com.quantlime.notification.service.FcmPushService;
 import com.quantlime.score.dto.response.ScoreRankingResponse;
 import com.quantlime.score.service.ScoreService;
 import com.quantlime.subscription.domain.SubscriptionStatus;
-import com.quantlime.subscription.repository.SubscriptionRepository;
+import com.quantlime.subscription.implement.SubscriptionReader;
 import java.util.List;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -30,7 +30,7 @@ public class ScoreRankingNotificationScheduler {
     private static final String SCOPE_ALL = "all";
 
     private final ScoreService scoreService;
-    private final SubscriptionRepository subscriptionRepository;
+    private final SubscriptionReader subscriptionReader;
     private final FcmPushService fcmPushService;
 
     @Scheduled(cron = "0 20 20 * * MON-FRI", zone = "Asia/Seoul")
@@ -44,7 +44,7 @@ public class ScoreRankingNotificationScheduler {
     }
 
     private void sendScoreRankingNotifications() {
-        List<Long> subscriberIds = subscriptionRepository.findAllUserIdsByStatus(SubscriptionStatus.ACTIVE);
+        List<Long> subscriberIds = subscriptionReader.findAllUserIdsByStatus(SubscriptionStatus.ACTIVE);
         if (subscriberIds.isEmpty()) {
             log.info("스코어 랭킹 알림 대상 구독자 없음 - 스킵");
             return;

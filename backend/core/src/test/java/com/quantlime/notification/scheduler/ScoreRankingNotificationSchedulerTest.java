@@ -15,13 +15,14 @@ import com.quantlime.notification.service.FcmPushService;
 import com.quantlime.score.dto.response.ScoreRankingResponse;
 import com.quantlime.score.service.ScoreService;
 import com.quantlime.subscription.domain.SubscriptionStatus;
+import com.quantlime.subscription.implement.SubscriptionReader;
 import com.quantlime.subscription.repository.SubscriptionRepository;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -38,8 +39,13 @@ class ScoreRankingNotificationSchedulerTest {
     @Mock
     private FcmPushService fcmPushService;
 
-    @InjectMocks
     private ScoreRankingNotificationScheduler scheduler;
+
+    @BeforeEach
+    void setUp() {
+        scheduler = new ScoreRankingNotificationScheduler(
+            scoreService, new SubscriptionReader(subscriptionRepository), fcmPushService);
+    }
 
     private ScoreRankingResponse score(String name, String grade) {
         return new ScoreRankingResponse("000001", name, "섹터", null, null, null, 70.0, null, null, 90.0,
