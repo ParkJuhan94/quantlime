@@ -61,7 +61,12 @@ class BillingKeyConverterTest {
         for (String plain : new String[] {"billing-key-123", "빌링키-한글-테스트", "x"}) {
             String stored = converter.convertToDatabaseColumn(plain);
 
-            assertThat(stored).isNotEqualTo(plain).doesNotContain(plain);
+            assertThat(stored).isNotEqualTo(plain);
+            // 암호문은 base64라 1~2글자 평문은 우연히 부분 문자열로 들어갈 수 있다(예: "x") - 충분히 긴
+            // 평문에만 "평문이 그대로 노출되지 않는다"를 검사한다
+            if (plain.length() >= 8) {
+                assertThat(stored).doesNotContain(plain);
+            }
             assertThat(converter.convertToEntityAttribute(stored)).isEqualTo(plain);
         }
     }
