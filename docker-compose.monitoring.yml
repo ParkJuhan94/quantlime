@@ -103,22 +103,13 @@ services:
     mem_limit: 64m
     logging: *default-logging
 
-  # 컨테이너별 CPU/메모리/네트워크 사용량(어떤 컨테이너가 리소스를 먹는지
-  # node-exporter의 호스트 합산 지표만으로는 안 보이는 부분을 보완). 별도
-  # exporter 없이도 container_last_seen/container_start_time_seconds로
-  # FrontendDown/ContainerRestartLoop 알림을 만들 수 있어(2026-08-17)
-  # nginx용 exporter를 새로 추가하지 않았다.
-  cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.49.1
-    container_name: quantlime-prod-cadvisor
-    volumes:
-      - /:/rootfs:ro
-      - /var/run:/var/run:ro
-      - /sys:/sys:ro
-      - /var/lib/docker/:/var/lib/docker:ro
-    restart: on-failure:5
-    mem_limit: 128m
-    logging: *default-logging
+  # cAdvisor는 2026-10-04에 제거했다 - 운영 EC2의 Docker 29(containerd 이미지 스토어)에서
+  # cAdvisor v0.49.1이 Docker 컨테이너를 하나도 등록하지 못해(`failed to identify the
+  # read-write layer ID`) container_* 지표에 name 라벨이 없었고, 그 지표에 의존하던
+  # FrontendDown/RedpandaDown/ContainerRestartLoop 알림이 조용히 죽어 있었다. 컨테이너별
+  # 메모리/CPU/생존/기동 시각은 호스트 크론 scripts/report-container-metrics.sh가
+  # node-exporter textfile collector로 내보내는 quantlime_container_* 지표가 대신한다.
+  # (기존 서버에는 `docker compose ... up -d --remove-orphans`로 남은 컨테이너를 정리할 것)
 
   # MySQL 자체 상태(mysql_up)를 Prometheus가 직접 볼 수 있게 한다 - 이전엔
   # backend의 /api/health가 의존성을 안 보는 정적 200이라(application.yml

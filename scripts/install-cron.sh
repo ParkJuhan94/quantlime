@@ -13,9 +13,9 @@
 # 헬스/리소스 지표는 더 이상 여기서 다루지 않는다 - CloudWatch 커스텀
 # 메트릭 대신 PLG 관측성 스택(docker-compose.monitoring.yml,
 # node-exporter/cAdvisor + Prometheus + Alertmanager)으로 일원화했다
-# (docs/DEPLOYMENT.md 참고). 다만 cAdvisor가 Docker 29에서 컨테이너를 못 읽어
-# 컨테이너별 지표가 비는 동안(2026-10-03 확인)에는 report-container-metrics.sh가
-# 그 자리를 대신하도록 1분 주기로 함께 등록한다.
+# (docs/DEPLOYMENT.md 참고). 컨테이너별 지표만은 예외다 - cAdvisor가 Docker 29에서
+# 컨테이너를 못 읽어(2026-10-03 확인) 제거하고, report-container-metrics.sh가
+# 그 자리를 1분 주기로 대신한다(FrontendDown/RedpandaDown/ContainerRestartLoop 알림의 입력).
 #
 # 부팅 시 자동 기동(@reboot): 컨테이너 restart 정책이 on-failure:5라 EC2를
 # stop/start하거나 재부팅하면(도커 데몬이 컨테이너를 정상 정지시켜 "수동
