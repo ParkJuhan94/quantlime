@@ -17,15 +17,16 @@ import com.quantlime.videofeed.domain.ChannelFilterConfig;
 import com.quantlime.videofeed.domain.Platform;
 import com.quantlime.videofeed.domain.Video;
 import com.quantlime.videofeed.implement.TranscriptAppender;
+import com.quantlime.videofeed.implement.TranscriptFetcher;
 import com.quantlime.videofeed.implement.VideoReader;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -43,8 +44,14 @@ class TranscriptProcessingServiceTest {
     @Mock
     private TranscriptAppender transcriptAppender;
 
-    @InjectMocks
     private TranscriptProcessingService transcriptProcessingService;
+
+    // 대상 선정·저장(service)과 외부 호출(implement)을 함께 검증한다 - 외부 클라이언트만 mock.
+    @BeforeEach
+    void setUpService() {
+        transcriptProcessingService = new TranscriptProcessingService(
+            videoReader, new TranscriptFetcher(pythonEngineClient), transcriptAppender);
+    }
 
     private Video videoOf(Long id, String externalVideoId) {
         Channel channel = Channel.of(Platform.YOUTUBE, "UCtest", "UUtest", "테스트 채널", 10,

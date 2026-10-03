@@ -1,14 +1,13 @@
 package com.quantlime.videofeed.service;
 
 import com.quantlime.common.exception.NotFoundException;
-import com.quantlime.infra.python.PythonEngineClient;
-import com.quantlime.infra.python.dto.SummarizeApiRequest;
 import com.quantlime.infra.python.dto.SummarizeApiResponse;
 import com.quantlime.videofeed.domain.Transcript;
 import com.quantlime.videofeed.domain.Video;
 import com.quantlime.videofeed.domain.VideoStatus;
 import com.quantlime.videofeed.exception.VideoFeedErrorCode;
 import com.quantlime.videofeed.implement.SummaryAppender;
+import com.quantlime.videofeed.implement.SummaryGenerator;
 import com.quantlime.videofeed.implement.TranscriptReader;
 import com.quantlime.videofeed.implement.VideoReader;
 import lombok.RequiredArgsConstructor;
@@ -28,7 +27,7 @@ public class SummaryProcessingService {
 
     private final VideoReader videoReader;
     private final TranscriptReader transcriptReader;
-    private final PythonEngineClient pythonEngineClient;
+    private final SummaryGenerator summaryGenerator;
     private final SummaryAppender summaryAppender;
 
     public void processVideo(Long videoId) {
@@ -44,8 +43,7 @@ public class SummaryProcessingService {
         try {
             Transcript transcript = transcriptReader.findByVideo(video)
                 .orElseThrow(() -> new NotFoundException(VideoFeedErrorCode.NOT_FOUND_TRANSCRIPT));
-            SummarizeApiResponse response = pythonEngineClient.summarize(new SummarizeApiRequest(
-                video.getTitle(), video.getChannel().getName(), transcript.getContent()));
+            SummarizeApiResponse response = summaryGenerator.generate(video, transcript);
             summaryAppender.persistResult(video.getId(), response);
         } catch (Exception e) {
             log.error("AI 요약 생성 실패: videoId={}, title={}, reason={}",

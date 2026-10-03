@@ -1,15 +1,13 @@
 package com.quantlime.videofeed.service;
 
-import com.quantlime.infra.youtube.YoutubeApiClient;
-import com.quantlime.infra.youtube.dto.YoutubeChannelsResponse;
 import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.ChannelFilterConfig;
 import com.quantlime.videofeed.domain.Platform;
 import com.quantlime.videofeed.implement.ChannelAppender;
 import com.quantlime.videofeed.implement.ChannelReader;
+import com.quantlime.videofeed.implement.YoutubeMetadataCollector;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
@@ -46,7 +44,7 @@ public class ChannelSeedInitializer implements ApplicationRunner {
 
     private final ChannelReader channelReader;
     private final ChannelAppender channelAppender;
-    private final YoutubeApiClient youtubeApiClient;
+    private final YoutubeMetadataCollector youtubeMetadataCollector;
 
     // run() 자체엔 @Transactional을 걸지 않는다 - seedIfAbsent는 채널별로
     // 독립된 exists 체크+단건 save라 3개를 하나의 트랜잭션으로 묶을 필요가
@@ -104,20 +102,11 @@ public class ChannelSeedInitializer implements ApplicationRunner {
         }
         try {
             List<String> channelIds = channelsMissingImage.stream().map(Channel::getExternalChannelId).toList();
-            Map<String, String> imageUrlByChannelId = fetchProfileImageUrls(channelIds);
+            Map<String, String> imageUrlByChannelId = youtubeMetadataCollector.fetchProfileImageUrls(channelIds);
             imageUrlByChannelId.forEach(this::persistProfileImageUrl);
         } catch (Exception e) {
             log.warn("채널 프로필 사진 백필에 실패했습니다 - 다음 기동 시 재시도됩니다.", e);
         }
-    }
-
-    private Map<String, String> fetchProfileImageUrls(List<String> channelIds) {
-        YoutubeChannelsResponse response = youtubeApiClient.getChannels(channelIds);
-        return response.items().stream()
-            .filter(item -> item.snippet() != null && item.snippet().thumbnails() != null
-                && item.snippet().thumbnails().defaultThumbnail() != null)
-            .collect(Collectors.toMap(YoutubeChannelsResponse.Item::id,
-                item -> item.snippet().thumbnails().defaultThumbnail().url()));
     }
 
     // findBy...로 얻은 엔티티는 그 조회 호출이 끝나면 detach되므로,

@@ -1,11 +1,10 @@
 package com.quantlime.videofeed.service;
 
-import com.quantlime.infra.python.PythonEngineClient;
-import com.quantlime.infra.python.dto.TranscribeApiRequest;
 import com.quantlime.infra.python.dto.TranscribeApiResponse;
 import com.quantlime.videofeed.domain.Video;
 import com.quantlime.videofeed.domain.VideoStatus;
 import com.quantlime.videofeed.implement.TranscriptAppender;
+import com.quantlime.videofeed.implement.TranscriptFetcher;
 import com.quantlime.videofeed.implement.VideoReader;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,7 +26,7 @@ import org.springframework.stereotype.Service;
 public class TranscriptProcessingService {
 
     private final VideoReader videoReader;
-    private final PythonEngineClient pythonEngineClient;
+    private final TranscriptFetcher transcriptFetcher;
     private final TranscriptAppender transcriptAppender;
 
     public void processVideo(Long videoId) {
@@ -44,8 +43,7 @@ public class TranscriptProcessingService {
             return;
         }
         try {
-            TranscribeApiResponse response = pythonEngineClient.fetchTranscript(
-                new TranscribeApiRequest(video.getExternalVideoId()));
+            TranscribeApiResponse response = transcriptFetcher.fetch(video);
             transcriptAppender.persistResult(video.getId(), response);
         } catch (Exception e) {
             log.error("자막 수집 실패: videoId={}, title={}, reason={}",

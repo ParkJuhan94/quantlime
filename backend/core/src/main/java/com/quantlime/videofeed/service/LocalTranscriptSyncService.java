@@ -1,10 +1,8 @@
 package com.quantlime.videofeed.service;
 
-import com.quantlime.infra.sync.SyncApiClient;
-import com.quantlime.infra.sync.SyncProperties;
 import com.quantlime.videofeed.domain.Transcript;
 import com.quantlime.videofeed.domain.Video;
-import com.quantlime.videofeed.dto.request.TranscriptImportRequest;
+import com.quantlime.videofeed.implement.ProdTranscriptSyncer;
 import com.quantlime.videofeed.implement.TranscriptReader;
 import com.quantlime.videofeed.implement.VideoReader;
 import java.net.ConnectException;
@@ -13,7 +11,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.NestedExceptionUtils;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 
 /**
  * 로컬에서 자막이 새로 저장될 때마다(LocalTranscriptSyncConsumer, event
@@ -32,12 +29,10 @@ public class LocalTranscriptSyncService {
 
     private final VideoReader videoReader;
     private final TranscriptReader transcriptReader;
-    private final SyncApiClient syncApiClient;
-    private final SyncProperties syncProperties;
+    private final ProdTranscriptSyncer prodTranscriptSyncer;
 
     public void syncOne(Long videoId) {
-        if (!StringUtils.hasText(syncProperties.getApiKey())
-            || !StringUtils.hasText(syncProperties.getProdApiBase())) {
+        if (!prodTranscriptSyncer.isConfigured()) {
             log.debug("운영 동기화 미설정(sync.api-key/prod-api-base) - 스킵: videoId={}", videoId);
             return;
         }
@@ -49,9 +44,7 @@ public class LocalTranscriptSyncService {
             return;
         }
         try {
-            syncApiClient.pushTranscript(new TranscriptImportRequest.Item(
-                video.getExternalVideoId(), transcript.getSource(), transcript.getLang(),
-                transcript.getContent(), transcript.getCharCount()));
+            prodTranscriptSyncer.push(video, transcript);
             log.info("자막 운영 동기화 완료: videoId={}, externalVideoId={}", videoId, video.getExternalVideoId());
         } catch (Exception e) {
             log.warn("자막 운영 동기화 실패(다음 배치 스크립트가 보충함): videoId={}, reason={}{}",
