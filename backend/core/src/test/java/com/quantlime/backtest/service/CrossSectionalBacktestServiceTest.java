@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import com.quantlime.backtest.domain.BacktestDailyScore;
 import com.quantlime.backtest.exception.BacktestErrorCode;
 import com.quantlime.backtest.implement.BacktestAppender;
+import com.quantlime.backtest.implement.BacktestEngineProcessor;
 import com.quantlime.backtest.implement.BacktestReader;
 import com.quantlime.common.exception.ValidationException;
 import com.quantlime.infra.python.PythonEngineClient;
@@ -24,11 +25,11 @@ import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.StockMasterService;
 import java.time.LocalDate;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -53,8 +54,14 @@ class CrossSectionalBacktestServiceTest {
     @Mock
     private BacktestAppender backtestAppender;
 
-    @InjectMocks
     private CrossSectionalBacktestService crossSectionalBacktestService;
+
+    // 대상 선정·저장(service)과 엔진 요청/응답 변환·호출(processor)을 함께 검증한다 - processor는 실제 객체.
+    @BeforeEach
+    void setUpService() {
+        crossSectionalBacktestService = new CrossSectionalBacktestService(stockMasterService, backtestReader,
+            benchmarkIndexReader, new BacktestEngineProcessor(pythonEngineClient), backtestAppender);
+    }
 
     @Test
     @DisplayName("[벤치마크 매핑이 없는 시장(코넥스)은 UNSUPPORTED_MARKET 예외를 던진다]")

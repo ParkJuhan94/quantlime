@@ -2,16 +2,12 @@ package com.quantlime.backtest.service;
 
 import com.quantlime.backtest.domain.BacktestAxis;
 import com.quantlime.backtest.domain.BacktestDailyScore;
-import com.quantlime.backtest.domain.BacktestSampleSplit;
 import com.quantlime.backtest.domain.CrossSectionalBacktestResult;
-import com.quantlime.backtest.dto.mapper.CrossSectionalBacktestMapper;
 import com.quantlime.backtest.exception.BacktestErrorCode;
 import com.quantlime.backtest.implement.BacktestAppender;
+import com.quantlime.backtest.implement.BacktestEngineProcessor;
 import com.quantlime.backtest.implement.BacktestReader;
 import com.quantlime.common.exception.ValidationException;
-import com.quantlime.infra.python.PythonEngineClient;
-import com.quantlime.infra.python.dto.CrossSectionalBacktestApiRequest;
-import com.quantlime.infra.python.dto.CrossSectionalBacktestApiResponse;
 import com.quantlime.market.domain.BenchmarkIndex;
 import com.quantlime.market.implement.BenchmarkIndexReader;
 import com.quantlime.stock.domain.MarketType;
@@ -54,7 +50,7 @@ public class CrossSectionalBacktestService {
     private final StockMasterService stockMasterService;
     private final BacktestReader backtestReader;
     private final BenchmarkIndexReader benchmarkIndexReader;
-    private final PythonEngineClient pythonEngineClient;
+    private final BacktestEngineProcessor backtestEngineProcessor;
     private final BacktestAppender backtestAppender;
 
     /**
@@ -110,12 +106,9 @@ public class CrossSectionalBacktestService {
                         List<BenchmarkIndex> benchmarkPrices, BacktestAxis axis, int horizonDays,
                         boolean nullTest, int nullRepeats) {
         try {
-            CrossSectionalBacktestApiRequest request = CrossSectionalBacktestMapper.toApiRequest(
+            CrossSectionalBacktestResult result = backtestEngineProcessor.runCrossSectional(
                 market, scoreVersion, dailyScoresByStock, benchmarkPrices, axis, horizonDays,
                 nullTest, nullRepeats);
-            CrossSectionalBacktestApiResponse response = pythonEngineClient.runCrossSectionalBacktest(request);
-            CrossSectionalBacktestResult result = CrossSectionalBacktestMapper.toResult(
-                market, axis, BacktestSampleSplit.FULL, LocalDate.now(), response);
             backtestAppender.saveCrossSectional(result);
             log.info("횡단면 백테스트 완료: market={}, axis={}, horizonDays={}, meanIc={}, nDates={}",
                 market, axis, horizonDays, result.getMeanIc(), result.getSampleDates());

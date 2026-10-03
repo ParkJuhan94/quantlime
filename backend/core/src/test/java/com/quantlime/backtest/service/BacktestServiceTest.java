@@ -13,6 +13,7 @@ import com.quantlime.backtest.domain.BacktestResult;
 import com.quantlime.backtest.dto.response.BacktestResponse;
 import com.quantlime.backtest.exception.BacktestErrorCode;
 import com.quantlime.backtest.implement.BacktestAppender;
+import com.quantlime.backtest.implement.BacktestEngineProcessor;
 import com.quantlime.backtest.implement.BacktestReader;
 import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.common.exception.ValidationException;
@@ -34,11 +35,11 @@ import com.quantlime.stock.service.StockMasterService;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -69,8 +70,14 @@ class BacktestServiceTest {
     @Mock
     private BacktestAppender backtestAppender;
 
-    @InjectMocks
     private BacktestService backtestService;
+
+    // 대상 선정·저장(service)과 엔진 요청/응답 변환·호출(processor)을 함께 검증한다 - processor는 실제 객체.
+    @BeforeEach
+    void setUpService() {
+        backtestService = new BacktestService(stockMasterService, domesticDailyPriceService, backtestReader,
+            benchmarkIndexReader, dailyPriceReader, new BacktestEngineProcessor(pythonEngineClient), backtestAppender);
+    }
 
     @Test
     @DisplayName("[국내(KOSPI) 종목은 벤치마크와 함께 퀀트 엔진에 넘겨 결과를 저장한다]")

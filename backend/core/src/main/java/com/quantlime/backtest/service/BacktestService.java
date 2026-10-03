@@ -3,16 +3,14 @@ package com.quantlime.backtest.service;
 import com.quantlime.backtest.domain.BacktestDailyScore;
 import com.quantlime.backtest.domain.BacktestResult;
 import com.quantlime.backtest.dto.mapper.BacktestMapper;
-import com.quantlime.backtest.dto.mapper.BacktestRequestMapper;
 import com.quantlime.backtest.dto.response.BacktestResponse;
 import com.quantlime.backtest.exception.BacktestErrorCode;
 import com.quantlime.backtest.implement.BacktestAppender;
+import com.quantlime.backtest.implement.BacktestEngineProcessor;
+import com.quantlime.backtest.implement.BacktestEngineProcessor.StockBacktestOutput;
 import com.quantlime.backtest.implement.BacktestReader;
 import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.common.exception.ValidationException;
-import com.quantlime.infra.python.PythonEngineClient;
-import com.quantlime.infra.python.dto.BacktestApiRequest;
-import com.quantlime.infra.python.dto.BacktestApiResponse;
 import com.quantlime.market.domain.BenchmarkIndex;
 import com.quantlime.market.implement.BenchmarkIndexReader;
 import com.quantlime.price.domain.DomesticDailyPrice;
@@ -66,7 +64,7 @@ public class BacktestService {
     private final BacktestReader backtestReader;
     private final BenchmarkIndexReader benchmarkIndexReader;
     private final DailyPriceReader dailyPriceReader;
-    private final PythonEngineClient pythonEngineClient;
+    private final BacktestEngineProcessor backtestEngineProcessor;
     private final BacktestAppender backtestAppender;
 
     public void runBacktest(String stockCode) {
@@ -81,38 +79,34 @@ public class BacktestService {
         List<BenchmarkIndex> benchmarkPrices = benchmarkIndexReader
             .findBetween(benchmarkIndexCode, start, end);
 
-        BacktestApiRequest request = stock.getMarketType().isDomestic()
-            ? toDomesticRequest(stockCode, start, end, benchmarkPrices)
-            : toOverseasRequest(stockCode, start, end, benchmarkPrices);
-        BacktestApiResponse response = pythonEngineClient.runBacktest(request);
+        StockBacktestOutput output = stock.getMarketType().isDomestic()
+            ? runDomestic(stockCode, start, end, benchmarkPrices)
+            : runOverseas(stockCode, start, end, benchmarkPrices);
 
-        List<BacktestResult> results = BacktestMapper.toBacktestResults(response, end);
-        backtestAppender.saveAll(results);
-
-        List<BacktestDailyScore> dailyScores = BacktestMapper.toBacktestDailyScores(response);
-        backtestAppender.replaceDailyScores(stockCode, response.scoreVersion(), dailyScores);
+        backtestAppender.saveAll(output.results());
+        backtestAppender.replaceDailyScores(stockCode, output.scoreVersion(), output.dailyScores());
 
         log.info("백테스트 완료: stockCode={}, scoreVersion={}, sampleDays={}",
-            stockCode, response.scoreVersion(), response.sampleDays());
+            stockCode, output.scoreVersion(), output.sampleDays());
     }
 
-    private BacktestApiRequest toDomesticRequest(
+    private StockBacktestOutput runDomestic(
         String stockCode, LocalDate start, LocalDate end, List<BenchmarkIndex> benchmarkPrices) {
         List<DomesticDailyPrice> domesticDailyPrices = domesticDailyPriceService.getDailyPrices(stockCode, start, end);
         if (domesticDailyPrices.isEmpty() || benchmarkPrices.isEmpty()) {
             throw new ValidationException(BacktestErrorCode.INSUFFICIENT_HISTORY);
         }
-        return BacktestRequestMapper.toBacktestApiRequest(stockCode, domesticDailyPrices, benchmarkPrices);
+        return backtestEngineProcessor.runDomestic(stockCode, domesticDailyPrices, benchmarkPrices, end);
     }
 
-    private BacktestApiRequest toOverseasRequest(
+    private StockBacktestOutput runOverseas(
         String stockCode, LocalDate start, LocalDate end, List<BenchmarkIndex> benchmarkPrices) {
         List<OverseasDailyPrice> overseasDailyPrices = dailyPriceReader
             .findOverseasBetween(stockCode, start, end);
         if (overseasDailyPrices.isEmpty() || benchmarkPrices.isEmpty()) {
             throw new ValidationException(BacktestErrorCode.INSUFFICIENT_HISTORY);
         }
-        return BacktestRequestMapper.toOverseasBacktestApiRequest(stockCode, overseasDailyPrices, benchmarkPrices);
+        return backtestEngineProcessor.runOverseas(stockCode, overseasDailyPrices, benchmarkPrices, end);
     }
 
     @Transactional(readOnly = true)
