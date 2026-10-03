@@ -1,4 +1,4 @@
-package com.quantlime.telegramfeed.service;
+package com.quantlime.telegramfeed.implement;
 
 import com.quantlime.common.util.SleepUtil;
 import com.quantlime.infra.telegram.TelegramApiProperties;
@@ -8,7 +8,6 @@ import com.quantlime.infra.telegram.dto.TelegramPreviewPage;
 import com.quantlime.telegramfeed.dto.CollectedTelegramPost;
 import com.quantlime.telegramfeed.dto.TelegramChannelMeta;
 import com.quantlime.telegramfeed.dto.TelegramCollectionOutcome;
-import com.quantlime.telegramfeed.implement.TelegramPostReader;
 import com.quantlime.videofeed.domain.Channel;
 import java.time.LocalDateTime;
 import java.util.ArrayList;

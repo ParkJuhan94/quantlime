@@ -7,6 +7,7 @@ import com.quantlime.telegramfeed.dto.TelegramCollectResult;
 import com.quantlime.telegramfeed.dto.TelegramCollectionOutcome;
 import com.quantlime.telegramfeed.exception.TelegramFeedErrorCode;
 import com.quantlime.telegramfeed.implement.TelegramPostAppender;
+import com.quantlime.telegramfeed.implement.TelegramPostCollector;
 import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.Platform;
 import com.quantlime.videofeed.implement.ChannelAppender;
