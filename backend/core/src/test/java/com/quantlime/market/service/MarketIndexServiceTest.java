@@ -14,7 +14,7 @@ import com.quantlime.market.cache.OverseasIndexChartCache;
 import com.quantlime.market.domain.BenchmarkIndex;
 import com.quantlime.market.dto.response.IndexChartResponse;
 import com.quantlime.market.dto.response.IndexMinuteChartResponse;
-import com.quantlime.market.repository.BenchmarkIndexRepository;
+import com.quantlime.market.implement.BenchmarkIndexReader;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -48,7 +48,7 @@ class MarketIndexServiceTest {
     private ExchangeRateChartCache exchangeRateChartCache;
 
     @Mock
-    private BenchmarkIndexRepository benchmarkIndexRepository;
+    private BenchmarkIndexReader benchmarkIndexReader;
 
     @InjectMocks
     private MarketIndexService marketIndexService;
@@ -58,7 +58,7 @@ class MarketIndexServiceTest {
         + "2026-07-30 DomesticIndexChartCache(60초 TTL, 영속 저장 안 함)에서 이관, 종목 상세페이지처럼 영속 이력 조회]")
     void getIndexChart_domestic_readsFromBenchmarkIndex() {
         // given
-        given(benchmarkIndexRepository.findByIndexCodeAndTradeDateBetweenOrderByTradeDateAsc(
+        given(benchmarkIndexReader.findBetween(
             eq("KOSPI"), any(), any()))
             .willReturn(List.of(
                 BenchmarkIndex.of("KOSPI", LocalDate.of(2026, 7, 15), 7082.91, 7424.18, 7082.91, 7284.41)));

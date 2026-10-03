@@ -8,7 +8,7 @@ import com.quantlime.market.cache.MarketRankingCache;
 import com.quantlime.market.dto.response.HotSectorResponse;
 import com.quantlime.market.dto.response.MarketRankingResponse;
 import com.quantlime.price.domain.StockLiquidity;
-import com.quantlime.price.repository.StockLiquidityRepository;
+import com.quantlime.price.implement.StockLiquidityReader;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -27,7 +27,7 @@ class HotSectorServiceTest {
     private MarketRankingCache domesticMarketRankingCache;
 
     @Mock
-    private StockLiquidityRepository stockLiquidityRepository;
+    private StockLiquidityReader stockLiquidityReader;
 
     @InjectMocks
     private HotSectorService service;
@@ -48,7 +48,7 @@ class HotSectorServiceTest {
         given(domesticMarketRankingCache.getAll()).willReturn(List.of(
             item("A", "반도체", 1.0), item("B", "반도체", 30.0), item("C", "반도체", 30.0),
             item("D", "은행", 5.0), item("E", "은행", 5.0), item("F", "은행", 5.0)));
-        given(stockLiquidityRepository.findAllByStockCodeIn(anyList())).willReturn(List.of(
+        given(stockLiquidityReader.findAllByStockCodes(anyList())).willReturn(List.of(
             liquidity("A", 100, true), liquidity("B", 1, true), liquidity("C", 1, true),
             liquidity("D", 10, true), liquidity("E", 10, true), liquidity("F", 10, true)));
 
@@ -68,7 +68,7 @@ class HotSectorServiceTest {
         given(domesticMarketRankingCache.getAll()).willReturn(List.of(
             item("A", "철강", 3.0), item("B", "철강", 3.0),
             item("C", "조선", 9.0), item("D", "조선", 9.0), item("E", "조선", 9.0)));
-        given(stockLiquidityRepository.findAllByStockCodeIn(anyList())).willReturn(List.of(
+        given(stockLiquidityReader.findAllByStockCodes(anyList())).willReturn(List.of(
             liquidity("A", 10, true), liquidity("B", 10, true),
             liquidity("C", 10, true), liquidity("D", 10, true), liquidity("E", 10, false)));
 

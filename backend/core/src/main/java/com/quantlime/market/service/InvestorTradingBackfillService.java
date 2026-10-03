@@ -6,7 +6,8 @@ import com.quantlime.infra.toss.dto.TossInvestorTradingResponse.InvestorTradingR
 import com.quantlime.market.domain.AggregationInterval;
 import com.quantlime.market.domain.InvestorTrading;
 import com.quantlime.market.domain.InvestorTradingAmounts;
-import com.quantlime.market.repository.InvestorTradingRepository;
+import com.quantlime.market.implement.InvestorTradingAppender;
+import com.quantlime.market.implement.InvestorTradingReader;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -36,7 +37,8 @@ public class InvestorTradingBackfillService {
     // Toss investor-trading count 파라미터 상한.
     private static final int PAGE_SIZE = 100;
 
-    private final InvestorTradingRepository investorTradingRepository;
+    private final InvestorTradingReader investorTradingReader;
+    private final InvestorTradingAppender investorTradingAppender;
     private final TossApiClient tossApiClient;
 
     public void refreshAllIfNeeded() {
@@ -75,10 +77,9 @@ public class InvestorTradingBackfillService {
         LocalDateTime sourceUpdatedAt = OffsetDateTime.parse(record.updatedAt()).toLocalDateTime();
         InvestorTradingAmounts amounts = toAmounts(record);
 
-        Optional<InvestorTrading> existing = investorTradingRepository
-            .findByMarketCodeAndAggregationIntervalAndBaseDate(marketCode, interval, baseDate);
+        Optional<InvestorTrading> existing = investorTradingReader.find(marketCode, interval, baseDate);
         if (existing.isEmpty()) {
-            investorTradingRepository.save(
+            investorTradingAppender.save(
                 InvestorTrading.of(marketCode, interval, baseDate, sourceUpdatedAt, amounts));
             return UpsertResult.SAVED;
         }
@@ -88,7 +89,7 @@ public class InvestorTradingBackfillService {
             return UpsertResult.SKIPPED;
         }
         current.updateAmounts(sourceUpdatedAt, amounts);
-        investorTradingRepository.save(current);
+        investorTradingAppender.save(current);
         return UpsertResult.UPDATED;
     }
 

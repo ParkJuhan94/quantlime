@@ -1,7 +1,7 @@
 package com.quantlime.market.service;
 
 import com.quantlime.price.dto.OverseasStockTradingValue;
-import com.quantlime.price.repository.OverseasDailyPriceRepository;
+import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.price.service.OverseasDailyPriceBackfillService;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.StockMasterService;
@@ -45,7 +45,7 @@ public class OverseasUniverseSelectionService {
 
     private final StockMasterService stockMasterService;
     private final OverseasDailyPriceBackfillService overseasDailyPriceBackfillService;
-    private final OverseasDailyPriceRepository overseasDailyPriceRepository;
+    private final DailyPriceReader dailyPriceReader;
 
     public List<String> selectAndBackfillUniverse() {
         List<Stock> candidates = stockMasterService.getAllListedStocks().stream()
@@ -58,7 +58,7 @@ public class OverseasUniverseSelectionService {
 
         LocalDate since = LocalDate.now().minusMonths(3);
         List<OverseasStockTradingValue> ranked =
-            overseasDailyPriceRepository.findTopByTradingValue(since, UNIVERSE_SIZE);
+            dailyPriceReader.findTopOverseasByTradingValue(since, UNIVERSE_SIZE);
         List<String> selectedCodes = ranked.stream().map(OverseasStockTradingValue::stockCode).toList();
         log.info("해외 거래대금 상위 {}종목 선정 완료(기준일 {} 이후)", selectedCodes.size(), since);
 

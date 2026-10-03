@@ -5,7 +5,7 @@ import com.quantlime.market.cache.TossMarketRankingCache;
 import com.quantlime.market.domain.RankingPeriod;
 import com.quantlime.market.dto.response.MarketRankingResponse;
 import com.quantlime.score.domain.Score;
-import com.quantlime.score.repository.ScoreRepository;
+import com.quantlime.score.implement.ScoreReader;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -46,7 +46,7 @@ public class MarketRankingService {
     private final MarketRankingCache domesticMarketRankingCache;
     private final MarketRankingCache overseasMarketRankingCache;
     private final TossMarketRankingCache tossMarketRankingCache;
-    private final ScoreRepository scoreRepository;
+    private final ScoreReader scoreReader;
 
     public List<MarketRankingResponse> getRanking(String scope, String sort, int limit, Set<String> watchlistCodes) {
         return getRanking(scope, sort, limit, watchlistCodes, RankingPeriod.REALTIME);
@@ -92,8 +92,8 @@ public class MarketRankingService {
             return rows;
         }
         List<String> codes = rows.stream().map(MarketRankingResponse::stockCode).toList();
-        Map<String, Score> scoreByCode = scoreRepository
-            .findLatestScoresByStockCodesOrderByCompositeScoreDesc(codes)
+        Map<String, Score> scoreByCode = scoreReader
+            .findLatestScores(codes)
             .stream()
             .collect(Collectors.toMap(Score::getStockCode, Function.identity(), (a, b) -> a));
 

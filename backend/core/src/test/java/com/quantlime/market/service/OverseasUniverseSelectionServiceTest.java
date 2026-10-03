@@ -8,7 +8,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.quantlime.price.dto.OverseasStockTradingValue;
-import com.quantlime.price.repository.OverseasDailyPriceRepository;
+import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.price.service.OverseasDailyPriceBackfillService;
 import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
@@ -34,7 +34,7 @@ class OverseasUniverseSelectionServiceTest {
     private OverseasDailyPriceBackfillService overseasDailyPriceBackfillService;
 
     @Mock
-    private OverseasDailyPriceRepository overseasDailyPriceRepository;
+    private DailyPriceReader dailyPriceReader;
 
     @InjectMocks
     private OverseasUniverseSelectionService overseasUniverseSelectionService;
@@ -47,7 +47,7 @@ class OverseasUniverseSelectionServiceTest {
         Stock nasdaq = stock("AAPL", "APPLE INC", MarketType.NASDAQ);
         Stock nyse = stock("AA", "ALCOA CORPORATION", MarketType.NYSE);
         given(stockMasterService.getAllListedStocks()).willReturn(List.of(domestic, nasdaq, nyse));
-        given(overseasDailyPriceRepository.findTopByTradingValue(any(), eq(500)))
+        given(dailyPriceReader.findTopOverseasByTradingValue(any(), eq(500)))
             .willReturn(List.of(new OverseasStockTradingValue("AAPL", 1_000_000.0)));
 
         // when
@@ -70,7 +70,7 @@ class OverseasUniverseSelectionServiceTest {
         Stock reit = stock("O", "REALTY INCOME CORP", MarketType.NYSE, "630");
         Stock normalStock = stock("AAPL", "APPLE INC", MarketType.NASDAQ, "720");
         given(stockMasterService.getAllListedStocks()).willReturn(List.of(reit, normalStock));
-        given(overseasDailyPriceRepository.findTopByTradingValue(any(), eq(500)))
+        given(dailyPriceReader.findTopOverseasByTradingValue(any(), eq(500)))
             .willReturn(List.of(new OverseasStockTradingValue("AAPL", 1_000_000.0)));
 
         // when
@@ -92,7 +92,7 @@ class OverseasUniverseSelectionServiceTest {
             stock("AAPL", "APPLE INC", MarketType.NASDAQ),
             stock("MSFT", "MICROSOFT CORP", MarketType.NASDAQ)
         ));
-        given(overseasDailyPriceRepository.findTopByTradingValue(any(), eq(500)))
+        given(dailyPriceReader.findTopOverseasByTradingValue(any(), eq(500)))
             .willReturn(List.of(new OverseasStockTradingValue("AAPL", 1_000_000.0)));
 
         // when
