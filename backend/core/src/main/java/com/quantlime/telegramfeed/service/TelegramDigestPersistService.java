@@ -18,7 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * SummaryPersistService(유튜브)와 구조는 비슷하지만 대상이 글이 아니라
+ * SummaryAppender(유튜브)와 구조는 비슷하지만 대상이 글이 아니라
  * 채널×날짜 다이제스트라 findById 대신 upsert(findByChannelAndDigestDate 후
  * 있으면 덮어쓰기, 없으면 신규 생성)로 동작한다. 종목마스터에 없는 티커
  * 코드를 skip+log.warn하는 AI 환각 방어는 그대로 복제(텔레그램 채널이 해외

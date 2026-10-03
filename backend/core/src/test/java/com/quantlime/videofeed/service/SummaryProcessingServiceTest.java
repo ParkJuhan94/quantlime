@@ -17,8 +17,9 @@ import com.quantlime.videofeed.domain.ChannelFilterConfig;
 import com.quantlime.videofeed.domain.Platform;
 import com.quantlime.videofeed.domain.Transcript;
 import com.quantlime.videofeed.domain.Video;
-import com.quantlime.videofeed.repository.TranscriptRepository;
-import com.quantlime.videofeed.repository.VideoRepository;
+import com.quantlime.videofeed.implement.SummaryAppender;
+import com.quantlime.videofeed.implement.TranscriptReader;
+import com.quantlime.videofeed.implement.VideoReader;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -36,16 +37,16 @@ import org.springframework.test.util.ReflectionTestUtils;
 class SummaryProcessingServiceTest {
 
     @Mock
-    private VideoRepository videoRepository;
+    private VideoReader videoReader;
 
     @Mock
-    private TranscriptRepository transcriptRepository;
+    private TranscriptReader transcriptReader;
 
     @Mock
     private PythonEngineClient pythonEngineClient;
 
     @Mock
-    private SummaryPersistService summaryPersistService;
+    private SummaryAppender summaryAppender;
 
     @InjectMocks
     private SummaryProcessingService summaryProcessingService;
@@ -67,8 +68,8 @@ class SummaryProcessingServiceTest {
     void processVideo_success_persistsResult() {
         // given
         Video video = videoOf(1L, "제목1");
-        given(videoRepository.findByIdWithChannel(1L)).willReturn(Optional.of(video));
-        given(transcriptRepository.findByVideo(video)).willReturn(Optional.of(transcriptOf(video, "자막 내용")));
+        given(videoReader.findByIdWithChannel(1L)).willReturn(Optional.of(video));
+        given(transcriptReader.findByVideo(video)).willReturn(Optional.of(transcriptOf(video, "자막 내용")));
         SummarizeApiResponse response = new SummarizeApiResponse(
             "요약", List.of(), List.of(), List.of(), "고지", "gemini-3.5-flash-lite", 100, 50);
         given(pythonEngineClient.summarize(new SummarizeApiRequest("제목1", "테스트 채널", "자막 내용")))
@@ -78,7 +79,7 @@ class SummaryProcessingServiceTest {
         summaryProcessingService.processVideo(1L);
 
         // then
-        verify(summaryPersistService).persistResult(1L, response);
+        verify(summaryAppender).persistResult(1L, response);
     }
 
     @Test
@@ -86,15 +87,15 @@ class SummaryProcessingServiceTest {
     void processVideo_failure_marksFailedAndRethrows() {
         // given
         Video video = videoOf(1L, "제목1");
-        given(videoRepository.findByIdWithChannel(1L)).willReturn(Optional.of(video));
-        given(transcriptRepository.findByVideo(video)).willReturn(Optional.of(transcriptOf(video, "자막 내용")));
+        given(videoReader.findByIdWithChannel(1L)).willReturn(Optional.of(video));
+        given(transcriptReader.findByVideo(video)).willReturn(Optional.of(transcriptOf(video, "자막 내용")));
         given(pythonEngineClient.summarize(any()))
             .willThrow(new ExternalApiException(PythonEngineErrorCode.SUMMARY_GENERATION_FAILED));
 
         // when / then
         assertThatThrownBy(() -> summaryProcessingService.processVideo(1L))
             .isInstanceOf(ExternalApiException.class);
-        verify(summaryPersistService).markSummarizeFailed(eq(1L), any());
+        verify(summaryAppender).markSummarizeFailed(eq(1L), any());
     }
 
     @Test
@@ -104,27 +105,27 @@ class SummaryProcessingServiceTest {
         Video video = videoOf(1L, "제목1");
         video.markTranscribed();
         video.markSummarized();
-        given(videoRepository.findByIdWithChannel(1L)).willReturn(Optional.of(video));
+        given(videoReader.findByIdWithChannel(1L)).willReturn(Optional.of(video));
 
         // when
         summaryProcessingService.processVideo(1L);
 
         // then
         verifyNoInteractions(pythonEngineClient);
-        verifyNoInteractions(summaryPersistService);
+        verifyNoInteractions(summaryAppender);
     }
 
     @Test
     @DisplayName("[영상이 이미 삭제된 경우(보존기간 정리 등) 아무 것도 하지 않는다]")
     void processVideo_videoNotFound_isNoOp() {
         // given
-        given(videoRepository.findByIdWithChannel(1L)).willReturn(Optional.empty());
+        given(videoReader.findByIdWithChannel(1L)).willReturn(Optional.empty());
 
         // when
         summaryProcessingService.processVideo(1L);
 
         // then
         verifyNoInteractions(pythonEngineClient);
-        verifyNoInteractions(summaryPersistService);
+        verifyNoInteractions(summaryAppender);
     }
 }

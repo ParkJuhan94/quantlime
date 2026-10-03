@@ -1,4 +1,4 @@
-package com.quantlime.videofeed.service;
+package com.quantlime.videofeed.implement;
 
 import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.Video;
@@ -19,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class VideoPersistService {
+public class VideoAppender {
 
     private final VideoRepository videoRepository;
 

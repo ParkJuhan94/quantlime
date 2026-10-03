@@ -3,7 +3,7 @@ package com.quantlime.videofeed.service;
 import com.quantlime.videofeed.domain.Video;
 import com.quantlime.videofeed.domain.VideoStatus;
 import com.quantlime.videofeed.event.VideoSelectedEvent;
-import com.quantlime.videofeed.repository.VideoRepository;
+import com.quantlime.videofeed.implement.VideoReader;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,11 +32,11 @@ public class TranscriptCollectionFacade {
     private static final int MAX_RETRY_COUNT = 3;
     private static final int BATCH_SIZE = 20;
 
-    private final VideoRepository videoRepository;
+    private final VideoReader videoReader;
     private final ApplicationEventPublisher eventPublisher;
 
     public int publishBacklog() {
-        Slice<Video> candidates = videoRepository.findTranscribeCandidates(
+        Slice<Video> candidates = videoReader.findTranscribeCandidates(
             List.of(VideoStatus.SELECTED, VideoStatus.FAILED), MAX_RETRY_COUNT,
             PageRequest.of(0, BATCH_SIZE));
         candidates.forEach(video -> eventPublisher.publishEvent(new VideoSelectedEvent(video.getId())));

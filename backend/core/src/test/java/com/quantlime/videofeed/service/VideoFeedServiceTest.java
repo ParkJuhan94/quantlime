@@ -17,10 +17,10 @@ import com.quantlime.videofeed.domain.VideoTicker;
 import com.quantlime.videofeed.dto.response.VideoFeedChannelResponse;
 import com.quantlime.videofeed.dto.response.VideoFeedDetailResponse;
 import com.quantlime.videofeed.dto.response.VideoFeedItemResponse;
-import com.quantlime.videofeed.repository.ChannelRepository;
-import com.quantlime.videofeed.repository.SummaryRepository;
-import com.quantlime.videofeed.repository.VideoRepository;
-import com.quantlime.videofeed.repository.VideoTickerRepository;
+import com.quantlime.videofeed.implement.ChannelReader;
+import com.quantlime.videofeed.implement.SummaryReader;
+import com.quantlime.videofeed.implement.VideoReader;
+import com.quantlime.videofeed.implement.VideoTickerReader;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -43,16 +43,16 @@ import org.springframework.test.util.ReflectionTestUtils;
 class VideoFeedServiceTest {
 
     @Mock
-    private VideoRepository videoRepository;
+    private ChannelReader channelReader;
 
     @Mock
-    private SummaryRepository summaryRepository;
+    private VideoReader videoReader;
 
     @Mock
-    private VideoTickerRepository videoTickerRepository;
+    private SummaryReader summaryReader;
 
     @Mock
-    private ChannelRepository channelRepository;
+    private VideoTickerReader videoTickerReader;
 
     private VideoFeedService videoFeedService;
 
@@ -94,7 +94,7 @@ class VideoFeedServiceTest {
     // 이 서비스의 핵심 동작이라 mock으로 대체하면 검증 의미가 없다.
     private VideoFeedService newService() {
         return new VideoFeedService(
-            videoRepository, summaryRepository, videoTickerRepository, channelRepository, new ObjectMapper());
+            channelReader, videoReader, summaryReader, videoTickerReader, new ObjectMapper());
     }
 
     @Test
@@ -105,11 +105,11 @@ class VideoFeedServiceTest {
         Video video1 = videoOf(1L, "영상1");
         Video video2 = videoOf(2L, "영상2");
         Pageable pageable = PageRequest.of(0, 10);
-        given(videoRepository.findSummarizedVideos(null, null, null, null, pageable))
+        given(videoReader.findSummarizedVideos(null, null, null, null, pageable))
             .willReturn(new SliceImpl<>(List.of(video1, video2)));
-        given(summaryRepository.findByVideo_IdIn(List.of(1L, 2L)))
+        given(summaryReader.findByVideo_IdIn(List.of(1L, 2L)))
             .willReturn(List.of(summaryOf(video1, "요약1"), summaryOf(video2, "요약2")));
-        given(videoTickerRepository.findByVideo_IdIn(List.of(1L, 2L)))
+        given(videoTickerReader.findByVideo_IdIn(List.of(1L, 2L)))
             .willReturn(List.of(VideoTicker.of(video1, "005930", "삼성전자", "BULLISH", BigDecimal.valueOf(0.8))));
 
         // when
@@ -137,7 +137,7 @@ class VideoFeedServiceTest {
         Pageable pageable = PageRequest.of(0, 10);
         Slice<Video> emptySlice = new SliceImpl<>(List.of());
         LocalDate date = LocalDate.of(2026, 7, 30);
-        given(videoRepository.findSummarizedVideos(
+        given(videoReader.findSummarizedVideos(
             eq("005930"), eq(1L), eq(date.atStartOfDay()), eq(date.plusDays(1).atStartOfDay()), eq(pageable)))
             .willReturn(emptySlice);
 
@@ -145,7 +145,7 @@ class VideoFeedServiceTest {
         videoFeedService.getVideos("005930", 1L, date, pageable);
 
         // then
-        verify(videoRepository).findSummarizedVideos(
+        verify(videoReader).findSummarizedVideos(
             "005930", 1L, date.atStartOfDay(), date.plusDays(1).atStartOfDay(), pageable);
     }
 
@@ -156,7 +156,7 @@ class VideoFeedServiceTest {
         videoFeedService = newService();
         Channel channel = channelOf();
         ReflectionTestUtils.setField(channel, "id", 1L);
-        given(channelRepository.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.YOUTUBE)).willReturn(List.of(channel));
+        given(channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.YOUTUBE)).willReturn(List.of(channel));
 
         // when
         List<VideoFeedChannelResponse> result = videoFeedService.getChannels();
@@ -171,9 +171,9 @@ class VideoFeedServiceTest {
         // given
         videoFeedService = newService();
         Video video = videoOf(1L, "영상1");
-        given(videoRepository.findSummarizedVideoById(1L)).willReturn(Optional.of(video));
-        given(summaryRepository.findByVideo(video)).willReturn(Optional.of(summaryOf(video, "요약1")));
-        given(videoTickerRepository.findByVideo(video))
+        given(videoReader.findSummarizedVideoById(1L)).willReturn(Optional.of(video));
+        given(summaryReader.findByVideo(video)).willReturn(Optional.of(summaryOf(video, "요약1")));
+        given(videoTickerReader.findByVideo(video))
             .willReturn(List.of(VideoTicker.of(video, "005930", "삼성전자", "BULLISH", BigDecimal.valueOf(0.8))));
 
         // when
@@ -193,9 +193,9 @@ class VideoFeedServiceTest {
         // given
         videoFeedService = newService();
         Video video = videoOf(1L, "영상1");
-        given(videoRepository.findSummarizedVideoById(1L)).willReturn(Optional.of(video));
-        given(summaryRepository.findByVideo(video)).willReturn(Optional.of(summaryOfWithoutMacroPoints(video, "요약1")));
-        given(videoTickerRepository.findByVideo(video)).willReturn(List.of());
+        given(videoReader.findSummarizedVideoById(1L)).willReturn(Optional.of(video));
+        given(summaryReader.findByVideo(video)).willReturn(Optional.of(summaryOfWithoutMacroPoints(video, "요약1")));
+        given(videoTickerReader.findByVideo(video)).willReturn(List.of());
 
         // when
         VideoFeedDetailResponse result = videoFeedService.getVideoDetail(1L);
@@ -209,7 +209,7 @@ class VideoFeedServiceTest {
     void getVideoDetail_videoNotFoundOrNotSummarized_throwsNotFoundException() {
         // given
         videoFeedService = newService();
-        given(videoRepository.findSummarizedVideoById(999L)).willReturn(Optional.empty());
+        given(videoReader.findSummarizedVideoById(999L)).willReturn(Optional.empty());
 
         // when & then
         assertThatThrownBy(() -> videoFeedService.getVideoDetail(999L))

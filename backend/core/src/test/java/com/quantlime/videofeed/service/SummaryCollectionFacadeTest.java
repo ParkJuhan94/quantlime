@@ -12,7 +12,7 @@ import com.quantlime.videofeed.domain.ChannelFilterConfig;
 import com.quantlime.videofeed.domain.Platform;
 import com.quantlime.videofeed.domain.Video;
 import com.quantlime.videofeed.event.VideoTranscribedEvent;
-import com.quantlime.videofeed.repository.VideoRepository;
+import com.quantlime.videofeed.implement.VideoReader;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -35,7 +35,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 class SummaryCollectionFacadeTest {
 
     @Mock
-    private VideoRepository videoRepository;
+    private VideoReader videoReader;
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
@@ -57,7 +57,7 @@ class SummaryCollectionFacadeTest {
         // given
         Video first = videoOf(1L);
         Video second = videoOf(2L);
-        given(videoRepository.findSummarizeCandidates(any(), anyInt(), any()))
+        given(videoReader.findSummarizeCandidates(any(), anyInt(), any()))
             .willReturn(new SliceImpl<>(List.of(first, second)));
 
         // when
@@ -73,7 +73,7 @@ class SummaryCollectionFacadeTest {
     @DisplayName("[후보가 없으면 이벤트를 발행하지 않고 0을 반환한다]")
     void publishBacklog_noCandidates_publishesNothing() {
         // given
-        given(videoRepository.findSummarizeCandidates(any(), anyInt(), any()))
+        given(videoReader.findSummarizeCandidates(any(), anyInt(), any()))
             .willReturn(new SliceImpl<>(List.of()));
 
         // when

@@ -9,7 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * VideoRetentionDeleteService와 동일한 이유로 분리된 별도 빈 - deleteBy...IdIn
+ * VideoRemover와 동일한 이유로 분리된 별도 빈 - deleteBy...IdIn
  * 파생 삭제 쿼리는 SimpleJpaRepository의 클래스 레벨 @Transactional을 상속받지
  * 못해, self-invocation 경로(TelegramPostRetentionService.runExclusively ->
  * deleteOlderThanRetention)에서 호출하면 TransactionRequiredException을

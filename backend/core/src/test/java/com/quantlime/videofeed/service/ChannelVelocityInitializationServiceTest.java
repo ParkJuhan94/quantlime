@@ -10,6 +10,8 @@ import com.quantlime.support.DataJpaTestSupport;
 import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.ChannelFilterConfig;
 import com.quantlime.videofeed.domain.Platform;
+import com.quantlime.videofeed.implement.ChannelAppender;
+import com.quantlime.videofeed.implement.ChannelReader;
 import com.quantlime.videofeed.repository.ChannelRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -31,7 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 // @Transactional을 실제로 우회하는지 검증할 수 없어(목 자체가 프록시/트랜잭션과
 // 무관) 반드시 이 방식(DataJpaTest + 실제 빈)으로 재현해야 한다.
 @Tag("integration")
-@Import(ChannelVelocityInitializationService.class)
+@Import({ChannelVelocityInitializationService.class, ChannelReader.class, ChannelAppender.class})
 class ChannelVelocityInitializationServiceTest extends DataJpaTestSupport {
 
     @Autowired

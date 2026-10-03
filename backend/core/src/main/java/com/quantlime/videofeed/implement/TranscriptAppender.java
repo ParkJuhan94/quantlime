@@ -1,4 +1,4 @@
-package com.quantlime.videofeed.service;
+package com.quantlime.videofeed.implement;
 
 import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.infra.python.dto.TranscribeApiResponse;
@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 퀀트 엔진 자막 조회(외부 I/O)와 결과 영속화를 분리한 짧은 트랜잭션 계층
- * (YoutubeVideoCollector/VideoPersistService와 동일한 설계). 호출부인
+ * (YoutubeVideoCollector/VideoAppender와 동일한 설계). 호출부인
  * TranscriptCollectionFacade와 별도 빈으로 둔 것은 스타일 선택이 아니라
  * 실제 버그를 겪고 확정한 원칙이다 - ChannelVelocityInitializationService에서
  * 같은 클래스 내부의 @Transactional 메서드를 self-invocation으로 호출해
@@ -25,7 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 @RequiredArgsConstructor
-public class TranscriptPersistService {
+public class TranscriptAppender {
 
     private final VideoRepository videoRepository;
     private final TranscriptRepository transcriptRepository;

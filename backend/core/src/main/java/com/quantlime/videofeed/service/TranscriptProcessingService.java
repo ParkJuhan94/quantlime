@@ -5,7 +5,8 @@ import com.quantlime.infra.python.dto.TranscribeApiRequest;
 import com.quantlime.infra.python.dto.TranscribeApiResponse;
 import com.quantlime.videofeed.domain.Video;
 import com.quantlime.videofeed.domain.VideoStatus;
-import com.quantlime.videofeed.repository.VideoRepository;
+import com.quantlime.videofeed.implement.TranscriptAppender;
+import com.quantlime.videofeed.implement.VideoReader;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,12 +26,12 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class TranscriptProcessingService {
 
-    private final VideoRepository videoRepository;
+    private final VideoReader videoReader;
     private final PythonEngineClient pythonEngineClient;
-    private final TranscriptPersistService transcriptPersistService;
+    private final TranscriptAppender transcriptAppender;
 
     public void processVideo(Long videoId) {
-        Video video = videoRepository.findById(videoId).orElse(null);
+        Video video = videoReader.findById(videoId).orElse(null);
         if (video == null) {
             log.warn("자막 처리 대상 영상을 찾을 수 없음(삭제됐을 수 있음) - 스킵: videoId={}", videoId);
             return;
@@ -45,11 +46,11 @@ public class TranscriptProcessingService {
         try {
             TranscribeApiResponse response = pythonEngineClient.fetchTranscript(
                 new TranscribeApiRequest(video.getExternalVideoId()));
-            transcriptPersistService.persistResult(video.getId(), response);
+            transcriptAppender.persistResult(video.getId(), response);
         } catch (Exception e) {
             log.error("자막 수집 실패: videoId={}, title={}, reason={}",
                 video.getId(), video.getTitle(), e.getMessage(), e);
-            transcriptPersistService.markFetchFailed(video.getId(), e.getMessage());
+            transcriptAppender.markFetchFailed(video.getId(), e.getMessage());
             throw e;
         }
     }

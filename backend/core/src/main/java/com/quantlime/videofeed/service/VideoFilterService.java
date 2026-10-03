@@ -5,7 +5,7 @@ import com.quantlime.videofeed.domain.ChannelFilterConfig;
 import com.quantlime.videofeed.domain.Video;
 import com.quantlime.videofeed.domain.VideoStatus;
 import com.quantlime.videofeed.event.VideoSelectedEvent;
-import com.quantlime.videofeed.repository.VideoRepository;
+import com.quantlime.videofeed.implement.VideoReader;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
@@ -52,7 +52,7 @@ public class VideoFilterService {
     // 반드시 VideoRetentionService 값 이하로 유지할 것.
     // 이미 컷오프를 넘긴 영상은 여기서 바로 걸러 자막/요약 파이프라인에
     // 들여보내지 않는다 - 신규 채널의 오래된 백로그가
-    // VideoPersistService.existsByExternalVideoId 기준 재수집→재분류→
+    // VideoAppender.existsByExternalVideoId 기준 재수집→재분류→
     // 재처리(자막/요약 API 호출)→보존기간 정리로 재삭제되는 낭비 루프를
     // 방지하고, publishedAt asc로 오래된 것부터 배치를 채우는 Transcribe/
     // SummarizeCandidates 쿼리가 이 오래된 영상들에 밀려 정작 최근 영상을
@@ -69,12 +69,12 @@ public class VideoFilterService {
     // 클래스 주석도 참고).
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
 
-    private final VideoRepository videoRepository;
+    private final VideoReader videoReader;
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public void applyFilters(Channel channel) {
-        List<Video> discovered = videoRepository.findByChannelAndStatus(channel, VideoStatus.DISCOVERED);
+        List<Video> discovered = videoReader.findByChannelAndStatus(channel, VideoStatus.DISCOVERED);
         classifyAndSelect(channel, discovered);
     }
 
@@ -89,7 +89,7 @@ public class VideoFilterService {
     @Transactional(readOnly = true)
     public List<Video> findReevaluationCandidates(Channel channel) {
         LocalDateTime cutoff = LocalDateTime.now(SEOUL).minusHours(VELOCITY_GRACE_HOURS);
-        return videoRepository.findByStatusAndPublishedAtBefore(VideoStatus.PENDING_REVIEW, cutoff)
+        return videoReader.findByStatusAndPublishedAtBefore(VideoStatus.PENDING_REVIEW, cutoff)
             .stream()
             .filter(video -> video.getChannel().getId().equals(channel.getId()))
             .toList();
@@ -110,7 +110,7 @@ public class VideoFilterService {
             return;
         }
         LocalDateTime checkedAt = LocalDateTime.now();
-        List<Video> videos = videoRepository.findAllById(candidateVideoIds);
+        List<Video> videos = videoReader.findAllById(candidateVideoIds);
         videos.forEach(video -> {
             Long freshViewCount = freshViewCountsByExternalId.get(video.getExternalVideoId());
             if (freshViewCount != null) {
@@ -210,7 +210,7 @@ public class VideoFilterService {
     // 후보 개수만 보지 않고 그 날짜에 이미 SELECTED된 개수를 DB에서 다시 세어
     // 남은 쿼터만 적용한다 - 그래야 하루 상한이 사이클 횟수와 무관하게 지켜진다.
     private void selectUpToDailyQuota(Channel channel, List<Video> videosOnDate, int maxPerRun, LocalDate publishedDate) {
-        int alreadySelected = videoRepository.countByChannelAndStatusAndPublishedAtBetween(
+        int alreadySelected = videoReader.countByChannelAndStatusAndPublishedAtBetween(
             channel, VideoStatus.SELECTED, publishedDate.atStartOfDay(), publishedDate.plusDays(1).atStartOfDay());
         int remainingQuota = Math.max(maxPerRun - alreadySelected, 0);
 

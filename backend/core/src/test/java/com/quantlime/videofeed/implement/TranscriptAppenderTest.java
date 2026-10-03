@@ -1,4 +1,4 @@
-package com.quantlime.videofeed.service;
+package com.quantlime.videofeed.implement;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
@@ -31,7 +31,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
-class TranscriptPersistServiceTest {
+class TranscriptAppenderTest {
 
     @Mock
     private VideoRepository videoRepository;
@@ -43,7 +43,7 @@ class TranscriptPersistServiceTest {
     private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
-    private TranscriptPersistService transcriptPersistService;
+    private TranscriptAppender transcriptAppender;
 
     private Video videoOf() {
         Channel channel = Channel.of(Platform.YOUTUBE, "UCtest", "UUtest", "테스트 채널", 10,
@@ -63,7 +63,7 @@ class TranscriptPersistServiceTest {
             true, "youtube_auto_caption", "ko", "안녕하세요", 5, null);
 
         // when
-        transcriptPersistService.persistResult(1L, response);
+        transcriptAppender.persistResult(1L, response);
 
         // then
         ArgumentCaptor<com.quantlime.videofeed.domain.Transcript> captor =
@@ -85,7 +85,7 @@ class TranscriptPersistServiceTest {
             false, null, null, null, null, "TranscriptsDisabled");
 
         // when
-        transcriptPersistService.persistResult(1L, response);
+        transcriptAppender.persistResult(1L, response);
 
         // then
         verify(transcriptRepository, never()).save(org.mockito.ArgumentMatchers.any());
@@ -103,7 +103,7 @@ class TranscriptPersistServiceTest {
         given(videoRepository.findById(1L)).willReturn(Optional.of(video));
 
         // when
-        transcriptPersistService.markFetchFailed(1L, "네트워크 타임아웃");
+        transcriptAppender.markFetchFailed(1L, "네트워크 타임아웃");
 
         // then
         assertThat(video.getStatus()).isEqualTo(VideoStatus.FAILED);

@@ -5,8 +5,8 @@ import com.quantlime.infra.sync.SyncProperties;
 import com.quantlime.videofeed.domain.Transcript;
 import com.quantlime.videofeed.domain.Video;
 import com.quantlime.videofeed.dto.request.TranscriptImportRequest;
-import com.quantlime.videofeed.repository.TranscriptRepository;
-import com.quantlime.videofeed.repository.VideoRepository;
+import com.quantlime.videofeed.implement.TranscriptReader;
+import com.quantlime.videofeed.implement.VideoReader;
 import java.net.ConnectException;
 import java.net.SocketTimeoutException;
 import lombok.RequiredArgsConstructor;
@@ -30,8 +30,8 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class LocalTranscriptSyncService {
 
-    private final VideoRepository videoRepository;
-    private final TranscriptRepository transcriptRepository;
+    private final VideoReader videoReader;
+    private final TranscriptReader transcriptReader;
     private final SyncApiClient syncApiClient;
     private final SyncProperties syncProperties;
 
@@ -41,9 +41,9 @@ public class LocalTranscriptSyncService {
             log.debug("운영 동기화 미설정(sync.api-key/prod-api-base) - 스킵: videoId={}", videoId);
             return;
         }
-        Video video = videoRepository.findById(videoId).orElse(null);
+        Video video = videoReader.findById(videoId).orElse(null);
         Transcript transcript = video != null
-            ? transcriptRepository.findByVideo(video).orElse(null) : null;
+            ? transcriptReader.findByVideo(video).orElse(null) : null;
         if (video == null || transcript == null) {
             log.warn("운영 동기화 대상 영상/자막을 찾을 수 없음 - 스킵: videoId={}", videoId);
             return;

@@ -11,7 +11,7 @@ import com.quantlime.videofeed.domain.ChannelFilterConfig;
 import com.quantlime.videofeed.domain.Platform;
 import com.quantlime.videofeed.domain.Video;
 import com.quantlime.videofeed.domain.VideoStatus;
-import com.quantlime.videofeed.repository.VideoRepository;
+import com.quantlime.videofeed.implement.VideoReader;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -38,7 +38,7 @@ class VideoFilterServiceTest {
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
 
     @Mock
-    private VideoRepository videoRepository;
+    private VideoReader videoReader;
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
@@ -54,7 +54,7 @@ class VideoFilterServiceTest {
         // 바로 SELECTED됐어야 할 조건이지만, 발행일이 보존기간(3일)을 넘겨 있다.
         Channel channel = channelOf(new ChannelFilterConfig(180, 0.0, 5, List.of(), List.of()));
         Video video = videoOf(channel, "오래된 영상", 400, 9999L, LocalDateTime.now(SEOUL).minusDays(15));
-        given(videoRepository.findByChannelAndStatus(channel, VideoStatus.DISCOVERED)).willReturn(List.of(video));
+        given(videoReader.findByChannelAndStatus(channel, VideoStatus.DISCOVERED)).willReturn(List.of(video));
 
         // when
         videoFilterService.applyFilters(channel);
@@ -69,7 +69,7 @@ class VideoFilterServiceTest {
         // given
         Channel channel = channelOf(new ChannelFilterConfig(300, 0.0, 5, List.of("속보"), List.of()));
         Video video = videoOf(channel, "속보) 삼성전자 급등", 400, 100L, LocalDateTime.now(SEOUL).minusDays(1));
-        given(videoRepository.findByChannelAndStatus(channel, VideoStatus.DISCOVERED)).willReturn(List.of(video));
+        given(videoReader.findByChannelAndStatus(channel, VideoStatus.DISCOVERED)).willReturn(List.of(video));
 
         // when
         videoFilterService.applyFilters(channel);
@@ -84,7 +84,7 @@ class VideoFilterServiceTest {
         // given
         Channel channel = channelOf(new ChannelFilterConfig(300, 0.0, 5, List.of(), List.of()));
         Video video = videoOf(channel, "짧은 영상", 60, 100L, LocalDateTime.now(SEOUL).minusDays(1));
-        given(videoRepository.findByChannelAndStatus(channel, VideoStatus.DISCOVERED)).willReturn(List.of(video));
+        given(videoReader.findByChannelAndStatus(channel, VideoStatus.DISCOVERED)).willReturn(List.of(video));
 
         // when
         videoFilterService.applyFilters(channel);
@@ -99,7 +99,7 @@ class VideoFilterServiceTest {
         // given
         Channel channel = channelOf(new ChannelFilterConfig(180, 0.0, 5, List.of(), List.of()));
         Video video = videoOf(channel, "개인 채널 영상", 400, 10L, LocalDateTime.now(SEOUL).minusHours(1));
-        given(videoRepository.findByChannelAndStatus(channel, VideoStatus.DISCOVERED)).willReturn(List.of(video));
+        given(videoReader.findByChannelAndStatus(channel, VideoStatus.DISCOVERED)).willReturn(List.of(video));
 
         // when
         videoFilterService.applyFilters(channel);
@@ -114,7 +114,7 @@ class VideoFilterServiceTest {
         // given
         Channel channel = channelOf(new ChannelFilterConfig(300, 1.5, 5, List.of(), List.of()));
         Video video = videoOf(channel, "방금 올라온 영상", 400, 10L, LocalDateTime.now(SEOUL).minusHours(1));
-        given(videoRepository.findByChannelAndStatus(channel, VideoStatus.DISCOVERED)).willReturn(List.of(video));
+        given(videoReader.findByChannelAndStatus(channel, VideoStatus.DISCOVERED)).willReturn(List.of(video));
 
         // when
         videoFilterService.applyFilters(channel);
@@ -130,7 +130,7 @@ class VideoFilterServiceTest {
         Channel channel = channelOf(new ChannelFilterConfig(300, 1.5, 5, List.of(), List.of()));
         channel.updateMedianVelocity(BigDecimal.valueOf(100));
         Video video = videoOf(channel, "저조한 영상", 400, 50L, LocalDateTime.now(SEOUL).minusHours(10));
-        given(videoRepository.findByChannelAndStatus(channel, VideoStatus.DISCOVERED)).willReturn(List.of(video));
+        given(videoReader.findByChannelAndStatus(channel, VideoStatus.DISCOVERED)).willReturn(List.of(video));
 
         // when
         videoFilterService.applyFilters(channel);
@@ -146,7 +146,7 @@ class VideoFilterServiceTest {
         Channel channel = channelOf(new ChannelFilterConfig(300, 1.5, 5, List.of(), List.of()));
         channel.updateMedianVelocity(BigDecimal.valueOf(10));
         Video video = videoOf(channel, "인기 영상", 400, 1000L, LocalDateTime.now(SEOUL).minusHours(10));
-        given(videoRepository.findByChannelAndStatus(channel, VideoStatus.DISCOVERED)).willReturn(List.of(video));
+        given(videoReader.findByChannelAndStatus(channel, VideoStatus.DISCOVERED)).willReturn(List.of(video));
 
         // when
         videoFilterService.applyFilters(channel);
@@ -162,7 +162,7 @@ class VideoFilterServiceTest {
         Channel channel = channelOf(new ChannelFilterConfig(180, 0.0, 1, List.of(), List.of()));
         Video popular = videoOf(channel, "인기 영상", 400, 1000L, LocalDateTime.now(SEOUL).minusHours(1));
         Video lessPopular = videoOf(channel, "비인기 영상", 400, 10L, LocalDateTime.now(SEOUL).minusHours(1));
-        given(videoRepository.findByChannelAndStatus(channel, VideoStatus.DISCOVERED))
+        given(videoReader.findByChannelAndStatus(channel, VideoStatus.DISCOVERED))
             .willReturn(List.of(lessPopular, popular));
 
         // when
@@ -183,7 +183,7 @@ class VideoFilterServiceTest {
         Channel channel = channelOf(new ChannelFilterConfig(180, 0.0, 1, List.of(), List.of()));
         Video today = videoOf(channel, "오늘 영상", 400, 1000L, LocalDateTime.now(SEOUL));
         Video yesterday = videoOf(channel, "어제 영상", 400, 1000L, LocalDateTime.now(SEOUL).minusDays(1));
-        given(videoRepository.findByChannelAndStatus(channel, VideoStatus.DISCOVERED))
+        given(videoReader.findByChannelAndStatus(channel, VideoStatus.DISCOVERED))
             .willReturn(List.of(today, yesterday));
 
         // when
@@ -202,8 +202,8 @@ class VideoFilterServiceTest {
         // 조회수와 무관하게 전부 FILTERED_OUT돼야 한다.
         Channel channel = channelOf(new ChannelFilterConfig(180, 0.0, 1, List.of(), List.of()));
         Video video = videoOf(channel, "이번 사이클 신규 영상", 400, 9999L, LocalDateTime.now(SEOUL));
-        given(videoRepository.findByChannelAndStatus(channel, VideoStatus.DISCOVERED)).willReturn(List.of(video));
-        given(videoRepository.countByChannelAndStatusAndPublishedAtBetween(eq(channel), eq(VideoStatus.SELECTED), any(), any()))
+        given(videoReader.findByChannelAndStatus(channel, VideoStatus.DISCOVERED)).willReturn(List.of(video));
+        given(videoReader.countByChannelAndStatusAndPublishedAtBetween(eq(channel), eq(VideoStatus.SELECTED), any(), any()))
             .willReturn(1);
 
         // when
@@ -224,7 +224,7 @@ class VideoFilterServiceTest {
 
         Video ownVideo = videoOf(channel, "이 채널 영상", 400, 10L, LocalDateTime.now(SEOUL).minusHours(10));
         Video otherChannelVideo = videoOf(otherChannel, "다른 채널 영상", 400, 10L, LocalDateTime.now(SEOUL).minusHours(10));
-        given(videoRepository.findByStatusAndPublishedAtBefore(eq(VideoStatus.PENDING_REVIEW), any()))
+        given(videoReader.findByStatusAndPublishedAtBefore(eq(VideoStatus.PENDING_REVIEW), any()))
             .willReturn(List.of(ownVideo, otherChannelVideo));
 
         // when
@@ -244,7 +244,7 @@ class VideoFilterServiceTest {
         channel.updateMedianVelocity(BigDecimal.valueOf(100));
         Video video = videoOf(channel, "재평가 대상 영상", 400, 10L, LocalDateTime.now(SEOUL).minusHours(10));
         ReflectionTestUtils.setField(video, "id", 1L);
-        given(videoRepository.findAllById(List.of(1L))).willReturn(List.of(video));
+        given(videoReader.findAllById(List.of(1L))).willReturn(List.of(video));
 
         // when
         videoFilterService.reevaluatePendingReview(
@@ -263,7 +263,7 @@ class VideoFilterServiceTest {
         channel.updateMedianVelocity(BigDecimal.valueOf(10));
         Video video = videoOf(channel, "삭제된 영상", 400, 500L, LocalDateTime.now(SEOUL).minusHours(10));
         ReflectionTestUtils.setField(video, "id", 1L);
-        given(videoRepository.findAllById(List.of(1L))).willReturn(List.of(video));
+        given(videoReader.findAllById(List.of(1L))).willReturn(List.of(video));
 
         // when
         videoFilterService.reevaluatePendingReview(channel, List.of(1L), Map.of());
@@ -283,7 +283,7 @@ class VideoFilterServiceTest {
         videoFilterService.reevaluatePendingReview(channel, List.of(), Map.of());
 
         // then
-        verifyNoInteractions(videoRepository);
+        verifyNoInteractions(videoReader);
     }
 
     private Channel channelOf(ChannelFilterConfig filterConfig) {

@@ -1,4 +1,4 @@
-package com.quantlime.videofeed.service;
+package com.quantlime.videofeed.implement;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
@@ -31,7 +31,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
-class SummaryPersistServiceTest {
+class SummaryAppenderTest {
 
     @Mock
     private VideoRepository videoRepository;
@@ -45,7 +45,7 @@ class SummaryPersistServiceTest {
     @Mock
     private StockRepository stockRepository;
 
-    private SummaryPersistService summaryPersistService;
+    private SummaryAppender summaryAppender;
 
     private Video videoOf() {
         Channel channel = Channel.of(Platform.YOUTUBE, "UCtest", "UUtest", "테스트 채널", 10,
@@ -55,8 +55,8 @@ class SummaryPersistServiceTest {
         return video;
     }
 
-    private SummaryPersistService newService() {
-        return new SummaryPersistService(
+    private SummaryAppender newService() {
+        return new SummaryAppender(
             videoRepository, summaryRepository, videoTickerRepository, stockRepository, new ObjectMapper());
     }
 
@@ -64,7 +64,7 @@ class SummaryPersistServiceTest {
     @DisplayName("[요약 결과를 저장하고, 실제 종목마스터에 있는 태깅 종목만 VideoTicker로 정규화하며, 영상을 SUMMARIZED로 전이한다]")
     void persistResult_savesSummaryAndValidTickers_marksSummarized() {
         // given
-        summaryPersistService = newService();
+        summaryAppender = newService();
         Video video = videoOf();
         given(videoRepository.findById(1L)).willReturn(Optional.of(video));
         given(stockRepository.existsByStockCode("005930")).willReturn(true);
@@ -74,7 +74,7 @@ class SummaryPersistServiceTest {
             "고지", "gemini-2.5-flash", 100, 50);
 
         // when
-        summaryPersistService.persistResult(1L, response);
+        summaryAppender.persistResult(1L, response);
 
         // then
         ArgumentCaptor<com.quantlime.videofeed.domain.Summary> summaryCaptor =
@@ -92,7 +92,7 @@ class SummaryPersistServiceTest {
     @DisplayName("[실제 종목마스터에 없는(환각) 종목코드는 VideoTicker로 저장하지 않고 건너뛴다]")
     void persistResult_hallucinatedTickerCode_isSkipped() {
         // given
-        summaryPersistService = newService();
+        summaryAppender = newService();
         Video video = videoOf();
         given(videoRepository.findById(1L)).willReturn(Optional.of(video));
         given(stockRepository.existsByStockCode("999999")).willReturn(false);
@@ -102,7 +102,7 @@ class SummaryPersistServiceTest {
             "고지", "gemini-2.5-flash", 100, 50);
 
         // when
-        summaryPersistService.persistResult(1L, response);
+        summaryAppender.persistResult(1L, response);
 
         // then
         verify(videoTickerRepository, never()).save(org.mockito.ArgumentMatchers.any());
@@ -113,12 +113,12 @@ class SummaryPersistServiceTest {
     @DisplayName("[markSummarizeFailed 호출 시 주어진 사유로 영상을 FAILED 처리한다]")
     void markSummarizeFailed_marksVideoFailedWithGivenReason() {
         // given
-        summaryPersistService = newService();
+        summaryAppender = newService();
         Video video = videoOf();
         given(videoRepository.findById(1L)).willReturn(Optional.of(video));
 
         // when
-        summaryPersistService.markSummarizeFailed(1L, "Gemini 호출 실패");
+        summaryAppender.markSummarizeFailed(1L, "Gemini 호출 실패");
 
         // then
         assertThat(video.getStatus()).isEqualTo(VideoStatus.FAILED);

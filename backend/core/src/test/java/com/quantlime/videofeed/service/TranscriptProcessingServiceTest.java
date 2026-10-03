@@ -16,7 +16,8 @@ import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.ChannelFilterConfig;
 import com.quantlime.videofeed.domain.Platform;
 import com.quantlime.videofeed.domain.Video;
-import com.quantlime.videofeed.repository.VideoRepository;
+import com.quantlime.videofeed.implement.TranscriptAppender;
+import com.quantlime.videofeed.implement.VideoReader;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -34,13 +35,13 @@ import org.springframework.test.util.ReflectionTestUtils;
 class TranscriptProcessingServiceTest {
 
     @Mock
-    private VideoRepository videoRepository;
+    private VideoReader videoReader;
 
     @Mock
     private PythonEngineClient pythonEngineClient;
 
     @Mock
-    private TranscriptPersistService transcriptPersistService;
+    private TranscriptAppender transcriptAppender;
 
     @InjectMocks
     private TranscriptProcessingService transcriptProcessingService;
@@ -58,7 +59,7 @@ class TranscriptProcessingServiceTest {
     void processVideo_available_persistsResult() {
         // given
         Video video = videoOf(1L, "vid-1");
-        given(videoRepository.findById(1L)).willReturn(Optional.of(video));
+        given(videoReader.findById(1L)).willReturn(Optional.of(video));
         TranscribeApiResponse response = new TranscribeApiResponse(
             true, "youtube_auto_caption", "ko", "내용", 2, null);
         given(pythonEngineClient.fetchTranscript(new TranscribeApiRequest("vid-1"))).willReturn(response);
@@ -67,7 +68,7 @@ class TranscriptProcessingServiceTest {
         transcriptProcessingService.processVideo(1L);
 
         // then
-        verify(transcriptPersistService).persistResult(1L, response);
+        verify(transcriptAppender).persistResult(1L, response);
     }
 
     @Test
@@ -75,14 +76,14 @@ class TranscriptProcessingServiceTest {
     void processVideo_failure_marksFailedAndRethrows() {
         // given
         Video video = videoOf(1L, "vid-1");
-        given(videoRepository.findById(1L)).willReturn(Optional.of(video));
+        given(videoReader.findById(1L)).willReturn(Optional.of(video));
         given(pythonEngineClient.fetchTranscript(new TranscribeApiRequest("vid-1")))
             .willThrow(new ExternalApiException(PythonEngineErrorCode.TRANSCRIPT_FETCH_FAILED));
 
         // when / then
         assertThatThrownBy(() -> transcriptProcessingService.processVideo(1L))
             .isInstanceOf(ExternalApiException.class);
-        verify(transcriptPersistService).markFetchFailed(eq(1L), any());
+        verify(transcriptAppender).markFetchFailed(eq(1L), any());
     }
 
     @Test
@@ -91,27 +92,27 @@ class TranscriptProcessingServiceTest {
         // given
         Video video = videoOf(1L, "vid-1");
         video.markTranscribed();
-        given(videoRepository.findById(1L)).willReturn(Optional.of(video));
+        given(videoReader.findById(1L)).willReturn(Optional.of(video));
 
         // when
         transcriptProcessingService.processVideo(1L);
 
         // then
         verifyNoInteractions(pythonEngineClient);
-        verifyNoInteractions(transcriptPersistService);
+        verifyNoInteractions(transcriptAppender);
     }
 
     @Test
     @DisplayName("[영상이 이미 삭제된 경우(보존기간 정리 등) 아무 것도 하지 않는다]")
     void processVideo_videoNotFound_isNoOp() {
         // given
-        given(videoRepository.findById(1L)).willReturn(Optional.empty());
+        given(videoReader.findById(1L)).willReturn(Optional.empty());
 
         // when
         transcriptProcessingService.processVideo(1L);
 
         // then
         verifyNoInteractions(pythonEngineClient);
-        verifyNoInteractions(transcriptPersistService);
+        verifyNoInteractions(transcriptAppender);
     }
 }
