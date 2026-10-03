@@ -8,11 +8,18 @@ dependencies {
     // 토스페이먼츠(결제) 연동 - 2026-09-28 별도 모듈로 분리(패키지명은
     // com.quantlime.infra.tosspayments.*로 동일하게 유지)
     implementation project(':tosspayments')
-    // 외부 연동 클라이언트 모듈 분리(2026-10-04 파일럿: dart/kis/tradingview) - 패키지명은
+    // 외부 연동 클라이언트 모듈 분리(2026-10-04 dart/kis/tradingview 파일럿 후 나머지 클라이언트) - 패키지명은
     // com.quantlime.infra.<이름>.*로 동일하게 유지, core→infra 한 방향 의존만 허용
     implementation project(':dart')
     implementation project(':kis')
     implementation project(':tradingview')
+    implementation project(':upbit')
+    implementation project(':slack')
+    implementation project(':telegram')
+    implementation project(':youtube')
+    implementation project(':naver')
+    implementation project(':python')
+    implementation project(':firebase')
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
