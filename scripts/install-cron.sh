@@ -13,7 +13,9 @@
 # 헬스/리소스 지표는 더 이상 여기서 다루지 않는다 - CloudWatch 커스텀
 # 메트릭 대신 PLG 관측성 스택(docker-compose.monitoring.yml,
 # node-exporter/cAdvisor + Prometheus + Alertmanager)으로 일원화했다
-# (docs/DEPLOYMENT.md 참고).
+# (docs/DEPLOYMENT.md 참고). 다만 cAdvisor가 Docker 29에서 컨테이너를 못 읽어
+# 컨테이너별 지표가 비는 동안(2026-10-03 확인)에는 report-container-metrics.sh가
+# 그 자리를 대신하도록 1분 주기로 함께 등록한다.
 #
 # 부팅 시 자동 기동(@reboot): 컨테이너 restart 정책이 on-failure:5라 EC2를
 # stop/start하거나 재부팅하면(도커 데몬이 컨테이너를 정상 정지시켜 "수동
@@ -37,10 +39,13 @@ mkdir -p "$LOG_DIR"
 BACKUP_MARKER="# quantlime-backup-mysql"
 UPLOADS_MARKER="# quantlime-backup-uploads"
 BOOT_MARKER="# quantlime-boot-up"
+METRICS_MARKER="# quantlime-container-metrics"
 
 # 18:00/18:15 UTC = 03:00/03:15 KST(다음날)
 BACKUP_LINE="0 18 * * * $QUANTLIME_DIR/scripts/backup-mysql.sh >> $LOG_DIR/backup-mysql.log 2>&1 $BACKUP_MARKER"
 UPLOADS_LINE="15 18 * * * $QUANTLIME_DIR/scripts/backup-uploads.sh >> $LOG_DIR/backup-uploads.log 2>&1 $UPLOADS_MARKER"
+# 1분마다(UTC/KST 무관) - docker stats 결과를 textfile collector로 내보낸다.
+METRICS_LINE="* * * * * $QUANTLIME_DIR/scripts/report-container-metrics.sh >> $LOG_DIR/report-container-metrics.log 2>&1 $METRICS_MARKER"
 
 # 크론 @reboot 시점엔 도커 데몬이 아직 준비 전일 수 있어 최대 5분 대기 후 기동.
 # 이미지는 pull하지 않는다(배포는 CD 몫, 부팅 복구는 기존 이미지로 충분).
@@ -50,11 +55,12 @@ current_crontab="$(crontab -l 2>/dev/null || true)"
 
 # 기존 마커 줄을 전부 제거한 뒤 현재 정의로 다시 추가 - 시각/경로 변경이
 # 재실행만으로 반영되도록 한다.
-new_crontab="$(grep -vF "$BACKUP_MARKER" <<< "$current_crontab" | grep -vF "$UPLOADS_MARKER" | grep -vF "$BOOT_MARKER" || true)"
+new_crontab="$(grep -vF "$BACKUP_MARKER" <<< "$current_crontab" | grep -vF "$UPLOADS_MARKER" | grep -vF "$BOOT_MARKER" | grep -vF "$METRICS_MARKER" || true)"
 new_crontab="$new_crontab
 $BACKUP_LINE
 $UPLOADS_LINE
-$BOOT_LINE"
+$BOOT_LINE
+$METRICS_LINE"
 
 # 앞뒤 빈 줄 정리 후 반영
 echo "$new_crontab" | sed '/^$/d' | crontab -
@@ -62,5 +68,6 @@ echo "$new_crontab" | sed '/^$/d' | crontab -
 echo "[install-cron] MySQL 백업(매일 03:00 KST = 18:00 UTC) 등록/갱신"
 echo "[install-cron] 업로드 이미지 백업(매일 03:15 KST = 18:15 UTC) 등록/갱신"
 echo "[install-cron] 부팅 시 스택 자동 기동(@reboot) 등록/갱신"
+echo "[install-cron] 컨테이너 메트릭(docker stats -> textfile collector, 1분마다) 등록/갱신"
 echo "[install-cron] 완료. 현재 crontab:"
 crontab -l
