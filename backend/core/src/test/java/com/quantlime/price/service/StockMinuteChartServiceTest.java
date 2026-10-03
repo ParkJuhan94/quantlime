@@ -13,6 +13,7 @@ import com.quantlime.infra.toss.dto.TossCandleResponse.TossCandle;
 import com.quantlime.infra.toss.dto.TossCandleResponse.TossCandlePageResult;
 import com.quantlime.price.cache.MinuteChartCacheStore;
 import com.quantlime.price.dto.response.MinuteChartResponse;
+import com.quantlime.price.implement.MinuteChartCollector;
 import com.quantlime.stock.StockFixture;
 import com.quantlime.stock.service.StockMasterService;
 import java.util.List;
@@ -22,7 +23,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -41,11 +41,13 @@ class StockMinuteChartServiceTest {
     @Mock
     private MinuteChartCacheStore minuteChartCacheStore;
 
-    @InjectMocks
+    // 종목 확인·캐싱(service)과 토스 호출·변환(collector)을 함께 검증한다 - collector는 실제 객체.
     private StockMinuteChartService service;
 
     @BeforeEach
     void setUp() {
+        service = new StockMinuteChartService(
+            stockMasterService, new MinuteChartCollector(tossApiClient), minuteChartCacheStore);
         given(stockMasterService.getStockByCode(CODE)).willReturn(StockFixture.createStock(CODE, "삼성전자"));
     }
 

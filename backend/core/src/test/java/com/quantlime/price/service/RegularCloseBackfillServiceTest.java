@@ -15,16 +15,17 @@ import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.dto.RegularCloseBackfillResult;
 import com.quantlime.price.implement.DailyPriceAppender;
 import com.quantlime.price.implement.DailyPriceReader;
+import com.quantlime.price.implement.RegularCloseCollector;
 import com.quantlime.stock.StockFixture;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -46,8 +47,15 @@ class RegularCloseBackfillServiceTest {
     @Mock
     private TossApiClient tossApiClient;
 
-    @InjectMocks
     private RegularCloseBackfillService regularCloseBackfillService;
+
+    // 대상 선정·집계(service)와 1분봉 복원·저장(collector)을 함께 검증한다 - collector는 실제 객체.
+    @BeforeEach
+    void setUp() {
+        regularCloseBackfillService = new RegularCloseBackfillService(
+            dailyPriceReader, domesticListedStockCache,
+            new RegularCloseCollector(dailyPriceAppender, tossApiClient));
+    }
 
     @Test
     @DisplayName("[미확정 행은 1분봉 조회 결과로 정규장 종가를 확정한다]")
