@@ -2,9 +2,9 @@ package com.quantlime.market.service;
 
 import com.quantlime.infra.naver.NaverFinanceApiClient;
 import com.quantlime.infra.naver.dto.NaverIndexCandleResponse;
-import com.quantlime.market.domain.BenchmarkIndex;
 import com.quantlime.market.domain.OverseasIndexCode;
-import com.quantlime.market.repository.BenchmarkIndexRepository;
+import com.quantlime.market.implement.BenchmarkIndexAppender;
+import com.quantlime.market.implement.BenchmarkIndexReader;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
@@ -65,7 +65,8 @@ public class BenchmarkIndexBackfillService {
     // 루프에 빠지지 않도록 하는 안전장치 - 400일 목표엔 page 7개면 충분.
     private static final int MAX_PAGES = 20;
 
-    private final BenchmarkIndexRepository benchmarkIndexRepository;
+    private final BenchmarkIndexReader benchmarkIndexReader;
+    private final BenchmarkIndexAppender benchmarkIndexAppender;
     private final NaverFinanceApiClient naverFinanceApiClient;
 
     public void backfillAllIfNeeded() {
@@ -118,7 +119,7 @@ public class BenchmarkIndexBackfillService {
     }
 
     private void backfill(String indexCode, int targetDays, IntFunction<List<NaverIndexCandleResponse>> fetchPage) {
-        long existingCount = benchmarkIndexRepository.countByIndexCode(indexCode);
+        long existingCount = benchmarkIndexReader.count(indexCode);
         if (existingCount >= targetDays) {
             log.debug("벤치마크 이력 백필 불필요: indexCode={}, 기존건수={}", indexCode, existingCount);
             return;
@@ -158,17 +159,17 @@ public class BenchmarkIndexBackfillService {
         int saved = 0;
         for (NaverIndexCandleResponse candle : candles) {
             LocalDate tradeDate = parseTradeDate(candle.localTradedAt());
-            if (benchmarkIndexRepository.existsByIndexCodeAndTradeDate(indexCode, tradeDate)) {
+            if (benchmarkIndexReader.exists(indexCode, tradeDate)) {
                 continue;
             }
             try {
-                benchmarkIndexRepository.save(BenchmarkIndex.of(
+                benchmarkIndexAppender.append(
                     indexCode,
                     tradeDate,
                     parseNumber(candle.openPrice()),
                     parseNumber(candle.highPrice()),
                     parseNumber(candle.lowPrice()),
-                    parseNumber(candle.closePrice())));
+                    parseNumber(candle.closePrice()));
                 saved++;
             } catch (DataIntegrityViolationException e) {
                 log.debug("벤치마크 이력 중복 저장 스킵: indexCode={}, date={}", indexCode, tradeDate);

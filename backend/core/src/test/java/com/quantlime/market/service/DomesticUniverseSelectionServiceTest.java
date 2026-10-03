@@ -10,7 +10,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.quantlime.price.dto.DomesticStockTradingValue;
-import com.quantlime.price.repository.DomesticDailyPriceRepository;
+import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.price.service.DomesticDailyPriceService;
 import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
@@ -36,7 +36,7 @@ class DomesticUniverseSelectionServiceTest {
     private DomesticDailyPriceService domesticDailyPriceService;
 
     @Mock
-    private DomesticDailyPriceRepository domesticDailyPriceRepository;
+    private DailyPriceReader dailyPriceReader;
 
     @InjectMocks
     private DomesticUniverseSelectionService domesticUniverseSelectionService;
@@ -50,7 +50,7 @@ class DomesticUniverseSelectionServiceTest {
         Stock normalStock = stock("005930", "삼성전자");
         given(stockMasterService.getAllListedStocks())
             .willReturn(List.of(reit, notReitButContainsName, normalStock));
-        given(domesticDailyPriceRepository.findTopByTradingValue(any(), eq(500)))
+        given(dailyPriceReader.findTopDomesticByTradingValue(any(), eq(500)))
             .willReturn(List.of(new DomesticStockTradingValue("005930", 1_000_000L)));
 
         // when
@@ -72,7 +72,7 @@ class DomesticUniverseSelectionServiceTest {
         Stock domesticStock = stock("005930", "삼성전자");
         given(stockMasterService.getAllListedStocks())
             .willReturn(List.of(overseasStock, domesticStock));
-        given(domesticDailyPriceRepository.findTopByTradingValue(any(), eq(500)))
+        given(dailyPriceReader.findTopDomesticByTradingValue(any(), eq(500)))
             .willReturn(List.of(new DomesticStockTradingValue("005930", 1_000_000L)));
 
         // when
@@ -89,7 +89,7 @@ class DomesticUniverseSelectionServiceTest {
         // given
         given(stockMasterService.getAllListedStocks())
             .willReturn(List.of(stock("005930", "삼성전자"), stock("000660", "SK하이닉스")));
-        given(domesticDailyPriceRepository.findTopByTradingValue(any(), eq(500)))
+        given(dailyPriceReader.findTopDomesticByTradingValue(any(), eq(500)))
             .willReturn(List.of(new DomesticStockTradingValue("005930", 1_000_000L)));
 
         // when
@@ -107,7 +107,7 @@ class DomesticUniverseSelectionServiceTest {
         given(stockMasterService.getAllListedStocks())
             .willReturn(List.of(stock("005930", "삼성전자"), stock("000660", "SK하이닉스")));
         doThrowOnBackfill("005930", 60);
-        given(domesticDailyPriceRepository.findTopByTradingValue(any(), eq(500))).willReturn(List.of());
+        given(dailyPriceReader.findTopDomesticByTradingValue(any(), eq(500))).willReturn(List.of());
 
         // when & then: 예외가 전파되지 않고 나머지 종목까지 처리됨
         domesticUniverseSelectionService.selectAndBackfillUniverse();

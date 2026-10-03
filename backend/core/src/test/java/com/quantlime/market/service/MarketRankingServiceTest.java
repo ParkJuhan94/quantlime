@@ -15,7 +15,7 @@ import com.quantlime.score.domain.Divergence;
 import com.quantlime.score.domain.Grade;
 import com.quantlime.score.domain.Quadrant;
 import com.quantlime.score.domain.Score;
-import com.quantlime.score.repository.ScoreRepository;
+import com.quantlime.score.implement.ScoreReader;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
@@ -45,7 +45,7 @@ class MarketRankingServiceTest {
     private TossMarketRankingCache tossMarketRankingCache;
 
     @Mock
-    private ScoreRepository scoreRepository;
+    private ScoreReader scoreReader;
 
     private MarketRankingService marketRankingService;
 
@@ -57,7 +57,7 @@ class MarketRankingServiceTest {
     @BeforeEach
     void setUp() {
         marketRankingService = new MarketRankingService(
-            domesticMarketRankingCache, overseasMarketRankingCache, tossMarketRankingCache, scoreRepository);
+            domesticMarketRankingCache, overseasMarketRankingCache, tossMarketRankingCache, scoreReader);
     }
 
     @Test
@@ -169,7 +169,7 @@ class MarketRankingServiceTest {
             List.of(ranking("005930", 2.0)));
         Score score = Score.of("005930", LocalDate.now(), 70.0, 60.0, 65.0,
             Grade.BUY, Quadrant.TREND_UP_OVERSOLD, Divergence.of(false, null), false);
-        given(scoreRepository.findLatestScoresByStockCodesOrderByCompositeScoreDesc(List.of("005930")))
+        given(scoreReader.findLatestScores(List.of("005930")))
             .willReturn(List.of(score));
 
         // when
@@ -187,7 +187,7 @@ class MarketRankingServiceTest {
         // given
         given(tossMarketRankingCache.get("domestic", "gainers", RankingPeriod.REALTIME)).willReturn(
             List.of(ranking("005930", 2.0)));
-        given(scoreRepository.findLatestScoresByStockCodesOrderByCompositeScoreDesc(List.of("005930")))
+        given(scoreReader.findLatestScores(List.of("005930")))
             .willReturn(List.of());
 
         // when

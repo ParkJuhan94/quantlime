@@ -17,7 +17,8 @@ import com.quantlime.infra.toss.dto.TossInvestorTradingResponse.InvestorTradingR
 import com.quantlime.market.domain.AggregationInterval;
 import com.quantlime.market.domain.InvestorTrading;
 import com.quantlime.market.domain.InvestorTradingAmounts;
-import com.quantlime.market.repository.InvestorTradingRepository;
+import com.quantlime.market.implement.InvestorTradingAppender;
+import com.quantlime.market.implement.InvestorTradingReader;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -36,7 +37,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class InvestorTradingBackfillServiceTest {
 
     @Mock
-    private InvestorTradingRepository investorTradingRepository;
+    private InvestorTradingReader investorTradingReader;
+
+    @Mock
+    private InvestorTradingAppender investorTradingAppender;
 
     @Mock
     private TossApiClient tossApiClient;
@@ -50,7 +54,7 @@ class InvestorTradingBackfillServiceTest {
         // given
         given(tossApiClient.getInvestorTrading(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(), eq(100), any()))
             .willReturn(responseWith(record("2026-07-29", "2026-07-29T20:00:02+09:00")));
-        given(investorTradingRepository.findByMarketCodeAndAggregationIntervalAndBaseDate(any(), any(), any()))
+        given(investorTradingReader.find(any(), any(), any()))
             .willReturn(Optional.empty());
 
         // when
@@ -59,7 +63,7 @@ class InvestorTradingBackfillServiceTest {
         // then: KOSPI/KOSDAQ x WEEKLY/MONTHLY = 4회 API 호출, 4건 저장
         verify(tossApiClient, times(4)).getInvestorTrading(
             org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(), eq(100), any());
-        verify(investorTradingRepository, times(4)).save(any(InvestorTrading.class));
+        verify(investorTradingAppender, times(4)).save(any(InvestorTrading.class));
     }
 
     @Test
@@ -75,14 +79,14 @@ class InvestorTradingBackfillServiceTest {
             .willReturn(responseWith(record("2026-07-24", updatedAt)));
 
         InvestorTrading existing = existingWithSourceUpdatedAt(updatedAt);
-        given(investorTradingRepository.findByMarketCodeAndAggregationIntervalAndBaseDate(any(), any(), any()))
+        given(investorTradingReader.find(any(), any(), any()))
             .willReturn(Optional.of(existing));
 
         // when
         investorTradingBackfillService.refreshAllIfNeeded();
 
         // then: 이미 있고 updatedAt도 같으니 저장/갱신 없음
-        verify(investorTradingRepository, never()).save(any());
+        verify(investorTradingAppender, never()).save(any());
     }
 
     @Test
@@ -97,7 +101,7 @@ class InvestorTradingBackfillServiceTest {
             .willReturn(responseWith(List.of()));
 
         InvestorTrading existing = existingWithSourceUpdatedAt("2026-07-29T15:00:00+09:00");
-        given(investorTradingRepository.findByMarketCodeAndAggregationIntervalAndBaseDate(
+        given(investorTradingReader.find(
             eq("KOSPI"), eq(AggregationInterval.WEEKLY), any()))
             .willReturn(Optional.of(existing));
 
@@ -106,7 +110,7 @@ class InvestorTradingBackfillServiceTest {
 
         // then: 신규 저장 없이 기존 행 하나만 덮어써진다(save가 갱신된 엔티티로 1회 호출)
         ArgumentCaptor<InvestorTrading> captor = ArgumentCaptor.forClass(InvestorTrading.class);
-        verify(investorTradingRepository, times(1)).save(captor.capture());
+        verify(investorTradingAppender, times(1)).save(captor.capture());
         assertThat(captor.getValue()).isSameAs(existing);
         assertThat(existing.getSourceUpdatedAt()).isEqualTo(LocalDateTime.of(2026, 7, 29, 20, 0, 2));
     }

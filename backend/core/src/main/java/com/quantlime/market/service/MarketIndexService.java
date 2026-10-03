@@ -11,7 +11,7 @@ import com.quantlime.market.domain.OverseasIndexCode;
 import com.quantlime.market.dto.response.IndexChartResponse;
 import com.quantlime.market.dto.response.IndexMinuteChartResponse;
 import com.quantlime.market.dto.response.MarketIndexResponse;
-import com.quantlime.market.repository.BenchmarkIndexRepository;
+import com.quantlime.market.implement.BenchmarkIndexReader;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
@@ -34,7 +34,7 @@ public class MarketIndexService {
     private final OverseasIndexChartCache overseasIndexChartCache;
     private final BitcoinChartCache bitcoinChartCache;
     private final ExchangeRateChartCache exchangeRateChartCache;
-    private final BenchmarkIndexRepository benchmarkIndexRepository;
+    private final BenchmarkIndexReader benchmarkIndexReader;
 
     public MarketIndexResponse getIndices() {
         return marketIndexCache.get();
@@ -51,9 +51,8 @@ public class MarketIndexService {
      */
     public List<IndexChartResponse> getIndexChart(String code) {
         if (DOMESTIC_CODES.contains(code)) {
-            return benchmarkIndexRepository
-                .findByIndexCodeAndTradeDateBetweenOrderByTradeDateAsc(
-                    code, LocalDate.now().minusDays(CHART_LOOKBACK_DAYS), LocalDate.now())
+            return benchmarkIndexReader
+                .findBetween(code, LocalDate.now().minusDays(CHART_LOOKBACK_DAYS), LocalDate.now())
                 .stream()
                 .map(this::toChartResponse)
                 .toList();

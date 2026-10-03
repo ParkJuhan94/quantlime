@@ -4,7 +4,7 @@ import com.quantlime.market.cache.MarketRankingCache;
 import com.quantlime.market.dto.response.HotSectorResponse;
 import com.quantlime.market.dto.response.MarketRankingResponse;
 import com.quantlime.price.domain.StockLiquidity;
-import com.quantlime.price.repository.StockLiquidityRepository;
+import com.quantlime.price.implement.StockLiquidityReader;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -37,7 +37,7 @@ public class HotSectorService {
 
     // 필드명이 MarketRankingCacheConfig의 @Bean 메서드명과 일치해야 한다(MarketRankingService와 동일 관례).
     private final MarketRankingCache domesticMarketRankingCache;
-    private final StockLiquidityRepository stockLiquidityRepository;
+    private final StockLiquidityReader stockLiquidityReader;
 
     public List<HotSectorResponse> getHotSectors(int limit) {
         List<MarketRankingResponse> snapshot = domesticMarketRankingCache.getAll();
@@ -65,7 +65,7 @@ public class HotSectorService {
 
     private Map<String, Double> liquidWeights(List<MarketRankingResponse> snapshot) {
         List<String> codes = snapshot.stream().map(MarketRankingResponse::stockCode).toList();
-        return stockLiquidityRepository.findAllByStockCodeIn(codes).stream()
+        return stockLiquidityReader.findAllByStockCodes(codes).stream()
             .filter(StockLiquidity::isLiquid)
             .filter(liquidity -> liquidity.getAvgTradingValue20d() != null && liquidity.getAvgTradingValue20d() > 0)
             .collect(Collectors.toMap(StockLiquidity::getStockCode, StockLiquidity::getAvgTradingValue20d,

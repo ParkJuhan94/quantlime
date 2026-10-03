@@ -4,12 +4,11 @@ import com.quantlime.market.domain.AggregationInterval;
 import com.quantlime.market.domain.InvestorTrading;
 import com.quantlime.market.dto.mapper.InvestorTradingMapper;
 import com.quantlime.market.dto.response.InvestorTradingResponse;
-import com.quantlime.market.repository.InvestorTradingRepository;
+import com.quantlime.market.implement.InvestorTradingReader;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,13 +21,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class InvestorTradingService {
 
-    private final InvestorTradingRepository investorTradingRepository;
+    private final InvestorTradingReader investorTradingReader;
 
     public List<InvestorTradingResponse> getInvestorTrading(String marketCode, String intervalQueryValue, int count) {
         AggregationInterval interval = AggregationInterval.fromQueryValue(intervalQueryValue);
-        List<InvestorTrading> latestFirst = investorTradingRepository
-            .findByMarketCodeAndAggregationIntervalOrderByBaseDateDesc(
-                marketCode, interval, PageRequest.of(0, count));
+        List<InvestorTrading> latestFirst = investorTradingReader.findLatest(marketCode, interval, count);
 
         List<InvestorTradingResponse> responses = new ArrayList<>(latestFirst.stream()
             .map(InvestorTradingMapper::toInvestorTradingResponse)
