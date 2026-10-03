@@ -12,8 +12,8 @@ import com.quantlime.backtest.domain.BacktestAxis;
 import com.quantlime.backtest.domain.BacktestResult;
 import com.quantlime.backtest.dto.response.BacktestResponse;
 import com.quantlime.backtest.exception.BacktestErrorCode;
-import com.quantlime.backtest.repository.BacktestDailyScoreRepository;
-import com.quantlime.backtest.repository.BacktestResultRepository;
+import com.quantlime.backtest.implement.BacktestAppender;
+import com.quantlime.backtest.implement.BacktestReader;
 import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.common.exception.ValidationException;
 import com.quantlime.infra.python.PythonEngineClient;
@@ -22,10 +22,10 @@ import com.quantlime.infra.python.dto.BacktestApiResponse.AxisBacktestApiRespons
 import com.quantlime.infra.python.dto.BacktestApiResponse.HorizonStatApiResponse;
 import com.quantlime.infra.python.dto.BacktestApiResponse.StabilityStatApiResponse;
 import com.quantlime.market.domain.BenchmarkIndex;
-import com.quantlime.market.repository.BenchmarkIndexRepository;
+import com.quantlime.market.implement.BenchmarkIndexReader;
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
-import com.quantlime.price.repository.OverseasDailyPriceRepository;
+import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.price.service.DomesticDailyPriceService;
 import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
@@ -55,22 +55,19 @@ class BacktestServiceTest {
     private DomesticDailyPriceService domesticDailyPriceService;
 
     @Mock
-    private OverseasDailyPriceRepository overseasDailyPriceRepository;
+    private BacktestReader backtestReader;
 
     @Mock
-    private BenchmarkIndexRepository benchmarkIndexRepository;
+    private BenchmarkIndexReader benchmarkIndexReader;
+
+    @Mock
+    private DailyPriceReader dailyPriceReader;
 
     @Mock
     private PythonEngineClient pythonEngineClient;
 
     @Mock
-    private BacktestPersistenceService backtestPersistenceService;
-
-    @Mock
-    private BacktestResultRepository backtestResultRepository;
-
-    @Mock
-    private BacktestDailyScoreRepository backtestDailyScoreRepository;
+    private BacktestAppender backtestAppender;
 
     @InjectMocks
     private BacktestService backtestService;
@@ -82,7 +79,7 @@ class BacktestServiceTest {
         given(stockMasterService.getStockByCode(STOCK_CODE)).willReturn(stock(STOCK_CODE, MarketType.KOSPI));
         given(domesticDailyPriceService.getDailyPrices(eq(STOCK_CODE), any(), any()))
             .willReturn(List.of(domesticDailyPrice()));
-        given(benchmarkIndexRepository.findByIndexCodeAndTradeDateBetweenOrderByTradeDateAsc(
+        given(benchmarkIndexReader.findBetween(
             eq("KOSPI"), any(), any())).willReturn(List.of(benchmarkIndex()));
         given(pythonEngineClient.runBacktest(any())).willReturn(apiResponse());
 
@@ -91,8 +88,8 @@ class BacktestServiceTest {
 
         // then
         verify(pythonEngineClient).runBacktest(any());
-        verify(backtestPersistenceService).saveAll(any());
-        verify(backtestPersistenceService).replaceDailyScores(eq(STOCK_CODE), eq("v2.1"), any());
+        verify(backtestAppender).saveAll(any());
+        verify(backtestAppender).replaceDailyScores(eq(STOCK_CODE), eq("v2.1"), any());
     }
 
     @Test
@@ -102,10 +99,10 @@ class BacktestServiceTest {
         String overseasStockCode = "AAPL";
         given(stockMasterService.getStockByCode(overseasStockCode))
             .willReturn(stock(overseasStockCode, MarketType.NASDAQ));
-        given(overseasDailyPriceRepository
-            .findByStockCodeAndTradeDateBetweenOrderByTradeDateDesc(eq(overseasStockCode), any(), any()))
+        given(dailyPriceReader
+            .findOverseasBetween(eq(overseasStockCode), any(), any()))
             .willReturn(List.of(overseasDailyPrice(overseasStockCode)));
-        given(benchmarkIndexRepository.findByIndexCodeAndTradeDateBetweenOrderByTradeDateAsc(
+        given(benchmarkIndexReader.findBetween(
             eq("NASDAQ"), any(), any())).willReturn(List.of(benchmarkIndex()));
         given(pythonEngineClient.runBacktest(any())).willReturn(apiResponse());
 
@@ -115,7 +112,7 @@ class BacktestServiceTest {
         // then: 해외종목은 국내 daily_price가 아니라 overseas_daily_price에서 조회한다
         verify(domesticDailyPriceService, never()).getDailyPrices(any(String.class), any(), any());
         verify(pythonEngineClient).runBacktest(any());
-        verify(backtestPersistenceService).saveAll(any());
+        verify(backtestAppender).saveAll(any());
     }
 
     @Test
@@ -152,7 +149,7 @@ class BacktestServiceTest {
         given(stockMasterService.getStockByCode(STOCK_CODE)).willReturn(stock(STOCK_CODE, MarketType.KOSPI));
         given(domesticDailyPriceService.getDailyPrices(eq(STOCK_CODE), any(), any()))
             .willReturn(List.of(domesticDailyPrice()));
-        given(benchmarkIndexRepository.findByIndexCodeAndTradeDateBetweenOrderByTradeDateAsc(
+        given(benchmarkIndexReader.findBetween(
             eq("KOSPI"), any(), any())).willReturn(List.of());
 
         // when & then
@@ -165,7 +162,7 @@ class BacktestServiceTest {
     @DisplayName("[백테스트 결과가 없으면 NOT_FOUND 예외를 던진다]")
     void getBacktestResult_noResults_throwsNotFoundException() {
         // given
-        given(backtestResultRepository.findTopByStockCodeOrderByBacktestDateDesc(STOCK_CODE))
+        given(backtestReader.findLatestResult(STOCK_CODE))
             .willReturn(Optional.empty());
 
         // when & then
@@ -181,13 +178,13 @@ class BacktestServiceTest {
         BacktestResult latest = BacktestResult.of(
             STOCK_CODE, BacktestAxis.TREND, 5, "v2.1", LocalDate.now(),
             300, 0.1, -0.1, 0.3, 0.05, 0.1, List.of());
-        given(backtestResultRepository.findTopByStockCodeOrderByBacktestDateDesc(STOCK_CODE))
+        given(backtestReader.findLatestResult(STOCK_CODE))
             .willReturn(Optional.of(latest));
-        given(backtestResultRepository
-            .findByStockCodeAndScoreVersionOrderByAxisAscHorizonDaysAsc(STOCK_CODE, "v2.1"))
+        given(backtestReader
+            .findResults(STOCK_CODE, "v2.1"))
             .willReturn(List.of(latest));
-        given(backtestDailyScoreRepository
-            .findByStockCodeAndScoreVersionOrderByTradeDateAsc(STOCK_CODE, "v2.1"))
+        given(backtestReader
+            .findDailyScores(STOCK_CODE, "v2.1"))
             .willReturn(List.of());
 
         // when

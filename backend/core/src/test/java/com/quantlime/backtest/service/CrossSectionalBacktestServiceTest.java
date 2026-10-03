@@ -11,12 +11,13 @@ import static org.mockito.Mockito.verify;
 
 import com.quantlime.backtest.domain.BacktestDailyScore;
 import com.quantlime.backtest.exception.BacktestErrorCode;
-import com.quantlime.backtest.repository.BacktestDailyScoreRepository;
+import com.quantlime.backtest.implement.BacktestAppender;
+import com.quantlime.backtest.implement.BacktestReader;
 import com.quantlime.common.exception.ValidationException;
 import com.quantlime.infra.python.PythonEngineClient;
 import com.quantlime.infra.python.dto.CrossSectionalBacktestApiResponse;
 import com.quantlime.market.domain.BenchmarkIndex;
-import com.quantlime.market.repository.BenchmarkIndexRepository;
+import com.quantlime.market.implement.BenchmarkIndexReader;
 import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
@@ -41,16 +42,16 @@ class CrossSectionalBacktestServiceTest {
     private StockMasterService stockMasterService;
 
     @Mock
-    private BacktestDailyScoreRepository backtestDailyScoreRepository;
+    private BacktestReader backtestReader;
 
     @Mock
-    private BenchmarkIndexRepository benchmarkIndexRepository;
+    private BenchmarkIndexReader benchmarkIndexReader;
 
     @Mock
     private PythonEngineClient pythonEngineClient;
 
     @Mock
-    private BacktestPersistenceService backtestPersistenceService;
+    private BacktestAppender backtestAppender;
 
     @InjectMocks
     private CrossSectionalBacktestService crossSectionalBacktestService;
@@ -82,8 +83,8 @@ class CrossSectionalBacktestServiceTest {
     void runForMarket_noPersistedScores_skipsWithoutCallingEngine() {
         // given
         given(stockMasterService.getAllListedStocks()).willReturn(List.of(stock("005930", MarketType.KOSPI)));
-        given(backtestDailyScoreRepository
-            .findByStockCodeInAndScoreVersionOrderByStockCodeAscTradeDateAsc(any(), anyString()))
+        given(backtestReader
+            .findDailyScoresByStocks(any(), anyString()))
             .willReturn(List.of());
 
         // when
@@ -98,10 +99,10 @@ class CrossSectionalBacktestServiceTest {
     void runForMarket_happyPath_runsEightCombinationsAndPersistsEach() {
         // given
         given(stockMasterService.getAllListedStocks()).willReturn(List.of(stock("005930", MarketType.KOSPI)));
-        given(backtestDailyScoreRepository
-            .findByStockCodeInAndScoreVersionOrderByStockCodeAscTradeDateAsc(any(), eq(SCORE_VERSION)))
+        given(backtestReader
+            .findDailyScoresByStocks(any(), eq(SCORE_VERSION)))
             .willReturn(List.of(dailyScore("005930")));
-        given(benchmarkIndexRepository.findByIndexCodeAndTradeDateBetweenOrderByTradeDateAsc(
+        given(benchmarkIndexReader.findBetween(
             eq("KOSPI"), any(), any())).willReturn(List.of(benchmarkIndex()));
         given(pythonEngineClient.runCrossSectionalBacktest(any())).willReturn(apiResponse(5));
 
@@ -110,7 +111,7 @@ class CrossSectionalBacktestServiceTest {
 
         // then
         verify(pythonEngineClient, times(8)).runCrossSectionalBacktest(any());
-        verify(backtestPersistenceService, times(8)).saveCrossSectional(any());
+        verify(backtestAppender, times(8)).saveCrossSectional(any());
     }
 
     @Test
@@ -118,10 +119,10 @@ class CrossSectionalBacktestServiceTest {
     void runForMarket_oneCombinationFails_othersStillPersisted() {
         // given
         given(stockMasterService.getAllListedStocks()).willReturn(List.of(stock("005930", MarketType.KOSPI)));
-        given(backtestDailyScoreRepository
-            .findByStockCodeInAndScoreVersionOrderByStockCodeAscTradeDateAsc(any(), eq(SCORE_VERSION)))
+        given(backtestReader
+            .findDailyScoresByStocks(any(), eq(SCORE_VERSION)))
             .willReturn(List.of(dailyScore("005930")));
-        given(benchmarkIndexRepository.findByIndexCodeAndTradeDateBetweenOrderByTradeDateAsc(
+        given(benchmarkIndexReader.findBetween(
             eq("KOSPI"), any(), any())).willReturn(List.of(benchmarkIndex()));
         given(pythonEngineClient.runCrossSectionalBacktest(any()))
             .willThrow(new RuntimeException("일시적 장애"))
@@ -132,7 +133,7 @@ class CrossSectionalBacktestServiceTest {
 
         // then: 8번 모두 시도되고, 실패한 1건을 제외한 7건만 저장된다
         verify(pythonEngineClient, times(8)).runCrossSectionalBacktest(any());
-        verify(backtestPersistenceService, times(7)).saveCrossSectional(any());
+        verify(backtestAppender, times(7)).saveCrossSectional(any());
     }
 
     @Test

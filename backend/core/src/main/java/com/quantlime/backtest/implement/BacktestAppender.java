@@ -1,4 +1,4 @@
-package com.quantlime.backtest.service;
+package com.quantlime.backtest.implement;
 
 import com.quantlime.backtest.domain.BacktestDailyScore;
 import com.quantlime.backtest.domain.BacktestResult;
@@ -13,14 +13,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 퀀트 엔진 백테스트 응답을 {@link BacktestResult}로 영속화하는 책임만 분리.
- * {@link BacktestService}가 외부 HTTP 호출까지 감싸는 트랜잭션을 만들지
- * 않도록 저장 전용 빈으로 둔다(ScorePersistenceService와 동일한 이유).
+ * 퀀트 엔진 백테스트 응답을 {@link BacktestResult}로 영속화하는 구현 레이어
+ * (Implementation) - {@code BacktestService}가 외부 HTTP 호출까지 감싸는
+ * 트랜잭션을 만들지 않도록 저장 전용 빈으로 둔다(ScorePersistenceService와 동일한
+ * 이유). 원래 service 패키지의 {@code BacktestPersistenceService}였으나 Repository만
+ * 다루는 저장 전용이라 구현 레이어로 옮겼다. 조회는 {@link BacktestReader}가 맡는다.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class BacktestPersistenceService {
+public class BacktestAppender {
 
     private final BacktestResultRepository backtestResultRepository;
     private final BacktestDailyScoreRepository backtestDailyScoreRepository;
@@ -69,7 +71,7 @@ public class BacktestPersistenceService {
     /**
      * 횡단면 백테스트 결과 하나(시장·축·horizon·버전·표본분할 조합)를
      * upsert한다 - saveOne(BacktestResult)과 동일한 find-or-update 패턴.
-     * {@link CrossSectionalBacktestService}가 조합마다 개별 호출하므로 리스트
+     * {@code CrossSectionalBacktestService}가 조합마다 개별 호출하므로 리스트
      * 배치가 아니라 단건 메서드로 둔다.
      */
     @Transactional
