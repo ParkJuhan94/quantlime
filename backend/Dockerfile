@@ -14,6 +14,9 @@ COPY common/build.gradle common/build.gradle
 COPY event/build.gradle event/build.gradle
 COPY client-support/build.gradle client-support/build.gradle
 COPY tosspayments/build.gradle tosspayments/build.gradle
+COPY dart/build.gradle dart/build.gradle
+COPY kis/build.gradle kis/build.gradle
+COPY tradingview/build.gradle tradingview/build.gradle
 RUN ./gradlew --version
 
 COPY api api
@@ -22,6 +25,9 @@ COPY common common
 COPY event event
 COPY client-support client-support
 COPY tosspayments tosspayments
+COPY dart dart
+COPY kis kis
+COPY tradingview tradingview
 RUN ./gradlew :api:bootJar -x test --no-daemon
 
 FROM eclipse-temurin:21-jre AS runtime
