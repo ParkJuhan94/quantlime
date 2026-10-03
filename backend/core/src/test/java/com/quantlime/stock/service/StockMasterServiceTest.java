@@ -8,14 +8,16 @@ import static org.mockito.Mockito.verify;
 import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
+import com.quantlime.stock.implement.StockAppender;
+import com.quantlime.stock.implement.StockReader;
 import com.quantlime.stock.repository.StockRepository;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -26,8 +28,13 @@ class StockMasterServiceTest {
     @Mock
     private StockRepository stockRepository;
 
-    @InjectMocks
     private StockMasterService stockMasterService;
+
+    @BeforeEach
+    void setUp() {
+        stockMasterService = new StockMasterService(
+            new StockReader(stockRepository), new StockAppender(stockRepository), null);
+    }
 
     @Test
     @DisplayName("[신규 종목은 한글명을 포함해 그대로 등록한다]")

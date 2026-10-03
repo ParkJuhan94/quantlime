@@ -6,7 +6,8 @@ import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.exception.StockErrorCode;
-import com.quantlime.stock.repository.StockRepository;
+import com.quantlime.stock.implement.StockAppender;
+import com.quantlime.stock.implement.StockReader;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -24,17 +25,18 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class StockMasterService {
 
-    private final StockRepository stockRepository;
+    private final StockReader stockReader;
+    private final StockAppender stockAppender;
     private final StockSearchCache stockSearchCache;
 
     @Transactional(readOnly = true)
     public List<Stock> getAllListedStocks() {
-        return stockRepository.findByListingStatus(ListingStatus.LISTED);
+        return stockReader.findByListingStatus(ListingStatus.LISTED);
     }
 
     @Transactional(readOnly = true)
     public Stock getStockByCode(String stockCode) {
-        return stockRepository.findByStockCode(stockCode)
+        return stockReader.findByStockCode(stockCode)
             .orElseThrow(() -> new NotFoundException(
                 StockErrorCode.NOT_FOUND_STOCK));
     }
@@ -48,7 +50,7 @@ public class StockMasterService {
     @Transactional
     public Stock registerStock(String stockCode, String stockName,
                                MarketType marketType, String sector, String koreanName) {
-        var existing = stockRepository.findByStockCode(stockCode);
+        var existing = stockReader.findByStockCode(stockCode);
         if (existing.isPresent()) {
             Stock stock = existing.get();
             stock.updateKoreanName(koreanName);
@@ -57,7 +59,7 @@ public class StockMasterService {
 
         Stock stock = Stock.of(stockCode, stockName, marketType,
             ListingStatus.LISTED, sector, koreanName);
-        return stockRepository.save(stock);
+        return stockAppender.save(stock);
     }
 
     /**
@@ -67,13 +69,13 @@ public class StockMasterService {
      */
     @Transactional
     public void markPriceUnsupported(String stockCode) {
-        stockRepository.findByStockCode(stockCode)
+        stockReader.findByStockCode(stockCode)
             .ifPresent(Stock::markPriceUnsupported);
     }
 
     @Transactional
     public void bulkRegisterStocks(List<Stock> stocks) {
-        stockRepository.saveAll(stocks);
+        stockAppender.saveAll(stocks);
         log.info("종목 마스터 일괄 등록 완료: count={}", stocks.size());
     }
 
@@ -88,7 +90,7 @@ public class StockMasterService {
      */
     @Transactional(readOnly = true)
     public List<Stock> getStocksByCodesInOrder(List<String> stockCodes) {
-        Map<String, Stock> stockByCode = stockRepository.findByStockCodeIn(stockCodes).stream()
+        Map<String, Stock> stockByCode = stockReader.findByStockCodeIn(stockCodes).stream()
             .collect(Collectors.toMap(Stock::getStockCode, Function.identity()));
         return stockCodes.stream()
             .map(stockByCode::get)

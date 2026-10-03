@@ -3,7 +3,8 @@ package com.quantlime.stock.service;
 import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
-import com.quantlime.stock.repository.StockRepository;
+import com.quantlime.stock.implement.StockAppender;
+import com.quantlime.stock.implement.StockReader;
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -27,14 +28,15 @@ public class StockMasterInitializer implements ApplicationRunner {
 
     private static final String CSV_FILE_PATH = "data/krx-stocks.csv";
 
-    private final StockRepository stockRepository;
+    private final StockReader stockReader;
+    private final StockAppender stockAppender;
 
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
-        if (stockRepository.count() > 0) {
+        if (stockReader.count() > 0) {
             log.info("종목 마스터 이미 적재됨: count={}",
-                stockRepository.count());
+                stockReader.count());
             return;
         }
 
@@ -46,7 +48,7 @@ public class StockMasterInitializer implements ApplicationRunner {
 
         try (InputStream is = resource.getInputStream()) {
             List<Stock> stocks = parseCsv(is);
-            stockRepository.saveAll(stocks);
+            stockAppender.saveAll(stocks);
             log.info("종목 마스터 적재 완료: count={}", stocks.size());
         } catch (Exception e) {
             log.error("종목 마스터 적재 실패: error={}", e.getMessage(), e);

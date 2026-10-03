@@ -8,7 +8,8 @@ import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.dto.StockMasterSyncResult;
-import com.quantlime.stock.repository.StockRepository;
+import com.quantlime.stock.implement.StockAppender;
+import com.quantlime.stock.implement.StockReader;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,12 +40,13 @@ public class DomesticStockMasterSyncService {
 
     private final DartApiClient dartApiClient;
     private final TossApiClient tossApiClient;
-    private final StockRepository stockRepository;
+    private final StockReader stockReader;
+    private final StockAppender stockAppender;
 
     @Transactional
     public StockMasterSyncResult syncStockMaster() {
         Map<String, DartCorpInfo> latestByCode = fetchLatestCorpList();
-        Map<String, Stock> existingByCode = stockRepository.findAll().stream()
+        Map<String, Stock> existingByCode = stockReader.findAll().stream()
             .collect(Collectors.toMap(Stock::getStockCode, Function.identity()));
 
         int newlyListedCount = registerNewlyListed(latestByCode, existingByCode);
@@ -91,7 +93,7 @@ public class DomesticStockMasterSyncService {
             // DART corpCode API는 업종(sector) 정보를 주지 않는다 - KIND
             // 시절 빈 값 폴백과 동일하게 "기타"로 남긴다(없는 데이터를
             // 지어내지 않음).
-            stockRepository.save(Stock.of(code, info.corpName(), marketType, ListingStatus.LISTED, "기타"));
+            stockAppender.save(Stock.of(code, info.corpName(), marketType, ListingStatus.LISTED, "기타"));
             count++;
         }
         if (unresolvedMarketCount > 0) {

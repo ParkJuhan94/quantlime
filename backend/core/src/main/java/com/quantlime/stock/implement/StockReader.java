@@ -5,6 +5,7 @@ import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.repository.StockRepository;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -27,5 +28,21 @@ public class StockReader {
 
     public List<Stock> findByStockCodeIn(List<String> stockCodes) {
         return stockRepository.findByStockCodeIn(stockCodes);
+    }
+
+    public Optional<Stock> findByStockCode(String stockCode) {
+        return stockRepository.findByStockCode(stockCode);
+    }
+
+    public List<Stock> findByListingStatus(ListingStatus listingStatus) {
+        return stockRepository.findByListingStatus(listingStatus);
+    }
+
+    public List<Stock> findAll() {
+        return stockRepository.findAll();
+    }
+
+    public long count() {
+        return stockRepository.count();
     }
 }

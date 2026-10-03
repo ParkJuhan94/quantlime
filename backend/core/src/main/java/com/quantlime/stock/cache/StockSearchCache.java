@@ -1,7 +1,7 @@
 package com.quantlime.stock.cache;
 
 import com.quantlime.stock.domain.Stock;
-import com.quantlime.stock.repository.StockRepository;
+import com.quantlime.stock.implement.StockReader;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -45,7 +45,7 @@ public class StockSearchCache {
 
     private static final int REFRESH_INTERVAL_SECONDS = 600;
 
-    private final StockRepository stockRepository;
+    private final StockReader stockReader;
 
     private volatile List<Stock> cachedStocks = List.of();
     private volatile Instant lastRefreshedAt = Instant.EPOCH;
@@ -124,7 +124,7 @@ public class StockSearchCache {
     }
 
     private void refresh() {
-        cachedStocks = stockRepository.findAll();
+        cachedStocks = stockReader.findAll();
         lastRefreshedAt = Instant.now();
     }
 }

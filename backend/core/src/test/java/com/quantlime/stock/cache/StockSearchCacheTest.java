@@ -8,14 +8,15 @@ import static org.mockito.Mockito.verify;
 
 import com.quantlime.stock.StockFixture;
 import com.quantlime.stock.domain.Stock;
+import com.quantlime.stock.implement.StockReader;
 import com.quantlime.stock.repository.StockRepository;
 import java.time.Instant;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageRequest;
@@ -34,8 +35,12 @@ class StockSearchCacheTest {
     @Mock
     private StockRepository stockRepository;
 
-    @InjectMocks
     private StockSearchCache stockSearchCache;
+
+    @BeforeEach
+    void setUp() {
+        stockSearchCache = new StockSearchCache(new StockReader(stockRepository));
+    }
 
     private void seed(Stock... stocks) {
         given(stockRepository.findAll()).willReturn(List.of(stocks));

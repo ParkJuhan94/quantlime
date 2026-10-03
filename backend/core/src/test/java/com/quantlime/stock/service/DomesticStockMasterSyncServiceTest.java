@@ -16,14 +16,16 @@ import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.dto.StockMasterSyncResult;
+import com.quantlime.stock.implement.StockAppender;
+import com.quantlime.stock.implement.StockReader;
 import com.quantlime.stock.repository.StockRepository;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -40,8 +42,14 @@ class DomesticStockMasterSyncServiceTest {
     @Mock
     private StockRepository stockRepository;
 
-    @InjectMocks
     private DomesticStockMasterSyncService domesticStockMasterSyncService;
+
+    @BeforeEach
+    void setUp() {
+        domesticStockMasterSyncService = new DomesticStockMasterSyncService(
+            dartApiClient, tossApiClient,
+            new StockReader(stockRepository), new StockAppender(stockRepository));
+    }
 
     @Test
     @DisplayName("[DART 목록에는 있는데 DB에 없는 종목은 Toss로 시장구분을 조회해 신규상장으로 등록한다]")

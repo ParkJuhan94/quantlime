@@ -11,14 +11,16 @@ import static org.mockito.Mockito.verify;
 import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
+import com.quantlime.stock.implement.StockAppender;
+import com.quantlime.stock.implement.StockReader;
 import com.quantlime.stock.repository.StockRepository;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -33,8 +35,13 @@ class StockMasterInitializerTest {
     @Mock
     private StockRepository stockRepository;
 
-    @InjectMocks
     private StockMasterInitializer initializer;
+
+    @BeforeEach
+    void setUp() {
+        initializer = new StockMasterInitializer(
+            new StockReader(stockRepository), new StockAppender(stockRepository));
+    }
 
     @Test
     @DisplayName("[이미 종목이 적재돼 있으면 CSV를 읽지 않고 저장하지 않는다 - 재기동마다 중복 적재 방지]")
