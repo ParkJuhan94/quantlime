@@ -7,6 +7,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.quantlime.notification.domain.FcmToken;
+import com.quantlime.notification.implement.FcmTokenAppender;
+import com.quantlime.notification.implement.FcmTokenReader;
 import com.quantlime.notification.repository.FcmTokenRepository;
 import com.quantlime.user.UserFixture;
 import com.quantlime.user.domain.OAuthProvider;
@@ -14,12 +16,12 @@ import com.quantlime.user.domain.User;
 import com.quantlime.user.service.UserService;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -33,8 +35,13 @@ class FcmTokenServiceTest {
     @Mock
     private UserService userService;
 
-    @InjectMocks
     private FcmTokenService service;
+
+    @BeforeEach
+    void setUp() {
+        service = new FcmTokenService(
+            new FcmTokenReader(fcmTokenRepository), new FcmTokenAppender(fcmTokenRepository), userService);
+    }
 
     @Test
     @DisplayName("[처음 보는 토큰이면 새 row로 저장한다]")

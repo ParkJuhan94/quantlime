@@ -9,8 +9,10 @@ import com.quantlime.user.domain.User;
 import com.quantlime.user.domain.UserSocialAccount;
 import com.quantlime.user.dto.response.LinkedProviderResponse;
 import com.quantlime.user.exception.UserErrorCode;
-import com.quantlime.user.repository.UserRepository;
-import com.quantlime.user.repository.UserSocialAccountRepository;
+import com.quantlime.user.implement.UserAppender;
+import com.quantlime.user.implement.UserReader;
+import com.quantlime.user.implement.UserSocialAccountAppender;
+import com.quantlime.user.implement.UserSocialAccountReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -25,12 +27,14 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class UserService {
 
-    private final UserRepository userRepository;
-    private final UserSocialAccountRepository userSocialAccountRepository;
+    private final UserReader userReader;
+    private final UserAppender userAppender;
+    private final UserSocialAccountReader userSocialAccountReader;
+    private final UserSocialAccountAppender userSocialAccountAppender;
 
     @Transactional
     public User findOrCreate(OAuthUserInfo userInfo) {
-        return userRepository.findByProviderAndProviderId(
+        return userReader.findByProviderAndProviderId(
                 userInfo.provider(), userInfo.providerId())
             .map(user -> {
                 user.updateProfile(userInfo.email(), userInfo.nickname(),
@@ -39,13 +43,13 @@ public class UserService {
             })
             // 가입 계정이 아니라 나중에 연결한 소셜 계정으로 로그인한 경우 - 프로필은 가입 계정 기준을
             // 유지한다(연결 계정의 닉네임/사진으로 덮어쓰면 로그인 수단에 따라 프로필이 바뀐다).
-            .or(() -> userSocialAccountRepository
+            .or(() -> userSocialAccountReader
                 .findByProviderAndProviderId(userInfo.provider(), userInfo.providerId())
                 .map(UserSocialAccount::getUser))
             .orElseGet(() -> {
                 User user = User.of(userInfo.email(), userInfo.nickname(),
                     userInfo.profileImageUrl(), userInfo.provider(), userInfo.providerId());
-                User saved = userRepository.save(user);
+                User saved = userAppender.save(user);
                 log.info("신규 사용자 가입 완료: userId={}, provider={}",
                     saved.getId(), saved.getProvider());
                 return saved;
@@ -69,14 +73,14 @@ public class UserService {
             throw new ValidationException(AuthErrorCode.PROVIDER_ALREADY_LINKED);
         }
 
-        Optional<User> primaryOwner = userRepository.findByProviderAndProviderId(
+        Optional<User> primaryOwner = userReader.findByProviderAndProviderId(
             userInfo.provider(), userInfo.providerId());
         if (primaryOwner.isPresent()) {
             // 다른 사용자의 가입 계정(자기 자신은 위에서 걸러짐).
             throw new ValidationException(AuthErrorCode.SOCIAL_ACCOUNT_IN_USE);
         }
 
-        Optional<UserSocialAccount> linkedOwner = userSocialAccountRepository
+        Optional<UserSocialAccount> linkedOwner = userSocialAccountReader
             .findByProviderAndProviderId(userInfo.provider(), userInfo.providerId());
         if (linkedOwner.isPresent()) {
             if (linkedOwner.get().getUser().getId().equals(userId)) {
@@ -85,11 +89,11 @@ public class UserService {
             throw new ValidationException(AuthErrorCode.SOCIAL_ACCOUNT_IN_USE);
         }
 
-        if (userSocialAccountRepository.findByUser_IdAndProvider(userId, userInfo.provider()).isPresent()) {
+        if (userSocialAccountReader.findByUser_IdAndProvider(userId, userInfo.provider()).isPresent()) {
             throw new ValidationException(AuthErrorCode.PROVIDER_ALREADY_LINKED);
         }
 
-        userSocialAccountRepository.save(
+        userSocialAccountAppender.save(
             UserSocialAccount.of(user, userInfo.provider(), userInfo.providerId()));
         log.info("소셜 계정 연결 완료: userId={}, provider={}", userId, userInfo.provider());
     }
@@ -100,9 +104,9 @@ public class UserService {
         if (user.getProvider() == provider) {
             throw new ValidationException(AuthErrorCode.CANNOT_UNLINK_PRIMARY);
         }
-        UserSocialAccount account = userSocialAccountRepository.findByUser_IdAndProvider(userId, provider)
+        UserSocialAccount account = userSocialAccountReader.findByUser_IdAndProvider(userId, provider)
             .orElseThrow(() -> new NotFoundException(AuthErrorCode.SOCIAL_ACCOUNT_NOT_LINKED));
-        userSocialAccountRepository.delete(account);
+        userSocialAccountAppender.delete(account);
         log.info("소셜 계정 연결 해제: userId={}, provider={}", userId, provider);
     }
 
@@ -111,7 +115,7 @@ public class UserService {
         User user = getById(userId);
         List<LinkedProviderResponse> result = new ArrayList<>();
         result.add(toResponse(user.getProvider(), true));
-        userSocialAccountRepository.findAllByUser_Id(userId)
+        userSocialAccountReader.findAllByUser_Id(userId)
             .forEach(account -> result.add(toResponse(account.getProvider(), false)));
         return result;
     }
@@ -122,7 +126,13 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public User getById(Long userId) {
-        return userRepository.findById(userId)
+        return userReader.findById(userId)
             .orElseThrow(() -> new NotFoundException(UserErrorCode.NOT_FOUND_USER));
+    }
+
+    /** 관리자 공지 브로드캐스트 대상 - 엔티티 전체를 안 불러오고 id만 뽑는다. */
+    @Transactional(readOnly = true)
+    public List<Long> getAllUserIds() {
+        return userReader.findAllIds();
     }
 }

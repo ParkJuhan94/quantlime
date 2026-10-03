@@ -7,9 +7,10 @@ import com.quantlime.notification.domain.NotificationType;
 import com.quantlime.notification.dto.mapper.NotificationMapper;
 import com.quantlime.notification.dto.response.NotificationResponse;
 import com.quantlime.notification.exception.NotificationErrorCode;
-import com.quantlime.notification.repository.NotificationRepository;
+import com.quantlime.notification.implement.NotificationAppender;
+import com.quantlime.notification.implement.NotificationReader;
 import com.quantlime.user.domain.User;
-import com.quantlime.user.repository.UserRepository;
+import com.quantlime.user.implement.UserReader;
 import com.quantlime.user.service.UserService;
 import java.util.Collection;
 import java.util.List;
@@ -23,14 +24,15 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class NotificationService {
 
-    private final NotificationRepository notificationRepository;
-    private final UserRepository userRepository;
+    private final NotificationReader notificationReader;
+    private final NotificationAppender notificationAppender;
+    private final UserReader userReader;
     private final UserService userService;
 
     @Transactional
     public void save(Long userId, NotificationType type, String title, String content, String linkUrl) {
         User user = userService.getById(userId);
-        notificationRepository.save(Notification.of(user, type, title, content, linkUrl));
+        notificationAppender.save(Notification.of(user, type, title, content, linkUrl));
     }
 
     // 관리자 공지/전체 스코어 랭킹처럼 다수 사용자에게 동시에 보내는
@@ -39,27 +41,27 @@ public class NotificationService {
     @Transactional
     public void saveAll(Collection<Long> userIds, NotificationType type, String title, String content,
                         String linkUrl) {
-        List<Notification> notifications = userRepository.findAllById(userIds).stream()
+        List<Notification> notifications = userReader.findAllById(userIds).stream()
             .map(user -> Notification.of(user, type, title, content, linkUrl))
             .toList();
-        notificationRepository.saveAll(notifications);
+        notificationAppender.saveAll(notifications);
     }
 
     @Transactional(readOnly = true)
     public PageResponse<NotificationResponse> getNotifications(Long userId, Pageable pageable) {
         Slice<Notification> notifications =
-            notificationRepository.findByUser_IdOrderByCreatedAtDesc(userId, pageable);
+            notificationReader.findByUser_IdOrderByCreatedAtDesc(userId, pageable);
         return PageResponse.of(notifications.map(NotificationMapper::toNotificationResponse));
     }
 
     @Transactional(readOnly = true)
     public long countUnread(Long userId) {
-        return notificationRepository.countByUser_IdAndIsReadFalse(userId);
+        return notificationReader.countByUser_IdAndIsReadFalse(userId);
     }
 
     @Transactional
     public void markAsRead(Long notificationId, Long userId) {
-        Notification notification = notificationRepository.findById(notificationId)
+        Notification notification = notificationReader.findById(notificationId)
             .orElseThrow(() -> new NotFoundException(NotificationErrorCode.NOT_FOUND_NOTIFICATION));
         // 존재 여부와 소유권 미스매치를 같은 예외로 응답해, 다른 사용자의
         // 알림 id가 유효한지 여부를 응답 차이로 추론할 수 없게 한다.
@@ -71,6 +73,6 @@ public class NotificationService {
 
     @Transactional
     public void markAllAsRead(Long userId) {
-        notificationRepository.markAllAsRead(userId);
+        notificationAppender.markAllAsRead(userId);
     }
 }

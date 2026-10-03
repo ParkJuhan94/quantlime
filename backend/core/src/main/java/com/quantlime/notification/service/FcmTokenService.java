@@ -1,7 +1,8 @@
 package com.quantlime.notification.service;
 
 import com.quantlime.notification.domain.FcmToken;
-import com.quantlime.notification.repository.FcmTokenRepository;
+import com.quantlime.notification.implement.FcmTokenAppender;
+import com.quantlime.notification.implement.FcmTokenReader;
 import com.quantlime.user.domain.User;
 import com.quantlime.user.service.UserService;
 import java.util.Collection;
@@ -14,7 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class FcmTokenService {
 
-    private final FcmTokenRepository fcmTokenRepository;
+    private final FcmTokenReader fcmTokenReader;
+    private final FcmTokenAppender fcmTokenAppender;
     private final UserService userService;
 
     // 같은 토큰 문자열이 다른 계정으로 재등록되면(같은 브라우저에서 계정
@@ -23,24 +25,24 @@ public class FcmTokenService {
     @Transactional
     public void registerToken(Long userId, String token, String deviceInfo) {
         User user = userService.getById(userId);
-        fcmTokenRepository.findByToken(token)
+        fcmTokenReader.findByToken(token)
             .ifPresentOrElse(
                 existing -> existing.reassignTo(user),
-                () -> fcmTokenRepository.save(FcmToken.of(user, token, deviceInfo)));
+                () -> fcmTokenAppender.save(FcmToken.of(user, token, deviceInfo)));
     }
 
     @Transactional
     public void deleteToken(String token) {
-        fcmTokenRepository.deleteByToken(token);
+        fcmTokenAppender.deleteByToken(token);
     }
 
     @Transactional(readOnly = true)
     public List<FcmToken> getTokensForUser(Long userId) {
-        return fcmTokenRepository.findAllByUser_Id(userId);
+        return fcmTokenReader.findAllByUser_Id(userId);
     }
 
     @Transactional(readOnly = true)
     public List<FcmToken> getTokensForUsers(Collection<Long> userIds) {
-        return fcmTokenRepository.findAllByUser_IdIn(userIds);
+        return fcmTokenReader.findAllByUser_IdIn(userIds);
     }
 }

@@ -12,20 +12,23 @@ import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.notification.domain.Notification;
 import com.quantlime.notification.domain.NotificationType;
 import com.quantlime.notification.dto.response.NotificationResponse;
+import com.quantlime.notification.implement.NotificationAppender;
+import com.quantlime.notification.implement.NotificationReader;
 import com.quantlime.notification.repository.NotificationRepository;
 import com.quantlime.user.UserFixture;
 import com.quantlime.user.domain.User;
+import com.quantlime.user.implement.UserReader;
 import com.quantlime.user.repository.UserRepository;
 import com.quantlime.user.service.UserService;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageRequest;
@@ -45,8 +48,14 @@ class NotificationServiceTest {
     @Mock
     private UserService userService;
 
-    @InjectMocks
     private NotificationService service;
+
+    @BeforeEach
+    void setUp() {
+        service = new NotificationService(
+            new NotificationReader(notificationRepository), new NotificationAppender(notificationRepository),
+            new UserReader(userRepository), userService);
+    }
 
     @Captor
     private ArgumentCaptor<List<Notification>> notificationsCaptor;
