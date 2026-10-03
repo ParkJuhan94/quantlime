@@ -23,14 +23,16 @@ import com.quantlime.watchlist.WatchlistFixture;
 import com.quantlime.watchlist.WatchlistGroupFixture;
 import com.quantlime.watchlist.domain.Watchlist;
 import com.quantlime.watchlist.domain.WatchlistGroup;
+import com.quantlime.watchlist.implement.WatchlistAppender;
+import com.quantlime.watchlist.implement.WatchlistReader;
 import com.quantlime.watchlist.repository.WatchlistRepository;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.task.TaskExecutor;
@@ -61,8 +63,14 @@ class WatchlistServiceTest {
     @Mock
     private TaskExecutor watchlistTaskExecutor;
 
-    @InjectMocks
     private WatchlistService watchlistService;
+
+    @BeforeEach
+    void setUp() {
+        watchlistService = new WatchlistService(userService, stockMasterService,
+            new WatchlistReader(watchlistRepository), new WatchlistAppender(watchlistRepository),
+            watchlistGroupService, domesticDailyPriceService, scoreService, watchlistTaskExecutor);
+    }
 
     private final User user = UserFixture.createUser();
     private final Stock stock = StockFixture.createStock();

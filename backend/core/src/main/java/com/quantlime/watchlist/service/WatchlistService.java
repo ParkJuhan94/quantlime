@@ -12,7 +12,8 @@ import com.quantlime.user.service.UserService;
 import com.quantlime.watchlist.domain.Watchlist;
 import com.quantlime.watchlist.domain.WatchlistGroup;
 import com.quantlime.watchlist.exception.WatchlistErrorCode;
-import com.quantlime.watchlist.repository.WatchlistRepository;
+import com.quantlime.watchlist.implement.WatchlistAppender;
+import com.quantlime.watchlist.implement.WatchlistReader;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,7 +33,8 @@ public class WatchlistService {
 
     private final UserService userService;
     private final StockMasterService stockMasterService;
-    private final WatchlistRepository watchlistRepository;
+    private final WatchlistReader watchlistReader;
+    private final WatchlistAppender watchlistAppender;
     private final WatchlistGroupService watchlistGroupService;
     private final DomesticDailyPriceService domesticDailyPriceService;
     private final ScoreService scoreService;
@@ -50,15 +52,15 @@ public class WatchlistService {
         Stock stock = stockMasterService.getStockByCode(stockCode);
         WatchlistGroup group = watchlistGroupService.getOwnedGroup(userId, groupId);
 
-        if (watchlistRepository.existsByUser_IdAndStock_StockCode(userId, stockCode)) {
+        if (watchlistReader.existsByUser_IdAndStock_StockCode(userId, stockCode)) {
             throw new ValidationException(WatchlistErrorCode.ALREADY_EXISTS_WATCHLIST);
         }
 
         Watchlist watchlist;
         try {
             // 새 종목은 목록 맨 뒤에 추가되도록 현재 개수를 다음 sortOrder로 쓴다.
-            int nextSortOrder = (int) watchlistRepository.countByUser_Id(userId);
-            watchlist = watchlistRepository.save(Watchlist.of(user, stock, group, nextSortOrder));
+            int nextSortOrder = (int) watchlistReader.countByUser_Id(userId);
+            watchlist = watchlistAppender.save(Watchlist.of(user, stock, group, nextSortOrder));
             log.info("관심종목 등록 완료: userId={}, stockCode={}, groupId={}", userId, stockCode, groupId);
         } catch (DataIntegrityViolationException e) {
             throw new ValidationException(WatchlistErrorCode.ALREADY_EXISTS_WATCHLIST);
@@ -83,10 +85,10 @@ public class WatchlistService {
 
     @Transactional
     public void removeWatchlist(Long userId, String stockCode) {
-        Watchlist watchlist = watchlistRepository
+        Watchlist watchlist = watchlistReader
             .findByUser_IdAndStock_StockCode(userId, stockCode)
             .orElseThrow(() -> new NotFoundException(WatchlistErrorCode.NOT_FOUND_WATCHLIST));
-        watchlistRepository.delete(watchlist);
+        watchlistAppender.delete(watchlist);
         log.info("관심종목 해제 완료: userId={}, stockCode={}", userId, stockCode);
     }
 
@@ -99,11 +101,11 @@ public class WatchlistService {
     @Transactional
     public List<Watchlist> getWatchlist(Long userId) {
         reconcileUngroupedWatchlist(userId);
-        return watchlistRepository.findAllWithStockByUserId(userId);
+        return watchlistReader.findAllWithStockByUserId(userId);
     }
 
     private void reconcileUngroupedWatchlist(Long userId) {
-        List<Watchlist> ungrouped = watchlistRepository.findAllByUser_IdAndGroupIsNull(userId);
+        List<Watchlist> ungrouped = watchlistReader.findAllByUser_IdAndGroupIsNull(userId);
         if (ungrouped.isEmpty()) {
             return;
         }
@@ -114,7 +116,7 @@ public class WatchlistService {
 
     @Transactional
     public void moveToGroup(Long userId, String stockCode, Long groupId) {
-        Watchlist watchlist = watchlistRepository
+        Watchlist watchlist = watchlistReader
             .findByUser_IdAndStock_StockCode(userId, stockCode)
             .orElseThrow(() -> new NotFoundException(WatchlistErrorCode.NOT_FOUND_WATCHLIST));
         WatchlistGroup group = watchlistGroupService.getOwnedGroup(userId, groupId);
@@ -126,7 +128,7 @@ public class WatchlistService {
     // 전역으로 유일할 필요가 없다(항상 같은 그룹 안에서만 비교되므로).
     @Transactional
     public void reorderWatchlist(Long userId, List<Long> watchlistIds) {
-        List<Watchlist> items = watchlistRepository.findAllByUser_IdAndIdIn(userId, watchlistIds);
+        List<Watchlist> items = watchlistReader.findAllByUser_IdAndIdIn(userId, watchlistIds);
         Map<Long, Watchlist> itemById = new HashMap<>();
         items.forEach(item -> itemById.put(item.getId(), item));
 
@@ -142,7 +144,7 @@ public class WatchlistService {
     // 정렬 기준(watcherCount) 자체는 응답에 노출하지 않고 순서로만 반영한다.
     @Transactional(readOnly = true)
     public List<Stock> getPopularStocks(int limit) {
-        List<String> stockCodes = watchlistRepository.findStockCodesOrderByWatcherCountDesc(PageRequest.of(0, limit));
+        List<String> stockCodes = watchlistReader.findStockCodesOrderByWatcherCountDesc(PageRequest.of(0, limit));
         return stockMasterService.getStocksByCodesInOrder(stockCodes);
     }
 
@@ -150,6 +152,6 @@ public class WatchlistService {
     // 코드 집합으로 전종목 랭킹을 필터링한다.
     @Transactional(readOnly = true)
     public Set<String> getWatchlistStockCodes(Long userId) {
-        return Set.copyOf(watchlistRepository.findStockCodesByUserId(userId));
+        return Set.copyOf(watchlistReader.findStockCodesByUserId(userId));
     }
 }
