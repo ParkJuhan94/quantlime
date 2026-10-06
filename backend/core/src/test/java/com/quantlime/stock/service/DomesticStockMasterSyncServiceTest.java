@@ -16,6 +16,7 @@ import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.dto.StockMasterSyncResult;
+import com.quantlime.stock.implement.DomesticStockMasterCollector;
 import com.quantlime.stock.implement.StockAppender;
 import com.quantlime.stock.implement.StockReader;
 import com.quantlime.stock.repository.StockRepository;
@@ -47,7 +48,7 @@ class DomesticStockMasterSyncServiceTest {
     @BeforeEach
     void setUp() {
         domesticStockMasterSyncService = new DomesticStockMasterSyncService(
-            dartApiClient, tossApiClient,
+            new DomesticStockMasterCollector(dartApiClient, tossApiClient),
             new StockReader(stockRepository), new StockAppender(stockRepository));
     }
 

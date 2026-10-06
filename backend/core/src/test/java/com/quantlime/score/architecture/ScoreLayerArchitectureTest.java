@@ -16,8 +16,8 @@ import org.junit.jupiter.api.Test;
  * 상위 레이어를 모름)을 {@code com.quantlime.score} 패키지에 한해 고정한다
  * ({@code StockLayerArchitectureTest}와 같은 패턴).
  *
- * <p>외부 연동 클라이언트(quant-engine) 참조 금지 규칙은 아직 두지 않는다 - ScoreService가 퀀트 엔진 클라이언트를
- * 직접 쓰고 있어 Processor 분리 이후 추가한다.
+ * <p>외부 연동 클라이언트 참조(`com.quantlime.infra.*`, DTO/예외 제외)도 막는다 - 수집·호출 흐름은 implement의
+ * Collector/Processor가 맡는다.
  */
 @Tag("unit")
 class ScoreLayerArchitectureTest {
@@ -71,6 +71,17 @@ class ScoreLayerArchitectureTest {
             .that().resideInAnyPackage(
                 "com.quantlime.score.cache..")
             .should().dependOnClassesThat().resideInAPackage("..repository..");
+
+        rule.check(scoreClasses);
+    }
+
+    @Test
+    @DisplayName("[Business(service)는 외부 연동 클라이언트(infra)를 직접 참조하지 않는다 - 구현 상세는 "
+        + "Implementation(implement)의 Processor로 감춘다. 응답 DTO/예외는 데이터라 예외로 둔다]")
+    void serviceMustNotAccessInfraClientDirectly() {
+        ArchRule rule = noClasses()
+            .that().resideInAPackage("com.quantlime.score.service..")
+            .should().dependOnClassesThat().resideInAPackage("com.quantlime.infra.*");
 
         rule.check(scoreClasses);
     }

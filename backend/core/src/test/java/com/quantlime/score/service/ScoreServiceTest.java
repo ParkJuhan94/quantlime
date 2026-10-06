@@ -37,6 +37,7 @@ import com.quantlime.score.domain.Score;
 import com.quantlime.score.dto.response.ScoreRankingResponse;
 import com.quantlime.score.dto.response.ScoreResponse;
 import com.quantlime.score.implement.ScoreAppender;
+import com.quantlime.score.implement.ScoreEngineProcessor;
 import com.quantlime.score.implement.ScoreReader;
 import com.quantlime.stock.StockFixture;
 import com.quantlime.stock.domain.Stock;
@@ -58,13 +59,13 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -105,8 +106,14 @@ class ScoreServiceTest {
     @Spy
     private MeterRegistry meterRegistry = new SimpleMeterRegistry();
 
-    @InjectMocks
     private ScoreService scoreService;
+
+    @BeforeEach
+    void setUp() {
+        scoreService = new ScoreService(domesticDailyPriceService, dailyPriceReader,
+            new ScoreEngineProcessor(pythonEngineClient, meterRegistry), scoreAppender, scoreReader,
+            stockLiquidityReader, watchlistReader, stockMasterService, scoreRankingCacheStore);
+    }
 
     @Test
     @DisplayName("[OHLCV 이력이 없으면 퀀트 엔진을 호출하지 않는다]")
