@@ -17,6 +17,8 @@ import com.quantlime.subscription.SubscriptionPlanFixture;
 import com.quantlime.subscription.domain.Subscription;
 import com.quantlime.subscription.domain.SubscriptionPlan;
 import com.quantlime.subscription.domain.SubscriptionStatus;
+import com.quantlime.subscription.implement.SubscriptionAppender;
+import com.quantlime.subscription.implement.SubscriptionReader;
 import com.quantlime.subscription.repository.SubscriptionRepository;
 import com.quantlime.user.UserFixture;
 import com.quantlime.user.domain.User;
@@ -24,11 +26,11 @@ import com.quantlime.user.service.UserService;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -45,8 +47,14 @@ class SubscriptionServiceTest {
     @Mock
     private FcmPushService fcmPushService;
 
-    @InjectMocks
     private SubscriptionService subscriptionService;
+
+    @BeforeEach
+    void setUp() {
+        subscriptionService = new SubscriptionService(
+            new SubscriptionReader(subscriptionRepository), new SubscriptionAppender(subscriptionRepository),
+            userService, fcmPushService);
+    }
 
     private final User user = UserFixture.createUser();
     private final SubscriptionPlan plan = SubscriptionPlanFixture.createPlan();

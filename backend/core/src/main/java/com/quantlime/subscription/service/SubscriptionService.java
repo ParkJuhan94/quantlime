@@ -8,7 +8,8 @@ import com.quantlime.subscription.domain.Subscription;
 import com.quantlime.subscription.domain.SubscriptionPlan;
 import com.quantlime.subscription.domain.SubscriptionStatus;
 import com.quantlime.subscription.exception.SubscriptionErrorCode;
-import com.quantlime.subscription.repository.SubscriptionRepository;
+import com.quantlime.subscription.implement.SubscriptionAppender;
+import com.quantlime.subscription.implement.SubscriptionReader;
 import com.quantlime.user.domain.User;
 import com.quantlime.user.service.UserService;
 import java.time.LocalDate;
@@ -24,13 +25,14 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class SubscriptionService {
 
-    private final SubscriptionRepository subscriptionRepository;
+    private final SubscriptionReader subscriptionReader;
+    private final SubscriptionAppender subscriptionAppender;
     private final UserService userService;
     private final FcmPushService fcmPushService;
 
     @Transactional(readOnly = true)
     public Optional<Subscription> findByUserId(Long userId) {
-        return subscriptionRepository.findByUser_Id(userId);
+        return subscriptionReader.findByUserId(userId);
     }
 
     // 스코어/백테스트 등 프리미엄 기능 게이팅에 쓰는 엔타이틀먼트 판정.
@@ -42,14 +44,14 @@ public class SubscriptionService {
         if (userId == null) {
             return false;
         }
-        return subscriptionRepository.findByUser_Id(userId)
+        return subscriptionReader.findByUserId(userId)
             .map(subscription -> subscription.getStatus() == SubscriptionStatus.ACTIVE)
             .orElse(false);
     }
 
     @Transactional
     public void cancelAutoRenew(Long userId) {
-        Subscription subscription = subscriptionRepository.findByUser_Id(userId)
+        Subscription subscription = subscriptionReader.findByUserId(userId)
             .orElseThrow(() -> new NotFoundException(SubscriptionErrorCode.NOT_FOUND_SUBSCRIPTION));
         if (subscription.getStatus() != SubscriptionStatus.ACTIVE) {
             throw new ValidationException(SubscriptionErrorCode.INVALID_SUBSCRIPTION_STATUS);
@@ -69,12 +71,12 @@ public class SubscriptionService {
     public Subscription activateOrResubscribe(
         Long userId, SubscriptionPlan plan, String billingKey, int installmentMonths) {
         User user = userService.getById(userId);
-        return subscriptionRepository.findByUser_Id(userId)
+        return subscriptionReader.findByUserId(userId)
             .map(existing -> {
                 existing.resubscribe(plan, billingKey, installmentMonths, LocalDate.now());
                 return existing;
             })
-            .orElseGet(() -> subscriptionRepository.save(
+            .orElseGet(() -> subscriptionAppender.save(
                 Subscription.activate(user, plan, billingKey, installmentMonths, LocalDate.now())));
     }
 
@@ -84,7 +86,7 @@ public class SubscriptionService {
     // PaymentService가 건별로 새 트랜잭션에서 다시 조회해 처리한다).
     @Transactional(readOnly = true)
     public List<Long> findSubscriptionIdsDueForRenewal() {
-        return subscriptionRepository
+        return subscriptionReader
             .findAllByNextBillingAtAndAutoRenewTrueAndStatus(LocalDate.now(), SubscriptionStatus.ACTIVE)
             .stream()
             .map(Subscription::getId)
@@ -95,7 +97,7 @@ public class SubscriptionService {
     // 구독 중, 오늘 기준으로 기간이 끝난 것들을 EXPIRED로 정리한다.
     @Transactional
     public void expireLapsedSubscriptions() {
-        List<Subscription> lapsed = subscriptionRepository
+        List<Subscription> lapsed = subscriptionReader
             .findAllExpiredWithoutAutoRenew(SubscriptionStatus.ACTIVE, LocalDate.now());
         lapsed.forEach(Subscription::expire);
         if (!lapsed.isEmpty()) {

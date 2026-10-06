@@ -18,21 +18,30 @@ import com.quantlime.feed.dto.request.CreateFeedPostRequest;
 import com.quantlime.feed.dto.request.UpdateFeedPostRequest;
 import com.quantlime.feed.dto.response.FeedCommentResponse;
 import com.quantlime.feed.dto.response.FeedPostResponse;
+import com.quantlime.feed.implement.FeedCommentAppender;
+import com.quantlime.feed.implement.FeedCommentReader;
+import com.quantlime.feed.implement.FeedPostAppender;
+import com.quantlime.feed.implement.FeedPostLikeAppender;
+import com.quantlime.feed.implement.FeedPostLikeReader;
+import com.quantlime.feed.implement.FeedPostReader;
+import com.quantlime.feed.implement.FeedReportAppender;
+import com.quantlime.feed.implement.FeedReportReader;
 import com.quantlime.feed.repository.FeedCommentRepository;
 import com.quantlime.feed.repository.FeedPostLikeRepository;
 import com.quantlime.feed.repository.FeedPostRepository;
 import com.quantlime.feed.repository.FeedReportRepository;
 import com.quantlime.user.UserFixture;
 import com.quantlime.user.domain.User;
+import com.quantlime.user.implement.UserReader;
 import com.quantlime.user.repository.UserRepository;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageRequest;
@@ -58,8 +67,17 @@ class FeedServiceTest {
     @Mock
     private FeedReportRepository feedReportRepository;
 
-    @InjectMocks
     private FeedService feedService;
+
+    @BeforeEach
+    void setUp() {
+        feedService = new FeedService(
+            new FeedPostReader(feedPostRepository), new FeedPostAppender(feedPostRepository),
+            new FeedPostLikeReader(feedPostLikeRepository), new FeedPostLikeAppender(feedPostLikeRepository),
+            new FeedCommentReader(feedCommentRepository), new FeedCommentAppender(feedCommentRepository),
+            new FeedReportReader(feedReportRepository), new FeedReportAppender(feedReportRepository),
+            new UserReader(userRepository));
+    }
 
     @Test
     @DisplayName("[존재하는 사용자·주제로 글을 작성하면 저장하고 응답으로 변환한다]")

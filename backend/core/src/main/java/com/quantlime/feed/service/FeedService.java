@@ -14,13 +14,17 @@ import com.quantlime.feed.dto.request.UpdateFeedPostRequest;
 import com.quantlime.feed.dto.response.FeedCommentResponse;
 import com.quantlime.feed.dto.response.FeedPostResponse;
 import com.quantlime.feed.exception.FeedErrorCode;
-import com.quantlime.feed.repository.FeedCommentRepository;
-import com.quantlime.feed.repository.FeedPostLikeRepository;
-import com.quantlime.feed.repository.FeedPostRepository;
-import com.quantlime.feed.repository.FeedReportRepository;
+import com.quantlime.feed.implement.FeedCommentAppender;
+import com.quantlime.feed.implement.FeedCommentReader;
+import com.quantlime.feed.implement.FeedPostAppender;
+import com.quantlime.feed.implement.FeedPostLikeAppender;
+import com.quantlime.feed.implement.FeedPostLikeReader;
+import com.quantlime.feed.implement.FeedPostReader;
+import com.quantlime.feed.implement.FeedReportAppender;
+import com.quantlime.feed.implement.FeedReportReader;
 import com.quantlime.user.domain.User;
 import com.quantlime.user.exception.UserErrorCode;
-import com.quantlime.user.repository.UserRepository;
+import com.quantlime.user.implement.UserReader;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -36,32 +40,36 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class FeedService {
 
-    private final FeedPostRepository feedPostRepository;
-    private final FeedPostLikeRepository feedPostLikeRepository;
-    private final FeedCommentRepository feedCommentRepository;
-    private final FeedReportRepository feedReportRepository;
-    private final UserRepository userRepository;
+    private final FeedPostReader feedPostReader;
+    private final FeedPostAppender feedPostAppender;
+    private final FeedPostLikeReader feedPostLikeReader;
+    private final FeedPostLikeAppender feedPostLikeAppender;
+    private final FeedCommentReader feedCommentReader;
+    private final FeedCommentAppender feedCommentAppender;
+    private final FeedReportReader feedReportReader;
+    private final FeedReportAppender feedReportAppender;
+    private final UserReader userReader;
 
     @Transactional
     public FeedPostResponse createPost(Long userId, CreateFeedPostRequest request) {
         User user = findUser(userId);
         FeedCategory category = FeedCategory.of(request.category());
         validateImageRequirement(category, request.imageUrl());
-        FeedPost post = feedPostRepository.save(FeedPost.of(user, category, request.title(), request.imageUrl()));
+        FeedPost post = feedPostAppender.save(FeedPost.of(user, category, request.title(), request.imageUrl()));
         return FeedMapper.toFeedPostResponse(post, 0, 0, false, true);
     }
 
     @Transactional(readOnly = true)
     public Slice<FeedPostResponse> getPosts(String categoryLabel, Long userId, Pageable pageable) {
         Slice<FeedPost> posts = categoryLabel == null
-            ? feedPostRepository.findAllOrderByIdDesc(pageable)
-            : feedPostRepository.findByCategoryOrderByIdDesc(FeedCategory.of(categoryLabel), pageable);
+            ? feedPostReader.findAllOrderByIdDesc(pageable)
+            : feedPostReader.findByCategoryOrderByIdDesc(FeedCategory.of(categoryLabel), pageable);
 
         List<Long> postIds = posts.getContent().stream().map(FeedPost::getId).toList();
-        Map<Long, Long> likeCounts = toCountMap(feedPostLikeRepository.countByPostIds(postIds));
-        Map<Long, Long> commentCounts = toCountMap(feedCommentRepository.countByPostIds(postIds));
+        Map<Long, Long> likeCounts = toCountMap(feedPostLikeReader.countByPostIds(postIds));
+        Map<Long, Long> commentCounts = toCountMap(feedCommentReader.countByPostIds(postIds));
         Set<Long> likedPostIds = userId != null
-            ? new HashSet<>(feedPostLikeRepository.findLikedPostIds(userId, postIds))
+            ? new HashSet<>(feedPostLikeReader.findLikedPostIds(userId, postIds))
             : Set.of();
 
         return posts.map(post -> FeedMapper.toFeedPostResponse(
@@ -81,9 +89,9 @@ public class FeedService {
         validateImageRequirement(category, request.imageUrl());
         post.update(category, request.title(), request.imageUrl());
 
-        long likeCount = toCountMap(feedPostLikeRepository.countByPostIds(List.of(postId))).getOrDefault(postId, 0L);
-        long commentCount = toCountMap(feedCommentRepository.countByPostIds(List.of(postId))).getOrDefault(postId, 0L);
-        boolean likedByMe = feedPostLikeRepository.existsByUser_IdAndFeedPost_Id(userId, postId);
+        long likeCount = toCountMap(feedPostLikeReader.countByPostIds(List.of(postId))).getOrDefault(postId, 0L);
+        long commentCount = toCountMap(feedCommentReader.countByPostIds(List.of(postId))).getOrDefault(postId, 0L);
+        boolean likedByMe = feedPostLikeReader.existsByUser_IdAndFeedPost_Id(userId, postId);
         return FeedMapper.toFeedPostResponse(post, likeCount, commentCount, likedByMe, true);
     }
 
@@ -94,12 +102,12 @@ public class FeedService {
     public void deletePost(Long userId, Long postId) {
         FeedPost post = findOwnedPost(userId, postId);
         // 신고 기록도 대상이 사라지면 의미가 없어 같이 정리한다(FeedModerationService.deletePost와 동일).
-        feedReportRepository.deleteByTargetTypeAndTargetIdIn(
-            FeedReportTarget.COMMENT, feedCommentRepository.findIdsByFeedPostId(postId));
-        feedReportRepository.deleteByTargetTypeAndTargetId(FeedReportTarget.POST, postId);
-        feedCommentRepository.deleteByFeedPost_Id(postId);
-        feedPostLikeRepository.deleteByFeedPost_Id(postId);
-        feedPostRepository.delete(post);
+        feedReportAppender.deleteByTargetTypeAndTargetIdIn(
+            FeedReportTarget.COMMENT, feedCommentReader.findIdsByFeedPostId(postId));
+        feedReportAppender.deleteByTargetTypeAndTargetId(FeedReportTarget.POST, postId);
+        feedCommentAppender.deleteByFeedPost_Id(postId);
+        feedPostLikeAppender.deleteByFeedPost_Id(postId);
+        feedPostAppender.delete(post);
     }
 
     // 중복 클릭(더블 클릭, 네트워크 재시도)으로 좋아요가 두 번 눌려도
@@ -108,30 +116,30 @@ public class FeedService {
     // 좋아요한 상태"는 사용자에게 에러로 보여줄 이유가 없는 멱등 동작.
     @Transactional
     public void likePost(Long userId, Long postId) {
-        if (feedPostLikeRepository.existsByUser_IdAndFeedPost_Id(userId, postId)) {
+        if (feedPostLikeReader.existsByUser_IdAndFeedPost_Id(userId, postId)) {
             return;
         }
         User user = findUser(userId);
         FeedPost post = findPost(postId);
-        feedPostLikeRepository.save(FeedPostLike.of(user, post));
+        feedPostLikeAppender.save(FeedPostLike.of(user, post));
     }
 
     @Transactional
     public void unlikePost(Long userId, Long postId) {
-        feedPostLikeRepository.deleteByUser_IdAndFeedPost_Id(userId, postId);
+        feedPostLikeAppender.deleteByUser_IdAndFeedPost_Id(userId, postId);
     }
 
     @Transactional
     public FeedCommentResponse createComment(Long userId, Long postId, CreateFeedCommentRequest request) {
         User user = findUser(userId);
         FeedPost post = findPost(postId);
-        FeedComment comment = feedCommentRepository.save(FeedComment.of(user, post, request.content()));
+        FeedComment comment = feedCommentAppender.save(FeedComment.of(user, post, request.content()));
         return FeedMapper.toFeedCommentResponse(comment);
     }
 
     @Transactional(readOnly = true)
     public Slice<FeedCommentResponse> getComments(Long postId, Pageable pageable) {
-        return feedCommentRepository.findByFeedPostIdOrderByIdAsc(postId, pageable)
+        return feedCommentReader.findByFeedPostIdOrderByIdAsc(postId, pageable)
             .map(FeedMapper::toFeedCommentResponse);
     }
 
@@ -142,19 +150,19 @@ public class FeedService {
     }
 
     private User findUser(Long userId) {
-        return userRepository.findById(userId)
+        return userReader.findById(userId)
             .orElseThrow(() -> new NotFoundException(UserErrorCode.NOT_FOUND_USER));
     }
 
     private FeedPost findPost(Long postId) {
-        return feedPostRepository.findById(postId)
+        return feedPostReader.findById(postId)
             .orElseThrow(() -> new NotFoundException(FeedErrorCode.POST_NOT_FOUND));
     }
 
     // 다른 사용자의 글이면 존재 자체를 노출하지 않고 404로 응답한다
     // (WatchlistGroupService.getOwnedGroup과 동일한 패턴).
     private FeedPost findOwnedPost(Long userId, Long postId) {
-        return feedPostRepository.findByIdAndUser_Id(postId, userId)
+        return feedPostReader.findByIdAndUser_Id(postId, userId)
             .orElseThrow(() -> new NotFoundException(FeedErrorCode.POST_NOT_FOUND));
     }
 

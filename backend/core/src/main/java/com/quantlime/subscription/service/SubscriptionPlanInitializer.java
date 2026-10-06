@@ -1,7 +1,8 @@
 package com.quantlime.subscription.service;
 
 import com.quantlime.subscription.domain.SubscriptionPlan;
-import com.quantlime.subscription.repository.SubscriptionPlanRepository;
+import com.quantlime.subscription.implement.SubscriptionPlanAppender;
+import com.quantlime.subscription.implement.SubscriptionPlanReader;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
@@ -23,7 +24,8 @@ public class SubscriptionPlanInitializer implements ApplicationRunner {
 
     private static final int MONTHLY_PRICE_WON = 7900;
 
-    private final SubscriptionPlanRepository subscriptionPlanRepository;
+    private final SubscriptionPlanReader subscriptionPlanReader;
+    private final SubscriptionPlanAppender subscriptionPlanAppender;
 
     @Override
     @Transactional
@@ -34,11 +36,11 @@ public class SubscriptionPlanInitializer implements ApplicationRunner {
     }
 
     private void seedIfAbsent(String code, String name, int months) {
-        if (subscriptionPlanRepository.existsByCode(code)) {
+        if (subscriptionPlanReader.existsByCode(code)) {
             return;
         }
         int priceWon = MONTHLY_PRICE_WON * months;
-        subscriptionPlanRepository.save(SubscriptionPlan.of(code, name, months, priceWon));
+        subscriptionPlanAppender.save(SubscriptionPlan.of(code, name, months, priceWon));
         log.info("구독 플랜 시딩 완료: code={}, months={}, priceWon={}", code, months, priceWon);
     }
 }
