@@ -1,7 +1,8 @@
-package com.quantlime.infra.toss.dto;
+package com.quantlime.price.dto.mapper;
 
 import static lombok.AccessLevel.PRIVATE;
 
+import com.quantlime.infra.toss.dto.TossCandleResponse;
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
 import java.time.LocalDate;

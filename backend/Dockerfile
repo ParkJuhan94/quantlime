@@ -24,6 +24,8 @@ COPY youtube/build.gradle youtube/build.gradle
 COPY naver/build.gradle naver/build.gradle
 COPY python/build.gradle python/build.gradle
 COPY firebase/build.gradle firebase/build.gradle
+COPY toss/build.gradle toss/build.gradle
+COPY sync/build.gradle sync/build.gradle
 RUN ./gradlew --version
 
 COPY api api
@@ -42,6 +44,8 @@ COPY youtube youtube
 COPY naver naver
 COPY python python
 COPY firebase firebase
+COPY toss toss
+COPY sync sync
 RUN ./gradlew :api:bootJar -x test --no-daemon
 
 FROM eclipse-temurin:21-jre AS runtime

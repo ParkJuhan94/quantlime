@@ -2,9 +2,9 @@ package com.quantlime.videofeed.implement;
 
 import com.quantlime.infra.sync.SyncApiClient;
 import com.quantlime.infra.sync.SyncProperties;
+import com.quantlime.infra.sync.dto.TranscriptImportRequest;
 import com.quantlime.videofeed.domain.Transcript;
 import com.quantlime.videofeed.domain.Video;
-import com.quantlime.videofeed.dto.request.TranscriptImportRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;

@@ -1,10 +1,10 @@
 package com.quantlime.videofeed.service;
 
 import com.quantlime.infra.python.dto.TranscribeApiResponse;
+import com.quantlime.infra.sync.dto.TranscriptImportRequest;
 import com.quantlime.videofeed.domain.Video;
 import com.quantlime.videofeed.domain.VideoStatus;
 import com.quantlime.videofeed.dto.TranscriptImportResult;
-import com.quantlime.videofeed.dto.request.TranscriptImportRequest;
 import com.quantlime.videofeed.implement.TranscriptAppender;
 import com.quantlime.videofeed.implement.VideoReader;
 import java.util.List;

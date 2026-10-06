@@ -1,10 +1,10 @@
 package com.quantlime.videofeed.controller;
 
 import com.quantlime.common.exception.ValidationException;
+import com.quantlime.infra.sync.dto.TranscriptImportRequest;
 import com.quantlime.videofeed.dto.CollectResult;
 import com.quantlime.videofeed.dto.TranscriptImportResult;
 import com.quantlime.videofeed.dto.mapper.VideoFeedMapper;
-import com.quantlime.videofeed.dto.request.TranscriptImportRequest;
 import com.quantlime.videofeed.dto.response.ChannelResponse;
 import com.quantlime.videofeed.exception.VideoFeedErrorCode;
 import com.quantlime.videofeed.service.ChannelQueryService;

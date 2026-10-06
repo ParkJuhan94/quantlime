@@ -8,13 +8,13 @@ import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.quantlime.infra.sync.dto.TranscriptImportRequest;
 import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.ChannelFilterConfig;
 import com.quantlime.videofeed.domain.Platform;
 import com.quantlime.videofeed.domain.Video;
 import com.quantlime.videofeed.dto.TranscriptImportResult;
 import com.quantlime.videofeed.dto.TranscriptImportResult.Outcome;
-import com.quantlime.videofeed.dto.request.TranscriptImportRequest;
 import com.quantlime.videofeed.implement.TranscriptAppender;
 import com.quantlime.videofeed.implement.VideoReader;
 import java.time.LocalDateTime;

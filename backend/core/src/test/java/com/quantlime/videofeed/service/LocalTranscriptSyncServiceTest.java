@@ -10,12 +10,12 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.quantlime.infra.sync.SyncApiClient;
 import com.quantlime.infra.sync.SyncProperties;
+import com.quantlime.infra.sync.dto.TranscriptImportRequest;
 import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.ChannelFilterConfig;
 import com.quantlime.videofeed.domain.Platform;
 import com.quantlime.videofeed.domain.Transcript;
 import com.quantlime.videofeed.domain.Video;
-import com.quantlime.videofeed.dto.request.TranscriptImportRequest;
 import com.quantlime.videofeed.implement.ProdTranscriptSyncer;
 import com.quantlime.videofeed.implement.TranscriptReader;
 import com.quantlime.videofeed.implement.VideoReader;
