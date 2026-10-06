@@ -17,6 +17,13 @@ COPY tosspayments/build.gradle tosspayments/build.gradle
 COPY dart/build.gradle dart/build.gradle
 COPY kis/build.gradle kis/build.gradle
 COPY tradingview/build.gradle tradingview/build.gradle
+COPY upbit/build.gradle upbit/build.gradle
+COPY slack/build.gradle slack/build.gradle
+COPY telegram/build.gradle telegram/build.gradle
+COPY youtube/build.gradle youtube/build.gradle
+COPY naver/build.gradle naver/build.gradle
+COPY python/build.gradle python/build.gradle
+COPY firebase/build.gradle firebase/build.gradle
 RUN ./gradlew --version
 
 COPY api api
@@ -28,6 +35,13 @@ COPY tosspayments tosspayments
 COPY dart dart
 COPY kis kis
 COPY tradingview tradingview
+COPY upbit upbit
+COPY slack slack
+COPY telegram telegram
+COPY youtube youtube
+COPY naver naver
+COPY python python
+COPY firebase firebase
 RUN ./gradlew :api:bootJar -x test --no-daemon
 
 FROM eclipse-temurin:21-jre AS runtime
