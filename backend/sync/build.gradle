@@ -1,0 +1,8 @@
+dependencies {
+    implementation project(':common')
+    implementation project(':client-support')
+
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    // TranscriptImportRequest의 검증 어노테이션(@NotEmpty/@Valid 등)
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+}

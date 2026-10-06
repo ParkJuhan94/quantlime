@@ -1,6 +1,6 @@
 package com.quantlime.infra.sync;
 
-import com.quantlime.videofeed.dto.request.TranscriptImportRequest;
+import com.quantlime.infra.sync.dto.TranscriptImportRequest;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;

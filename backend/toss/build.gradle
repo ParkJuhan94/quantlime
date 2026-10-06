@@ -1,0 +1,12 @@
+dependencies {
+    implementation project(':common')
+    implementation project(':client-support')
+
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    // @CircuitBreaker/@Bulkhead/@RateLimiter 애너테이션
+    implementation 'io.github.resilience4j:resilience4j-annotations'
+    // 호출 지표(Timer/Counter) 계측
+    implementation 'io.micrometer:micrometer-core'
+    // TossTokenManager가 Redis에 액세스 토큰을 캐시한다
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+}

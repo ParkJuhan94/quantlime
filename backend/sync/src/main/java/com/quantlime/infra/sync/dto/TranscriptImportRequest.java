@@ -1,4 +1,4 @@
-package com.quantlime.videofeed.dto.request;
+package com.quantlime.infra.sync.dto;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
