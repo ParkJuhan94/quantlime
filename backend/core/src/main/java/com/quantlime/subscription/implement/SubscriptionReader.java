@@ -5,6 +5,7 @@ import com.quantlime.subscription.domain.Subscription;
 import com.quantlime.subscription.domain.SubscriptionStatus;
 import com.quantlime.subscription.exception.SubscriptionErrorCode;
 import com.quantlime.subscription.repository.SubscriptionRepository;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -33,5 +34,14 @@ public class SubscriptionReader {
 
     public List<Long> findAllUserIdsByStatus(SubscriptionStatus status) {
         return subscriptionRepository.findAllUserIdsByStatus(status);
+    }
+
+    public List<Subscription> findAllByNextBillingAtAndAutoRenewTrueAndStatus(
+        LocalDate nextBillingAt, SubscriptionStatus status) {
+        return subscriptionRepository.findAllByNextBillingAtAndAutoRenewTrueAndStatus(nextBillingAt, status);
+    }
+
+    public List<Subscription> findAllExpiredWithoutAutoRenew(SubscriptionStatus status, LocalDate today) {
+        return subscriptionRepository.findAllExpiredWithoutAutoRenew(status, today);
     }
 }

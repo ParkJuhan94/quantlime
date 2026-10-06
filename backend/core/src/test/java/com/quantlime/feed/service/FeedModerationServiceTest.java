@@ -14,6 +14,14 @@ import com.quantlime.feed.domain.FeedPost;
 import com.quantlime.feed.domain.FeedReport;
 import com.quantlime.feed.domain.FeedReportReason;
 import com.quantlime.feed.domain.FeedReportTarget;
+import com.quantlime.feed.implement.FeedCommentAppender;
+import com.quantlime.feed.implement.FeedCommentReader;
+import com.quantlime.feed.implement.FeedPostAppender;
+import com.quantlime.feed.implement.FeedPostLikeAppender;
+import com.quantlime.feed.implement.FeedPostLikeReader;
+import com.quantlime.feed.implement.FeedPostReader;
+import com.quantlime.feed.implement.FeedReportAppender;
+import com.quantlime.feed.implement.FeedReportReader;
 import com.quantlime.feed.repository.FeedCommentRepository;
 import com.quantlime.feed.repository.FeedPostLikeRepository;
 import com.quantlime.feed.repository.FeedPostRepository;
@@ -21,13 +29,14 @@ import com.quantlime.feed.repository.FeedReportRepository;
 import com.quantlime.user.UserFixture;
 import com.quantlime.user.domain.OAuthProvider;
 import com.quantlime.user.domain.User;
+import com.quantlime.user.implement.UserReader;
 import com.quantlime.user.repository.UserRepository;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -51,8 +60,17 @@ class FeedModerationServiceTest {
     @Mock
     private UserRepository userRepository;
 
-    @InjectMocks
     private FeedModerationService service;
+
+    @BeforeEach
+    void setUp() {
+        service = new FeedModerationService(
+            new FeedPostReader(feedPostRepository), new FeedPostAppender(feedPostRepository),
+            new FeedCommentReader(feedCommentRepository), new FeedCommentAppender(feedCommentRepository),
+            new FeedPostLikeReader(feedPostLikeRepository), new FeedPostLikeAppender(feedPostLikeRepository),
+            new FeedReportReader(feedReportRepository), new FeedReportAppender(feedReportRepository),
+            new UserReader(userRepository));
+    }
 
     private User userWithId(long id, String providerId) {
         User user = UserFixture.createUser(OAuthProvider.GOOGLE, providerId);

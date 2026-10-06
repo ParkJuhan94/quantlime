@@ -10,13 +10,17 @@ import com.quantlime.feed.domain.FeedReportTarget;
 import com.quantlime.feed.dto.response.AdminFeedCommentResponse;
 import com.quantlime.feed.dto.response.AdminFeedPostResponse;
 import com.quantlime.feed.exception.FeedErrorCode;
-import com.quantlime.feed.repository.FeedCommentRepository;
-import com.quantlime.feed.repository.FeedPostLikeRepository;
-import com.quantlime.feed.repository.FeedPostRepository;
-import com.quantlime.feed.repository.FeedReportRepository;
+import com.quantlime.feed.implement.FeedCommentAppender;
+import com.quantlime.feed.implement.FeedCommentReader;
+import com.quantlime.feed.implement.FeedPostAppender;
+import com.quantlime.feed.implement.FeedPostLikeAppender;
+import com.quantlime.feed.implement.FeedPostLikeReader;
+import com.quantlime.feed.implement.FeedPostReader;
+import com.quantlime.feed.implement.FeedReportAppender;
+import com.quantlime.feed.implement.FeedReportReader;
 import com.quantlime.user.domain.User;
 import com.quantlime.user.exception.UserErrorCode;
-import com.quantlime.user.repository.UserRepository;
+import com.quantlime.user.implement.UserReader;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,15 +46,19 @@ public class FeedModerationService {
 
     static final int AUTO_HIDE_THRESHOLD = 3;
 
-    private final FeedPostRepository feedPostRepository;
-    private final FeedCommentRepository feedCommentRepository;
-    private final FeedPostLikeRepository feedPostLikeRepository;
-    private final FeedReportRepository feedReportRepository;
-    private final UserRepository userRepository;
+    private final FeedPostReader feedPostReader;
+    private final FeedPostAppender feedPostAppender;
+    private final FeedCommentReader feedCommentReader;
+    private final FeedCommentAppender feedCommentAppender;
+    private final FeedPostLikeReader feedPostLikeReader;
+    private final FeedPostLikeAppender feedPostLikeAppender;
+    private final FeedReportReader feedReportReader;
+    private final FeedReportAppender feedReportAppender;
+    private final UserReader userReader;
 
     @Transactional
     public void reportPost(Long userId, Long postId, FeedReportReason reason) {
-        FeedPost post = feedPostRepository.findByIdAndHiddenFalse(postId)
+        FeedPost post = feedPostReader.findByIdAndHiddenFalse(postId)
             .orElseThrow(() -> new NotFoundException(FeedErrorCode.POST_NOT_FOUND));
         validateNotOwn(userId, post.getUser().getId());
         if (addReport(userId, FeedReportTarget.POST, postId, reason)
@@ -62,7 +70,7 @@ public class FeedModerationService {
 
     @Transactional
     public void reportComment(Long userId, Long commentId, FeedReportReason reason) {
-        FeedComment comment = feedCommentRepository.findByIdAndHiddenFalse(commentId)
+        FeedComment comment = feedCommentReader.findByIdAndHiddenFalse(commentId)
             .orElseThrow(() -> new NotFoundException(FeedErrorCode.COMMENT_NOT_FOUND));
         validateNotOwn(userId, comment.getUser().getId());
         if (addReport(userId, FeedReportTarget.COMMENT, commentId, reason)
@@ -74,7 +82,7 @@ public class FeedModerationService {
 
     @Transactional(readOnly = true)
     public Slice<AdminFeedPostResponse> getHiddenPosts(Pageable pageable) {
-        Slice<FeedPost> posts = feedPostRepository.findHiddenOrderByIdDesc(pageable);
+        Slice<FeedPost> posts = feedPostReader.findHiddenOrderByIdDesc(pageable);
         Map<Long, Long> counts = reportCounts(FeedReportTarget.POST, posts.getContent().stream().map(FeedPost::getId).toList());
         return posts.map(post -> new AdminFeedPostResponse(
             post.getId(), post.getUser().getNickname(), post.getCategory().getLabel(), post.getTitle(),
@@ -83,7 +91,7 @@ public class FeedModerationService {
 
     @Transactional(readOnly = true)
     public Slice<AdminFeedCommentResponse> getHiddenComments(Pageable pageable) {
-        Slice<FeedComment> comments = feedCommentRepository.findHiddenOrderByIdDesc(pageable);
+        Slice<FeedComment> comments = feedCommentReader.findHiddenOrderByIdDesc(pageable);
         Map<Long, Long> counts =
             reportCounts(FeedReportTarget.COMMENT, comments.getContent().stream().map(FeedComment::getId).toList());
         return comments.map(comment -> new AdminFeedCommentResponse(
@@ -93,39 +101,39 @@ public class FeedModerationService {
 
     @Transactional
     public void restorePost(Long postId) {
-        FeedPost post = feedPostRepository.findById(postId)
+        FeedPost post = feedPostReader.findById(postId)
             .orElseThrow(() -> new NotFoundException(FeedErrorCode.POST_NOT_FOUND));
         post.restore();
-        feedReportRepository.deleteByTargetTypeAndTargetId(FeedReportTarget.POST, postId);
+        feedReportAppender.deleteByTargetTypeAndTargetId(FeedReportTarget.POST, postId);
     }
 
     @Transactional
     public void restoreComment(Long commentId) {
-        FeedComment comment = feedCommentRepository.findById(commentId)
+        FeedComment comment = feedCommentReader.findById(commentId)
             .orElseThrow(() -> new NotFoundException(FeedErrorCode.COMMENT_NOT_FOUND));
         comment.restore();
-        feedReportRepository.deleteByTargetTypeAndTargetId(FeedReportTarget.COMMENT, commentId);
+        feedReportAppender.deleteByTargetTypeAndTargetId(FeedReportTarget.COMMENT, commentId);
     }
 
     // 좋아요/댓글/신고 모두 FK가 NO_CONSTRAINT라 DB 캐스케이드가 없어 직접 정리한다(FeedService.deletePost와 동일).
     @Transactional
     public void deletePost(Long postId) {
-        FeedPost post = feedPostRepository.findById(postId)
+        FeedPost post = feedPostReader.findById(postId)
             .orElseThrow(() -> new NotFoundException(FeedErrorCode.POST_NOT_FOUND));
-        List<Long> commentIds = feedCommentRepository.findIdsByFeedPostId(postId);
-        feedReportRepository.deleteByTargetTypeAndTargetIdIn(FeedReportTarget.COMMENT, commentIds);
-        feedReportRepository.deleteByTargetTypeAndTargetId(FeedReportTarget.POST, postId);
-        feedCommentRepository.deleteByFeedPost_Id(postId);
-        feedPostLikeRepository.deleteByFeedPost_Id(postId);
-        feedPostRepository.delete(post);
+        List<Long> commentIds = feedCommentReader.findIdsByFeedPostId(postId);
+        feedReportAppender.deleteByTargetTypeAndTargetIdIn(FeedReportTarget.COMMENT, commentIds);
+        feedReportAppender.deleteByTargetTypeAndTargetId(FeedReportTarget.POST, postId);
+        feedCommentAppender.deleteByFeedPost_Id(postId);
+        feedPostLikeAppender.deleteByFeedPost_Id(postId);
+        feedPostAppender.delete(post);
     }
 
     @Transactional
     public void deleteComment(Long commentId) {
-        FeedComment comment = feedCommentRepository.findById(commentId)
+        FeedComment comment = feedCommentReader.findById(commentId)
             .orElseThrow(() -> new NotFoundException(FeedErrorCode.COMMENT_NOT_FOUND));
-        feedReportRepository.deleteByTargetTypeAndTargetId(FeedReportTarget.COMMENT, commentId);
-        feedCommentRepository.delete(comment);
+        feedReportAppender.deleteByTargetTypeAndTargetId(FeedReportTarget.COMMENT, commentId);
+        feedCommentAppender.delete(comment);
     }
 
     private void validateNotOwn(Long reporterId, Long ownerId) {
@@ -136,17 +144,17 @@ public class FeedModerationService {
 
     /** @return 이번 호출로 새 신고가 쌓였으면 true, 이미 신고한 사용자의 중복이면 false */
     private boolean addReport(Long userId, FeedReportTarget target, Long targetId, FeedReportReason reason) {
-        if (feedReportRepository.existsByReporter_IdAndTargetTypeAndTargetId(userId, target, targetId)) {
+        if (feedReportReader.existsByReporter_IdAndTargetTypeAndTargetId(userId, target, targetId)) {
             return false;
         }
-        User reporter = userRepository.findById(userId)
+        User reporter = userReader.findById(userId)
             .orElseThrow(() -> new NotFoundException(UserErrorCode.NOT_FOUND_USER));
-        feedReportRepository.save(FeedReport.of(reporter, target, targetId, reason));
+        feedReportAppender.save(FeedReport.of(reporter, target, targetId, reason));
         return true;
     }
 
     private boolean isOverThreshold(FeedReportTarget target, Long targetId) {
-        return feedReportRepository.countByTargetTypeAndTargetId(target, targetId) >= AUTO_HIDE_THRESHOLD;
+        return feedReportReader.countByTargetTypeAndTargetId(target, targetId) >= AUTO_HIDE_THRESHOLD;
     }
 
     private Map<Long, Long> reportCounts(FeedReportTarget target, List<Long> ids) {
@@ -154,7 +162,7 @@ public class FeedModerationService {
         if (ids.isEmpty()) {
             return map;
         }
-        for (Object[] row : feedReportRepository.countByTargetIds(target, ids)) {
+        for (Object[] row : feedReportReader.countByTargetIds(target, ids)) {
             map.put((Long) row[0], (Long) row[1]);
         }
         return map;

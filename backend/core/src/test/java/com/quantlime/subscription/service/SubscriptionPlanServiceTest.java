@@ -7,14 +7,15 @@ import static org.mockito.BDDMockito.given;
 import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.subscription.SubscriptionPlanFixture;
 import com.quantlime.subscription.domain.SubscriptionPlan;
+import com.quantlime.subscription.implement.SubscriptionPlanReader;
 import com.quantlime.subscription.repository.SubscriptionPlanRepository;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -25,8 +26,12 @@ class SubscriptionPlanServiceTest {
     @Mock
     private SubscriptionPlanRepository subscriptionPlanRepository;
 
-    @InjectMocks
     private SubscriptionPlanService service;
+
+    @BeforeEach
+    void setUp() {
+        service = new SubscriptionPlanService(new SubscriptionPlanReader(subscriptionPlanRepository));
+    }
 
     @Test
     @DisplayName("[활성 플랜은 청구 주기 오름차순으로 조회한다]")
