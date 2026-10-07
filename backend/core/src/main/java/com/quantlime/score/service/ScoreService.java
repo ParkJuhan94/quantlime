@@ -1,12 +1,7 @@
 package com.quantlime.score.service;
 
 import com.quantlime.common.exception.NotFoundException;
-import com.quantlime.infra.python.PythonEngineClient;
-import com.quantlime.infra.python.dto.CrossSectionNormalizeApiRequest;
-import com.quantlime.infra.python.dto.CrossSectionNormalizeApiResponse;
-import com.quantlime.infra.python.dto.ScoreBatchApiRequest;
-import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse;
-import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.StockScoreSeriesApiResponse;
+import com.quantlime.infra.python.dto.CrossSectionNormalizeApiResponse.NormalizedItemApiResponse;
 import com.quantlime.market.domain.RankingPeriod;
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
@@ -18,11 +13,11 @@ import com.quantlime.score.cache.ScoreRankingCacheStore;
 import com.quantlime.score.domain.PeerGroup;
 import com.quantlime.score.domain.Score;
 import com.quantlime.score.dto.mapper.ScoreMapper;
-import com.quantlime.score.dto.mapper.ScoreRequestMapper;
 import com.quantlime.score.dto.response.ScoreRankingResponse;
 import com.quantlime.score.dto.response.ScoreResponse;
 import com.quantlime.score.exception.ScoreErrorCode;
 import com.quantlime.score.implement.ScoreAppender;
+import com.quantlime.score.implement.ScoreEngineProcessor;
 import com.quantlime.score.implement.ScoreReader;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
@@ -30,7 +25,6 @@ import com.quantlime.stock.dto.mapper.StockMapper;
 import com.quantlime.stock.service.StockMasterService;
 import com.quantlime.watchlist.domain.Watchlist;
 import com.quantlime.watchlist.implement.WatchlistReader;
-import io.micrometer.core.instrument.MeterRegistry;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -38,6 +32,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
@@ -70,7 +65,6 @@ public class ScoreService {
     // 것보다 더 많은 행을 요구해 항상 미스가 나고, 클 필요는 없다(그 이상
     // 요청 자체가 컨트롤러에서 막힘).
     private static final int MAX_CACHEABLE_RANKING_SIZE = 50;
-    private static final String METRIC_MISSING_FROM_RESPONSE = "score.batch.missing-from-response";
     // 전종목(약 2,700개)을 한 요청에 다 넣으면 퀀트 엔진에 보내는 JSON
     // 페이로드가 지나치게 커진다(종목당 최대 730일 OHLCV) - 청크로 나눠
     // 순차 호출하고, 한 청크가 실패해도 나머지 청크는 계속 진행한다
@@ -79,14 +73,13 @@ public class ScoreService {
 
     private final DomesticDailyPriceService domesticDailyPriceService;
     private final DailyPriceReader dailyPriceReader;
-    private final PythonEngineClient pythonEngineClient;
+    private final ScoreEngineProcessor scoreEngineProcessor;
     private final ScoreAppender scoreAppender;
     private final ScoreReader scoreReader;
     private final StockLiquidityReader stockLiquidityReader;
     private final WatchlistReader watchlistReader;
     private final StockMasterService stockMasterService;
     private final ScoreRankingCacheStore scoreRankingCacheStore;
-    private final MeterRegistry meterRegistry;
     // getAllStocksScoreRanking의 캐시 미스 시 scope별 단일 비행(single-flight)
     // 락 - 2026-09 성능 감사 중 k6 없이 curl 동시 호출로 재현: 배치가 캐시
     // 3개 키를 한꺼번에 비우는 순간 동시 접속자 수만큼 DB 쿼리가 같이
@@ -420,17 +413,15 @@ public class ScoreService {
             return;
         }
 
-        CrossSectionNormalizeApiRequest request = ScoreRequestMapper.toNormalizeRequest(
-            LocalDate.now(), peerGroup, latestScores);
-        CrossSectionNormalizeApiResponse response = pythonEngineClient.normalizeCrossSection(request);
-
-        if (!response.minSampleMet()) {
+        Optional<List<NormalizedItemApiResponse>> normalized =
+            scoreEngineProcessor.normalize(peerGroup, latestScores);
+        if (normalized.isEmpty()) {
             log.info("횡단면 정규화 스킵: 표본 부족, peerGroup={}, 대상종목수={}",
                 peerGroup, latestScores.size());
             return;
         }
 
-        scoreAppender.applyNormalization(marketTypes, peerGroup, response.items());
+        scoreAppender.applyNormalization(marketTypes, peerGroup, normalized.get());
         log.info("횡단면 정규화 완료: peerGroup={}, 대상종목수={}", peerGroup, latestScores.size());
     }
 
@@ -463,12 +454,7 @@ public class ScoreService {
         }
         warnIfMissingHistory(stockCodes, domesticDailyPricesByStockCode.keySet());
 
-        ScoreBatchApiRequest request =
-            ScoreRequestMapper.toScoreBatchApiRequest(domesticDailyPricesByStockCode);
-        ScoreSeriesBatchApiResponse response = pythonEngineClient.calculateScoreSeries(request);
-
-        warnIfMissingFromResponse(domesticDailyPricesByStockCode.keySet(), response.scores());
-        scoreAppender.saveAll(response.scores());
+        scoreAppender.saveAll(scoreEngineProcessor.calculateDomestic(domesticDailyPricesByStockCode));
 
         log.info("스코어 재계산 완료: 대상종목수={}", domesticDailyPricesByStockCode.size());
     }
@@ -493,11 +479,7 @@ public class ScoreService {
         }
         warnIfMissingHistory(stockCodes, pricesByStockCode.keySet());
 
-        ScoreBatchApiRequest request = ScoreRequestMapper.toOverseasScoreBatchApiRequest(pricesByStockCode);
-        ScoreSeriesBatchApiResponse response = pythonEngineClient.calculateScoreSeries(request);
-
-        warnIfMissingFromResponse(pricesByStockCode.keySet(), response.scores());
-        scoreAppender.saveAll(response.scores());
+        scoreAppender.saveAll(scoreEngineProcessor.calculateOverseas(pricesByStockCode));
 
         log.info("해외 스코어 재계산 완료: 대상종목수={}", pricesByStockCode.size());
     }
@@ -517,19 +499,6 @@ public class ScoreService {
             .toList();
         if (!skipped.isEmpty()) {
             log.warn("스코어 재계산 제외(OHLCV 이력 없음): stockCodes={}", skipped);
-        }
-    }
-
-    private void warnIfMissingFromResponse(Set<String> requested, List<StockScoreSeriesApiResponse> results) {
-        Set<String> responded = results.stream()
-            .map(StockScoreSeriesApiResponse::stockCode)
-            .collect(Collectors.toSet());
-        List<String> missing = requested.stream()
-            .filter(code -> !responded.contains(code))
-            .toList();
-        if (!missing.isEmpty()) {
-            log.warn("퀀트 엔진 응답에 누락된 종목 존재(저장 스킵): stockCodes={}", missing);
-            meterRegistry.counter(METRIC_MISSING_FROM_RESPONSE).increment(missing.size());
         }
     }
 }

@@ -12,12 +12,13 @@ import com.quantlime.infra.kis.dto.KisOverseasStockMasterEntry;
 import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
+import com.quantlime.stock.implement.OverseasStockMasterCollector;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -31,8 +32,13 @@ class OverseasStockMasterSyncServiceTest {
     @Mock
     private StockMasterService stockMasterService;
 
-    @InjectMocks
     private OverseasStockMasterSyncService overseasStockMasterSyncService;
+
+    @BeforeEach
+    void setUp() {
+        overseasStockMasterSyncService = new OverseasStockMasterSyncService(
+            new OverseasStockMasterCollector(kisOverseasStockMasterClient), stockMasterService);
+    }
 
     @Test
     @DisplayName("[ETF(종목구분 3)는 등록하지 않고 주식(종목구분 2)만 등록하며, 업종코드를 sector로 전달한다]")

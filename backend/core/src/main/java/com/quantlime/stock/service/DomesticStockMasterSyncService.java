@@ -1,19 +1,15 @@
 package com.quantlime.stock.service;
 
-import com.quantlime.infra.dart.DartApiClient;
 import com.quantlime.infra.dart.dto.DartCorpInfo;
-import com.quantlime.infra.toss.TossApiClient;
-import com.quantlime.infra.toss.dto.TossStockInfoResponse;
 import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.dto.StockMasterSyncResult;
+import com.quantlime.stock.implement.DomesticStockMasterCollector;
 import com.quantlime.stock.implement.StockAppender;
 import com.quantlime.stock.implement.StockReader;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -36,16 +32,13 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class DomesticStockMasterSyncService {
 
-    private static final int TOSS_STOCK_INFO_BATCH_SIZE = 200;
-
-    private final DartApiClient dartApiClient;
-    private final TossApiClient tossApiClient;
+    private final DomesticStockMasterCollector domesticStockMasterCollector;
     private final StockReader stockReader;
     private final StockAppender stockAppender;
 
     @Transactional
     public StockMasterSyncResult syncStockMaster() {
-        Map<String, DartCorpInfo> latestByCode = fetchLatestCorpList();
+        Map<String, DartCorpInfo> latestByCode = domesticStockMasterCollector.fetchLatestCorpList();
         Map<String, Stock> existingByCode = stockReader.findAll().stream()
             .collect(Collectors.toMap(Stock::getStockCode, Function.identity()));
 
@@ -57,14 +50,6 @@ public class DomesticStockMasterSyncService {
         return new StockMasterSyncResult(newlyListedCount, delistedCount);
     }
 
-    private Map<String, DartCorpInfo> fetchLatestCorpList() {
-        return dartApiClient.fetchCorpList().stream()
-            // 동일 종목코드가 중복 행으로 내려오는 경우 먼저 잡힌 값을 유지한다
-            // (KIND 시절과 동일한 방어 - DART에서 실제로 겪은 적은 없지만
-            // 외부 응답을 신뢰하지 않는 관행을 유지).
-            .collect(Collectors.toMap(DartCorpInfo::stockCode, Function.identity(), (a, b) -> a));
-    }
-
     private int registerNewlyListed(
         Map<String, DartCorpInfo> latestByCode, Map<String, Stock> existingByCode) {
         List<String> newCodes = latestByCode.keySet().stream()
@@ -74,7 +59,7 @@ public class DomesticStockMasterSyncService {
             return 0;
         }
 
-        Map<String, MarketType> marketByCode = resolveMarketTypes(newCodes);
+        Map<String, MarketType> marketByCode = domesticStockMasterCollector.resolveMarketTypes(newCodes);
         int count = 0;
         int unresolvedMarketCount = 0;
         for (String code : newCodes) {
@@ -101,29 +86,6 @@ public class DomesticStockMasterSyncService {
                 unresolvedMarketCount);
         }
         return count;
-    }
-
-    private Map<String, MarketType> resolveMarketTypes(List<String> codes) {
-        Map<String, MarketType> result = new HashMap<>();
-        for (int i = 0; i < codes.size(); i += TOSS_STOCK_INFO_BATCH_SIZE) {
-            List<String> chunk = codes.subList(i, Math.min(i + TOSS_STOCK_INFO_BATCH_SIZE, codes.size()));
-            TossStockInfoResponse response = tossApiClient.getStockInfo(String.join(",", chunk));
-            for (TossStockInfoResponse.TossStockInfo info : response.result()) {
-                toDomesticMarketType(info.market()).ifPresent(marketType -> result.put(info.symbol(), marketType));
-            }
-        }
-        return result;
-    }
-
-    private Optional<MarketType> toDomesticMarketType(String tossMarket) {
-        return switch (tossMarket) {
-            case "KOSPI" -> Optional.of(MarketType.KOSPI);
-            case "KOSDAQ" -> Optional.of(MarketType.KOSDAQ);
-            // 코넥스(KONEX)는 Toss market enum에 없다 - 별도 분류값이 없어
-            // 코넥스 신규상장은 이 경로로 자동 등록되지 않는다(위 registerNewlyListed
-            // 경고 로그로 드러남, 발견 시 수동 등록 검토).
-            default -> Optional.empty();
-        };
     }
 
     /**
