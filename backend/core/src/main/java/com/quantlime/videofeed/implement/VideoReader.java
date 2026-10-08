@@ -43,11 +43,11 @@ public class VideoReader {
         return videoRepository.findByChannelAndStatus(channel, status);
     }
 
-    public int countByChannelAndStatusAndPublishedAtBetween(Channel channel, VideoStatus status, LocalDateTime start, LocalDateTime end) {
+    public int countPublishedBetween(Channel channel, VideoStatus status, LocalDateTime start, LocalDateTime end) {
         return videoRepository.countByChannelAndStatusAndPublishedAtBetween(channel, status, start, end);
     }
 
-    public List<Video> findByStatusAndPublishedAtBefore(VideoStatus status, LocalDateTime publishedAt) {
+    public List<Video> findPublishedBefore(VideoStatus status, LocalDateTime publishedAt) {
         return videoRepository.findByStatusAndPublishedAtBefore(status, publishedAt);
     }
 
@@ -67,7 +67,7 @@ public class VideoReader {
         return videoRepository.findSummarizedVideoById(videoId);
     }
 
-    public List<Long> findIdsByPublishedAtBefore(LocalDateTime cutoff) {
+    public List<Long> findExpiredIds(LocalDateTime cutoff) {
         return videoRepository.findIdsByPublishedAtBefore(cutoff);
     }
 }

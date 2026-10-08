@@ -22,7 +22,7 @@ public class VideoTickerReader {
         return videoTickerRepository.findByVideo(video);
     }
 
-    public List<VideoTicker> findByVideo_IdIn(List<Long> videoIds) {
+    public List<VideoTicker> findByVideoIds(List<Long> videoIds) {
         return videoTickerRepository.findByVideo_IdIn(videoIds);
     }
 }

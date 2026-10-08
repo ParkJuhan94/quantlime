@@ -22,7 +22,7 @@ public class TelegramDigestTickerReader {
         return telegramDigestTickerRepository.findByTelegramDigest(telegramDigest);
     }
 
-    public List<TelegramDigestTicker> findByTelegramDigest_IdIn(List<Long> telegramDigestIds) {
+    public List<TelegramDigestTicker> findByDigestIds(List<Long> telegramDigestIds) {
         return telegramDigestTickerRepository.findByTelegramDigest_IdIn(telegramDigestIds);
     }
 }

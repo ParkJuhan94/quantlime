@@ -46,8 +46,8 @@ public class VideoFeedService {
             tickerCode, channelId, publishedFrom, publishedTo, pageable);
 
         List<Long> videoIds = videos.getContent().stream().map(Video::getId).toList();
-        Map<Long, String> summaryByVideoId = toSummaryTextMap(summaryReader.findByVideo_IdIn(videoIds));
-        Map<Long, List<VideoTicker>> tickersByVideoId = groupByVideoId(videoTickerReader.findByVideo_IdIn(videoIds));
+        Map<Long, String> summaryByVideoId = toSummaryTextMap(summaryReader.findByVideoIds(videoIds));
+        Map<Long, List<VideoTicker>> tickersByVideoId = groupByVideoId(videoTickerReader.findByVideoIds(videoIds));
 
         return videos.map(video -> VideoFeedMapper.toItemResponse(
             video,
@@ -61,7 +61,7 @@ public class VideoFeedService {
     // 필터라, 텔레그램 채널(Phase 8 P7)이 섞이면 선택해도 항상 빈 결과가 된다.
     @Transactional(readOnly = true)
     public List<VideoFeedChannelResponse> getChannels() {
-        return channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.YOUTUBE).stream()
+        return channelReader.findActive(Platform.YOUTUBE).stream()
             .map(VideoFeedMapper::toVideoFeedChannelResponse)
             .toList();
     }

@@ -89,7 +89,7 @@ public class VideoFilterService {
     @Transactional(readOnly = true)
     public List<Video> findReevaluationCandidates(Channel channel) {
         LocalDateTime cutoff = LocalDateTime.now(SEOUL).minusHours(VELOCITY_GRACE_HOURS);
-        return videoReader.findByStatusAndPublishedAtBefore(VideoStatus.PENDING_REVIEW, cutoff)
+        return videoReader.findPublishedBefore(VideoStatus.PENDING_REVIEW, cutoff)
             .stream()
             .filter(video -> video.getChannel().getId().equals(channel.getId()))
             .toList();
@@ -210,7 +210,7 @@ public class VideoFilterService {
     // 후보 개수만 보지 않고 그 날짜에 이미 SELECTED된 개수를 DB에서 다시 세어
     // 남은 쿼터만 적용한다 - 그래야 하루 상한이 사이클 횟수와 무관하게 지켜진다.
     private void selectUpToDailyQuota(Channel channel, List<Video> videosOnDate, int maxPerRun, LocalDate publishedDate) {
-        int alreadySelected = videoReader.countByChannelAndStatusAndPublishedAtBetween(
+        int alreadySelected = videoReader.countPublishedBetween(
             channel, VideoStatus.SELECTED, publishedDate.atStartOfDay(), publishedDate.plusDays(1).atStartOfDay());
         int remainingQuota = Math.max(maxPerRun - alreadySelected, 0);
 

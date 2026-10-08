@@ -52,7 +52,7 @@ public class TelegramChannelSeedInitializer implements ApplicationRunner {
     // 별도로 @Transactional을 붙일 필요가 없다(ChannelSeedInitializer와
     // 동일한 패턴·이유).
     void seedIfAbsent(String handle, String name, int priority, TelegramFilterConfig filterConfig) {
-        if (channelReader.existsByPlatformAndExternalChannelId(Platform.TELEGRAM, handle)) {
+        if (channelReader.isRegistered(Platform.TELEGRAM, handle)) {
             return;
         }
         Channel channel = Channel.ofTelegram(handle, name, priority, filterConfig);
