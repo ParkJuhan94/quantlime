@@ -5,6 +5,7 @@ import com.quantlime.infra.tradingview.dto.TradingViewSymbolResponse;
 import com.quantlime.infra.tradingview.exception.TradingViewApiErrorCode;
 import io.github.resilience4j.bulkhead.annotation.Bulkhead;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -29,6 +30,7 @@ public class TradingViewApiClient {
 
     private final RestClient tradingViewRestClient;
 
+    @Retry(name = "tradingview")
     @CircuitBreaker(name = "tradingview")
     @Bulkhead(name = "tradingview")
     public TradingViewSymbolResponse getSymbolQuote(String symbol) {

@@ -201,6 +201,80 @@ class TossApiClientTest {
     }
 
     @Test
+    @DisplayName("[저빈도 엔드포인트(랭킹)는 429를 받으면 Retry-After만큼 대기 후 재시도해 성공한다 - "
+        + "캔들 3개에만 있던 429 재시도를 withRateLimitRetry로 일반화(2026-10-08)]")
+    void getRankings_rateLimitedOnce_retriesAndSucceeds() {
+        // given
+        when(tokenManager.getAccessToken()).thenReturn("token");
+        String uri = BASE_URL
+            + "/api/v1/rankings?type=TOP_GAINERS&marketCountry=US&duration=1d&count=10";
+        mockServer.expect(requestTo(uri))
+            .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS)
+                .contentType(MediaType.APPLICATION_JSON)
+                .header("Retry-After", "1")
+                .body("{\"error\":{\"code\":\"rate-limit\"}}"));
+        mockServer.expect(requestTo(uri))
+            .andRespond(withSuccess(
+                "{\"result\":{\"rankedAt\":\"2026-07-29T17:43:34+09:00\",\"rankings\":[]}}",
+                MediaType.APPLICATION_JSON));
+
+        // when
+        TossRankingResponse response = tossApiClient.getRankings("TOP_GAINERS", "US", "1d", 10);
+
+        // then
+        assertThat(response.result().rankings()).isEmpty();
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("[429 매핑이 없던 장 캘린더도 이제 RATE_LIMIT_EXCEEDED로 분류돼 재시도된다 - "
+        + "이전엔 일반 실패 코드로 래핑돼 재시도 루프도, 서킷의 429 제외도 못 탔다]")
+    void getMarketCalendar_rateLimitedOnce_retriesAndSucceeds() {
+        // given
+        when(tokenManager.getAccessToken()).thenReturn("token");
+        mockServer.expect(requestTo(CALENDAR_URI))
+            .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS)
+                .contentType(MediaType.APPLICATION_JSON)
+                .header("Retry-After", "1")
+                .body("{\"error\":{\"code\":\"rate-limit\"}}"));
+        mockServer.expect(requestTo(CALENDAR_URI))
+            .andRespond(withSuccess(
+                "{\"result\":{\"today\":{\"date\":\"2026-07-13\",\"integrated\":null}}}",
+                MediaType.APPLICATION_JSON));
+
+        // when
+        TossMarketCalendarResponse response = tossApiClient.getMarketCalendar();
+
+        // then
+        assertThat(response.result().today().date()).isEqualTo("2026-07-13");
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("[시세 스윕 경로(getCurrentPrices)는 429에 대기·재시도하지 않고 즉시 실패한다 - "
+        + "다음 틱이 곧 재시도이고, 여기서 대기하면 전종목 시세·랭킹이 멈춘다]")
+    void getCurrentPrices_rateLimited_failsFastWithoutRetry() {
+        // given: 응답을 1건만 준비 - 재시도하면 추가 요청이 나가 MockRestServiceServer가 실패시킨다
+        when(tokenManager.getAccessToken()).thenReturn("token");
+        mockServer.expect(requestTo(PRICES_URI))
+            .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS)
+                .contentType(MediaType.APPLICATION_JSON)
+                .header("Retry-After", "5")
+                .body("{\"error\":{\"code\":\"rate-limit\"}}"));
+
+        // when
+        long start = System.currentTimeMillis();
+        assertThatThrownBy(() -> tossApiClient.getCurrentPrices("005930"))
+            .isInstanceOf(ExternalApiException.class)
+            .hasFieldOrPropertyWithValue("code", TossApiErrorCode.RATE_LIMIT_EXCEEDED.getCode());
+        long elapsedMs = System.currentTimeMillis() - start;
+
+        // then: Retry-After=5초를 무시하고 바로 반환
+        assertThat(elapsedMs).isLessThan(1000);
+        mockServer.verify();
+    }
+
+    @Test
     @DisplayName("[해외 장 운영 캘린더 조회 시 3영업일 응답을 그대로 파싱한다]")
     void getUsMarketCalendar_success_parsesThreeBusinessDays() {
         // given

@@ -3,6 +3,7 @@ package com.quantlime.infra.kis;
 import com.quantlime.common.util.ExternalApiInvoker;
 import com.quantlime.infra.kis.dto.KisOverseasStockMasterEntry;
 import com.quantlime.infra.kis.exception.KisApiErrorCode;
+import io.github.resilience4j.retry.annotation.Retry;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -42,6 +43,7 @@ public class KisOverseasStockMasterClient {
     /**
      * exchangeCode 예: nas(나스닥), nys(뉴욕), ams(아멕스).
      */
+    @Retry(name = "kis")
     public List<KisOverseasStockMasterEntry> fetchStockMaster(String exchangeCode) {
         return ExternalApiInvoker.call(
             KisApiErrorCode.MASTER_FILE_DOWNLOAD_FAILED,
