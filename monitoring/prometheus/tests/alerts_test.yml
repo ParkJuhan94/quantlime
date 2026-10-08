@@ -199,3 +199,56 @@ tests:
             exp_annotations:
               summary: "컨테이너 지표 갱신이 5분 이상 멈춤"
               description: "scripts/report-container-metrics.sh 크론이 5분 이상 성공하지 못했습니다(logs/report-container-metrics.log 확인, `crontab -l | grep container-metrics`) - FrontendDown/RedpandaDown/ContainerRestartLoop이 낡은 값을 보고 있을 수 있습니다."
+
+  # --- 호스트 디스크 사전 경고(80%) ---
+  # 사용률 85%(가용 15%)가 30분 넘게 지속되면 HostDiskWarning만 울리고, 90% 초과 구간은 HostDiskHigh가 맡아 중복 발화하지 않는다.
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{mountpoint="/"}'
+        values: '15x40'
+      - series: 'node_filesystem_size_bytes{mountpoint="/"}'
+        values: '100x40'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HostDiskWarning
+        exp_alerts: []
+      - eval_time: 35m
+        alertname: HostDiskWarning
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              mountpoint: "/"
+            exp_annotations:
+              summary: "호스트 루트 디스크 사용률 80% 초과"
+              description: "90%가 되기 전에 정리하세요 - docker system df 로 이미지/볼륨을 확인하고 docker image prune -a, 오래된 백업 파일(~/quantlime/backups, 홈 디렉터리 *.sql) 정리를 검토합니다."
+
+  # 75%(가용 25%)는 어느 알림도 울리지 않고, 95%(가용 5%)는 HostDiskWarning이 아니라 HostDiskHigh만 울린다.
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{mountpoint="/"}'
+        values: '25x40'
+      - series: 'node_filesystem_size_bytes{mountpoint="/"}'
+        values: '100x40'
+    alert_rule_test:
+      - eval_time: 35m
+        alertname: HostDiskWarning
+        exp_alerts: []
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{mountpoint="/"}'
+        values: '5x40'
+      - series: 'node_filesystem_size_bytes{mountpoint="/"}'
+        values: '100x40'
+    alert_rule_test:
+      - eval_time: 35m
+        alertname: HostDiskWarning
+        exp_alerts: []
+      - eval_time: 35m
+        alertname: HostDiskHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              mountpoint: "/"
+            exp_annotations:
+              summary: "호스트 루트 디스크 사용률 90% 초과"
+
