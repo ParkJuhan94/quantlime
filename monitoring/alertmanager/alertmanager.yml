@@ -28,6 +28,10 @@
 # Slack 웹훅 URL은 채널에 묶여 있어 채널마다 웹훅을 따로 발급해야 한다. WARN/INFO 웹훅이 비어 있으면
 # docker-compose.monitoring.yml이 SLACK_ALERT_WEBHOOK_URL로 대체해, 채널을 아직 안 만들었어도 기존처럼
 # 한 채널로 모두 전송된다(하위 호환).
+# 주의: warning/info 수신자에는 `channel:`을 지정하지 않는다 - 웹훅이 이미 채널에 묶여 있고, 구형 웹훅은
+# `channel`을 덮어쓰기로 취급해 그 채널이 없으면 `channel_not_found`(404)로 거부한다. WARN/INFO 웹훅이 아직
+# 없어 SLACK_ALERT_WEBHOOK_URL로 대체된 상태에서도 알림이 유실되지 않으려면 웹훅의 기본 채널로 보내야 한다
+# (2026-10-08 배포 직후 `#quantlime-warnings` 미생성 상태에서 실제로 발생). critical만 기존 설정대로 유지.
 route:
   receiver: slack-info
   group_by: ["alertname"]
@@ -64,14 +68,12 @@ receivers:
   - name: slack-warning
     slack_configs:
       - api_url: "__SLACK_WARN_WEBHOOK_URL__"
-        channel: "#quantlime-warnings"
         send_resolved: false
         title: "{{ .CommonAnnotations.summary }}"
         text: "{{ range .Alerts }}{{ .Annotations.description }}\n{{ end }}"
   - name: slack-info
     slack_configs:
       - api_url: "__SLACK_INFO_WEBHOOK_URL__"
-        channel: "#quantlime-info"
         send_resolved: false
         title: "{{ .CommonAnnotations.summary }}"
         text: "{{ range .Alerts }}{{ .Annotations.description }}\n{{ end }}"
