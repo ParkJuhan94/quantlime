@@ -1,5 +1,5 @@
 # 알림 규칙. Alertmanager(monitoring/alertmanager/alertmanager.yml)를 거쳐
-# Slack #quantlime-alerts(실제 Slack 채널명 그대로 유지)로 전송된다. 임계값은 t3.small~medium 1대 규모의
+# Slack으로 심각도별 전송된다(critical #quantlime-critical / warning #quantlime-warnings / info #quantlime-info). 임계값은 t3.small~medium 1대 규모의
 # 초기 추정치로, 실제 운영 데이터를 보며 조정할 것을 전제로 한다.
 groups:
   # --- 가용성: 서비스 자체가 죽었는지 ---
