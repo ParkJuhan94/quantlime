@@ -2,6 +2,7 @@ package com.quantlime.event.observability;
 
 import com.quantlime.event.market.MarketTopics;
 import com.quantlime.event.payment.PaymentTopics;
+import com.quantlime.event.score.ScoreTopics;
 import com.quantlime.event.subscription.SubscriptionTopics;
 import com.quantlime.event.telegramfeed.TelegramFeedTopics;
 import com.quantlime.event.videofeed.VideoFeedTopics;
@@ -28,7 +29,8 @@ public final class DltTopicCatalog {
         MarketTopics.PRICE_REFRESH_REQUESTED, "market-price-refresh",
         SubscriptionTopics.SUBSCRIPTION_RENEWAL_DUE, "subscription-renewal",
         PaymentTopics.PAYMENT_WEBHOOK_RECEIVED, "payment-webhook",
-        TelegramFeedTopics.TELEGRAM_DIGEST_GENERATION_REQUESTED, "telegram-digest");
+        TelegramFeedTopics.TELEGRAM_DIGEST_GENERATION_REQUESTED, "telegram-digest",
+        ScoreTopics.QUADRANT_ALERT_REQUESTED, "score-quadrant-alert");
 
     private DltTopicCatalog() {
     }

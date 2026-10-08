@@ -31,6 +31,11 @@ public interface WatchlistRepository extends JpaRepository<Watchlist, Long> {
         + "where w.user.id = :userId order by w.sortOrder asc, w.id asc")
     List<Watchlist> findAllWithStockByUserId(@Param("userId") Long userId);
 
+    // 사분면 변화 알림을 켠 그룹에 속한 종목코드만(사용자 단위, 중복 제거).
+    @Query("select distinct w.stock.stockCode from Watchlist w "
+        + "where w.user.id = :userId and w.group.quadrantAlertEnabled = true")
+    List<String> findStockCodesInQuadrantAlertGroups(@Param("userId") Long userId);
+
     @Query("select distinct w.stock.stockCode from Watchlist w")
     List<String> findDistinctStockCodes();
 

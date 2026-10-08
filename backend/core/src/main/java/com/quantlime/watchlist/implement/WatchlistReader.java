@@ -52,6 +52,10 @@ public class WatchlistReader {
         return watchlistRepository.findAllWithStockByUserId(userId);
     }
 
+    public List<String> findStockCodesInQuadrantAlertGroups(Long userId) {
+        return watchlistRepository.findStockCodesInQuadrantAlertGroups(userId);
+    }
+
     public List<String> findDistinctStockCodes() {
         return watchlistRepository.findDistinctStockCodes();
     }

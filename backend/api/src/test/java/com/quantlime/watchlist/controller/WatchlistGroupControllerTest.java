@@ -10,6 +10,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.quantlime.auth.jwt.JwtTokenProvider;
+import com.quantlime.subscription.SubscriptionFixture;
+import com.quantlime.subscription.SubscriptionPlanFixture;
+import com.quantlime.subscription.domain.SubscriptionPlan;
+import com.quantlime.subscription.repository.SubscriptionPlanRepository;
+import com.quantlime.subscription.repository.SubscriptionRepository;
 import com.quantlime.support.ApiTestSupport;
 import com.quantlime.user.UserFixture;
 import com.quantlime.user.domain.OAuthProvider;
@@ -35,6 +40,12 @@ class WatchlistGroupControllerTest extends ApiTestSupport {
 
     @Autowired
     private JwtTokenProvider jwtTokenProvider;
+
+    @Autowired
+    private SubscriptionPlanRepository subscriptionPlanRepository;
+
+    @Autowired
+    private SubscriptionRepository subscriptionRepository;
 
     private User user;
     private User other;
@@ -142,6 +153,90 @@ class WatchlistGroupControllerTest extends ApiTestSupport {
     void reorderGroups_empty_returns400() throws Exception {
         mockMvc.perform(put("/api/watchlist/groups/reorder").header("Authorization", auth)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"groupIds\":[]}"))
+            .andExpect(status().isBadRequest());
+    }
+
+    private String subscriberAuth() {
+        User subscriber = userRepository.save(UserFixture.createUser(OAuthProvider.GOOGLE, "wg-sub"));
+        SubscriptionPlan plan = subscriptionPlanRepository.save(SubscriptionPlanFixture.createPlan());
+        subscriptionRepository.save(SubscriptionFixture.createSubscription(subscriber, plan));
+        return "Bearer " + jwtTokenProvider.createAccessToken(subscriber.getId(), subscriber.getRole());
+    }
+
+    @Test
+    @DisplayName("[그룹은 기본적으로 사분면 변화 알림이 꺼져 있다]")
+    void quadrantAlert_defaultsToOff() throws Exception {
+        saveGroup(user, "기본", 0);
+
+        mockMvc.perform(get("/api/watchlist/groups").header("Authorization", auth))
+            .andExpect(jsonPath("$[0].quadrantAlertEnabled").value(false));
+    }
+
+    @Test
+    @DisplayName("[비구독자가 알림을 켜려 하면 403(SUB_006)이고 켜지지 않는다]")
+    void enableQuadrantAlert_nonSubscriber_returns403() throws Exception {
+        WatchlistGroup group = saveGroup(user, "성장주", 0);
+
+        mockMvc.perform(put("/api/watchlist/groups/" + group.getId() + "/quadrant-alert")
+                .header("Authorization", auth)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"enabled\":true}"))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("SUB_006"));
+
+        assertThat(watchlistGroupRepository.findById(group.getId()).orElseThrow().isQuadrantAlertEnabled())
+            .isFalse();
+    }
+
+    @Test
+    @DisplayName("[구독자는 알림을 켜고 끌 수 있고 응답과 저장값에 반영된다]")
+    void toggleQuadrantAlert_subscriber_persists() throws Exception {
+        String subscriber = subscriberAuth();
+        User subscriberUser = userRepository.findAll().stream()
+            .filter(u -> "wg-sub".equals(u.getProviderId())).findFirst().orElseThrow();
+        WatchlistGroup group = saveGroup(subscriberUser, "배당주", 0);
+
+        mockMvc.perform(put("/api/watchlist/groups/" + group.getId() + "/quadrant-alert")
+                .header("Authorization", subscriber)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"enabled\":true}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.quadrantAlertEnabled").value(true));
+        assertThat(watchlistGroupRepository.findById(group.getId()).orElseThrow().isQuadrantAlertEnabled()).isTrue();
+
+        mockMvc.perform(put("/api/watchlist/groups/" + group.getId() + "/quadrant-alert")
+                .header("Authorization", subscriber)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"enabled\":false}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.quadrantAlertEnabled").value(false));
+    }
+
+    @Test
+    @DisplayName("[구독이 끊긴 사용자도 이미 켜둔 알림은 끌 수 있다]")
+    void disableQuadrantAlert_nonSubscriber_isAllowed() throws Exception {
+        WatchlistGroup group = saveGroup(user, "옛 구독 때 켠 그룹", 0);
+        group.changeQuadrantAlert(true);
+        watchlistGroupRepository.save(group);
+
+        mockMvc.perform(put("/api/watchlist/groups/" + group.getId() + "/quadrant-alert")
+                .header("Authorization", auth)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"enabled\":false}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.quadrantAlertEnabled").value(false));
+    }
+
+    @Test
+    @DisplayName("[남의 그룹의 알림을 바꾸려 하면 404, enabled가 없으면 400]")
+    void quadrantAlert_otherUsersGroupOrInvalidBody() throws Exception {
+        String subscriber = subscriberAuth();
+        WatchlistGroup others = saveGroup(other, "남의그룹", 0);
+
+        mockMvc.perform(put("/api/watchlist/groups/" + others.getId() + "/quadrant-alert")
+                .header("Authorization", subscriber)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"enabled\":true}"))
+            .andExpect(status().isNotFound());
+
+        mockMvc.perform(put("/api/watchlist/groups/" + others.getId() + "/quadrant-alert")
+                .header("Authorization", subscriber)
+                .contentType(MediaType.APPLICATION_JSON).content("{}"))
             .andExpect(status().isBadRequest());
     }
 }

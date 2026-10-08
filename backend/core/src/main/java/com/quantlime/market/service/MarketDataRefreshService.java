@@ -3,6 +3,7 @@ package com.quantlime.market.service;
 import com.quantlime.common.lock.RedisLockService;
 import com.quantlime.common.util.SafeExecutor;
 import com.quantlime.market.event.PriceRefreshRequestedEvent;
+import com.quantlime.market.event.ScoreBatchCompletedEvent;
 import com.quantlime.market.implement.PriceRefreshFailureHandler;
 import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.price.service.PriceGapFillService;
@@ -186,6 +187,10 @@ public class MarketDataRefreshService {
         finishDomesticBatch();
         finishOverseasBatch();
         SafeExecutor.runSafely("스코어 랭킹 캐시 무효화", scoreRankingCacheStore::evictAll);
+        // 스코어가 확정된 이 시점에 후속 작업(사분면 변화 알림 등)을 깨운다 -
+        // 구독자(notification)를 market이 직접 알지 않도록 도메인 이벤트로만 알린다.
+        SafeExecutor.runSafely("스코어 배치 완료 이벤트 발행",
+            () -> eventPublisher.publishEvent(new ScoreBatchCompletedEvent()));
 
         // 국내 지수(코스피/코스닥) 일봉 갭필 + 투자자별 매매대금(주/월)을 같은
         // 트리거에 편입한다(2026-07-29, 사용자 요청) - MarketIndexCache의 지수

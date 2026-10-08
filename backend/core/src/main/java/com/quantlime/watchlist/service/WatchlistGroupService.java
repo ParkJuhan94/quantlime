@@ -54,6 +54,13 @@ public class WatchlistGroupService {
     }
 
     @Transactional
+    public WatchlistGroup changeQuadrantAlert(Long userId, Long groupId, boolean enabled) {
+        WatchlistGroup group = getOwnedGroup(userId, groupId);
+        group.changeQuadrantAlert(enabled);
+        return group;
+    }
+
+    @Transactional
     public void deleteGroup(Long userId, Long groupId) {
         WatchlistGroup group = getOwnedGroup(userId, groupId);
         // 그룹에 속한 관심 종목 자체는 삭제하지 않고 기본 그룹으로 옮긴다
