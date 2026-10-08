@@ -26,6 +26,7 @@ COPY python/build.gradle python/build.gradle
 COPY firebase/build.gradle firebase/build.gradle
 COPY toss/build.gradle toss/build.gradle
 COPY sync/build.gradle sync/build.gradle
+COPY oauth/build.gradle oauth/build.gradle
 RUN ./gradlew --version
 
 COPY api api
@@ -46,6 +47,7 @@ COPY python python
 COPY firebase firebase
 COPY toss toss
 COPY sync sync
+COPY oauth oauth
 RUN ./gradlew :api:bootJar -x test --no-daemon
 
 FROM eclipse-temurin:21-jre AS runtime

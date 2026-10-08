@@ -1,11 +1,10 @@
 package com.quantlime.infra.oauth;
 
-import com.quantlime.auth.exception.AuthErrorCode;
 import com.quantlime.common.exception.ExternalApiException;
 import com.quantlime.infra.oauth.dto.GoogleTokenResponse;
 import com.quantlime.infra.oauth.dto.GoogleUserInfoResponse;
-import com.quantlime.infra.oauth.dto.OAuthUserInfo;
-import com.quantlime.user.domain.OAuthProvider;
+import com.quantlime.infra.oauth.dto.OAuthProfile;
+import com.quantlime.infra.oauth.exception.OAuthErrorCode;
 import io.github.resilience4j.bulkhead.annotation.Bulkhead;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
@@ -29,14 +28,14 @@ public class GoogleOAuthClient implements OAuthClient {
     private final OAuthProperties properties;
 
     @Override
-    public boolean supports(OAuthProvider provider) {
-        return provider == OAuthProvider.GOOGLE;
+    public boolean supports(String provider) {
+        return OAuthProviders.GOOGLE.equals(provider);
     }
 
     @Override
     @CircuitBreaker(name = "oauth-google", fallbackMethod = "fetchFallback")
     @Bulkhead(name = "oauth-google")
-    public OAuthUserInfo fetch(String code, String redirectUri) {
+    public OAuthProfile fetch(String code, String redirectUri) {
         try {
             OAuthProperties.Provider google = properties.getGoogle();
 
@@ -55,7 +54,7 @@ public class GoogleOAuthClient implements OAuthClient {
                 .body(GoogleTokenResponse.class);
 
             if (tokenResponse == null || tokenResponse.accessToken() == null) {
-                throw new ExternalApiException(AuthErrorCode.OAUTH_USERINFO_FAILED);
+                throw new ExternalApiException(OAuthErrorCode.OAUTH_USERINFO_FAILED);
             }
 
             GoogleUserInfoResponse userInfo = oAuthRestClient.get()
@@ -65,15 +64,15 @@ public class GoogleOAuthClient implements OAuthClient {
                 .body(GoogleUserInfoResponse.class);
 
             if (userInfo == null) {
-                throw new ExternalApiException(AuthErrorCode.OAUTH_USERINFO_FAILED);
+                throw new ExternalApiException(OAuthErrorCode.OAUTH_USERINFO_FAILED);
             }
 
-            return new OAuthUserInfo(OAuthProvider.GOOGLE, userInfo.sub(),
+            return new OAuthProfile(OAuthProviders.GOOGLE, userInfo.sub(),
                 userInfo.email(), userInfo.name(), userInfo.picture());
         } catch (ExternalApiException e) {
             throw e;
         } catch (Exception e) {
-            throw new ExternalApiException(AuthErrorCode.OAUTH_USERINFO_FAILED, e);
+            throw new ExternalApiException(OAuthErrorCode.OAUTH_USERINFO_FAILED, e);
         }
     }
 
@@ -83,10 +82,10 @@ public class GoogleOAuthClient implements OAuthClient {
     // 만다 - 실패 원인이 외부 API인데 내 서버 탓처럼 보이는 문제.
     // ExternalApiException으로 통일해 기존 503 응답 경로를 그대로 타게 한다.
     @SuppressWarnings("unused")
-    private OAuthUserInfo fetchFallback(String code, String redirectUri, Throwable t) {
+    private OAuthProfile fetchFallback(String code, String redirectUri, Throwable t) {
         if (t instanceof ExternalApiException e) {
             throw e;
         }
-        throw new ExternalApiException(AuthErrorCode.OAUTH_USERINFO_FAILED, t);
+        throw new ExternalApiException(OAuthErrorCode.OAUTH_USERINFO_FAILED, t);
     }
 }

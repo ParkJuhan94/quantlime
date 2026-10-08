@@ -1,11 +1,10 @@
 package com.quantlime.infra.oauth;
 
-import com.quantlime.auth.exception.AuthErrorCode;
 import com.quantlime.common.exception.ExternalApiException;
 import com.quantlime.infra.oauth.dto.KakaoTokenResponse;
 import com.quantlime.infra.oauth.dto.KakaoUserInfoResponse;
-import com.quantlime.infra.oauth.dto.OAuthUserInfo;
-import com.quantlime.user.domain.OAuthProvider;
+import com.quantlime.infra.oauth.dto.OAuthProfile;
+import com.quantlime.infra.oauth.exception.OAuthErrorCode;
 import io.github.resilience4j.bulkhead.annotation.Bulkhead;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
@@ -31,14 +30,14 @@ public class KakaoOAuthClient implements OAuthClient {
     private final OAuthProperties properties;
 
     @Override
-    public boolean supports(OAuthProvider provider) {
-        return provider == OAuthProvider.KAKAO;
+    public boolean supports(String provider) {
+        return OAuthProviders.KAKAO.equals(provider);
     }
 
     @Override
     @CircuitBreaker(name = "oauth-kakao", fallbackMethod = "fetchFallback")
     @Bulkhead(name = "oauth-kakao")
-    public OAuthUserInfo fetch(String code, String redirectUri) {
+    public OAuthProfile fetch(String code, String redirectUri) {
         try {
             OAuthProperties.Provider kakao = properties.getKakao();
 
@@ -57,7 +56,7 @@ public class KakaoOAuthClient implements OAuthClient {
                 .body(KakaoTokenResponse.class);
 
             if (tokenResponse == null || tokenResponse.accessToken() == null) {
-                throw new ExternalApiException(AuthErrorCode.OAUTH_USERINFO_FAILED);
+                throw new ExternalApiException(OAuthErrorCode.OAUTH_USERINFO_FAILED);
             }
 
             KakaoUserInfoResponse userInfo = oAuthRestClient.get()
@@ -67,7 +66,7 @@ public class KakaoOAuthClient implements OAuthClient {
                 .body(KakaoUserInfoResponse.class);
 
             if (userInfo == null) {
-                throw new ExternalApiException(AuthErrorCode.OAUTH_USERINFO_FAILED);
+                throw new ExternalApiException(OAuthErrorCode.OAUTH_USERINFO_FAILED);
             }
 
             String email = userInfo.kakaoAccount() != null
@@ -79,22 +78,22 @@ public class KakaoOAuthClient implements OAuthClient {
                 && userInfo.kakaoAccount().profile() != null
                 ? userInfo.kakaoAccount().profile().profileImageUrl() : null;
 
-            return new OAuthUserInfo(OAuthProvider.KAKAO, String.valueOf(userInfo.id()),
+            return new OAuthProfile(OAuthProviders.KAKAO, String.valueOf(userInfo.id()),
                 email, StringUtils.hasText(nickname) ? nickname : DEFAULT_NICKNAME, profileImageUrl);
         } catch (ExternalApiException e) {
             throw e;
         } catch (Exception e) {
-            throw new ExternalApiException(AuthErrorCode.OAUTH_USERINFO_FAILED, e);
+            throw new ExternalApiException(OAuthErrorCode.OAUTH_USERINFO_FAILED, e);
         }
     }
 
     // GoogleOAuthClient.fetchFallback와 동일한 이유 - 서킷 open 시 위 try/catch를
     // 건너뛰고 곧장 CallNotPermittedException이 던져지므로 여기서 통일한다.
     @SuppressWarnings("unused")
-    private OAuthUserInfo fetchFallback(String code, String redirectUri, Throwable t) {
+    private OAuthProfile fetchFallback(String code, String redirectUri, Throwable t) {
         if (t instanceof ExternalApiException e) {
             throw e;
         }
-        throw new ExternalApiException(AuthErrorCode.OAUTH_USERINFO_FAILED, t);
+        throw new ExternalApiException(OAuthErrorCode.OAUTH_USERINFO_FAILED, t);
     }
 }

@@ -10,8 +10,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.quantlime.common.exception.ExternalApiException;
-import com.quantlime.infra.oauth.dto.OAuthUserInfo;
-import com.quantlime.user.domain.OAuthProvider;
+import com.quantlime.infra.oauth.dto.OAuthProfile;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -44,7 +43,7 @@ class GoogleOAuthClientTest {
 
     @Test
     @DisplayName("[구글 인가 코드로 사용자 정보를 정상적으로 조회한다]")
-    void fetch_success_returnsOAuthUserInfo() {
+    void fetch_success_returnsOAuthProfile() {
         // given
         mockServer.expect(requestTo(TOKEN_URI))
             .andExpect(method(POST))
@@ -59,10 +58,10 @@ class GoogleOAuthClientTest {
                 MediaType.APPLICATION_JSON));
 
         // when
-        OAuthUserInfo userInfo = googleOAuthClient.fetch("auth-code", "http://localhost/cb");
+        OAuthProfile userInfo = googleOAuthClient.fetch("auth-code", "http://localhost/cb");
 
         // then
-        assertThat(userInfo.provider()).isEqualTo(OAuthProvider.GOOGLE);
+        assertThat(userInfo.provider()).isEqualTo(OAuthProviders.GOOGLE);
         assertThat(userInfo.providerId()).isEqualTo("google-sub-1");
         assertThat(userInfo.email()).isEqualTo("test@gmail.com");
         assertThat(userInfo.nickname()).isEqualTo("테스트");

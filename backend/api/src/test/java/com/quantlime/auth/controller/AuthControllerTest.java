@@ -11,10 +11,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.quantlime.auth.cookie.RefreshTokenCookieProvider;
+import com.quantlime.auth.dto.OAuthUserInfo;
 import com.quantlime.auth.dto.request.SocialLoginRequest;
+import com.quantlime.auth.implement.OAuthUserCollector;
 import com.quantlime.auth.jwt.JwtTokenProvider;
-import com.quantlime.infra.oauth.OAuthClientDispatcher;
-import com.quantlime.infra.oauth.dto.OAuthUserInfo;
 import com.quantlime.support.ApiTestSupport;
 import com.quantlime.user.domain.OAuthProvider;
 import com.quantlime.user.domain.UserRole;
@@ -36,7 +36,7 @@ class AuthControllerTest extends ApiTestSupport {
     private JwtTokenProvider jwtTokenProvider;
 
     @MockBean
-    private OAuthClientDispatcher oAuthClientDispatcher;
+    private OAuthUserCollector oAuthUserCollector;
 
     @Test
     @DisplayName("[소셜 로그인 성공 시 액세스 토큰은 바디로, 리프레시 토큰은 httpOnly 쿠키로 내려온다]")
@@ -44,7 +44,7 @@ class AuthControllerTest extends ApiTestSupport {
         // given
         OAuthUserInfo userInfo = new OAuthUserInfo(
             OAuthProvider.GOOGLE, "google-id-1", "test@gmail.com", "테스트유저", null);
-        given(oAuthClientDispatcher.fetch(eq(OAuthProvider.GOOGLE), any(), any()))
+        given(oAuthUserCollector.fetch(eq(OAuthProvider.GOOGLE), any(), any()))
             .willReturn(userInfo);
 
         SocialLoginRequest request = new SocialLoginRequest("auth-code", "http://localhost/cb");
@@ -126,7 +126,7 @@ class AuthControllerTest extends ApiTestSupport {
     @DisplayName("[로그인 후 다른 소셜 계정을 연결하면 204이고 연결 목록에 나타나며, 연결된 계정으로 로그인하면 같은 사용자로 들어온다]")
     void link_thenLoginWithLinkedAccount_sameUser() throws Exception {
         // given: 구글로 가입
-        given(oAuthClientDispatcher.fetch(eq(OAuthProvider.GOOGLE), any(), any()))
+        given(oAuthUserCollector.fetch(eq(OAuthProvider.GOOGLE), any(), any()))
             .willReturn(new OAuthUserInfo(OAuthProvider.GOOGLE, "g-link-1", "a@gmail.com", "연결유저", null));
         String loginBody = objectMapper.writeValueAsString(new SocialLoginRequest("code", "http://localhost/cb"));
         String loginResponse = mockMvc.perform(post("/api/auth/login/google")
@@ -136,7 +136,7 @@ class AuthControllerTest extends ApiTestSupport {
         String accessToken = objectMapper.readTree(loginResponse).get("accessToken").asText();
 
         // when: 카카오 연결
-        given(oAuthClientDispatcher.fetch(eq(OAuthProvider.KAKAO), any(), any()))
+        given(oAuthUserCollector.fetch(eq(OAuthProvider.KAKAO), any(), any()))
             .willReturn(new OAuthUserInfo(OAuthProvider.KAKAO, "k-link-1", "a@kakao.com", "카카오닉", null));
         mockMvc.perform(post("/api/auth/link/kakao")
                 .header("Authorization", "Bearer " + accessToken)

@@ -7,8 +7,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
-import com.quantlime.infra.oauth.dto.OAuthUserInfo;
-import com.quantlime.user.domain.OAuthProvider;
+import com.quantlime.infra.oauth.dto.OAuthProfile;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -41,7 +40,7 @@ class NaverOAuthClientTest {
 
     @Test
     @DisplayName("[네이버 인가 코드로 사용자 정보를 정상적으로 조회한다]")
-    void fetch_success_returnsOAuthUserInfo() {
+    void fetch_success_returnsOAuthProfile() {
         // given
         mockServer.expect(requestTo(TOKEN_URI))
             .andExpect(method(POST))
@@ -57,10 +56,10 @@ class NaverOAuthClientTest {
                 MediaType.APPLICATION_JSON));
 
         // when
-        OAuthUserInfo userInfo = naverOAuthClient.fetch("auth-code", "http://localhost/cb");
+        OAuthProfile userInfo = naverOAuthClient.fetch("auth-code", "http://localhost/cb");
 
         // then
-        assertThat(userInfo.provider()).isEqualTo(OAuthProvider.NAVER);
+        assertThat(userInfo.provider()).isEqualTo(OAuthProviders.NAVER);
         assertThat(userInfo.providerId()).isEqualTo("naver-id-1");
         assertThat(userInfo.email()).isEqualTo("test@naver.com");
         assertThat(userInfo.nickname()).isEqualTo("네이버유저");
@@ -83,7 +82,7 @@ class NaverOAuthClientTest {
                 MediaType.APPLICATION_JSON));
 
         // when
-        OAuthUserInfo userInfo = naverOAuthClient.fetch("auth-code", "http://localhost/cb");
+        OAuthProfile userInfo = naverOAuthClient.fetch("auth-code", "http://localhost/cb");
 
         // then
         assertThat(userInfo.providerId()).isEqualTo("naver-id-2");
