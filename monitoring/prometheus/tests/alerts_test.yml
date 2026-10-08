@@ -199,3 +199,35 @@ tests:
             exp_annotations:
               summary: "컨테이너 지표 갱신이 5분 이상 멈춤"
               description: "scripts/report-container-metrics.sh 크론이 5분 이상 성공하지 못했습니다(logs/report-container-metrics.log 확인, `crontab -l | grep container-metrics`) - FrontendDown/RedpandaDown/ContainerRestartLoop이 낡은 값을 보고 있을 수 있습니다."
+
+  # --- 로그 파이프라인 감시 ---
+  # Loki/Alloy가 계속 응답하면 알림 없음.
+  - interval: 1m
+    input_series:
+      - series: 'up{job="loki"}'
+        values: '1x10'
+      - series: 'up{job="alloy"}'
+        values: '1x10'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: LogPipelineDown
+        exp_alerts: []
+
+  # Alloy가 3분 넘게 죽어 있으면 job 라벨과 함께 발화한다(로그 알림 입력이 끊긴 상태).
+  - interval: 1m
+    input_series:
+      - series: 'up{job="alloy"}'
+        values: '1 1 0 0 0 0 0 0 0 0'
+      - series: 'up{job="loki"}'
+        values: '1x10'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: LogPipelineDown
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: alloy
+            exp_annotations:
+              summary: "로그 파이프라인 중단: alloy"
+              description: "alloy이(가) 3분 이상 응답하지 않습니다 - 로그 수집/로그 기반 알림(OutOfMemoryError·ERROR 급증)이 멈춘 상태입니다. docker ps와 docker logs quantlime-prod-alloy를 확인하세요."
+

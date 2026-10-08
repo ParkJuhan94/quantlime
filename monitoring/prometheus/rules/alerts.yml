@@ -88,6 +88,17 @@ groups:
           summary: "컨테이너 재시작 루프 감지: {{ $labels.name }}"
           description: "{{ $labels.name }}이(가) 최근 30분간 3회 이상 재시작했습니다 - restart:on-failure 또는 autoheal이 반복 발동 중일 수 있습니다."
 
+      # 로그 파이프라인(Loki/Alloy)이 죽으면 로그 기반 알림(monitoring/loki/rules)이 조용히 멈춘다 -
+      # "울려야 할 때 안 울리는" 사각지대를 막는 감시. 로컬 Prometheus에는 이 job이 없어 평가되지 않는다.
+      - alert: LogPipelineDown
+        expr: up{job=~"loki|alloy"} == 0
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "로그 파이프라인 중단: {{ $labels.job }}"
+          description: "{{ $labels.job }}이(가) 3분 이상 응답하지 않습니다 - 로그 수집/로그 기반 알림(OutOfMemoryError·ERROR 급증)이 멈춘 상태입니다. docker ps와 docker logs quantlime-prod-{{ $labels.job }}를 확인하세요."
+
       # 위 세 알림(FrontendDown/RedpandaDown/ContainerRestartLoop)이 기대는 지표는 호스트 크론
       # (scripts/report-container-metrics.sh)이 쓰는 파일이라, 크론이 멈추면 마지막 값이 그대로 남아
       # 알림이 "정상"으로 보인다 - 갱신 시각을 직접 감시해 그 사각지대를 막는다
