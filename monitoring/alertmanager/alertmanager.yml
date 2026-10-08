@@ -59,21 +59,27 @@ route:
 
 receivers:
   - name: "null"
+  # 제목 앞 이모지와 막대 색으로 심각도를 한눈에 구분한다(2026-10-08): 🔴 critical(빨강) / 🟠 warning(주황) /
+  # 🔵 info(파랑). Slack 채널 이름에는 이모지를 넣을 수 없어 메시지 쪽에서 구분한다. critical만 해결(resolved)
+  # 메시지를 보내므로 그때는 ✅ [해결]로 바꾸고 막대를 초록으로 둔다.
   - name: slack-critical
     slack_configs:
       - api_url: "__SLACK_ALERT_WEBHOOK_URL__"
         send_resolved: true
-        title: "{{ .CommonAnnotations.summary }}"
+        color: '{{ if eq .Status "resolved" }}good{{ else }}#D32F2F{{ end }}'
+        title: '{{ if eq .Status "resolved" }}✅ [해결] {{ else }}🔴 {{ end }}{{ .CommonAnnotations.summary }}'
         text: "{{ range .Alerts }}{{ .Annotations.description }}\n{{ end }}"
   - name: slack-warning
     slack_configs:
       - api_url: "__SLACK_WARN_WEBHOOK_URL__"
         send_resolved: false
-        title: "{{ .CommonAnnotations.summary }}"
+        color: "#F57C00"
+        title: "🟠 {{ .CommonAnnotations.summary }}"
         text: "{{ range .Alerts }}{{ .Annotations.description }}\n{{ end }}"
   - name: slack-info
     slack_configs:
       - api_url: "__SLACK_INFO_WEBHOOK_URL__"
         send_resolved: false
-        title: "{{ .CommonAnnotations.summary }}"
+        color: "#1976D2"
+        title: "🔵 {{ .CommonAnnotations.summary }}"
         text: "{{ range .Alerts }}{{ .Annotations.description }}\n{{ end }}"
