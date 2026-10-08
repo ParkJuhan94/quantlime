@@ -168,6 +168,11 @@ services:
       # 반드시 같은 경로를 가리켜야 한다(안 그러면 컨테이너 재기동 시
       # 업로드 파일이 유실된다).
       UPLOAD_DIR: /app/uploads
+      # 앱의 DLT 개별 알림(정보성) 채널. `.env.prod`에 `SLACK_INFO_WEBHOOK_URL=`처럼 값 없이 키만 있으면
+      # env_file이 "빈 문자열이 정의된 환경변수"로 넘겨 Spring의 `${A:${B:}}` 기본값이 동작하지 않는다
+      # (정의된 빈 값은 "없음"이 아님). compose의 `:-`는 빈 값도 "없음"으로 취급하므로 여기서
+      # SLACK_ALERT_WEBHOOK_URL로 대체한다(monitoring 오버레이의 Alertmanager와 같은 규칙).
+      SLACK_INFO_WEBHOOK_URL: ${SLACK_INFO_WEBHOOK_URL:-${SLACK_ALERT_WEBHOOK_URL:-}}
     volumes:
       - upload_data:/app/uploads
     depends_on:

@@ -56,7 +56,10 @@ services:
       - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml.template:ro
       - alertmanager_data:/alertmanager
     environment:
+      # critical 채널(기존). WARN/INFO가 비어 있으면 이 값으로 대체돼 한 채널로 모두 전송된다(하위 호환)
       SLACK_ALERT_WEBHOOK_URL: ${SLACK_ALERT_WEBHOOK_URL:-}
+      SLACK_WARN_WEBHOOK_URL: ${SLACK_WARN_WEBHOOK_URL:-${SLACK_ALERT_WEBHOOK_URL:-}}
+      SLACK_INFO_WEBHOOK_URL: ${SLACK_INFO_WEBHOOK_URL:-${SLACK_ALERT_WEBHOOK_URL:-}}
     # Alertmanager 설정 파일은 환경변수 치환을 지원하지 않아(monitoring/
     # alertmanager/alertmanager.yml 상단 주석 참고) 기동 시 sed로 직접
     # 치환한 사본을 만든 뒤 그 파일로 기동한다. prom/alertmanager 이미지는
@@ -70,7 +73,9 @@ services:
       - sh
       - -c
       - |
-        sed "s#__SLACK_ALERT_WEBHOOK_URL__#$$SLACK_ALERT_WEBHOOK_URL#" \
+        sed -e "s#__SLACK_ALERT_WEBHOOK_URL__#$$SLACK_ALERT_WEBHOOK_URL#" \
+            -e "s#__SLACK_WARN_WEBHOOK_URL__#$$SLACK_WARN_WEBHOOK_URL#" \
+            -e "s#__SLACK_INFO_WEBHOOK_URL__#$$SLACK_INFO_WEBHOOK_URL#" \
           /etc/alertmanager/alertmanager.yml.template > /etc/alertmanager/alertmanager.yml
         exec /bin/alertmanager --config.file=/etc/alertmanager/alertmanager.yml --storage.path=/alertmanager
     ports:

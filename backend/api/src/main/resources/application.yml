@@ -362,12 +362,11 @@ slack:
   # WEBHOOK_NOT_CONFIGURED 에러를 던진다(설정 누락과 실제 전송 실패를
   # 구분하기 위함).
   feedback-webhook-url: ${SLACK_FEEDBACK_WEBHOOK_URL:}
-  # Kafka DLT 알림 등 운영 신호 전용(2026-09-24) - 별도 웹훅을 새로 발급하지 않고
-  # Alertmanager가 이미 쓰는 SLACK_ALERT_WEBHOOK_URL(#quantlime-alerts)을 그대로
-  # 재사용한다. 앱에서 즉시 보내는 상세 알림과 Alertmanager의 집계 백스톱 알림이
-  # 같은 채널에 모이는 게 온콜 입장에서 오히려 자연스럽다 - 신호가 두 종류라고
-  # 채널까지 나눌 필요는 없음.
-  ops-webhook-url: ${SLACK_ALERT_WEBHOOK_URL:}
+  # Kafka DLT 개별 알림 등 정보성 운영 신호 전용. 처음(2026-09-24)엔 Alertmanager와 같은 채널
+  # (SLACK_ALERT_WEBHOOK_URL)을 재사용했으나, 2026-10-08 자막 수집 실패 DLT가 영상마다 쏟아져
+  # critical 채널을 덮어(34건/48h) critical/warning/info 3채널로 나누면서 정보성 채널
+  # (SLACK_INFO_WEBHOOK_URL)로 옮겼다. 비어 있으면 기존 SLACK_ALERT_WEBHOOK_URL로 대체돼 동작은 그대로다.
+  ops-webhook-url: ${SLACK_INFO_WEBHOOK_URL:${SLACK_ALERT_WEBHOOK_URL:}}
 
 python-engine:
   base-url: ${PYTHON_ENGINE_URL:http://localhost:8000}
