@@ -19,6 +19,14 @@ spring:
 toss-payments:
   allow-missing-webhook-secret: false
 
+# 운영 자막 수집은 YouTube가 AWS 등 클라우드 IP를 차단(RequestBlocked, 2026-10-08 확인 - 48시간 63건
+# 전부 실패)해 영상마다 DLT가 쌓인다. 자막은 로컬에서 가져와 운영에 동기화(scripts/
+# sync-transcripts-to-prod.sh)하는 방식으로 운영하므로 이 도메인의 개별 Slack 알림만 끈다
+# (Prometheus 카운터는 그대로 증가 - Alertmanager가 집계 알림을 판단).
+kafka:
+  dlt:
+    slack-suppressed-domains: videofeed-transcript
+
 logging:
   level:
     root: info

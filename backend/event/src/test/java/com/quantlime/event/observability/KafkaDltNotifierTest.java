@@ -6,9 +6,11 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.quantlime.infra.slack.SlackWebhookClient;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -33,7 +35,7 @@ class KafkaDltNotifierTest {
     @DisplayName("[notify는 dlt.messages 카운터를 domain/topic 태그로 증가시키고 Slack 운영 알림을 보낸다]")
     void notify_incrementsCounterWithTagsAndSendsOpsMessage() {
         // given
-        KafkaDltNotifier notifier = new KafkaDltNotifier(registry, slackWebhookClient);
+        KafkaDltNotifier notifier = new KafkaDltNotifier(registry, slackWebhookClient, new KafkaDltProperties(Set.of()));
 
         // when
         notifier.notify("payment-webhook", "payment.webhook.received", "payloadHash=abc");
@@ -50,7 +52,7 @@ class KafkaDltNotifierTest {
     @DisplayName("[notify는 Slack 전송이 실패해도 예외를 전파하지 않고 카운터는 이미 증가해 있다]")
     void notify_slackFails_doesNotPropagateAndCounterStillIncremented() {
         // given
-        KafkaDltNotifier notifier = new KafkaDltNotifier(registry, slackWebhookClient);
+        KafkaDltNotifier notifier = new KafkaDltNotifier(registry, slackWebhookClient, new KafkaDltProperties(Set.of()));
         willThrow(new RuntimeException("slack down")).given(slackWebhookClient).sendOpsMessage(anyString());
 
         // when & then
@@ -60,5 +62,37 @@ class KafkaDltNotifierTest {
             .tags("domain", "telegram-digest", "topic", "telegram.digest.generation.requested")
             .counter().count();
         assertThat(count).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("[억제 대상 도메인은 카운터만 증가시키고 Slack 알림은 보내지 않는다]")
+    void notify_suppressedDomain_incrementsCounterButSkipsSlack() {
+        // given
+        KafkaDltNotifier notifier = new KafkaDltNotifier(
+            registry, slackWebhookClient, new KafkaDltProperties(Set.of("videofeed-transcript")));
+
+        // when
+        notifier.notify("videofeed-transcript", "video.selected", "videoId=1");
+
+        // then
+        double count = registry.get("dlt.messages")
+            .tags("domain", "videofeed-transcript", "topic", "video.selected")
+            .counter().count();
+        assertThat(count).isEqualTo(1.0);
+        verifyNoInteractions(slackWebhookClient);
+    }
+
+    @Test
+    @DisplayName("[억제 목록에 없는 도메인은 억제 설정이 있어도 Slack 알림을 그대로 보낸다]")
+    void notify_domainNotInSuppressedSet_stillSendsSlack() {
+        // given
+        KafkaDltNotifier notifier = new KafkaDltNotifier(
+            registry, slackWebhookClient, new KafkaDltProperties(Set.of("videofeed-transcript")));
+
+        // when
+        notifier.notify("payment-webhook", "payment.webhook.received", "payloadHash=abc");
+
+        // then
+        verify(slackWebhookClient).sendOpsMessage(contains("payment-webhook"));
     }
 }

@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 
 import com.quantlime.infra.slack.SlackWebhookClient;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -32,7 +33,7 @@ class DltMetricsBinderTest {
     void notify_afterPreRegistration_incrementsSameSeries() {
         // given
         new DltMetricsBinder().bindTo(registry);
-        KafkaDltNotifier notifier = new KafkaDltNotifier(registry, mock(SlackWebhookClient.class));
+        KafkaDltNotifier notifier = new KafkaDltNotifier(registry, mock(SlackWebhookClient.class), new KafkaDltProperties(Set.of()));
         String topic = "payment.webhook.received";
 
         // when
