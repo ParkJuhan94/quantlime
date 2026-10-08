@@ -135,4 +135,67 @@ class NaverFinanceApiClientTest {
         assertThatThrownBy(() -> client.getIndexBasic("KOSPI")).isInstanceOf(ExternalApiException.class);
         assertThatThrownBy(() -> client.getIndexMinuteCandles("KOSPI")).isInstanceOf(ExternalApiException.class);
     }
+
+    @Test
+    @DisplayName("[분봉은 차트 호스트의 도메스틱 지수 분봉 경로로 당일 전체를 받는다]")
+    void getIndexMinuteCandles_parsesList() {
+        chartServer.expect(requestTo(CHART_URL + "/chart/domestic/index/KOSPI/minute"))
+            .andRespond(withSuccess("[{},{}]", MediaType.APPLICATION_JSON));
+
+        assertThat(client.getIndexMinuteCandles("KOSPI")).hasSize(2);
+        chartServer.verify();
+    }
+
+    @Test
+    @DisplayName("[해외 지수 일봉은 로이터 코드 경로에 page를 싣고, 기본 오버로드는 page=1이다]")
+    void getWorldIndexPrices_pagination() {
+        chartServer.expect(requestTo(Matchers.startsWith(CHART_URL + "/index/.IXIC/price")))
+            .andExpect(queryParam("pageSize", "60"))
+            .andExpect(queryParam("page", "1"))
+            .andRespond(withSuccess("[{}]", MediaType.APPLICATION_JSON));
+        chartServer.expect(requestTo(Matchers.startsWith(CHART_URL + "/index/.IXIC/price")))
+            .andExpect(queryParam("page", "4"))
+            .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
+
+        assertThat(client.getWorldIndexPrices(".IXIC", 60)).hasSize(1);
+        assertThat(client.getWorldIndexPrices(".IXIC", 60, 4)).isEmpty();
+        chartServer.verify();
+    }
+
+    @Test
+    @DisplayName("[해외 ETF 일봉은 /stock 경로에 page=1 고정으로 조회한다]")
+    void getWorldStockPrices_usesStockPath() {
+        chartServer.expect(requestTo(Matchers.startsWith(CHART_URL + "/stock/SOXX.O/price")))
+            .andExpect(queryParam("pageSize", "30"))
+            .andExpect(queryParam("page", "1"))
+            .andRespond(withSuccess("[{}]", MediaType.APPLICATION_JSON));
+
+        assertThat(client.getWorldStockPrices("SOXX.O", 30)).hasSize(1);
+        chartServer.verify();
+    }
+
+    @Test
+    @DisplayName("[종목 통합 정보와 연간 재무는 모바일 호스트 경로로 조회한다]")
+    void stockFundamentals_useMobileHost() {
+        mobileServer.expect(requestTo(MOBILE_URL + "/api/stock/005930/integration"))
+            .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+        mobileServer.expect(requestTo(MOBILE_URL + "/api/stock/005930/finance/annual"))
+            .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+
+        assertThat(client.getStockIntegration("005930")).isNotNull();
+        assertThat(client.getStockFinanceAnnual("005930")).isNotNull();
+        mobileServer.verify();
+    }
+
+    @Test
+    @DisplayName("[재무 조회 실패와 빈 응답 본문은 ExternalApiException으로 바꾼다]")
+    void fundamentalsAndEmptyBody_wrapAsExternalApiException() {
+        mobileServer.expect(requestTo(MOBILE_URL + "/api/stock/005930/integration")).andRespond(withServerError());
+        mobileServer.expect(requestTo(MOBILE_URL + "/api/stock/005930/finance/annual")).andRespond(withSuccess());
+        chartServer.expect(requestTo(Matchers.startsWith(CHART_URL + "/index/.INX/price"))).andRespond(withSuccess());
+
+        assertThatThrownBy(() -> client.getStockIntegration("005930")).isInstanceOf(ExternalApiException.class);
+        assertThatThrownBy(() -> client.getStockFinanceAnnual("005930")).isInstanceOf(ExternalApiException.class);
+        assertThatThrownBy(() -> client.getWorldIndexPrices(".INX", 60)).isInstanceOf(ExternalApiException.class);
+    }
 }
