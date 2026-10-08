@@ -34,9 +34,10 @@ services:
       - mysql_data:/var/lib/mysql
     restart: on-failure:5
     # t3.medium(4GB)에 컨테이너 11개(이 파일 6개 + monitoring 오버레이 5개)가
-    # 제한 없이 경쟁하던 문제(2026-08-17 감사) - 실측 전 추정치로 시작해
-    # 다음 세션에서 실제 사용량을 보고 조정한다.
-    mem_limit: 1g
+    # 제한 없이 경쟁하던 문제(2026-08-17 감사) - 실측 전 추정치로 시작했다.
+    # 2026-10-08 실측(t3a.large, 20:10 배치 구간): 피크 967MiB로 1g의 94%까지 올라
+    # 한도에 근접해 1280m로 올렸다(innodb_buffer_pool_size는 그대로 - 아래 주석 참고).
+    mem_limit: 1280m
     logging: *default-logging
     healthcheck:
       test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
@@ -59,8 +60,8 @@ services:
     # 이유 - docker-compose.yml 주석 참고).
     # innodb_buffer_pool_size: 기본값 128MB로 방치돼 있었다(2026-08-19 실측
     # - score/domestic_daily_price/overseas_daily_price 등 hot 테이블 합산
-    # ~1.1GB, 기본 버퍼풀 대비 9배). 512MB로 올린 근거: mem_limit이 1g라
-    # 버퍼풀에 컨테이너 메모리 전부를 줄 수 없다 - 커넥션별 sort/join
+    # ~1.1GB, 기본 버퍼풀 대비 9배). 512MB로 올린 근거(당시 mem_limit 1g, 2026-10-08
+    # 1280m로 상향했으나 버퍼풀은 그대로): 버퍼풀에 컨테이너 메모리 전부를 줄 수 없다 - 커넥션별 sort/join
     # buffer, InnoDB 어댑티브 해시 인덱스·redo log buffer, mysqld 기본
     # 프로세스 오버헤드를 빼면 절반 정도가 안전한 상한이다(로컬에서 온라인
     # 리사이즈로 256MB까지 무중단 테스트 확인 - `SET GLOBAL
@@ -179,7 +180,14 @@ services:
       redpanda:
         condition: service_healthy
     restart: on-failure:5
-    mem_limit: 1g
+    # 2026-10-08 실측: 매일 20:10 확정 배치(재확정 윈도우 덮어쓰기) 시각에 JVM이 컨테이너 한도(1g)를
+    # 넘어 cgroup OOM kill 됐다(커널 로그 `Memory cgroup out of memory: Killed process (java)
+    # anon-rss:약 1,040MB`, 10/6·10/7 연속, RestartCount=2). 힙은 한도의 75%(MaxRAMPercentage=75,
+    # backend/Dockerfile)라 1g에서 힙 768MB + 비힙 약 270MB가 한도를 넘는다. 비힙(메타스페이스·스레드·
+    # 다이렉트 버퍼)이 힙 비율과 무관하게 약 270MB 이상 필요하므로 한도 L은 0.25*L >= 비힙을 만족해야
+    # 해 1.5g(힙 1152MB, 비힙 여유 약 380MB)로 올렸다. 올린 뒤 `한도 대비 피크(%)`(docs/00-sre/MONITORING.md
+    # §3)가 90%를 넘으면 한도 또는 MaxRAMPercentage를 다시 조정할 것.
+    mem_limit: 1536m
     logging: *default-logging
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8080/api/health" ]
