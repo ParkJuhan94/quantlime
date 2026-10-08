@@ -33,10 +33,10 @@ class TelegramChannelQueryServiceTest {
         // given
         Channel channel = Channel.of(Platform.TELEGRAM, "tg", "tg", "텔레그램 채널", 10,
             new ChannelFilterConfig(0, 0.0, 0, List.of(), List.of()));
-        given(channelReader.findByPlatformOrderByPriorityAsc(Platform.TELEGRAM)).willReturn(List.of(channel));
+        given(channelReader.findByPlatform(Platform.TELEGRAM)).willReturn(List.of(channel));
 
         // when & then
         assertThat(service.findAllOrderByPriority()).containsExactly(channel);
-        verify(channelReader).findByPlatformOrderByPriorityAsc(Platform.TELEGRAM);
+        verify(channelReader).findByPlatform(Platform.TELEGRAM);
     }
 }

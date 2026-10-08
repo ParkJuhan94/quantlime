@@ -49,7 +49,7 @@ public class VideoRetentionService {
     // 위임해 정상적으로 트랜잭션 프록시를 타게 한다(그 클래스 javadoc 참고).
     public int deleteVideosOlderThanRetention() {
         LocalDateTime cutoff = LocalDate.now().minusDays(RETENTION_DAYS).atStartOfDay();
-        List<Long> videoIds = videoReader.findIdsByPublishedAtBefore(cutoff);
+        List<Long> videoIds = videoReader.findExpiredIds(cutoff);
         if (videoIds.isEmpty()) {
             log.info("보존 기간({}일) 초과 영상 없음 - 삭제할 데이터 없음", RETENTION_DAYS);
             return 0;

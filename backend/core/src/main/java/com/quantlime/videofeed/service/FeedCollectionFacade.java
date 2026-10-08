@@ -67,7 +67,7 @@ public class FeedCollectionFacade {
         // Platform.YOUTUBE로 한정 - 텔레그램 채널(Phase 8 P7)이 channel 테이블에
         // 섞여 들어와도 이 파사드는 YoutubeVideoCollector만 쓰므로 반드시 플랫폼을
         // 걸러야 한다(안 걸렀을 때의 실제 파급 효과는 ChannelRepository 주석 참고).
-        List<Channel> channels = channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.YOUTUBE);
+        List<Channel> channels = channelReader.findActive(Platform.YOUTUBE);
         List<CollectResult> results = new ArrayList<>();
         for (Channel channel : channels) {
             try {
@@ -81,7 +81,7 @@ public class FeedCollectionFacade {
     }
 
     public void reevaluatePendingReview() {
-        List<Channel> channels = channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.YOUTUBE);
+        List<Channel> channels = channelReader.findActive(Platform.YOUTUBE);
         for (Channel channel : channels) {
             try {
                 reevaluateChannelPendingReview(channel);

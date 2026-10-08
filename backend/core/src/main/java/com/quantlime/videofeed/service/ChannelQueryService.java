@@ -15,6 +15,6 @@ public class ChannelQueryService {
 
     @Transactional(readOnly = true)
     public List<Channel> findAllOrderByPriority() {
-        return channelReader.findAllByOrderByPriorityAsc();
+        return channelReader.findAll();
     }
 }

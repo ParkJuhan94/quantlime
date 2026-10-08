@@ -21,7 +21,7 @@ public class TelegramPostReader {
 
     private final TelegramPostRepository telegramPostRepository;
 
-    public Optional<Long> findMaxMessageIdByChannel(Channel channel) {
+    public Optional<Long> findLastMessageId(Channel channel) {
         return telegramPostRepository.findMaxMessageIdByChannel(channel);
     }
 
@@ -29,15 +29,15 @@ public class TelegramPostReader {
         return telegramPostRepository.findByChannelAndStatus(channel, status);
     }
 
-    public List<TelegramPost> findByChannelAndStatusAndPublishedAtBetween(Channel channel, TelegramPostStatus status, LocalDateTime start, LocalDateTime end) {
+    public List<TelegramPost> findPublishedBetween(Channel channel, TelegramPostStatus status, LocalDateTime start, LocalDateTime end) {
         return telegramPostRepository.findByChannelAndStatusAndPublishedAtBetween(channel, status, start, end);
     }
 
-    public List<Object[]> findChannelIdAndPublishedAtForCounting(List<Long> channelIds, TelegramPostStatus status, LocalDateTime from, LocalDateTime to) {
+    public List<Object[]> findPublishedAtForCounting(List<Long> channelIds, TelegramPostStatus status, LocalDateTime from, LocalDateTime to) {
         return telegramPostRepository.findChannelIdAndPublishedAtForCounting(channelIds, status, from, to);
     }
 
-    public List<Long> findIdsByPublishedAtBefore(LocalDateTime cutoff) {
+    public List<Long> findExpiredIds(LocalDateTime cutoff) {
         return telegramPostRepository.findIdsByPublishedAtBefore(cutoff);
     }
 }

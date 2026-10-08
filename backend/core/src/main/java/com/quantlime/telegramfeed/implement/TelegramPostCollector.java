@@ -40,7 +40,7 @@ public class TelegramPostCollector {
 
     public TelegramCollectionOutcome collect(Channel channel) {
         String handle = channel.getExternalChannelId();
-        return telegramPostReader.findMaxMessageIdByChannel(channel)
+        return telegramPostReader.findLastMessageId(channel)
             .map(cursor -> collectIncremental(handle, cursor))
             .orElseGet(() -> collectInitial(handle));
     }

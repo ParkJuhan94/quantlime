@@ -107,9 +107,9 @@ class VideoFeedServiceTest {
         Pageable pageable = PageRequest.of(0, 10);
         given(videoReader.findSummarizedVideos(null, null, null, null, pageable))
             .willReturn(new SliceImpl<>(List.of(video1, video2)));
-        given(summaryReader.findByVideo_IdIn(List.of(1L, 2L)))
+        given(summaryReader.findByVideoIds(List.of(1L, 2L)))
             .willReturn(List.of(summaryOf(video1, "요약1"), summaryOf(video2, "요약2")));
-        given(videoTickerReader.findByVideo_IdIn(List.of(1L, 2L)))
+        given(videoTickerReader.findByVideoIds(List.of(1L, 2L)))
             .willReturn(List.of(VideoTicker.of(video1, "005930", "삼성전자", "BULLISH", BigDecimal.valueOf(0.8))));
 
         // when
@@ -156,7 +156,7 @@ class VideoFeedServiceTest {
         videoFeedService = newService();
         Channel channel = channelOf();
         ReflectionTestUtils.setField(channel, "id", 1L);
-        given(channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.YOUTUBE)).willReturn(List.of(channel));
+        given(channelReader.findActive(Platform.YOUTUBE)).willReturn(List.of(channel));
 
         // when
         List<VideoFeedChannelResponse> result = videoFeedService.getChannels();
