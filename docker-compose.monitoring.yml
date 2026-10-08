@@ -11,9 +11,8 @@
 # docker-compose.prod.yml의 `name: quantlime-prod`를 그대로 따라가 같은
 # 프로젝트/네트워크에 합류한다.
 #
-# 로그(Loki)와 트레이스(Tempo)는 Phase 2/3로 별도 진행 예정 - 이 오버레이는
-# 메트릭 파이프라인(Prometheus/Alertmanager/exporter)과 시각화(Grafana)까지만
-# 다룬다.
+# 로그(Loki+Alloy)는 2026-10-08에 추가했고(로그 검색 + 로그 기반 알림), 트레이스(Tempo)는
+# Phase 3로 별도 진행 예정이다.
 #
 # docker-compose.prod.yml에도 동일한 x-logging 앵커가 있는데, docker compose는
 # -f로 병합하는 각 파일을 독립적으로 파싱한 뒤 병합하므로 YAML 앵커가 파일
@@ -202,7 +201,54 @@ services:
     mem_limit: 256m
     logging: *default-logging
 
+  # 로그 저장·검색·로그 기반 알림(2026-10-08 도입). 앱 컨테이너 로그를 Alloy가 모아 여기로 보내고
+  # Grafana(Explore)에서 LogQL로 검색한다. 하루 로그가 수 MB 수준(backend 시간당 약 4,800줄)이라
+  # 메모리 한도는 384m로 시작한다(실측 전 추정치 - 배치 구간 `한도 대비 사용률`을 보고 조정).
+  # 보관 14일(loki.yml)이라 디스크는 압축 기준 수십 MB 수준으로 예상(서버 여유 5.4G, 2026-10-08).
+  # 로그 알림 규칙은 monitoring/loki/rules/fake/*.yml(ruler가 Alertmanager로 전달).
+  loki:
+    image: grafana/loki:3.5.0
+    container_name: quantlime-prod-loki
+    command: ["-config.file=/etc/loki/loki.yml"]
+    volumes:
+      - ./monitoring/loki/loki.yml:/etc/loki/loki.yml:ro
+      - ./monitoring/loki/rules:/etc/loki/rules:ro
+      - loki_data:/loki
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3100/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    restart: on-failure:5
+    mem_limit: 384m
+    logging: *default-logging
+
+  # 컨테이너 로그 수집기(Grafana Alloy). Promtail은 2026-03 지원 종료라 후속인 Alloy를 쓴다.
+  # 도커 소켓(읽기 전용 마운트여도 API는 전부 호출 가능하다는 점에 유의 - autoheal과 같은 수준의 권한)으로
+  # 컨테이너를 찾아 로그를 읽는다. 이미지가 약 700MB로 크다(서버 디스크 여유 5.4G 기준 부담).
+  alloy:
+    image: grafana/alloy:v1.20.1
+    container_name: quantlime-prod-alloy
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./monitoring/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy_data:/var/lib/alloy/data
+    depends_on:
+      loki:
+        condition: service_healthy
+    restart: on-failure:5
+    mem_limit: 192m
+    logging: *default-logging
+
 volumes:
   prometheus_data:
   alertmanager_data:
   grafana_data:
+  loki_data:
+  alloy_data:

@@ -1,0 +1,60 @@
+# Loki 단일 바이너리 설정(2026-10-08 도입) - 컨테이너 로그를 모아 Grafana에서 검색하고
+# 로그 기반 알림(ruler)을 기존 Alertmanager로 보낸다. 하루 로그가 수 MB 수준이라 객체 스토리지
+# 없이 로컬 파일시스템(named volume loki_data)으로 충분하다. 메모리/디스크 한도와 보관 기간 근거는
+# docker-compose.monitoring.yml의 loki 서비스 주석 참고.
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+  log_level: warn
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: "2026-10-01"
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+limits_config:
+  # 14일 보관(2026-10-08 사용자 결정, Prometheus 15일과 비슷하게). retention을 실제로 적용하려면
+  # 아래 compactor.retention_enabled가 켜져 있어야 한다.
+  retention_period: 336h
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+
+compactor:
+  working_directory: /loki/compactor
+  retention_enabled: true
+  delete_request_store: filesystem
+  compaction_interval: 10m
+  retention_delete_delay: 2h
+
+# 로그 기반 알림 규칙(monitoring/loki/rules/fake/*.yml)을 평가해 Alertmanager로 보낸다.
+# auth_enabled=false라 테넌트 ID가 "fake"로 고정되어 규칙 파일이 rules/fake/ 아래에 있어야 한다.
+ruler:
+  alertmanager_url: http://alertmanager:9093
+  rule_path: /tmp/loki-ruler
+  storage:
+    type: local
+    local:
+      directory: /etc/loki/rules
+  evaluation_interval: 1m
+  enable_alertmanager_v2: true
+
+analytics:
+  reporting_enabled: false

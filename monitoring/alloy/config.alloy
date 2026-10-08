@@ -1,0 +1,42 @@
+// 컨테이너 로그 수집(2026-10-08 도입). Promtail은 2026-03에 지원이 종료돼 후속인 Grafana Alloy를 쓴다.
+// 도커 소켓으로 컨테이너를 찾아 Docker API로 로그를 읽는다(/var/lib/docker 경로를 마운트할 필요 없음).
+
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+
+  // 컨테이너 이름에서 선행 "/"를 뗀 값을 container 라벨로 쓴다
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.+)"
+    target_label  = "container"
+  }
+
+  // 수집 대상은 앱/인프라 컨테이너만(2026-10-08 결정). loki·alloy·grafana·prometheus 같은 모니터링
+  // 컨테이너는 자기 로그가 다시 수집되는 피드백을 피하려고 제외한다.
+  rule {
+    source_labels = ["container"]
+    regex         = "quantlime-prod-(backend|quant-engine|frontend|mysql|redis|redpanda|autoheal)"
+    action        = "keep"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+}
+
+loki.source.docker "containers" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.containers.output
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
