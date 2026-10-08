@@ -27,6 +27,7 @@ public class KafkaDltNotifier {
 
     private final MeterRegistry meterRegistry;
     private final SlackWebhookClient slackWebhookClient;
+    private final KafkaDltProperties properties;
 
     /** 카운터 정의를 한 곳에 둔다 - 알림 사유별로 등록 위치(실제 발생/기동 선등록)가 달라도 같은 시리즈여야 한다. */
     static Counter counter(MeterRegistry registry, String domain, String topic) {
@@ -39,6 +40,12 @@ public class KafkaDltNotifier {
 
     public void notify(String domain, String topic, String detail) {
         counter(meterRegistry, domain, topic).increment();
+
+        // 카운터는 위에서 이미 증가했으므로 Alertmanager 집계 알림/라우팅은 영향받지 않는다 - 개별 Slack 메시지만 끈다
+        if (properties.slackSuppressedDomains().contains(domain)) {
+            log.info("DLT Slack 알림 억제(kafka.dlt.slack-suppressed-domains): domain={}, topic={}", domain, topic);
+            return;
+        }
 
         try {
             slackWebhookClient.sendOpsMessage(
