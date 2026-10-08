@@ -130,11 +130,16 @@ services:
     container_name: quantlime-prod-mysqld-exporter
     environment:
       DB_PASSWORD: ${DB_PASSWORD}
+    # 비밀번호를 백틱으로 감싸는 이유: .my.cnf 파서(mysqld_exporter가 쓰는 ini 파서)는 값 중간의 `#`을
+    # 주석 시작으로 보고 그 뒤를 잘라낸다. 비밀번호에 `#`이 있으면 잘린 값으로 접속해 `Access denied`
+    # (mysql_up=0, MysqlDown 상시 발화 - 2026-09-25~10-08 운영에서 발생, 임시 MySQL 컨테이너로 재현).
+    # 큰따옴표/작은따옴표/백슬래시 이스케이프는 이 파서에서 효과가 없었고 백틱만 통했다. 비밀번호에
+    # 백틱 자체가 들어 있으면 이 방식도 깨지니 그 경우엔 모니터링 전용 DB 사용자를 만들 것.
     entrypoint:
       - sh
       - -c
       - |
-        printf '[client]\nuser=root\npassword=%s\n' "$$DB_PASSWORD" > /tmp/.my.cnf
+        printf '[client]\nuser=root\npassword=`%s`\n' "$$DB_PASSWORD" > /tmp/.my.cnf
         exec /bin/mysqld_exporter --config.my-cnf=/tmp/.my.cnf --mysqld.address=mysql:3306
     depends_on:
       mysql:
