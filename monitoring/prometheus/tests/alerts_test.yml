@@ -231,3 +231,59 @@ tests:
               summary: "로그 파이프라인 중단: alloy"
               description: "alloy이(가) 3분 이상 응답하지 않습니다 - 로그 수집/로그 기반 알림(OutOfMemoryError·ERROR 급증)이 멈춘 상태입니다. docker ps와 docker logs quantlime-prod-alloy를 확인하세요."
 
+  # --- OOM kill / 메모리 한도 근접 ---
+  # 커널 OOM kill 카운터(node_vmstat_oom_kill)가 올라가면 즉시 발화한다(실제 운영에선 backend가 20:10 배치마다 죽던 상황).
+  - interval: 1m
+    input_series:
+      - series: 'node_vmstat_oom_kill{instance="node-exporter:9100",job="node-exporter"}'
+        values: '4 4 4 5 5 5 5 5 5 5'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: ContainerOomKilled
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: ContainerOomKilled
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              instance: node-exporter:9100
+              job: node-exporter
+            exp_annotations:
+              summary: "OOM kill 발생: 커널이 메모리 부족으로 프로세스를 강제 종료함"
+              description: "최근 5분 안에 커널이 OOM으로 프로세스를 죽였습니다 - 컨테이너 mem_limit 초과(cgroup OOM)일 가능성이 큽니다. 어느 프로세스인지는 서버에서 journalctl -k --since '15 min ago' | grep -i 'out of memory' 로, 재시작된 컨테이너는 quantlime_container_start_time_seconds의 변화로 확인하세요. 앱 로그에는 남지 않습니다."
+
+  # 카운터가 그대로면(OOM이 없었으면) 알림 없음.
+  - interval: 1m
+    input_series:
+      - series: 'node_vmstat_oom_kill{instance="node-exporter:9100",job="node-exporter"}'
+        values: '4x10'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: ContainerOomKilled
+        exp_alerts: []
+
+  # 한도의 90%를 5분 넘게 넘으면 발화(95% 유지), 80%면 알림 없음.
+  - interval: 1m
+    input_series:
+      - series: 'quantlime_container_memory_usage_bytes{name="quantlime-prod-backend"}'
+        values: '950x10'
+      - series: 'quantlime_container_memory_limit_bytes{name="quantlime-prod-backend"}'
+        values: '1000x10'
+      - series: 'quantlime_container_memory_usage_bytes{name="quantlime-prod-mysql"}'
+        values: '800x10'
+      - series: 'quantlime_container_memory_limit_bytes{name="quantlime-prod-mysql"}'
+        values: '1000x10'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: ContainerMemoryNearLimit
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: ContainerMemoryNearLimit
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              name: quantlime-prod-backend
+            exp_annotations:
+              summary: "컨테이너 메모리가 한도에 근접: quantlime-prod-backend"
+              description: "quantlime-prod-backend의 메모리 사용률이 5분 넘게 90%를 넘었습니다(95%) - 한도(mem_limit)에 걸리면 OOM kill로 재시작됩니다. docker-compose.prod.yml의 한도 상향이나 메모리 누수 여부를 확인하세요."
+
