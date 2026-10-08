@@ -5,6 +5,7 @@ import {
   calculateMACD,
   calculateSMA,
   shiftBusinessDays,
+  shiftTradingDate,
 } from './indicators'
 import {
   CLOSES,
@@ -149,6 +150,25 @@ describe('calculateIchimoku', () => {
 
     expect(result.senkouA[3]).toBeNull()
     expect(result.senkouA[4]).not.toBeNull()
+  })
+})
+
+describe('shiftTradingDate', () => {
+  // 5/5(어린이날)는 거래일 배열에 없다
+  const dates = ['2026-05-01', '2026-05-04', '2026-05-06', '2026-05-07', '2026-05-08']
+
+  it('범위 안이면 배열의 실제 거래일을 쓴다(휴장일 5/5를 거치지 않는다)', () => {
+    expect(shiftTradingDate(dates, 1, 1)).toBe('2026-05-06')
+    expect(shiftTradingDate(dates, 3, -2)).toBe('2026-05-04')
+  })
+
+  it('과거 쪽으로 배열을 벗어나면 null이다', () => {
+    expect(shiftTradingDate(dates, 1, -2)).toBeNull()
+  })
+
+  it('미래 쪽으로 벗어나면 마지막 거래일 뒤로 주말 근사한다', () => {
+    expect(shiftTradingDate(dates, 4, 1)).toBe('2026-05-11')
+    expect(shiftTradingDate(dates, 3, 3)).toBe('2026-05-12')
   })
 })
 

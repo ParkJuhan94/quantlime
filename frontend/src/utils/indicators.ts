@@ -270,6 +270,24 @@ export function calculateIchimoku(
   return { tenkan, kijun, senkouA, senkouB, chikou: closes.slice() }
 }
 
+/**
+ * 캔들 날짜 배열(dates, 실제 거래일만 있음)에서 index번째 값을 offset 거래일만큼
+ * 이동한 자리의 날짜. 범위 안이면 배열의 실제 거래일을 그대로 쓰므로 휴장일 슬롯이
+ * 생기지 않는다(달력 계산은 공휴일을 몰라 캔들 없는 칸이 생겼다). 범위를 벗어난
+ * 미래는 마지막 캔들 날짜 뒤로 주말 근사({@link shiftBusinessDays})하고(항상 마지막
+ * 거래일보다 뒤라 시간 순서가 깨지지 않는다), 과거로 벗어나면 null.
+ */
+export function shiftTradingDate(dates: string[], index: number, offset: number): string | null {
+  const target = index + offset
+  if (target < 0) {
+    return null
+  }
+  if (target < dates.length) {
+    return dates[target]
+  }
+  return shiftBusinessDays(dates[dates.length - 1], target - (dates.length - 1))
+}
+
 /** 주말만 건너뛴 근사치 - 공휴일은 반영하지 않는다(차트 오버레이용
  * 표시 목적이라 스코어링만큼의 정밀도는 필요 없다는 트레이드오프). */
 export function shiftBusinessDays(dateStr: string, days: number): string {

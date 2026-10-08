@@ -17,7 +17,7 @@ import {
   calculateIchimoku,
   calculateMACD,
   calculateSMA,
-  shiftBusinessDays,
+  shiftTradingDate,
   type IndicatorSettings,
   type LineDashStyle,
   type LineStyleSettings,
@@ -89,6 +89,19 @@ function toLinePoints(values: Array<number | null>, dates: string[]): LinePoint[
   values.forEach((value, i) => {
     if (value != null) {
       points.push({ time: dates[i], value })
+    }
+  })
+  return points
+}
+
+// 일목균형표처럼 값을 거래일 단위로 앞/뒤로 옮겨 그리는 선 - 옮긴 날짜가 캔들 없는
+// 휴장일에 떨어지지 않도록 캔들 날짜 배열 기준으로 이동한다(shiftTradingDate 참고).
+function toShiftedLinePoints(values: Array<number | null>, dates: string[], offset: number): LinePoint[] {
+  const points: LinePoint[] = []
+  values.forEach((value, i) => {
+    const time = shiftTradingDate(dates, i, offset)
+    if (value != null && time != null) {
+      points.push({ time, value })
     }
   })
   return points
@@ -314,10 +327,7 @@ export const CandleChart = forwardRef<CandleChartHandle, CandleChartProps>(funct
           lastValueVisible: false,
           title: '',
         })
-        senkouAPoints = toLinePoints(senkouA, dates).map((point) => ({
-          ...point,
-          time: shiftBusinessDays(point.time, ichimokuDisplacement),
-        }))
+        senkouAPoints = toShiftedLinePoints(senkouA, dates, ichimokuDisplacement)
         senkouASeries.setData(senkouAPoints)
         senkouASeriesRef = senkouASeries
         lineRegistryRef.current['ichimoku-senkouA'] = { series: senkouASeries, width: toLineWidth(senkouALine.width) }
@@ -332,10 +342,7 @@ export const CandleChart = forwardRef<CandleChartHandle, CandleChartProps>(funct
           lastValueVisible: false,
           title: '',
         })
-        senkouBPoints = toLinePoints(senkouB, dates).map((point) => ({
-          ...point,
-          time: shiftBusinessDays(point.time, ichimokuDisplacement),
-        }))
+        senkouBPoints = toShiftedLinePoints(senkouB, dates, ichimokuDisplacement)
         senkouBSeries.setData(senkouBPoints)
         lineRegistryRef.current['ichimoku-senkouB'] = { series: senkouBSeries, width: toLineWidth(senkouBLine.width) }
       }
@@ -356,12 +363,7 @@ export const CandleChart = forwardRef<CandleChartHandle, CandleChartProps>(funct
           lastValueVisible: false,
           title: '',
         })
-        chikouSeries.setData(
-          toLinePoints(chikou, dates).map((point) => ({
-            ...point,
-            time: shiftBusinessDays(point.time, -ichimokuDisplacement),
-          })),
-        )
+        chikouSeries.setData(toShiftedLinePoints(chikou, dates, -ichimokuDisplacement))
         lineRegistryRef.current['ichimoku-chikou'] = { series: chikouSeries, width: toLineWidth(chikouLine.width) }
       }
     }
