@@ -207,7 +207,10 @@ services:
   # 보관 14일(loki.yml)이라 디스크는 압축 기준 수십 MB 수준으로 예상(서버 여유 5.4G, 2026-10-08).
   # 로그 알림 규칙은 monitoring/loki/rules/fake/*.yml(ruler가 Alertmanager로 전달).
   loki:
-    image: grafana/loki:3.5.0
+    # 3.5.0은 push마다 `negative structured metadata bytes received` 오류 로그를 반복 남겼다(수집 자체는 정상,
+    # 운영에서 분당 30건 이상 - 2026-10-08). 같은 조건의 로컬 테스트에서 3.5.7은 0건이라 패치 버전으로 올렸다.
+    # (3.6.4는 같은 설정에서 수집이 0줄이라 제외 - 설정 호환 미확인)
+    image: grafana/loki:3.5.7
     container_name: quantlime-prod-loki
     command: ["-config.file=/etc/loki/loki.yml"]
     volumes:
