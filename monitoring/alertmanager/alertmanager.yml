@@ -1,5 +1,5 @@
 # Alertmanager는 설정 파일 안에서 환경변수 치환을 지원하지 않는다. 그래서
-# 이 파일은 SLACK_ALERT_WEBHOOK_URL 자리를 __SLACK_ALERT_WEBHOOK_URL__
+# 이 파일은 SLACK_ALERT/WARN/INFO_WEBHOOK_URL 자리를 __SLACK_*_WEBHOOK_URL__
 # 플레이스홀더로 남긴 "템플릿"으로 커밋하고, docker-compose.monitoring.yml의
 # entrypoint가 컨테이너 기동 시점에 sed로 실제 값을 채운 사본
 # (/etc/alertmanager/alertmanager.yml)을 만들어 그걸로 alertmanager를
@@ -20,18 +20,58 @@
 # feedback-webhook-url)와 별개의 ops 알림 채널로 분리 등록할 것을 권장한다
 # (docs/DEPLOYMENT.md 참고) - 사용자 피드백과 인프라 알람이 같은 채널에
 # 섞이면 노이즈가 커진다.
+# 채널 3분할(2026-10-08): 알림 소음이 한 채널에 몰려 정작 봐야 할 critical이 묻혔다.
+#   - critical -> #quantlime-alerts : Down/OOM/5xx/TLS 등 즉시 봐야 하는 것(재전송 4h)
+#   - warning  -> #quantlime-warnings : 지켜볼 것(재전송 12h, resolved 알림 생략)
+#   - 그 외(info) -> #quantlime-info : 정보성. 앱이 즉시 보내는 DLT 개별 메시지도 이 채널로 간다
+#     (backend application.yml의 slack.ops-webhook-url = SLACK_INFO_WEBHOOK_URL)
+# Slack 웹훅 URL은 채널에 묶여 있어 채널마다 웹훅을 따로 발급해야 한다. WARN/INFO 웹훅이 비어 있으면
+# docker-compose.monitoring.yml이 SLACK_ALERT_WEBHOOK_URL로 대체해, 채널을 아직 안 만들었어도 기존처럼
+# 한 채널로 모두 전송된다(하위 호환).
 route:
-  receiver: slack
+  receiver: slack-info
   group_by: ["alertname"]
   group_wait: 30s
   group_interval: 5m
-  repeat_interval: 4h
+  repeat_interval: 24h
+  routes:
+    # 운영 자막 수집(videofeed-transcript)은 YouTube가 AWS 등 클라우드 IP를 차단해(RequestBlocked,
+    # 2026-10-08 확인 - 48시간 63건 전부 실패) 영상마다 DLT가 쌓인다. 자막은 로컬에서 가져와 운영에
+    # 동기화(scripts/sync-transcripts-to-prod.sh)하는 방식으로 운영하기로 해 이 도메인의 집계 알림은 버린다.
+    # (앱의 개별 DLT Slack 메시지 억제는 KafkaDltNotifier 쪽 별도 변경 - 그 전까지는 정보성 채널로만 간다)
+    - matchers:
+        - alertname="KafkaDltMessageArrived"
+        - domain="videofeed-transcript"
+      receiver: "null"
+    - matchers:
+        - severity="critical"
+      receiver: slack-critical
+      repeat_interval: 4h
+    - matchers:
+        - severity="warning"
+      receiver: slack-warning
+      repeat_interval: 12h
 
 receivers:
-  - name: slack
+  - name: "null"
+  - name: slack-critical
     slack_configs:
       - api_url: "__SLACK_ALERT_WEBHOOK_URL__"
         channel: "#quantlime-alerts"
         send_resolved: true
+        title: "{{ .CommonAnnotations.summary }}"
+        text: "{{ range .Alerts }}{{ .Annotations.description }}\n{{ end }}"
+  - name: slack-warning
+    slack_configs:
+      - api_url: "__SLACK_WARN_WEBHOOK_URL__"
+        channel: "#quantlime-warnings"
+        send_resolved: false
+        title: "{{ .CommonAnnotations.summary }}"
+        text: "{{ range .Alerts }}{{ .Annotations.description }}\n{{ end }}"
+  - name: slack-info
+    slack_configs:
+      - api_url: "__SLACK_INFO_WEBHOOK_URL__"
+        channel: "#quantlime-info"
+        send_resolved: false
         title: "{{ .CommonAnnotations.summary }}"
         text: "{{ range .Alerts }}{{ .Annotations.description }}\n{{ end }}"
