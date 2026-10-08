@@ -1,10 +1,13 @@
 package com.quantlime.price.implement;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -15,6 +18,7 @@ import com.quantlime.price.domain.OverseasDailyPrice;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.DisplayName;
@@ -24,6 +28,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 /**
  * KIS -> Toss 캔들로 이관(2026-07-29) 이후의 회귀 테스트 - 구조는
@@ -144,6 +149,143 @@ class OverseasDailyPriceCollectorTest {
         // then
         verify(tossApiClient, times(1)).getDailyCandles(eq(STOCK_CODE), eq(20), any());
         verify(dailyPriceAppender, times(20)).saveOverseas(any(OverseasDailyPrice.class));
+    }
+
+    @Test
+    @DisplayName("[refreshRecent - 응답 캔들이 비어 있으면 아무것도 저장하지 않는다]")
+    void refreshRecent_emptyCandles_savesNothing() {
+        // given
+        given(tossApiClient.getDailyCandles(eq(STOCK_CODE), eq(20), any()))
+            .willReturn(candlePage(0, "2026-06-01", null));
+
+        // when
+        overseasDailyPriceCollector.refreshRecent(STOCK_CODE, 8);
+
+        // then
+        verify(dailyPriceAppender, never()).saveOverseas(any(OverseasDailyPrice.class));
+    }
+
+    @Test
+    @DisplayName("[재확정 윈도우 안 - 기존 행과 값이 다르면 덮어써서 저장하고 재백필은 하지 않는다]")
+    void refreshRecent_withinWindowChangedRow_overwritesWithoutRebackfill() {
+        // given: 종가 140 -> 151 (+7.9%)은 재조정 임계값(50%) 미만
+        LocalDate today = LocalDate.now();
+        OverseasDailyPrice existing = existingRow(today, 140.0);
+        given(tossApiClient.getDailyCandles(eq(STOCK_CODE), eq(20), any()))
+            .willReturn(candlePage(1, today.toString(), null));
+        given(dailyPriceReader.findOverseas(STOCK_CODE, today)).willReturn(Optional.of(existing));
+
+        // when
+        overseasDailyPriceCollector.refreshRecent(STOCK_CODE, 8);
+
+        // then
+        assertThat(existing.getClosePrice()).isEqualTo(151.0);
+        verify(dailyPriceAppender).saveOverseas(existing);
+        verify(tossApiClient, times(1)).getDailyCandles(anyString(), anyInt(), any());
+    }
+
+    @Test
+    @DisplayName("[재확정 윈도우 안 - 기존 행과 값이 같으면 저장하지 않는다]")
+    void refreshRecent_withinWindowUnchangedRow_skipsSave() {
+        // given
+        LocalDate today = LocalDate.now();
+        given(tossApiClient.getDailyCandles(eq(STOCK_CODE), eq(20), any()))
+            .willReturn(candlePage(1, today.toString(), null));
+        given(dailyPriceReader.findOverseas(STOCK_CODE, today))
+            .willReturn(Optional.of(existingRow(today, 151.0)));
+
+        // when
+        overseasDailyPriceCollector.refreshRecent(STOCK_CODE, 8);
+
+        // then
+        verify(dailyPriceAppender, never()).saveOverseas(any(OverseasDailyPrice.class));
+    }
+
+    @Test
+    @DisplayName("[종가가 재조정 임계값(50%) 이상 바뀌면 덮어쓴 뒤 전 구간 재백필을 1회 트리거한다]")
+    void refreshRecent_restatement_triggersRebackfillOnce() {
+        // given: 100 -> 151 (+51%)
+        LocalDate today = LocalDate.now();
+        OverseasDailyPrice existing = existingRow(today, 100.0);
+        given(tossApiClient.getDailyCandles(eq(STOCK_CODE), eq(20), any()))
+            .willReturn(candlePage(1, today.toString(), null));
+        given(tossApiClient.getDailyCandles(STOCK_CODE, 200, null))
+            .willReturn(candlePage(1, today.toString(), null));
+        given(dailyPriceReader.findOverseas(STOCK_CODE, today)).willReturn(Optional.of(existing));
+
+        // when
+        overseasDailyPriceCollector.refreshRecent(STOCK_CODE, 8);
+
+        // then: 재백필 경로는 재조정을 다시 감지하지 않으므로 호출은 총 2회로 끝난다
+        verify(tossApiClient, times(1)).getDailyCandles(STOCK_CODE, 200, null);
+        verify(tossApiClient, times(2)).getDailyCandles(anyString(), anyInt(), any());
+    }
+
+    @Test
+    @DisplayName("[윈도우 안 신규 행 저장이 중복키 충돌이면 예외 없이 건너뛴다]")
+    void refreshRecent_insertConflict_isSwallowed() {
+        // given
+        LocalDate today = LocalDate.now();
+        given(tossApiClient.getDailyCandles(eq(STOCK_CODE), eq(20), any()))
+            .willReturn(candlePage(1, today.toString(), null));
+        given(dailyPriceReader.findOverseas(STOCK_CODE, today)).willReturn(Optional.empty());
+        willThrow(new DataIntegrityViolationException("dup"))
+            .given(dailyPriceAppender).saveOverseas(any(OverseasDailyPrice.class));
+
+        // when & then
+        assertThatCode(() -> overseasDailyPriceCollector.refreshRecent(STOCK_CODE, 8))
+            .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("[윈도우 밖 이력 저장이 중복키 충돌이면 예외 없이 건너뛴다]")
+    void backfillHistory_outsideWindowInsertConflict_isSwallowed() {
+        // given
+        given(dailyPriceReader.countOverseas(STOCK_CODE)).willReturn(0L);
+        given(tossApiClient.getDailyCandles(STOCK_CODE, 200, null))
+            .willReturn(candlePage(2, "2020-01-10", null));
+        willThrow(new DataIntegrityViolationException("dup"))
+            .given(dailyPriceAppender).saveOverseas(any(OverseasDailyPrice.class));
+
+        // when & then
+        assertThatCode(() -> overseasDailyPriceCollector.backfillHistory(STOCK_CODE, 200))
+            .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("[rebackfill - 커서를 따라 여러 페이지를 받아 기존 행을 덮어쓰고 신규 건수를 돌려준다]")
+    void rebackfill_paginatesAndReturnsCreatedCount() {
+        // given: 1페이지 200건(기존 행 없음 -> 신규), 2페이지 50건
+        given(tossApiClient.getDailyCandles(STOCK_CODE, 200, null))
+            .willReturn(candlePage(200, "2026-06-01", "cursor-1"));
+        given(tossApiClient.getDailyCandles(STOCK_CODE, 200, "cursor-1"))
+            .willReturn(candlePage(50, "2025-11-01", null));
+
+        // when
+        int created = overseasDailyPriceCollector.rebackfill(STOCK_CODE, 400);
+
+        // then
+        assertThat(created).isEqualTo(250);
+        verify(dailyPriceAppender, times(250)).saveOverseas(any(OverseasDailyPrice.class));
+    }
+
+    @Test
+    @DisplayName("[rebackfill - 빈 페이지가 오면 즉시 중단한다]")
+    void rebackfill_emptyPage_stops() {
+        // given
+        given(tossApiClient.getDailyCandles(STOCK_CODE, 200, null))
+            .willReturn(candlePage(0, "2026-06-01", null));
+
+        // when
+        int created = overseasDailyPriceCollector.rebackfill(STOCK_CODE, 400);
+
+        // then
+        assertThat(created).isZero();
+        verify(dailyPriceAppender, never()).saveOverseas(any(OverseasDailyPrice.class));
+    }
+
+    private OverseasDailyPrice existingRow(LocalDate tradeDate, double close) {
+        return OverseasDailyPrice.of(STOCK_CODE, tradeDate, 150.0, 152.0, 148.0, close, 1000000L);
     }
 
     // Rate Limit(429) 재시도는 2026-08-01부터 TossApiClient.getDailyCandles
