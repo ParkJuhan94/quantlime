@@ -300,6 +300,32 @@ groups:
         annotations:
           summary: "호스트 메모리 사용률 90% 초과"
 
+      # OOM kill은 커널이 프로세스를 죽이는 것이라 앱 로그에 아무것도 안 남는다(Loki FatalLogPattern으로는
+      # 못 잡음). 호스트 지표 node_vmstat_oom_kill(/proc/vmstat의 oom_kill, node-exporter 기본 수집)이 유일한
+      # 직접 신호다. 2026-10-08 운영 데이터로 검증: backend가 컨테이너 한도(1g)로 죽은 10/6 20:12, 10/7 20:10,
+      # 10/8 10:37(KST) 세 번 모두 이 식이 참이었다(그전까지는 알림이 없어 로그를 직접 열어보고서야 알았다).
+      # ContainerRestartLoop은 30분 3회 이상이라 하루 한 번 OOM으로 죽는 경우를 못 잡는다.
+      - alert: ContainerOomKilled
+        expr: increase(node_vmstat_oom_kill[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OOM kill 발생: 커널이 메모리 부족으로 프로세스를 강제 종료함"
+          description: "최근 5분 안에 커널이 OOM으로 프로세스를 죽였습니다 - 컨테이너 mem_limit 초과(cgroup OOM)일 가능성이 큽니다. 어느 프로세스인지는 서버에서 journalctl -k --since '15 min ago' | grep -i 'out of memory' 로, 재시작된 컨테이너는 quantlime_container_start_time_seconds의 변화로 확인하세요. 앱 로그에는 남지 않습니다."
+
+      # OOM kill 직전의 선행 신호. 같은 데이터로 검증: 이전 한도에서 backend는 16:00 배치 직후부터 죽기까지 4시간 넘게
+      # 90%를 넘겼고, mysql은 1.5일간 90%를 넘겼다. 한도 상향(backend 1.5g/mysql 1.25g, 2026-10-08) 뒤 배치 구간
+      # 피크는 backend 68%, mysql 56%라 평소에는 울리지 않는다. 값은 docker stats 1분 스냅샷이다.
+      - alert: ContainerMemoryNearLimit
+        expr: quantlime_container_memory_usage_bytes / quantlime_container_memory_limit_bytes * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "컨테이너 메모리가 한도에 근접: {{ $labels.name }}"
+          description: "{{ $labels.name }}의 메모리 사용률이 5분 넘게 90%를 넘었습니다({{ $value | humanize }}%) - 한도(mem_limit)에 걸리면 OOM kill로 재시작됩니다. docker-compose.prod.yml의 한도 상향이나 메모리 누수 여부를 확인하세요."
+
       - alert: HostDiskHigh
         expr: |
           (1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) > 0.9
