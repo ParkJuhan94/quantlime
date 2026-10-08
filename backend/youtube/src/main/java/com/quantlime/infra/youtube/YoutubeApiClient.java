@@ -5,6 +5,7 @@ import com.quantlime.infra.youtube.dto.YoutubeChannelsResponse;
 import com.quantlime.infra.youtube.dto.YoutubePlaylistItemsResponse;
 import com.quantlime.infra.youtube.dto.YoutubeVideosResponse;
 import com.quantlime.infra.youtube.exception.YoutubeApiErrorCode;
+import io.github.resilience4j.retry.annotation.Retry;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -25,6 +26,7 @@ public class YoutubeApiClient {
     private final RestClient youtubeRestClient;
     private final YoutubeApiProperties properties;
 
+    @Retry(name = "youtube")
     public YoutubePlaylistItemsResponse getPlaylistItems(String playlistId, String pageToken) {
         return ExternalApiInvoker.call(
             YoutubeApiErrorCode.PLAYLIST_ITEMS_INQUIRY_FAILED,
@@ -50,6 +52,7 @@ public class YoutubeApiClient {
     /**
      * @param videoIds 최대 50개(그 이상은 호출측에서 분할해야 함)
      */
+    @Retry(name = "youtube")
     public YoutubeVideosResponse getVideos(List<String> videoIds) {
         String ids = String.join(",", videoIds);
         return ExternalApiInvoker.call(
@@ -72,6 +75,7 @@ public class YoutubeApiClient {
      * 소수 채널의 부가정보 백필용이라 playlistItems/videos처럼 자주 불리지 않는다.
      * @param channelIds 최대 50개(그 이상은 호출측에서 분할해야 함)
      */
+    @Retry(name = "youtube")
     public YoutubeChannelsResponse getChannels(List<String> channelIds) {
         String ids = String.join(",", channelIds);
         return ExternalApiInvoker.call(
