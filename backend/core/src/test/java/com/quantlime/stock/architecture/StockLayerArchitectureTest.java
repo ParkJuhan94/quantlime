@@ -85,4 +85,15 @@ class StockLayerArchitectureTest {
 
         rule.check(stockClasses);
     }
+
+    @Test
+    @DisplayName("[캐시(cache)도 외부 연동 클라이언트(infra)를 직접 참조하지 않는다 - 수집은 implement의 "
+        + "Collector에 맡기고 캐시는 보관/TTL만 담당한다]")
+    void cacheMustNotAccessInfraClientDirectly() {
+        ArchRule rule = noClasses()
+            .that().resideInAPackage("com.quantlime.stock.cache..")
+            .should().dependOnClassesThat().resideInAPackage("com.quantlime.infra.*");
+
+        rule.check(stockClasses);
+    }
 }
