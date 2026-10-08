@@ -1,13 +1,13 @@
 package com.quantlime.auth.service;
 
+import com.quantlime.auth.dto.OAuthUserInfo;
 import com.quantlime.auth.dto.mapper.AuthMapper;
 import com.quantlime.auth.dto.request.SocialLoginRequest;
 import com.quantlime.auth.exception.AuthErrorCode;
+import com.quantlime.auth.implement.OAuthUserCollector;
 import com.quantlime.auth.jwt.JwtTokenProvider;
 import com.quantlime.auth.token.RefreshTokenStore;
 import com.quantlime.common.exception.UnauthorizedException;
-import com.quantlime.infra.oauth.OAuthClientDispatcher;
-import com.quantlime.infra.oauth.dto.OAuthUserInfo;
 import com.quantlime.user.domain.OAuthProvider;
 import com.quantlime.user.domain.User;
 import com.quantlime.user.dto.response.LinkedProviderResponse;
@@ -23,14 +23,14 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AuthService {
 
-    private final OAuthClientDispatcher oAuthClientDispatcher;
+    private final OAuthUserCollector oAuthUserCollector;
     private final UserService userService;
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenStore refreshTokenStore;
 
     @Transactional
     public AuthTokens login(OAuthProvider provider, SocialLoginRequest request) {
-        OAuthUserInfo userInfo = oAuthClientDispatcher.fetch(
+        OAuthUserInfo userInfo = oAuthUserCollector.fetch(
             provider, request.code(), request.redirectUri());
         User user = userService.findOrCreate(userInfo);
         log.info("소셜 로그인 완료: userId={}, provider={}", user.getId(), provider);
@@ -40,7 +40,7 @@ public class AuthService {
     /** 로그인된 사용자에게 추가 소셜 계정을 연결한다 - 인가 코드 교환으로 그 계정의 소유를 확인한 뒤에만 연결된다. */
     @Transactional
     public void link(Long userId, OAuthProvider provider, SocialLoginRequest request) {
-        OAuthUserInfo userInfo = oAuthClientDispatcher.fetch(provider, request.code(), request.redirectUri());
+        OAuthUserInfo userInfo = oAuthUserCollector.fetch(provider, request.code(), request.redirectUri());
         userService.linkSocialAccount(userId, userInfo);
     }
 

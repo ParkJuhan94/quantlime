@@ -1,4 +1,4 @@
-package com.quantlime.infra.oauth.dto;
+package com.quantlime.auth.dto;
 
 import com.quantlime.user.domain.OAuthProvider;
 

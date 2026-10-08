@@ -1,9 +1,9 @@
 package com.quantlime.user.service;
 
+import com.quantlime.auth.dto.OAuthUserInfo;
 import com.quantlime.auth.exception.AuthErrorCode;
 import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.common.exception.ValidationException;
-import com.quantlime.infra.oauth.dto.OAuthUserInfo;
 import com.quantlime.user.domain.OAuthProvider;
 import com.quantlime.user.domain.User;
 import com.quantlime.user.domain.UserSocialAccount;

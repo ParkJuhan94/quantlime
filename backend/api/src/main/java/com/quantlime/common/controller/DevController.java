@@ -1,6 +1,7 @@
 package com.quantlime.common.controller;
 
 import com.quantlime.auth.cookie.RefreshTokenCookieProvider;
+import com.quantlime.auth.dto.OAuthUserInfo;
 import com.quantlime.auth.dto.mapper.AuthMapper;
 import com.quantlime.auth.dto.response.TokenResponse;
 import com.quantlime.auth.jwt.JwtTokenProvider;
@@ -9,7 +10,6 @@ import com.quantlime.backtest.service.BacktestDatasetPreparationService;
 import com.quantlime.backtest.service.BacktestService;
 import com.quantlime.backtest.service.BacktestUniverseService;
 import com.quantlime.backtest.service.CrossSectionalBacktestService;
-import com.quantlime.infra.oauth.dto.OAuthUserInfo;
 import com.quantlime.market.service.MarketDataRefreshService;
 import com.quantlime.notification.scheduler.ScoreRankingNotificationScheduler;
 import com.quantlime.payment.service.PaymentService;

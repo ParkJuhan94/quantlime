@@ -22,6 +22,7 @@ dependencies {
     implementation project(':firebase')
     implementation project(':toss')
     implementation project(':sync')
+    implementation project(':oauth')
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-validation'

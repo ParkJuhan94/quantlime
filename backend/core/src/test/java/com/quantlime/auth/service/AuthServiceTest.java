@@ -7,12 +7,12 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
+import com.quantlime.auth.dto.OAuthUserInfo;
 import com.quantlime.auth.dto.request.SocialLoginRequest;
+import com.quantlime.auth.implement.OAuthUserCollector;
 import com.quantlime.auth.jwt.JwtTokenProvider;
 import com.quantlime.auth.token.RefreshTokenStore;
 import com.quantlime.common.exception.UnauthorizedException;
-import com.quantlime.infra.oauth.OAuthClientDispatcher;
-import com.quantlime.infra.oauth.dto.OAuthUserInfo;
 import com.quantlime.user.UserFixture;
 import com.quantlime.user.domain.OAuthProvider;
 import com.quantlime.user.domain.User;
@@ -32,7 +32,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class AuthServiceTest {
 
     @Mock
-    private OAuthClientDispatcher oAuthClientDispatcher;
+    private OAuthUserCollector oAuthUserCollector;
 
     @Mock
     private UserService userService;
@@ -56,7 +56,7 @@ class AuthServiceTest {
             OAuthProvider.GOOGLE, "google-id", "test@example.com", "테스트유저", null);
         SocialLoginRequest request = new SocialLoginRequest("auth-code", "http://localhost/cb");
 
-        given(oAuthClientDispatcher.fetch(OAuthProvider.GOOGLE, "auth-code", "http://localhost/cb"))
+        given(oAuthUserCollector.fetch(OAuthProvider.GOOGLE, "auth-code", "http://localhost/cb"))
             .willReturn(userInfo);
         given(userService.findOrCreate(userInfo)).willReturn(user);
         given(jwtTokenProvider.createAccessToken(1L, UserRole.USER)).willReturn("access-token");

@@ -7,8 +7,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
-import com.quantlime.infra.oauth.dto.OAuthUserInfo;
-import com.quantlime.user.domain.OAuthProvider;
+import com.quantlime.infra.oauth.dto.OAuthProfile;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -41,7 +40,7 @@ class KakaoOAuthClientTest {
 
     @Test
     @DisplayName("[카카오 계정 동의 정보가 모두 있으면 정상적으로 조회한다]")
-    void fetch_fullConsent_returnsOAuthUserInfo() {
+    void fetch_fullConsent_returnsOAuthProfile() {
         // given
         mockServer.expect(requestTo(TOKEN_URI))
             .andExpect(method(POST))
@@ -56,10 +55,10 @@ class KakaoOAuthClientTest {
                 MediaType.APPLICATION_JSON));
 
         // when
-        OAuthUserInfo userInfo = kakaoOAuthClient.fetch("auth-code", "http://localhost/cb");
+        OAuthProfile userInfo = kakaoOAuthClient.fetch("auth-code", "http://localhost/cb");
 
         // then
-        assertThat(userInfo.provider()).isEqualTo(OAuthProvider.KAKAO);
+        assertThat(userInfo.provider()).isEqualTo(OAuthProviders.KAKAO);
         assertThat(userInfo.providerId()).isEqualTo("123456789");
         assertThat(userInfo.email()).isEqualTo("test@kakao.com");
         assertThat(userInfo.nickname()).isEqualTo("카카오유저");
@@ -77,7 +76,7 @@ class KakaoOAuthClientTest {
             .andRespond(withSuccess("{\"id\":987654321}", MediaType.APPLICATION_JSON));
 
         // when
-        OAuthUserInfo userInfo = kakaoOAuthClient.fetch("auth-code", "http://localhost/cb");
+        OAuthProfile userInfo = kakaoOAuthClient.fetch("auth-code", "http://localhost/cb");
 
         // then
         assertThat(userInfo.providerId()).isEqualTo("987654321");
@@ -99,7 +98,7 @@ class KakaoOAuthClientTest {
                 MediaType.APPLICATION_JSON));
 
         // when
-        OAuthUserInfo userInfo = kakaoOAuthClient.fetch("auth-code", "http://localhost/cb");
+        OAuthProfile userInfo = kakaoOAuthClient.fetch("auth-code", "http://localhost/cb");
 
         // then
         assertThat(userInfo.providerId()).isEqualTo("111222333");

@@ -7,9 +7,9 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.quantlime.auth.dto.OAuthUserInfo;
 import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.common.exception.ValidationException;
-import com.quantlime.infra.oauth.dto.OAuthUserInfo;
 import com.quantlime.user.UserFixture;
 import com.quantlime.user.domain.OAuthProvider;
 import com.quantlime.user.domain.User;
