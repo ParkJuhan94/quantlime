@@ -7,26 +7,22 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * 매일 16:00(장 마감 후, 월~금) + 20:10(NXT 애프터마켓 마감 후) 전 상장종목
- * (국내+해외)의 가격+스코어를 갱신하는 배치. 실제 갭필 로직은
- * {@link MarketDataRefreshService}(트리거1)에 위임한다 - 이전에는 이
- * 스케줄러가 "고정 10일 재조회 후 오늘자 스코어만 재계산"이라는 자체
- * 로직을 갖고 있었지만, 지금은 dev 수동 트리거(/dev/refresh)·기동 시
- * 캐치업(StartupCatchUpRunner)과 완전히 동일한 로직을 공유한다. 락
- * (refreshAllExclusively)도 이 셋이 공유해 서버가 하필 16:00/20:10
- * 근처에 재기동돼도 기동 캐치업과 겹쳐 돌지 않는다
- * (FeedCollectionScheduler/VideoRetentionScheduler와 동일한 패턴,
- * 2026-08-02).
+ * 매일 15:36(정규장 마감 후, 월~금) 전 상장종목(국내+해외)의 가격+스코어를 갱신하는
+ * 하루 한 번짜리 배치. 실제 갭필 로직은 {@link MarketDataRefreshService}(트리거1)에
+ * 위임한다 - dev 수동 트리거(/dev/refresh)·기동 시 캐치업(StartupCatchUpRunner)과
+ * 완전히 동일한 로직과 락(refreshAllExclusively)을 공유한다.
  *
- * <p>16:00 한 번으로 끝내지 않고 20:10에 한 번 더 도는 이유 - Toss 일봉
- * (interval=1d)은 NXT 프리(08:00~09:00)/애프터(15:30~20:00)마켓을 포함해
- * 20:00까지 계속 갱신되는 값이다(실측: 정규장 개장 전인 08:23에 이미 당일
- * 캔들이 거래량과 함께 존재). 즉 16:00에 저장한 종가는 정의상 미확정
- * 스냅샷이고, 20:10 배치가 그날의 진짜 확정값으로 재확정한다
- * ({@link com.quantlime.price.util.DailyPriceSettlementPolicy} 참고).
- * 16:30에 잠정 스코어를 먼저 보여주고 20:35에 확정값으로 조용히 교체되는
- * 셈이다. `MARKET_DATA_CHART`는 초당 토큰버킷(일일 쿼터 없음)이라 스윕이
- * 하루 2회로 늘어도 무방하다.
+ * <p>2026-10-09부로 16:00(잠정)+20:10(확정) 2단계에서 15:36 한 번으로 줄였다 - 스코어와
+ * 사분면 변화 알림을 NXT 애프터마켓(거래량이 적음)이 아니라 정규장 기준으로 판단하려는
+ * 결정이다. 종가(close)는 15:35에 {@code DomesticRegularCloseCaptureScheduler}가 Redis
+ * 시세 스냅샷으로 정규장 마감가를 확정해 두므로(수 초, Toss 호출 없음) 그 직후인 15:36에
+ * 시작한다. 스코어의 종가 기반 지표(RSI/MACD/이평/볼린저)는 이 값을 쓴다.
+ *
+ * <p>시가/고가/저가/거래량은 Toss 일봉이 NXT를 포함하는 값이다. 국내 약 2,600종목을
+ * 거래대금 순으로 처리하는 데 약 22분(분당 ~120종목)이 걸려 15:40 애프터마켓 시작 전에
+ * 끝낼 수 없다 - 상위 약 480종목만 15:40 전에 처리되고, 나머지는 처리 시각까지의 NXT
+ * 체결이 섞인 미확정 값이다. 다음 거래일 배치가 재확정 윈도우({@link
+ * com.quantlime.price.util.DailyPriceSettlementPolicy})로 확정값을 덮어쓴다.
  */
 @Slf4j
 @Component
@@ -35,20 +31,9 @@ public class OhlcvCollectorScheduler {
 
     private final MarketDataRefreshService marketDataRefreshService;
 
-    @Scheduled(cron = "0 0 16 * * MON-FRI", zone = "Asia/Seoul")
+    @Scheduled(cron = "0 36 15 * * MON-FRI", zone = "Asia/Seoul")
     public void collectDailyOhlcv() {
-        runRefresh("장 마감 직후 1차 수집(잠정)");
-    }
-
-    /**
-     * NXT 애프터마켓 종료(20:00) 직후 한 번 더 돌려 그날 일봉을 확정한다.
-     * 재확정 윈도우(DailyPriceSettlementPolicy) 안의 거래일은 이미 저장돼
-     * 있어도 최신 응답으로 덮어쓰므로, 이 실행이 16:00 잠정값을 확정값으로
-     * 교체한다.
-     */
-    @Scheduled(cron = "0 10 20 * * MON-FRI", zone = "Asia/Seoul")
-    public void settleDailyOhlcv() {
-        runRefresh("NXT 마감 후 재확정");
+        runRefresh("정규장 마감 후 수집");
     }
 
     private void runRefresh(String label) {

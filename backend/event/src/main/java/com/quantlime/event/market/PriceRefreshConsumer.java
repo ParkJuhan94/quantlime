@@ -97,13 +97,13 @@ public class PriceRefreshConsumer {
         try {
             priceRefreshBatchGate.completeOne(message.runId(), PeerGroup.of(message.peerGroup()),
                 message.stockCode());
-            log.error("가격 갱신 최종 실패(재시도 소진, DLT 이관) - 다음 정기 배치(16:00/20:10)에서 자동 재시도됨: "
+            log.error("가격 갱신 최종 실패(재시도 소진, DLT 이관) - 다음 정기 배치(평일 15:36)에서 자동 재시도됨: "
                     + "stockCode={}, runId={}",
                 message.stockCode(), message.runId());
             dltNotifier.notify("market-price-refresh", MarketTopics.PRICE_REFRESH_REQUESTED,
                 "stockCode=" + message.stockCode() + ", runId=" + message.runId()
                     + " - 가격/스코어 갱신 최종 실패. 이 종목만 이번 배치에서 갱신되지 않았고, "
-                    + "다음 정기 배치(16:00/20:10)에서 자동 재시도됩니다.");
+                    + "다음 정기 배치(평일 15:36)에서 자동 재시도됩니다.");
         } catch (Exception e) {
             log.error("DLT 핸들러 자체 실패(무한 재발행 방지를 위해 예외를 삼킴): stockCode={}, runId={}",
                 message.stockCode(), message.runId(), e);
