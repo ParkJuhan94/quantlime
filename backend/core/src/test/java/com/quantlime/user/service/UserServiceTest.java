@@ -2,6 +2,7 @@ package com.quantlime.user.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
@@ -14,12 +15,14 @@ import com.quantlime.user.UserFixture;
 import com.quantlime.user.domain.OAuthProvider;
 import com.quantlime.user.domain.User;
 import com.quantlime.user.domain.UserSocialAccount;
+import com.quantlime.user.dto.response.LinkedProviderResponse;
 import com.quantlime.user.implement.UserAppender;
 import com.quantlime.user.implement.UserReader;
 import com.quantlime.user.implement.UserSocialAccountAppender;
 import com.quantlime.user.implement.UserSocialAccountReader;
 import com.quantlime.user.repository.UserRepository;
 import com.quantlime.user.repository.UserSocialAccountRepository;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -215,5 +218,64 @@ class UserServiceTest {
         // when & then
         assertThatThrownBy(() -> service.unlinkSocialAccount(1L, OAuthProvider.KAKAO))
             .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("[연결된 소셜 계정을 해제하면 연결 정보를 삭제한다]")
+    void unlinkSocialAccount_linked_deletes() {
+        User user = userWithId(1L, OAuthProvider.GOOGLE, "g-1");
+        UserSocialAccount linked = UserSocialAccount.of(user, OAuthProvider.KAKAO, "kakao-1");
+        given(userRepository.findById(1L)).willReturn(Optional.of(user));
+        given(userSocialAccountRepository.findByUser_IdAndProvider(1L, OAuthProvider.KAKAO))
+            .willReturn(Optional.of(linked));
+
+        service.unlinkSocialAccount(1L, OAuthProvider.KAKAO);
+
+        verify(userSocialAccountRepository).delete(linked);
+    }
+
+    @Test
+    @DisplayName("[가입 계정과 같은 제공자·같은 계정을 다시 연결하면 조용히 성공한다]")
+    void linkSocialAccount_samePrimaryAccount_isIdempotent() {
+        given(userRepository.findById(1L)).willReturn(Optional.of(userWithId(1L, OAuthProvider.GOOGLE, "g-1")));
+
+        service.linkSocialAccount(1L, new OAuthUserInfo(OAuthProvider.GOOGLE, "g-1", "a@example.com", "닉", null));
+
+        verify(userSocialAccountRepository, never()).save(any(UserSocialAccount.class));
+    }
+
+    @Test
+    @DisplayName("[같은 제공자의 다른 계정이 이미 연결돼 있으면 연결을 거부한다]")
+    void linkSocialAccount_providerAlreadyLinkedWithOtherAccount_throws() {
+        User user = userWithId(1L, OAuthProvider.GOOGLE, "g-1");
+        given(userRepository.findById(1L)).willReturn(Optional.of(user));
+        given(userSocialAccountRepository.findByUser_IdAndProvider(1L, OAuthProvider.KAKAO))
+            .willReturn(Optional.of(UserSocialAccount.of(user, OAuthProvider.KAKAO, "kakao-OTHER")));
+
+        assertThatThrownBy(() -> service.linkSocialAccount(1L, kakaoInfo)).isInstanceOf(ValidationException.class);
+        verify(userSocialAccountRepository, never()).save(any(UserSocialAccount.class));
+    }
+
+    @Test
+    @DisplayName("[연결 제공자 목록은 가입 계정을 primary로 맨 앞에, 연결 계정을 뒤에 담는다]")
+    void getLinkedProviders_primaryFirstThenLinked() {
+        User user = userWithId(1L, OAuthProvider.GOOGLE, "g-1");
+        given(userRepository.findById(1L)).willReturn(Optional.of(user));
+        given(userSocialAccountRepository.findAllByUser_Id(1L))
+            .willReturn(List.of(UserSocialAccount.of(user, OAuthProvider.KAKAO, "kakao-1")));
+
+        List<LinkedProviderResponse> result = service.getLinkedProviders(1L);
+
+        assertThat(result).extracting(LinkedProviderResponse::provider, LinkedProviderResponse::label,
+            LinkedProviderResponse::primary)
+            .containsExactly(tuple("google", "구글", true), tuple("kakao", "카카오", false));
+    }
+
+    @Test
+    @DisplayName("[전체 사용자 id 조회는 Repository의 id 목록을 그대로 돌려준다]")
+    void getAllUserIds_delegates() {
+        given(userRepository.findAllIds()).willReturn(List.of(1L, 2L, 3L));
+
+        assertThat(service.getAllUserIds()).containsExactly(1L, 2L, 3L);
     }
 }

@@ -37,6 +37,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
@@ -349,5 +351,65 @@ class WatchlistServiceTest {
         // then
         verify(watchlistGroupService).findOrCreateDefaultGroup(userId);
         assertThat(legacyUngrouped.getGroup()).isEqualTo(group);
+    }
+
+    private Watchlist itemWithId(Long id, int sortOrder) {
+        Watchlist item = Watchlist.of(user, stock, group, sortOrder);
+        ReflectionTestUtils.setField(item, "id", id);
+        return item;
+    }
+
+    @Test
+    @DisplayName("[재배열은 보낸 id 순서대로 sortOrder를 0부터 다시 매긴다]")
+    void reorderWatchlist_assignsSortOrderInRequestedOrder() {
+        // given
+        Watchlist first = itemWithId(1L, 0);
+        Watchlist second = itemWithId(2L, 1);
+        Watchlist third = itemWithId(3L, 2);
+        List<Long> requested = List.of(3L, 1L, 2L);
+        given(watchlistRepository.findAllByUser_IdAndIdIn(1L, requested)).willReturn(List.of(first, second, third));
+
+        // when
+        watchlistService.reorderWatchlist(1L, requested);
+
+        // then
+        assertThat(third.getSortOrder()).isZero();
+        assertThat(first.getSortOrder()).isEqualTo(1);
+        assertThat(second.getSortOrder()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("[재배열 - 내 소유가 아니라 조회되지 않은 id는 건너뛰고 나머지 순서는 유지한다]")
+    void reorderWatchlist_unknownIdIsSkipped() {
+        // given: 99L은 다른 사용자의 항목이라 조회 결과에 없다
+        Watchlist mine = itemWithId(1L, 5);
+        List<Long> requested = List.of(99L, 1L);
+        given(watchlistRepository.findAllByUser_IdAndIdIn(1L, requested)).willReturn(List.of(mine));
+
+        // when
+        watchlistService.reorderWatchlist(1L, requested);
+
+        // then: 요청 목록상 위치(1)가 그대로 반영된다
+        assertThat(mine.getSortOrder()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("[인기 종목은 등록자 수 순 코드 목록을 순서 그대로 종목으로 바꿔 돌려준다]")
+    void getPopularStocks_keepsRankingOrder() {
+        // given
+        List<String> rankedCodes = List.of("005930", "000660");
+        given(watchlistRepository.findStockCodesOrderByWatcherCountDesc(PageRequest.of(0, 2))).willReturn(rankedCodes);
+        given(stockMasterService.getStocksByCodesInOrder(rankedCodes)).willReturn(List.of(stock));
+
+        // when & then
+        assertThat(watchlistService.getPopularStocks(2)).containsExactly(stock);
+    }
+
+    @Test
+    @DisplayName("[관심종목 코드 집합은 중복 없이 Set으로 돌려준다]")
+    void getWatchlistStockCodes_returnsDistinctSet() {
+        given(watchlistRepository.findStockCodesByUserId(1L)).willReturn(List.of("005930", "000660"));
+
+        assertThat(watchlistService.getWatchlistStockCodes(1L)).containsExactlyInAnyOrder("005930", "000660");
     }
 }
