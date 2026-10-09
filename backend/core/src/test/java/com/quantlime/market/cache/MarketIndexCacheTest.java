@@ -306,4 +306,91 @@ class MarketIndexCacheTest {
         assertThat(result.usdKrwChangeRate()).isNull();
         assertThat(result.bitcoinPriceKrw()).isEqualTo(132000000L);
     }
+
+    @Test
+    @DisplayName("[캐시가 이미 있을 때 토스 환율 조회가 실패하면 이전 환율로 폴백한다(stale-serve)]")
+    void refresh_exchangeRateFails_withPrevious_fallsBackToPreviousValue() {
+        // given: 최초 적재 성공 후, 다음 갱신에서 토스 환율만 실패
+        stubExchangeRateAndBitcoin();
+        marketIndexCache.get();
+        given(tossApiClient.getExchangeRate("USD", "KRW")).willThrow(new IllegalStateException("toss down"));
+
+        // when: 백그라운드 스레드를 기다리지 않도록 갱신 메서드를 직접 실행한다
+        ReflectionTestUtils.invokeMethod(marketIndexCache, "refresh");
+
+        // then
+        MarketIndexResponse refreshed = (MarketIndexResponse) ReflectionTestUtils.getField(marketIndexCache, "cached");
+        assertThat(refreshed.usdKrwRate()).isEqualTo(1380.5);
+        assertThat(refreshed.usdKrwChangeType()).isEqualTo("UP");
+    }
+
+    @Test
+    @DisplayName("[캐시가 이미 있을 때 업비트 비트코인 조회가 실패하면 이전 시세로 폴백한다]")
+    void refresh_bitcoinFails_withPrevious_fallsBackToPreviousValue() {
+        // given
+        stubExchangeRateAndBitcoin();
+        marketIndexCache.get();
+        given(upbitApiClient.getTicker("KRW-BTC")).willThrow(new IllegalStateException("upbit down"));
+
+        // when
+        ReflectionTestUtils.invokeMethod(marketIndexCache, "refresh");
+
+        // then
+        MarketIndexResponse refreshed = (MarketIndexResponse) ReflectionTestUtils.getField(marketIndexCache, "cached");
+        assertThat(refreshed.bitcoinPriceKrw()).isEqualTo(132000000L);
+        assertThat(refreshed.bitcoinChangeRate()).isEqualTo(3.45);
+    }
+
+    @Test
+    @DisplayName("[최초 적재에서 환율 조회가 실패하면 보여줄 이전 값이 없으므로 예외를 전파한다]")
+    void get_firstCallExchangeRateFails_propagates() {
+        given(tossApiClient.getExchangeRate("USD", "KRW")).willThrow(new IllegalStateException("toss down"));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> marketIndexCache.get())
+            .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    @DisplayName("[최초 적재에서 비트코인 시세가 비어 있으면 예외를 전파한다]")
+    void get_firstCallBitcoinTickerMissing_propagates() {
+        given(tossApiClient.getExchangeRate("USD", "KRW")).willReturn(
+            new TossExchangeRateResponse(new ExchangeRateResult("USD", "KRW", "1380.5", "UP")));
+        given(upbitApiClient.getTicker("KRW-BTC")).willReturn(List.of());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> marketIndexCache.get())
+            .isInstanceOf(com.quantlime.common.exception.NotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("[국채금리 이력은 최대 30개까지만 쌓고 가장 오래된 값부터 버린다]")
+    void refresh_treasuryHistory_isCappedAtThirty() {
+        // given: 갱신 때마다 값이 1.0, 2.0, ... 로 증가
+        stubExchangeRateAndBitcoin();
+        java.util.concurrent.atomic.AtomicInteger counter = new java.util.concurrent.atomic.AtomicInteger();
+        given(tradingViewApiClient.getSymbolQuote("TVC:US10Y")).willAnswer(
+            invocation -> new TradingViewSymbolResponse((double) counter.incrementAndGet(), 0.1));
+
+        // when: refresh()를 31번 직접 실행
+        for (int i = 0; i < 31; i++) {
+            ReflectionTestUtils.invokeMethod(marketIndexCache, "refresh");
+        }
+
+        // then
+        MarketIndexResponse result = (MarketIndexResponse) ReflectionTestUtils.getField(marketIndexCache, "cached");
+        assertThat(result.usTreasuryYield10yHistory()).hasSize(30).startsWith(2.0).endsWith(31.0);
+    }
+
+    @Test
+    @DisplayName("[Toss 지수 응답의 result가 null이면 지수는 null로 폴백하고 나머지는 그대로 응답한다]")
+    void get_domesticIndexResultNull_fallsBackToNullQuotes() {
+        stubExchangeRateAndBitcoin();
+        given(tossApiClient.getMarketIndicatorPrices(anyString()))
+            .willReturn(new TossMarketIndicatorPriceResponse(null));
+
+        MarketIndexResponse result = marketIndexCache.get();
+
+        assertThat(result.kospi()).isNull();
+        assertThat(result.kosdaq()).isNull();
+        assertThat(result.usdKrwRate()).isEqualTo(1380.5);
+    }
 }
