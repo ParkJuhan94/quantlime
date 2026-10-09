@@ -27,7 +27,7 @@ jobs:
 
       - name: 빌드 + 테스트
         working-directory: backend
-        run: ./gradlew build --profile
+        run: ./gradlew build --parallel
 
       # 모듈별 jacoco XML을 Codecov가 합쳐 PR에 코멘트한다. 포크 PR처럼 시크릿이
       # 없는 경우에도 CI가 깨지지 않게 fail_ci_if_error는 끈다
