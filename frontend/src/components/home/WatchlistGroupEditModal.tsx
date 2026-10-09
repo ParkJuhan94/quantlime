@@ -2,12 +2,15 @@ import { useEffect, useState } from 'react'
 import { StockLogo } from '../common/StockLogo'
 import { currencyForMarketType } from '../../utils/priceFormat'
 import {
+  useChangeQuadrantAlert,
   useCreateWatchlistGroup,
   useDeleteWatchlistGroup,
   useRenameWatchlistGroup,
   useReorderWatchlistGroups,
 } from '../../hooks/queries/useWatchlistGroups'
 import { useMoveWatchlistGroup, useRemoveWatchlist, useReorderWatchlist } from '../../hooks/queries/useWatchlist'
+import { useIsPremium } from '../../hooks/queries/useSubscription'
+import { ToggleSwitch } from '../chart/IndicatorSettingsModal'
 import { GroupNameDialog } from './GroupNameDialog'
 import { AddStockToGroupPopover } from './AddStockToGroupPopover'
 import type { WatchlistGroupResponse, WatchlistResponse } from '../../types/watchlist'
@@ -56,6 +59,8 @@ export function WatchlistGroupEditModal({ open, onClose, watchlist, groups }: Wa
   const renameGroup = useRenameWatchlistGroup()
   const deleteGroup = useDeleteWatchlistGroup()
   const reorderGroups = useReorderWatchlistGroups()
+  const changeQuadrantAlert = useChangeQuadrantAlert()
+  const { isPremium } = useIsPremium()
   const moveWatchlistGroup = useMoveWatchlistGroup()
   const reorderWatchlist = useReorderWatchlist()
   const removeWatchlist = useRemoveWatchlist()
@@ -77,6 +82,8 @@ export function WatchlistGroupEditModal({ open, onClose, watchlist, groups }: Wa
   }, [open, onClose])
 
   if (!open) return null
+
+  const selectedGroup = groups.find((g) => g.id === selectedGroupId)
 
   const stocksInSelectedGroup = watchlist
     .filter((item) => item.groupId === selectedGroupId)
@@ -288,6 +295,27 @@ export function WatchlistGroupEditModal({ open, onClose, watchlist, groups }: Wa
                 + 종목 추가
               </button>
             </div>
+
+            {selectedGroup && (
+              <div className="mb-2 flex items-center justify-between gap-3 rounded-xl bg-gray-50 px-3 py-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-gray-900">사분면 변화 알림</p>
+                  <p className="text-xs text-gray-500">
+                    {isPremium || selectedGroup.quadrantAlertEnabled
+                      ? '이 그룹 종목의 스코어 사분면이 바뀌면 장 마감 후 알려드려요.'
+                      : '구독자 전용 기능이에요.'}
+                  </p>
+                </div>
+                <ToggleSwitch
+                  checked={selectedGroup.quadrantAlertEnabled}
+                  label={`${selectedGroup.name} 사분면 변화 알림`}
+                  onChange={(enabled) => {
+                    if (enabled && !isPremium) return
+                    changeQuadrantAlert.mutate({ groupId: selectedGroup.id, enabled })
+                  }}
+                />
+              </div>
+            )}
 
             <div className="flex-1 overflow-y-auto">
               {selectedGroupId === null && (

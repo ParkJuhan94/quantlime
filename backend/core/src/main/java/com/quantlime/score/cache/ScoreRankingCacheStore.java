@@ -35,7 +35,7 @@ import org.springframework.stereotype.Component;
 public class ScoreRankingCacheStore {
 
     private static final String KEY_PREFIX = "score:ranking:";
-    // 배치는 하루 2회(16:00/20:10)뿐이라 정상 경로는 언제나 명시적 무효화
+    // 배치는 하루 1회(15:36)뿐이라 정상 경로는 언제나 명시적 무효화
     // (MarketDataRefreshService가 정규화 직후 evict)다 - 이 TTL은 그 무효화가
     // 조용히 실패했을 때(예외 흡수 후 재시도 없음) stale 응답이 무한정
     // 남지 않게 하는 상한일 뿐이다.

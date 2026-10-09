@@ -26,6 +26,10 @@ public class WatchlistGroupReader {
         return watchlistGroupRepository.countByUser_Id(userId);
     }
 
+    public List<Long> findUserIdsWithQuadrantAlertEnabled() {
+        return watchlistGroupRepository.findUserIdsWithQuadrantAlertEnabled();
+    }
+
     public Optional<WatchlistGroup> findByUser_IdAndName(Long userId, String name) {
         return watchlistGroupRepository.findByUser_IdAndName(userId, name);
     }

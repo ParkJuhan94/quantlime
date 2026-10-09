@@ -39,6 +39,13 @@ export async function renameWatchlistGroup(groupId: number, name: string): Promi
   return data
 }
 
+export async function changeQuadrantAlert(groupId: number, enabled: boolean): Promise<WatchlistGroupResponse> {
+  const { data } = await apiClient.put<WatchlistGroupResponse>(`/api/watchlist/groups/${groupId}/quadrant-alert`, {
+    enabled,
+  })
+  return data
+}
+
 export async function deleteWatchlistGroup(groupId: number): Promise<void> {
   await apiClient.delete(`/api/watchlist/groups/${groupId}`)
 }
