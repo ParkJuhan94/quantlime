@@ -39,6 +39,15 @@ jobs:
           flags: backend
           fail_ci_if_error: false
 
+      # 느린 테스트 클래스·컨텍스트 기동 횟수를 사후에 분석할 수 있게 XML 결과를 보관한다
+      - name: 테스트 리포트 보관
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: backend/*/build/test-results/test/*.xml
+          retention-days: 7
+
   quant-engine:
     runs-on: ubuntu-latest
     steps:
