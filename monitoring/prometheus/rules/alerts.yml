@@ -1,5 +1,5 @@
 # 알림 규칙. Alertmanager(monitoring/alertmanager/alertmanager.yml)를 거쳐
-# Slack #quantlime-alerts(실제 Slack 채널명 그대로 유지)로 전송된다. 임계값은 t3.small~medium 1대 규모의
+# Slack으로 심각도별 전송된다(critical #quantlime-critical / warning #quantlime-warnings / info #quantlime-info). 임계값은 t3.small~medium 1대 규모의
 # 초기 추정치로, 실제 운영 데이터를 보며 조정할 것을 전제로 한다.
 groups:
   # --- 가용성: 서비스 자체가 죽었는지 ---
@@ -87,6 +87,17 @@ groups:
         annotations:
           summary: "컨테이너 재시작 루프 감지: {{ $labels.name }}"
           description: "{{ $labels.name }}이(가) 최근 30분간 3회 이상 재시작했습니다 - restart:on-failure 또는 autoheal이 반복 발동 중일 수 있습니다."
+
+      # 로그 파이프라인(Loki/Alloy)이 죽으면 로그 기반 알림(monitoring/loki/rules)이 조용히 멈춘다 -
+      # "울려야 할 때 안 울리는" 사각지대를 막는 감시. 로컬 Prometheus에는 이 job이 없어 평가되지 않는다.
+      - alert: LogPipelineDown
+        expr: up{job=~"loki|alloy"} == 0
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "로그 파이프라인 중단: {{ $labels.job }}"
+          description: "{{ $labels.job }}이(가) 3분 이상 응답하지 않습니다 - 로그 수집/로그 기반 알림(OutOfMemoryError·ERROR 급증)이 멈춘 상태입니다. docker ps와 docker logs quantlime-prod-{{ $labels.job }}를 확인하세요."
 
       # 위 세 알림(FrontendDown/RedpandaDown/ContainerRestartLoop)이 기대는 지표는 호스트 크론
       # (scripts/report-container-metrics.sh)이 쓰는 파일이라, 크론이 멈추면 마지막 값이 그대로 남아
@@ -288,6 +299,32 @@ groups:
           severity: warning
         annotations:
           summary: "호스트 메모리 사용률 90% 초과"
+
+      # OOM kill은 커널이 프로세스를 죽이는 것이라 앱 로그에 아무것도 안 남는다(Loki FatalLogPattern으로는
+      # 못 잡음). 호스트 지표 node_vmstat_oom_kill(/proc/vmstat의 oom_kill, node-exporter 기본 수집)이 유일한
+      # 직접 신호다. 2026-10-08 운영 데이터로 검증: backend가 컨테이너 한도(1g)로 죽은 10/6 20:12, 10/7 20:10,
+      # 10/8 10:37(KST) 세 번 모두 이 식이 참이었다(그전까지는 알림이 없어 로그를 직접 열어보고서야 알았다).
+      # ContainerRestartLoop은 30분 3회 이상이라 하루 한 번 OOM으로 죽는 경우를 못 잡는다.
+      - alert: ContainerOomKilled
+        expr: increase(node_vmstat_oom_kill[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OOM kill 발생: 커널이 메모리 부족으로 프로세스를 강제 종료함"
+          description: "최근 5분 안에 커널이 OOM으로 프로세스를 죽였습니다 - 컨테이너 mem_limit 초과(cgroup OOM)일 가능성이 큽니다. 어느 프로세스인지는 서버에서 journalctl -k --since '15 min ago' | grep -i 'out of memory' 로, 재시작된 컨테이너는 quantlime_container_start_time_seconds의 변화로 확인하세요. 앱 로그에는 남지 않습니다."
+
+      # OOM kill 직전의 선행 신호. 같은 데이터로 검증: 이전 한도에서 backend는 16:00 배치 직후부터 죽기까지 4시간 넘게
+      # 90%를 넘겼고, mysql은 1.5일간 90%를 넘겼다. 한도 상향(backend 1.5g/mysql 1.25g, 2026-10-08) 뒤 배치 구간
+      # 피크는 backend 68%, mysql 56%라 평소에는 울리지 않는다. 값은 docker stats 1분 스냅샷이다.
+      - alert: ContainerMemoryNearLimit
+        expr: quantlime_container_memory_usage_bytes / quantlime_container_memory_limit_bytes * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "컨테이너 메모리가 한도에 근접: {{ $labels.name }}"
+          description: "{{ $labels.name }}의 메모리 사용률이 5분 넘게 90%를 넘었습니다({{ $value | humanize }}%) - 한도(mem_limit)에 걸리면 OOM kill로 재시작됩니다. docker-compose.prod.yml의 한도 상향이나 메모리 누수 여부를 확인하세요."
 
       - alert: HostDiskHigh
         expr: |

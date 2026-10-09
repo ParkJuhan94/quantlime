@@ -203,7 +203,7 @@ class VideoFilterServiceTest {
         Channel channel = channelOf(new ChannelFilterConfig(180, 0.0, 1, List.of(), List.of()));
         Video video = videoOf(channel, "이번 사이클 신규 영상", 400, 9999L, LocalDateTime.now(SEOUL));
         given(videoReader.findByChannelAndStatus(channel, VideoStatus.DISCOVERED)).willReturn(List.of(video));
-        given(videoReader.countByChannelAndStatusAndPublishedAtBetween(eq(channel), eq(VideoStatus.SELECTED), any(), any()))
+        given(videoReader.countPublishedBetween(eq(channel), eq(VideoStatus.SELECTED), any(), any()))
             .willReturn(1);
 
         // when
@@ -224,7 +224,7 @@ class VideoFilterServiceTest {
 
         Video ownVideo = videoOf(channel, "이 채널 영상", 400, 10L, LocalDateTime.now(SEOUL).minusHours(10));
         Video otherChannelVideo = videoOf(otherChannel, "다른 채널 영상", 400, 10L, LocalDateTime.now(SEOUL).minusHours(10));
-        given(videoReader.findByStatusAndPublishedAtBefore(eq(VideoStatus.PENDING_REVIEW), any()))
+        given(videoReader.findPublishedBefore(eq(VideoStatus.PENDING_REVIEW), any()))
             .willReturn(List.of(ownVideo, otherChannelVideo));
 
         // when

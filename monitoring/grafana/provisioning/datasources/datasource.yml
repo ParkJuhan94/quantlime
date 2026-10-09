@@ -24,3 +24,12 @@ datasources:
     jsonData:
       implementation: prometheus
     editable: false
+
+  # 컨테이너 로그 검색(2026-10-08, 운영 compose의 loki 서비스). 로컬 모니터링 스택에는 loki가 없어
+  # 로컬 Grafana에서는 이 데이터소스가 연결 실패로 표시되지만 동작에는 영향이 없다.
+  - name: Loki
+    type: loki
+    uid: loki
+    access: proxy
+    url: http://loki:3100
+    editable: false

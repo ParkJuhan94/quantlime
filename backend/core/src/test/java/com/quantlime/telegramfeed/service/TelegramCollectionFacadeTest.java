@@ -63,7 +63,7 @@ class TelegramCollectionFacadeTest {
     void runAll_collectsOnlyTelegramChannels() {
         // given
         Channel channel = channelOf(1L, "handle1");
-        given(channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.TELEGRAM))
+        given(channelReader.findActive(Platform.TELEGRAM))
             .willReturn(List.of(channel));
         TelegramCollectionOutcome outcome = new TelegramCollectionOutcome(List.of(), null);
         given(telegramPostCollector.collect(channel)).willReturn(outcome);
@@ -85,7 +85,7 @@ class TelegramCollectionFacadeTest {
         // given
         Channel failingChannel = channelOf(1L, "failing");
         Channel okChannel = channelOf(2L, "ok");
-        given(channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.TELEGRAM))
+        given(channelReader.findActive(Platform.TELEGRAM))
             .willReturn(List.of(failingChannel, okChannel));
         given(telegramPostCollector.collect(failingChannel)).willThrow(new RuntimeException("스크래핑 실패"));
         TelegramCollectionOutcome okOutcome = new TelegramCollectionOutcome(

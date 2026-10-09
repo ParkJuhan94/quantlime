@@ -21,17 +21,18 @@
 # (docs/DEPLOYMENT.md 참고) - 사용자 피드백과 인프라 알람이 같은 채널에
 # 섞이면 노이즈가 커진다.
 # 채널 3분할(2026-10-08): 알림 소음이 한 채널에 몰려 정작 봐야 할 critical이 묻혔다.
-#   - critical -> #quantlime-alerts : Down/OOM/5xx/TLS 등 즉시 봐야 하는 것(재전송 4h)
+#   - critical -> #quantlime-critical : Down/OOM/5xx/TLS 등 즉시 봐야 하는 것(재전송 4h)
 #   - warning  -> #quantlime-warnings : 지켜볼 것(재전송 12h, resolved 알림 생략)
 #   - 그 외(info) -> #quantlime-info : 정보성. 앱이 즉시 보내는 DLT 개별 메시지도 이 채널로 간다
 #     (backend application.yml의 slack.ops-webhook-url = SLACK_INFO_WEBHOOK_URL)
 # Slack 웹훅 URL은 채널에 묶여 있어 채널마다 웹훅을 따로 발급해야 한다. WARN/INFO 웹훅이 비어 있으면
 # docker-compose.monitoring.yml이 SLACK_ALERT_WEBHOOK_URL로 대체해, 채널을 아직 안 만들었어도 기존처럼
 # 한 채널로 모두 전송된다(하위 호환).
-# 주의: warning/info 수신자에는 `channel:`을 지정하지 않는다 - 웹훅이 이미 채널에 묶여 있고, 구형 웹훅은
+# 주의: 모든 수신자(critical 포함)에 `channel:`을 지정하지 않는다 - 웹훅이 이미 채널에 묶여 있고, 구형 웹훅은
 # `channel`을 덮어쓰기로 취급해 그 채널이 없으면 `channel_not_found`(404)로 거부한다. WARN/INFO 웹훅이 아직
 # 없어 SLACK_ALERT_WEBHOOK_URL로 대체된 상태에서도 알림이 유실되지 않으려면 웹훅의 기본 채널로 보내야 한다
-# (2026-10-08 배포 직후 `#quantlime-warnings` 미생성 상태에서 실제로 발생). critical만 기존 설정대로 유지.
+# (2026-10-08 배포 직후 `#quantlime-warnings` 미생성 상태에서 실제로 발생). critical 채널도 `#quantlime-alerts`에서
+# `#quantlime-critical`로 이름을 바꾸면서 같은 이유로 `channel:`을 제거했다(이름이 바뀐 뒤 옛 이름으로 덮어쓰면 실패).
 route:
   receiver: slack-info
   group_by: ["alertname"]
@@ -58,22 +59,27 @@ route:
 
 receivers:
   - name: "null"
+  # 제목 앞 이모지와 막대 색으로 심각도를 한눈에 구분한다(2026-10-08): 🔴 critical(빨강) / 🟠 warning(주황) /
+  # 🔵 info(파랑). Slack 채널 이름에는 이모지를 넣을 수 없어 메시지 쪽에서 구분한다. critical만 해결(resolved)
+  # 메시지를 보내므로 그때는 ✅ [해결]로 바꾸고 막대를 초록으로 둔다.
   - name: slack-critical
     slack_configs:
       - api_url: "__SLACK_ALERT_WEBHOOK_URL__"
-        channel: "#quantlime-alerts"
         send_resolved: true
-        title: "{{ .CommonAnnotations.summary }}"
+        color: '{{ if eq .Status "resolved" }}good{{ else }}#D32F2F{{ end }}'
+        title: '{{ if eq .Status "resolved" }}✅ [해결] {{ else }}🔴 {{ end }}{{ .CommonAnnotations.summary }}'
         text: "{{ range .Alerts }}{{ .Annotations.description }}\n{{ end }}"
   - name: slack-warning
     slack_configs:
       - api_url: "__SLACK_WARN_WEBHOOK_URL__"
         send_resolved: false
-        title: "{{ .CommonAnnotations.summary }}"
+        color: "#F57C00"
+        title: "🟠 {{ .CommonAnnotations.summary }}"
         text: "{{ range .Alerts }}{{ .Annotations.description }}\n{{ end }}"
   - name: slack-info
     slack_configs:
       - api_url: "__SLACK_INFO_WEBHOOK_URL__"
         send_resolved: false
-        title: "{{ .CommonAnnotations.summary }}"
+        color: "#1976D2"
+        title: "🔵 {{ .CommonAnnotations.summary }}"
         text: "{{ range .Alerts }}{{ .Annotations.description }}\n{{ end }}"

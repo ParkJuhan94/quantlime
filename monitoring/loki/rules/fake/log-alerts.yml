@@ -1,0 +1,42 @@
+# 로그 기반 알림(LogQL). Loki ruler가 평가해 Alertmanager로 보내므로 severity 라벨로 기존 Slack 3채널
+# 라우팅(critical/warning/info)을 그대로 탄다. 입력(Alloy가 수집한 컨테이너 로그)이 끊기면 이 알림이 조용히
+# 멈추므로 파이프라인 자체는 Prometheus의 LogPipelineDown 알림이 감시한다(alerts.yml).
+#
+# Spring 로그 레벨 자리는 `... +09:00 ERROR 1 --- [` 형식이라 `\sERROR\s+\d+\s---`로 매칭한다.
+# 스택트레이스 이어지는 줄은 레벨이 없어 한 오류가 한 번만 센다. 기준선: 평소 backend ERROR는 하루 12건 수준
+# (2026-10-08 실측)이라 10분에 5건 초과는 이례적이다.
+groups:
+  - name: quantlime-logs
+    rules:
+      - alert: BackendErrorLogBurst
+        expr: |
+          sum(count_over_time({container="quantlime-prod-backend"} |~ `\sERROR\s+\d+\s---` [10m])) > 5
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "backend ERROR 로그 급증"
+          description: "backend에서 최근 10분간 ERROR 로그가 5건을 넘었습니다(평소 하루 십여 건) - Grafana Explore에서 {container=\"quantlime-prod-backend\"} |~ `\\sERROR\\s` 로 내용을 확인하세요."
+
+      # quant-engine(uvicorn)은 `ERROR:    Exception in ASGI application` 형식. Gemini 503이나 YouTube 자막
+      # 차단(RequestBlocked)이 500으로 이어질 때마다 한 건씩 쌓이므로(2026-10-08 실측 48시간 64건) 임계값을 높게 둔다.
+      - alert: QuantEngineErrorLogBurst
+        expr: |
+          sum(count_over_time({container="quantlime-prod-quant-engine"} |~ `^ERROR:` [10m])) > 10
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "quant-engine ERROR 로그 급증"
+          description: "quant-engine에서 최근 10분간 ERROR 로그가 10건을 넘었습니다 - 외부 API(Gemini/YouTube) 장애나 요청 폭주일 수 있습니다. Grafana Explore에서 {container=\"quantlime-prod-quant-engine\"} |= `ERROR` 로 확인하세요."
+
+      # 지표(OOM kill은 커널 로그라 앱 로그에 안 남는다)로는 안 잡히는 JVM 자체의 치명 신호. 한 건이라도 즉시 알린다.
+      - alert: FatalLogPattern
+        expr: |
+          sum by (container) (count_over_time({container=~"quantlime-prod-(backend|quant-engine)"} |~ `OutOfMemoryError|APPLICATION FAILED TO START|Application run failed|Exception in thread "main"` [5m])) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "치명적 로그 감지: {{ $labels.container }}"
+          description: "{{ $labels.container }}에서 OutOfMemoryError / 기동 실패 계열 로그가 최근 5분 안에 발생했습니다 - Grafana Explore에서 해당 컨테이너 로그를 확인하세요."
