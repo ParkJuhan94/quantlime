@@ -335,6 +335,22 @@ groups:
         annotations:
           summary: "호스트 루트 디스크 사용률 90% 초과"
 
+      # 90% 알림은 조치 시간이 부족하다는 판단으로 80% 사전 경고를 둔다(2026-10-08 - 19GB 루트 디스크가
+      # 한때 85%까지 찼고, 이미지 pull·백업·복구 리허설 같은 일시 증가가 4~6%p라 90%에선 사실상 여유가 없다).
+      # HostDiskHigh와 같은 시점에 두 번 울리지 않도록 90% 이하 구간에서만 발동하게 했다. 증가가 느려서
+      # 배포/pull로 인한 일시 스파이크를 거르도록 for를 30m로 길게 잡았다.
+      - alert: HostDiskWarning
+        expr: |
+          (1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) > 0.8
+          and
+          (1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) <= 0.9
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "호스트 루트 디스크 사용률 80% 초과"
+          description: "90%가 되기 전에 정리하세요 - docker system df 로 이미지/볼륨을 확인하고 docker image prune -a, 오래된 백업 파일(~/quantlime/backups, 홈 디렉터리 *.sql) 정리를 검토합니다."
+
   # --- DB/캐시 포화(2026-09 성능 감사 신설) ---
   # mysqld-exporter/redis-exporter는 이미 §가용성에서 up==0만 쓰고 있었고,
   # HikariCP 메트릭(hikaricp_*)은 quantlime-loadtest.json 대시보드에만 패널로
