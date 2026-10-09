@@ -108,7 +108,7 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: frontend/coverage/lcov.info
-          flags: frontend
+          flags: frontend-utils
           fail_ci_if_error: false
 
       - name: 타입체크 + 빌드
