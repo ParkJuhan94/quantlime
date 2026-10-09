@@ -105,4 +105,85 @@ class StockMarketDepthServiceTest {
         assertThat(result).extracting(StockWarningResponse::label)
             .containsExactly("VI 발동(정적)", "NEW_FUTURE_CODE");
     }
+
+    @Test
+    @DisplayName("[체결 내역은 가격·거래량을 숫자로 바꾸고, 응답 자체가 null이면 빈 목록이다]")
+    void getTrades_parsesValuesAndHandlesNullResponse() {
+        // given
+        given(stockMarketDepthCache.trades(CODE))
+            .willReturn(new TossTradeResponse(List.of(new TossTradeResponse.TossTrade("72000", "15", "ts", "KRW"))))
+            .willReturn(null);
+
+        // when & then
+        assertThat(service.getTrades(CODE)).singleElement().satisfies(trade -> {
+            assertThat(trade.price()).isEqualTo(72000.0);
+            assertThat(trade.volume()).isEqualTo(15.0);
+            assertThat(trade.currency()).isEqualTo("KRW");
+        });
+        assertThat(service.getTrades(CODE)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("[호가의 매도/매수 목록이 null이면 빈 목록으로 내려준다]")
+    void getOrderbook_nullSides_becomeEmptyLists() {
+        // given
+        given(stockMarketDepthCache.orderbook(CODE))
+            .willReturn(new TossOrderbookResponse.Orderbook("ts", "KRW", null, null));
+
+        // when
+        OrderbookResponse response = service.getOrderbook(CODE);
+
+        // then
+        assertThat(response.asks()).isEmpty();
+        assertThat(response.bids()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("[상/하한가가 있으면 숫자로 변환한다]")
+    void getPriceLimit_parsesLimits() {
+        // given
+        given(stockMarketDepthCache.priceLimit(CODE))
+            .willReturn(new TossPriceLimitResponse.PriceLimit("t", "93600", "50400", "KRW"));
+
+        // when
+        PriceLimitResponse response = service.getPriceLimit(CODE);
+
+        // then
+        assertThat(response.upperLimitPrice()).isEqualTo(93600.0);
+        assertThat(response.lowerLimitPrice()).isEqualTo(50400.0);
+        assertThat(response.currency()).isEqualTo("KRW");
+    }
+
+    @Test
+    @DisplayName("[알려진 유의사항 코드는 모두 한글 라벨로 바꾸고, 코드가 null이면 빈 라벨이다]")
+    void getWarnings_mapsEveryKnownLabel() {
+        // given
+        List<String> types = List.of("LIQUIDATION_TRADING", "OVERHEATED", "INVESTMENT_WARNING", "INVESTMENT_RISK",
+            "VI_STATIC_AND_DYNAMIC", "VI_STATIC", "VI_DYNAMIC", "STOCK_WARRANTS");
+        List<TossStockWarningResponse.TossStockWarning> warnings = new java.util.ArrayList<>(types.stream()
+            .map(type -> new TossStockWarningResponse.TossStockWarning(type, "KRX", "2026-10-01", "2026-10-02"))
+            .toList());
+        warnings.add(new TossStockWarningResponse.TossStockWarning(null, null, null, null));
+        given(stockMarketDepthCache.warnings(CODE)).willReturn(new TossStockWarningResponse(warnings));
+
+        // when
+        List<StockWarningResponse> result = service.getWarnings(CODE);
+
+        // then
+        assertThat(result).extracting(StockWarningResponse::label).containsExactly(
+            "정리매매", "단기과열종목", "투자경고종목", "투자위험종목",
+            "VI 발동(정적+동적)", "VI 발동(정적)", "VI 발동(동적)", "신주인수권", "");
+        assertThat(result.get(0).exchange()).isEqualTo("KRX");
+    }
+
+    @Test
+    @DisplayName("[유의사항 응답이 null이거나 결과가 null이면 빈 목록이다]")
+    void getWarnings_nullResponseOrResult_returnsEmpty() {
+        // given
+        given(stockMarketDepthCache.warnings(CODE)).willReturn(null).willReturn(new TossStockWarningResponse(null));
+
+        // when & then
+        assertThat(service.getWarnings(CODE)).isEmpty();
+        assertThat(service.getWarnings(CODE)).isEmpty();
+    }
 }
