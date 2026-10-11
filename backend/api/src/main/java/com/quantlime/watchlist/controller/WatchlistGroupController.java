@@ -1,10 +1,14 @@
 package com.quantlime.watchlist.controller;
 
 import com.quantlime.auth.resolver.LoginUser;
+import com.quantlime.common.exception.ForbiddenException;
+import com.quantlime.subscription.exception.SubscriptionErrorCode;
+import com.quantlime.subscription.service.SubscriptionService;
 import com.quantlime.watchlist.domain.WatchlistGroup;
 import com.quantlime.watchlist.dto.mapper.WatchlistMapper;
 import com.quantlime.watchlist.dto.request.CreateWatchlistGroupRequest;
 import com.quantlime.watchlist.dto.request.ReorderWatchlistGroupsRequest;
+import com.quantlime.watchlist.dto.request.UpdateQuadrantAlertRequest;
 import com.quantlime.watchlist.dto.request.UpdateWatchlistGroupRequest;
 import com.quantlime.watchlist.dto.response.WatchlistGroupResponse;
 import com.quantlime.watchlist.service.WatchlistGroupService;
@@ -33,6 +37,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class WatchlistGroupController {
 
     private final WatchlistGroupService watchlistGroupService;
+    private final SubscriptionService subscriptionService;
 
     @GetMapping
     @Operation(summary = "관심 그룹 목록 조회")
@@ -61,6 +66,21 @@ public class WatchlistGroupController {
         @LoginUser Long userId, @PathVariable Long groupId,
         @Valid @RequestBody UpdateWatchlistGroupRequest request) {
         WatchlistGroup group = watchlistGroupService.renameGroup(userId, groupId, request.name());
+        return ResponseEntity.ok(WatchlistMapper.toWatchlistGroupResponse(group));
+    }
+
+    @PutMapping("/{groupId}/quadrant-alert")
+    @Operation(summary = "관심 그룹 사분면 변화 알림 켜기/끄기",
+        description = "켜기는 구독중(status=ACTIVE)이 아니면 403(SUB_006). 끄기는 구독 여부와 무관하게 허용.")
+    @ApiResponse(useReturnTypeSchema = true)
+    public ResponseEntity<WatchlistGroupResponse> changeQuadrantAlert(
+        @LoginUser Long userId, @PathVariable Long groupId,
+        @Valid @RequestBody UpdateQuadrantAlertRequest request) {
+        boolean enabled = request.enabled();
+        if (enabled && !subscriptionService.hasActivePremium(userId)) {
+            throw new ForbiddenException(SubscriptionErrorCode.PREMIUM_REQUIRED);
+        }
+        WatchlistGroup group = watchlistGroupService.changeQuadrantAlert(userId, groupId, enabled);
         return ResponseEntity.ok(WatchlistMapper.toWatchlistGroupResponse(group));
     }
 

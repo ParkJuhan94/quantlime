@@ -14,4 +14,5 @@ export interface WatchlistGroupResponse {
   id: number
   name: string
   sortOrder: number
+  quadrantAlertEnabled: boolean
 }

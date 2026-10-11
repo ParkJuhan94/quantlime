@@ -42,6 +42,11 @@ public class WatchlistGroup extends TimeBaseEntity {
     @Column(name = "sort_order", nullable = false)
     private int sortOrder;
 
+    // 그룹 단위 옵트인 - 켜진 그룹의 종목만 사분면 변화 알림 대상이 된다
+    // (QuadrantChangeAlertService). 기본값 꺼짐.
+    @Column(name = "quadrant_alert_enabled", nullable = false)
+    private boolean quadrantAlertEnabled;
+
     @Builder
     private WatchlistGroup(User user, String name, int sortOrder) {
         validateWatchlistGroup(user, name);
@@ -65,6 +70,10 @@ public class WatchlistGroup extends TimeBaseEntity {
 
     public void updateSortOrder(int sortOrder) {
         this.sortOrder = sortOrder;
+    }
+
+    public void changeQuadrantAlert(boolean enabled) {
+        this.quadrantAlertEnabled = enabled;
     }
 
     private void validateWatchlistGroup(User user, String name) {

@@ -28,6 +28,7 @@ public final class WatchlistMapper {
     }
 
     public static WatchlistGroupResponse toWatchlistGroupResponse(WatchlistGroup group) {
-        return new WatchlistGroupResponse(group.getId(), group.getName(), group.getSortOrder());
+        return new WatchlistGroupResponse(group.getId(), group.getName(), group.getSortOrder(),
+            group.isQuadrantAlertEnabled());
     }
 }

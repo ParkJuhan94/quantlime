@@ -3,6 +3,7 @@ package com.quantlime.market.service;
 import com.quantlime.common.lock.RedisLockService;
 import com.quantlime.common.util.SafeExecutor;
 import com.quantlime.market.event.PriceRefreshRequestedEvent;
+import com.quantlime.market.event.ScoreBatchCompletedEvent;
 import com.quantlime.market.implement.PriceRefreshFailureHandler;
 import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.price.service.PriceGapFillService;
@@ -94,6 +95,7 @@ public class MarketDataRefreshService {
     private final RedisLockService redisLockService;
     private final PriceRefreshBatchGate priceRefreshBatchGate;
     private final ApplicationEventPublisher eventPublisher;
+    private final PostCloseRescorePolicy postCloseRescorePolicy;
 
     /**
      * 락을 잡은 채로만 {@link #refreshAll()}을 실행한다 - OhlcvCollectorScheduler
@@ -185,7 +187,15 @@ public class MarketDataRefreshService {
         // 애매한 창이 생겨, 둘 다 끝난 뒤 한 번에 지운다.
         finishDomesticBatch();
         finishOverseasBatch();
+        // 국내 종목이 전부 처리됐을 때만 마커를 남긴다(타임아웃으로 일부가 빠졌으면 다음 실행이 다시 재계산).
+        if (domesticDone) {
+            SafeExecutor.runSafely("마감 후 재계산 마커 기록", postCloseRescorePolicy::markDoneIfPostClose);
+        }
         SafeExecutor.runSafely("스코어 랭킹 캐시 무효화", scoreRankingCacheStore::evictAll);
+        // 스코어가 확정된 이 시점에 후속 작업(사분면 변화 알림 등)을 깨운다 -
+        // 구독자(notification)를 market이 직접 알지 않도록 도메인 이벤트로만 알린다.
+        SafeExecutor.runSafely("스코어 배치 완료 이벤트 발행",
+            () -> eventPublisher.publishEvent(new ScoreBatchCompletedEvent()));
 
         // 국내 지수(코스피/코스닥) 일봉 갭필 + 투자자별 매매대금(주/월)을 같은
         // 트리거에 편입한다(2026-07-29, 사용자 요청) - MarketIndexCache의 지수
@@ -276,7 +286,11 @@ public class MarketDataRefreshService {
             priceRefreshFailureHandler.handleDomestic(stockCode, e);
             latestPriceDate = dailyPriceReader.findLatestDomesticTradeDate(stockCode);
         }
-        return new StockRefreshOutcome(needsScoreRefresh(latestPriceDate, latestScoreDate));
+        // 마감 후 첫 배치는 오늘 스코어가 이미 있어도(낮 캐치업이 장중 일봉으로 만든 것) 한 번 다시 계산한다.
+        boolean rescoreToday = latestPriceDate
+            .map(priceDate -> postCloseRescorePolicy.shouldRescore(latestScoreDate, priceDate))
+            .orElse(false);
+        return new StockRefreshOutcome(needsScoreRefresh(latestPriceDate, latestScoreDate) || rescoreToday);
     }
 
     /** 해외 버전 - {@link #refreshDomesticStock}과 대칭. */

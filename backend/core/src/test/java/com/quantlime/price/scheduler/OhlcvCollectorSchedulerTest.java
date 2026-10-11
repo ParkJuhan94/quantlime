@@ -25,7 +25,7 @@ class OhlcvCollectorSchedulerTest {
     private OhlcvCollectorScheduler ohlcvCollectorScheduler;
 
     @Test
-    @DisplayName("[매일 16:00 배치는 전종목 가격/스코어 갱신을 트리거1(MarketDataRefreshService)에 "
+    @DisplayName("[매일 15:36 배치는 전종목 가격/스코어 갱신을 트리거1(MarketDataRefreshService)에 "
         + "락을 잡은 채로(refreshAllExclusively) 위임한다]")
     void collectDailyOhlcv_delegatesToMarketDataRefreshServiceExclusively() {
         // given

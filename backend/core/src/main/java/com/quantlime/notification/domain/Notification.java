@@ -43,7 +43,10 @@ public class Notification extends TimeBaseEntity {
     private User user;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "type", nullable = false, length = 30)
+    // Hibernate가 MySQL 네이티브 enum으로 매핑하면 상수를 추가할 때마다 컬럼
+    // 정의가 어긋나 insert가 "Data truncated"로 실패할 수 있어(Score.grade와
+    // 같은 이유) varchar로 고정한다.
+    @Column(name = "type", nullable = false, columnDefinition = "varchar(30)")
     private NotificationType type;
 
     @Column(name = "title", nullable = false, length = 100)

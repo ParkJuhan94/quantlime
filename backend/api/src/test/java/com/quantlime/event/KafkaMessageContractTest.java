@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.quantlime.event.envelope.DomainEventEnvelope;
 import com.quantlime.event.market.PriceRefreshRequestedMessage;
 import com.quantlime.event.payment.PaymentWebhookReceivedMessage;
+import com.quantlime.event.score.QuadrantAlertRequestedMessage;
 import com.quantlime.event.subscription.SubscriptionRenewalDueMessage;
 import com.quantlime.event.telegramfeed.TelegramDigestGenerationRequestedMessage;
 import com.quantlime.event.videofeed.VideoSelectedMessage;
@@ -58,7 +59,8 @@ class KafkaMessageContractTest extends ApiTestSupport {
                 "run-1", "AAPL", "overseas", null),
             SubscriptionRenewalDueMessage.of(3L),
             PaymentWebhookReceivedMessage.of("hash-1", "{\"eventType\":\"X\"}"),
-            TelegramDigestGenerationRequestedMessage.of(4L, LocalDate.of(2026, 9, 30)));
+            TelegramDigestGenerationRequestedMessage.of(4L, LocalDate.of(2026, 9, 30)),
+            QuadrantAlertRequestedMessage.of(5L));
     }
 
     private Object roundTrip(Object message) {

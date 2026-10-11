@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  changeQuadrantAlert,
   createWatchlistGroup,
   deleteWatchlistGroup,
   getWatchlistGroups,
@@ -30,6 +31,16 @@ export function useRenameWatchlistGroup() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ groupId, name }: { groupId: number; name: string }) => renameWatchlistGroup(groupId, name),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.watchlistGroups })
+    },
+  })
+}
+
+export function useChangeQuadrantAlert() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ groupId, enabled }: { groupId: number; enabled: boolean }) => changeQuadrantAlert(groupId, enabled),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.watchlistGroups })
     },
