@@ -13,7 +13,7 @@ import com.quantlime.notification.domain.Notification;
 import com.quantlime.notification.domain.NotificationType;
 import com.quantlime.notification.repository.FcmTokenRepository;
 import com.quantlime.notification.repository.NotificationRepository;
-import com.quantlime.support.ApiTestSupport;
+import com.quantlime.support.MockedServicesApiTestSupport;
 import com.quantlime.user.UserFixture;
 import com.quantlime.user.domain.OAuthProvider;
 import com.quantlime.user.domain.User;
@@ -26,7 +26,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 
 @Tag("integration")
-class NotificationControllerTest extends ApiTestSupport {
+class NotificationControllerTest extends MockedServicesApiTestSupport {
 
     @Autowired
     private UserRepository userRepository;

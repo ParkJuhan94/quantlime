@@ -4,7 +4,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.quantlime.support.ApiTestSupport;
+import com.quantlime.support.MockedServicesApiTestSupport;
 import com.quantlime.telegramfeed.domain.TelegramDigest;
 import com.quantlime.telegramfeed.domain.TelegramDigestTicker;
 import com.quantlime.telegramfeed.domain.TelegramPost;
@@ -26,7 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 @Tag("integration")
-class TelegramFeedControllerTest extends ApiTestSupport {
+class TelegramFeedControllerTest extends MockedServicesApiTestSupport {
 
     @Autowired
     private ChannelRepository channelRepository;

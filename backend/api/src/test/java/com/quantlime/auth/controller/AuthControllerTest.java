@@ -13,9 +13,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.quantlime.auth.cookie.RefreshTokenCookieProvider;
 import com.quantlime.auth.dto.OAuthUserInfo;
 import com.quantlime.auth.dto.request.SocialLoginRequest;
-import com.quantlime.auth.implement.OAuthUserCollector;
 import com.quantlime.auth.jwt.JwtTokenProvider;
-import com.quantlime.support.ApiTestSupport;
+import com.quantlime.support.MockedServicesApiTestSupport;
 import com.quantlime.user.domain.OAuthProvider;
 import com.quantlime.user.domain.UserRole;
 import jakarta.servlet.http.Cookie;
@@ -23,11 +22,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 
 @Tag("integration")
-class AuthControllerTest extends ApiTestSupport {
+class AuthControllerTest extends MockedServicesApiTestSupport {
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -35,8 +33,6 @@ class AuthControllerTest extends ApiTestSupport {
     @Autowired
     private JwtTokenProvider jwtTokenProvider;
 
-    @MockBean
-    private OAuthUserCollector oAuthUserCollector;
 
     @Test
     @DisplayName("[소셜 로그인 성공 시 액세스 토큰은 바디로, 리프레시 토큰은 httpOnly 쿠키로 내려온다]")

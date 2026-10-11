@@ -6,14 +6,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.price.DomesticDailyPriceFixture;
-import com.quantlime.price.cache.PriceCacheStore;
 import com.quantlime.price.repository.DomesticDailyPriceRepository;
 import com.quantlime.stock.StockFixture;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.repository.StockRepository;
-import com.quantlime.support.ApiTestSupport;
+import com.quantlime.support.MockedMarketApiTestSupport;
 import java.time.LocalDate;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,10 +19,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.mock.mockito.MockBean;
 
 @Tag("integration")
-class PriceControllerTest extends ApiTestSupport {
+class PriceControllerTest extends MockedMarketApiTestSupport {
 
     @Autowired
     private StockRepository stockRepository;
@@ -32,8 +29,6 @@ class PriceControllerTest extends ApiTestSupport {
     @Autowired
     private DomesticDailyPriceRepository domesticDailyPriceRepository;
 
-    @MockBean
-    private TossApiClient tossApiClient;
 
     // Redis는 TestContainerSupport가 격리하지만, @EnableScheduling이
     // 테스트 프로파일에서도 그대로 켜져 있어 DomesticMarketPriceSweepScheduler가
@@ -42,8 +37,6 @@ class PriceControllerTest extends ApiTestSupport {
     // 테스트는 캐시를 항상 미스로 고정해 Toss 응답 매핑 자체만
     // 결정적으로 검증한다(캐시 히트 경로는 StockPriceServiceTest에서
     // 별도 검증).
-    @MockBean
-    private PriceCacheStore priceCacheStore;
 
     private Stock stock;
 
