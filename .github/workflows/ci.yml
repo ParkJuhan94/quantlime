@@ -49,6 +49,24 @@ jobs:
           path: backend/*/build/test-results/test/*.xml
           retention-days: 7
 
+  # backend 이미지가 실제로 빌드되는지만 확인한다(푸시 없음). 새 Gradle 모듈을 추가하고 Dockerfile의
+  # COPY를 빠뜨리면 Gradle 빌드는 통과하는데 CD의 이미지 빌드에서야 실패했다(PR #75). 별도 잡이라
+  # backend 잡과 병렬로 돌아 전체 CI 시간은 늘지 않는다
+  docker-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: backend 이미지 빌드
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          push: false
+          cache-from: type=gha,scope=backend-image
+          cache-to: type=gha,mode=max,scope=backend-image
+
   quant-engine:
     runs-on: ubuntu-latest
     steps:
