@@ -164,6 +164,7 @@ export function StockMarketDepth({ stockCode }: { stockCode: string }) {
             <div className="max-h-72 overflow-y-auto rounded-xl border border-gray-100">
               {tradesQuery.data.map((trade, index) => (
                 <div
+                  // oxlint-disable-next-line react/no-array-index-key -- 동일 타임스탬프 체결이 겹칠 수 있어 index를 섞은 복합 key(읽기 전용 목록)
                   key={`${trade.timestamp}-${index}`}
                   className="flex items-center justify-between px-2 py-1 text-xs"
                 >

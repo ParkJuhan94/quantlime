@@ -28,6 +28,7 @@ export function ScoreHistogram({ label, color, scores }: ScoreHistogramProps) {
       <div className="flex h-24 items-end gap-0.5">
         {bins.map((count, i) => (
           <div
+            // oxlint-disable-next-line react/no-array-index-key -- 구간 순서가 곧 정체성인 고정 길이 히스토그램
             key={i}
             className="flex h-full flex-1 flex-col justify-end"
             title={`${i * BIN_WIDTH}~${(i + 1) * BIN_WIDTH}점: ${count}일`}
