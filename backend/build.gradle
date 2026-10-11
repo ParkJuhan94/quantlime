@@ -85,11 +85,17 @@ subprojects {
         if (name.toLowerCase().contains('test')) {
             options.errorprone.enabled = false
         } else {
+            // javac는 경고를 기본 100개까지만 출력해 실제 개수가 가려졌다(2026-10-11 - 106개로 보이던 NullAway가 실제로는 200개 안팎)
+            options.compilerArgs << '-Xmaxwarns' << '10000'
             options.errorprone {
                 disableWarningsInGeneratedCode = true
                 excludedPaths = '.*/build/generated/.*'
                 check('NullAway', net.ltgt.gradle.errorprone.CheckSeverity.WARN)
                 option('NullAway:AnnotatedPackages', 'com.quantlime')
+                // JPA 엔티티는 protected 기본 생성자로 만들어진 뒤 프레임워크가 필드를 채우는 구조라(id 등)
+                // "생성자가 @NonNull 필드를 초기화하지 않는다" 경고가 설계상 항상 난다 - 엔티티 클래스는 검사에서
+                // 제외한다(2026-10-11, 가짜 경고 제거). 엔티티 밖 코드의 null 검사는 그대로 유지된다
+                option('NullAway:ExcludedClassAnnotations', 'jakarta.persistence.Entity,jakarta.persistence.Embeddable,jakarta.persistence.MappedSuperclass')
             }
         }
     }
