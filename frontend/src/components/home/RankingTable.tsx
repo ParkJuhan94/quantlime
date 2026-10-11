@@ -259,6 +259,7 @@ function ScoreRankingSkeletonTable() {
       </thead>
       <tbody>
         {Array.from({ length: 50 }).map((_, i) => (
+          // oxlint-disable-next-line react/no-array-index-key -- 고정 개수 로딩 스켈레톤
           <tr key={i} className="border-b border-gray-50">
             <td className="py-2.5 text-xs font-semibold text-gray-300">{i + 1}</td>
             <td className="py-2.5">

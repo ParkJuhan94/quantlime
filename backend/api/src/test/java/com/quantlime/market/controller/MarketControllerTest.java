@@ -6,13 +6,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.quantlime.auth.jwt.JwtTokenProvider;
-import com.quantlime.market.cache.BitcoinChartCache;
-import com.quantlime.market.cache.DomesticIndexMinuteChartCache;
-import com.quantlime.market.cache.ExchangeRateChartCache;
-import com.quantlime.market.cache.MarketIndexCache;
-import com.quantlime.market.cache.MarketRankingCache;
-import com.quantlime.market.cache.OverseasIndexChartCache;
-import com.quantlime.market.cache.TossMarketRankingCache;
 import com.quantlime.market.domain.BenchmarkIndex;
 import com.quantlime.market.domain.RankingPeriod;
 import com.quantlime.market.dto.response.IndexChartResponse;
@@ -20,11 +13,10 @@ import com.quantlime.market.dto.response.IndexMinuteChartResponse;
 import com.quantlime.market.dto.response.MarketIndexResponse;
 import com.quantlime.market.dto.response.MarketRankingResponse;
 import com.quantlime.market.repository.BenchmarkIndexRepository;
-import com.quantlime.support.ApiTestSupport;
+import com.quantlime.support.MockedMarketApiTestSupport;
 import com.quantlime.user.UserFixture;
 import com.quantlime.user.domain.User;
 import com.quantlime.user.repository.UserRepository;
-import com.quantlime.watchlist.service.WatchlistService;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -33,7 +25,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.mock.mockito.MockBean;
 
 /**
  * MarketIndexCache/MarketRankingCache/TossMarketRankingCache/DomesticIndexChartCache는
@@ -51,33 +42,17 @@ import org.springframework.boot.test.mock.mockito.MockBean;
  * {@code tossMarketRankingCache}.
  */
 @Tag("integration")
-class MarketControllerTest extends ApiTestSupport {
+class MarketControllerTest extends MockedMarketApiTestSupport {
 
-    @MockBean
-    private MarketIndexCache marketIndexCache;
 
     // MarketRankingCache가 국내/해외 두 Bean으로 등록돼 있어(같은 타입) 타입만으로는
     // 어느 걸 대체할지 모호하다 - name으로 명시(2026-09-25).
-    @MockBean(name = "domesticMarketRankingCache")
-    private MarketRankingCache domesticMarketRankingCache;
 
-    @MockBean
-    private TossMarketRankingCache tossMarketRankingCache;
 
-    @MockBean
-    private DomesticIndexMinuteChartCache domesticIndexMinuteChartCache;
 
-    @MockBean
-    private OverseasIndexChartCache overseasIndexChartCache;
 
-    @MockBean
-    private BitcoinChartCache bitcoinChartCache;
 
-    @MockBean
-    private ExchangeRateChartCache exchangeRateChartCache;
 
-    @MockBean
-    private WatchlistService watchlistService;
 
     @Autowired
     private UserRepository userRepository;

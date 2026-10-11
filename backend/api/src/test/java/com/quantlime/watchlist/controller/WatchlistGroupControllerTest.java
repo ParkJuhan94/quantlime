@@ -15,7 +15,7 @@ import com.quantlime.subscription.SubscriptionPlanFixture;
 import com.quantlime.subscription.domain.SubscriptionPlan;
 import com.quantlime.subscription.repository.SubscriptionPlanRepository;
 import com.quantlime.subscription.repository.SubscriptionRepository;
-import com.quantlime.support.ApiTestSupport;
+import com.quantlime.support.MockedServicesApiTestSupport;
 import com.quantlime.user.UserFixture;
 import com.quantlime.user.domain.OAuthProvider;
 import com.quantlime.user.domain.User;
@@ -30,7 +30,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 
 @Tag("integration")
-class WatchlistGroupControllerTest extends ApiTestSupport {
+class WatchlistGroupControllerTest extends MockedServicesApiTestSupport {
 
     @Autowired
     private UserRepository userRepository;

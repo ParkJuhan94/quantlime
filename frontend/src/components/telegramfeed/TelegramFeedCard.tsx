@@ -78,6 +78,7 @@ export function TelegramFeedCard({ digest }: { digest: TelegramFeedDigest }) {
               <>
                 <ul className="list-disc space-y-1 pl-4 text-sm text-gray-700">
                   {detailQuery.data.keyPoints.map((point, index) => (
+                    // oxlint-disable-next-line react/no-array-index-key -- 서버 응답을 한 번 그리는 읽기 전용 목록
                     <li key={index}>{point}</li>
                   ))}
                 </ul>
@@ -86,6 +87,7 @@ export function TelegramFeedCard({ digest }: { digest: TelegramFeedDigest }) {
                     <p className="text-xs font-medium text-gray-500">시장 전반</p>
                     <ul className="mt-1 list-disc space-y-1 pl-4 text-sm text-gray-700">
                       {detailQuery.data.macroPoints.map((point, index) => (
+                        // oxlint-disable-next-line react/no-array-index-key -- 서버 응답을 한 번 그리는 읽기 전용 목록
                         <li key={index}>{point}</li>
                       ))}
                     </ul>

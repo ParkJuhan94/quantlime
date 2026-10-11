@@ -27,7 +27,19 @@ jobs:
 
       - name: 빌드 + 테스트
         working-directory: backend
-        run: ./gradlew build
+        # 모듈 간 병렬 실행 - 모듈 테스트가 직렬로 돌던 걸 겹쳐 실측 6m59s → 5m10s(2026-10-10)
+        # 경고 요약 스텝이 읽을 수 있게 로그를 파일로도 남긴다(pipefail로 빌드 실패는 그대로 전파)
+        run: |
+          set -o pipefail
+          ./gradlew build --parallel --console=plain 2>&1 | tee "$GITHUB_WORKSPACE/backend-build.log"
+
+      # NullAway/Error Prone 경고를 실행 화면 상단 요약표와 PR 변경 파일의 해당 줄에 보여준다.
+      # 경고가 있어도 실패시키지 않는다(보기 위한 스텝)
+      - name: 경고 요약
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/warning_report.py javac backend-build.log "backend (NullAway · Error Prone)" --root "$GITHUB_WORKSPACE"
 
       # 모듈별 jacoco XML을 Codecov가 합쳐 PR에 코멘트한다. 포크 PR처럼 시크릿이
       # 없는 경우에도 CI가 깨지지 않게 fail_ci_if_error는 끈다
@@ -38,6 +50,33 @@ jobs:
           files: backend/*/build/reports/jacoco/test/jacocoTestReport.xml
           flags: backend
           fail_ci_if_error: false
+
+      # 느린 테스트 클래스·컨텍스트 기동 횟수를 사후에 분석할 수 있게 XML 결과를 보관한다
+      - name: 테스트 리포트 보관
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: backend/*/build/test-results/test/*.xml
+          retention-days: 7
+
+  # backend 이미지가 실제로 빌드되는지만 확인한다(푸시 없음). 새 Gradle 모듈을 추가하고 Dockerfile의
+  # COPY를 빠뜨리면 Gradle 빌드는 통과하는데 CD의 이미지 빌드에서야 실패했다(PR #75). 별도 잡이라
+  # backend 잡과 병렬로 돌아 전체 CI 시간은 늘지 않는다
+  docker-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: backend 이미지 빌드
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          push: false
+          cache-from: type=gha,scope=backend-image
+          cache-to: type=gha,mode=max,scope=backend-image
 
   quant-engine:
     runs-on: ubuntu-latest
@@ -93,7 +132,15 @@ jobs:
 
       - name: Lint
         working-directory: frontend
-        run: npm run lint
+        run: |
+          set -o pipefail
+          npm run lint -- --format unix 2>&1 | tee "$GITHUB_WORKSPACE/frontend-lint.log"
+
+      - name: 경고 요약
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/warning_report.py oxlint frontend-lint.log "frontend (oxlint)"
 
       - name: 포맷 검사 (Prettier)
         working-directory: frontend

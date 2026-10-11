@@ -7,19 +7,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.quantlime.price.dto.response.OrderbookResponse;
 import com.quantlime.price.dto.response.StockWarningResponse;
-import com.quantlime.price.service.StockMarketDepthService;
-import com.quantlime.support.ApiTestSupport;
+import com.quantlime.support.MockedServicesApiTestSupport;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.mock.mockito.MockBean;
 
 @Tag("integration")
-class StockMarketDepthControllerTest extends ApiTestSupport {
+class StockMarketDepthControllerTest extends MockedServicesApiTestSupport {
 
-    @MockBean
-    private StockMarketDepthService stockMarketDepthService;
 
     @Test
     @DisplayName("[호가 조회 시 로그인 없이 200과 호가를 반환한다]")

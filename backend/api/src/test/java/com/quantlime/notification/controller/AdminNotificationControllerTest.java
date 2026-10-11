@@ -6,7 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.quantlime.auth.jwt.JwtTokenProvider;
 import com.quantlime.notification.repository.NotificationRepository;
-import com.quantlime.support.ApiTestSupport;
+import com.quantlime.support.MockedServicesApiTestSupport;
 import com.quantlime.user.UserFixture;
 import com.quantlime.user.domain.OAuthProvider;
 import com.quantlime.user.domain.User;
@@ -19,7 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 
 @Tag("integration")
-class AdminNotificationControllerTest extends ApiTestSupport {
+class AdminNotificationControllerTest extends MockedServicesApiTestSupport {
 
     private static final String BODY = "{\"title\":\"점검 안내\",\"content\":\"내일 02시 점검\",\"linkUrl\":\"/\"}";
 

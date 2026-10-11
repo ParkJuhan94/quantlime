@@ -5,13 +5,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.quantlime.support.ApiTestSupport;
+import com.quantlime.support.MockedServicesApiTestSupport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 @Tag("integration")
-class GlobalExceptionHandlerTest extends ApiTestSupport {
+class GlobalExceptionHandlerTest extends MockedServicesApiTestSupport {
 
     @Test
     @DisplayName("[매핑되지 않은 경로는 500이 아니라 404를 반환한다]")
