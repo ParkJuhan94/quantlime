@@ -50,7 +50,7 @@ public class TelegramCollectionFacade {
         // Platform.TELEGRAM으로 한정 - FeedCollectionFacade가 P7-0에서
         // Platform.YOUTUBE로 한정한 것과 대칭. 이 파사드는 TelegramPostCollector만
         // 쓰므로 유튜브 채널이 섞여 들어오면 안 된다.
-        List<Channel> channels = channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.TELEGRAM);
+        List<Channel> channels = channelReader.findActive(Platform.TELEGRAM);
         List<TelegramCollectResult> results = new ArrayList<>();
         for (Channel channel : channels) {
             try {

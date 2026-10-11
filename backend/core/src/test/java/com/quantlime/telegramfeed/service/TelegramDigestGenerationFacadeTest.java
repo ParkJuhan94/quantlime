@@ -99,7 +99,7 @@ class TelegramDigestGenerationFacadeTest {
         // given
         Channel channel1 = channelOf(1L, "insidertracking");
         Channel channel2 = channelOf(2L, "donmaek");
-        given(channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.TELEGRAM))
+        given(channelReader.findActive(Platform.TELEGRAM))
             .willReturn(List.of(channel1, channel2));
 
         // when
@@ -130,7 +130,7 @@ class TelegramDigestGenerationFacadeTest {
     void runAllExclusively_whenLockAcquired_returnsPublishedCount() {
         // given
         Channel channel = channelOf(1L, "insidertracking");
-        given(channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.TELEGRAM))
+        given(channelReader.findActive(Platform.TELEGRAM))
             .willReturn(List.of(channel));
         given(redisLockService.runExclusively(any(), any(), any())).willAnswer(invocation -> {
             Supplier<Integer> task = invocation.getArgument(2);
@@ -153,7 +153,7 @@ class TelegramDigestGenerationFacadeTest {
         given(channelReader.findById(1L)).willReturn(Optional.of(channel));
         TelegramPost earlier = postOf(channel, 1L, "아침 게시글", LocalDateTime.of(2026, 8, 15, 8, 0));
         TelegramPost later = postOf(channel, 2L, "오후 게시글", LocalDateTime.of(2026, 8, 15, 14, 0));
-        given(telegramPostReader.findByChannelAndStatusAndPublishedAtBetween(
+        given(telegramPostReader.findPublishedBetween(
             eq(channel), eq(TelegramPostStatus.SELECTED), any(), any()))
             .willReturn(List.of(later, earlier));
         SummarizeApiResponse response = new SummarizeApiResponse(
@@ -178,7 +178,7 @@ class TelegramDigestGenerationFacadeTest {
         Channel channel = channelOf(1L, "insidertracking");
         LocalDate today = LocalDate.now();
         given(channelReader.findById(1L)).willReturn(Optional.of(channel));
-        given(telegramPostReader.findByChannelAndStatusAndPublishedAtBetween(
+        given(telegramPostReader.findPublishedBetween(
             eq(channel), eq(TelegramPostStatus.SELECTED), any(), any()))
             .willReturn(List.of());
 
@@ -208,7 +208,7 @@ class TelegramDigestGenerationFacadeTest {
         // given
         Channel channel = channelOf(1L, "failing");
         given(channelReader.findById(1L)).willReturn(Optional.of(channel));
-        given(telegramPostReader.findByChannelAndStatusAndPublishedAtBetween(
+        given(telegramPostReader.findPublishedBetween(
             eq(channel), eq(TelegramPostStatus.SELECTED), any(), any()))
             .willReturn(List.of(postOf(channel, 1L, "본문", LocalDateTime.now())));
         given(pythonEngineClient.summarize(new SummarizeApiRequest(null, "테스트 채널", "본문", "telegram")))

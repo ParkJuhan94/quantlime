@@ -9,10 +9,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import com.quantlime.common.exception.ExternalApiException;
 import com.quantlime.common.lock.PriceRelayLeaderGate;
 import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.toss.dto.TossPriceResponse;
 import com.quantlime.infra.toss.dto.TossPriceResponse.TossPrice;
+import com.quantlime.infra.toss.exception.TossApiErrorCode;
 import com.quantlime.market.cache.DomesticListedStockCache;
 import com.quantlime.market.cache.MarketRankingCache;
 import com.quantlime.market.dto.response.MarketRankingResponse;
@@ -26,6 +28,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -230,5 +233,49 @@ class DomesticMarketPriceSweepSchedulerTest {
         // when & then: SafeExecutor가 내부에서 흡수하므로 예외가 밖으로 나오면 안 됨
         assertThatCode(() -> domesticMarketPriceSweepScheduler.refreshRanking())
             .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("[청크 하나가 ExternalApiException으로 실패하면 그 청크만 건너뛰고 사유별 카운터를 올린 뒤 다음 청크를 계속 처리한다]")
+    void refresh_oneChunkFailsWithExternalApiException_skipsOnlyThatChunk() {
+        // given: 201종목 = 청크 2개(청크 크기 200), 첫 호출은 레이트리밋, 두 번째는 정상(빈 결과)
+        List<Stock> stocks = IntStream.range(0, 201)
+            .mapToObj(i -> StockFixture.createStock(String.format("S%05d", i), "종목" + i)).toList();
+        given(domesticMarketCalendarCache.isMarketOpenNow()).willReturn(true);
+        given(domesticListedStockCache.get()).willReturn(stocks);
+        given(domesticPreviousCloseCache.get(anyList())).willReturn(Map.of());
+        given(tossApiClient.getCurrentPrices(anyString()))
+            .willThrow(new ExternalApiException(TossApiErrorCode.RATE_LIMIT_EXCEEDED))
+            .willReturn(new TossPriceResponse(List.of()));
+
+        // when
+        domesticMarketPriceSweepScheduler.refreshRanking();
+
+        // then
+        verify(tossApiClient, times(2)).getCurrentPrices(anyString());
+        assertThat(meterRegistry.counter("market.sweep.chunk.skipped", "reason",
+            TossApiErrorCode.RATE_LIMIT_EXCEEDED.getCode()).count()).isEqualTo(1.0);
+        verify(domesticMarketRankingCache).update(List.of());
+    }
+
+    @Test
+    @DisplayName("[응답 result가 null이거나 현재가가 비어 있는 심볼은 건너뛴다]")
+    void refresh_nullResultOrBlankLastPrice_isSkipped() {
+        // given
+        Stock stock = StockFixture.createStock(STOCK_CODE, "삼성전자");
+        given(domesticMarketCalendarCache.isMarketOpenNow()).willReturn(true);
+        given(domesticListedStockCache.get()).willReturn(List.of(stock));
+        given(domesticPreviousCloseCache.get(List.of(STOCK_CODE))).willReturn(Map.of(STOCK_CODE, 70000.0));
+        given(tossApiClient.getCurrentPrices(STOCK_CODE))
+            .willReturn(new TossPriceResponse(null))
+            .willReturn(new TossPriceResponse(List.of(new TossPrice(STOCK_CODE, "ts", " ", "KRW"))));
+
+        // when: 두 번의 틱
+        domesticMarketPriceSweepScheduler.refreshRanking();
+        domesticMarketPriceSweepScheduler.refreshRanking();
+
+        // then: 랭킹은 두 번 모두 빈 목록으로 갱신되고 시세 캐시에는 아무것도 적재되지 않는다
+        verify(domesticMarketRankingCache, times(2)).update(List.of());
+        verify(priceCacheStore, times(1)).saveAll(List.of());
     }
 }

@@ -81,7 +81,7 @@ public class ChannelSeedInitializer implements ApplicationRunner {
     // 자체가 Spring Data 리포지토리 프록시를 통해 독립적으로 트랜잭셔널하므로
     // 이 메서드 레벨에서 별도로 감쌀 필요가 없다.
     void seedIfAbsent(String externalChannelId, String name, int priority, ChannelFilterConfig filterConfig) {
-        if (channelReader.existsByPlatformAndExternalChannelId(Platform.YOUTUBE, externalChannelId)) {
+        if (channelReader.isRegistered(Platform.YOUTUBE, externalChannelId)) {
             return;
         }
         String uploadsPlaylistId = "UU" + externalChannelId.substring(2);
@@ -96,7 +96,7 @@ public class ChannelSeedInitializer implements ApplicationRunner {
     private void backfillProfileImagesIfMissing() {
         // Platform.YOUTUBE로 한정 - 안 걸르면 텔레그램 채널(Phase 8 P7)의
         // 핸들을 유튜브 channels.list API에 넘기는 무의미한 호출이 된다.
-        List<Channel> channelsMissingImage = channelReader.findByPlatformAndProfileImageUrlIsNull(Platform.YOUTUBE);
+        List<Channel> channelsMissingImage = channelReader.findWithoutProfileImage(Platform.YOUTUBE);
         if (channelsMissingImage.isEmpty()) {
             return;
         }
@@ -116,7 +116,7 @@ public class ChannelSeedInitializer implements ApplicationRunner {
     // 됨" 함정). 이 메서드도 this::persistProfileImageUrl로 self-invocation
     // 되므로 @Transactional을 붙이지 않는다 - 위 seedIfAbsent와 동일한 이유.
     void persistProfileImageUrl(String externalChannelId, String profileImageUrl) {
-        channelReader.findByPlatformAndExternalChannelId(Platform.YOUTUBE, externalChannelId)
+        channelReader.findByExternalChannelId(Platform.YOUTUBE, externalChannelId)
             .ifPresent(channel -> {
                 channel.updateProfileImageUrl(profileImageUrl);
                 channelAppender.save(channel);

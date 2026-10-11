@@ -104,12 +104,12 @@ class TelegramFeedServiceTest {
         Pageable pageable = PageRequest.of(0, 10);
         given(telegramDigestReader.findDigests(null, null, null, pageable))
             .willReturn(new SliceImpl<>(List.of(digest1, digest2)));
-        given(telegramDigestTickerReader.findByTelegramDigest_IdIn(List.of(1L, 2L)))
+        given(telegramDigestTickerReader.findByDigestIds(List.of(1L, 2L)))
             .willReturn(List.of(TelegramDigestTicker.of(digest1, "AAPL", "애플", "BULLISH", BigDecimal.valueOf(0.8))));
         // 다이제스트별 반복 조회(N+1) 대신 페이지 전체 날짜 범위를 한 번에
         // 집계하는 쿼리로 바뀌었다(2026-08-19) - digest1(date) 소속 글 1건만
         // 반환해, digest2(date-1일)는 소스 글 0건으로 집계되는지도 함께 검증한다.
-        given(telegramPostReader.findChannelIdAndPublishedAtForCounting(
+        given(telegramPostReader.findPublishedAtForCounting(
             eq(List.of(1L)), eq(TelegramPostStatus.SELECTED), any(), any()))
             .willReturn(List.<Object[]>of(new Object[]{1L, date.atTime(9, 0)}));
 
@@ -156,7 +156,7 @@ class TelegramFeedServiceTest {
         telegramFeedService = newService();
         Channel channel = channelOf();
         ReflectionTestUtils.setField(channel, "id", 1L);
-        given(channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.TELEGRAM))
+        given(channelReader.findActive(Platform.TELEGRAM))
             .willReturn(List.of(channel));
 
         // when
@@ -177,7 +177,7 @@ class TelegramFeedServiceTest {
         given(telegramDigestReader.findByIdWithChannel(1L)).willReturn(Optional.of(digest));
         given(telegramDigestTickerReader.findByTelegramDigest(digest))
             .willReturn(List.of(TelegramDigestTicker.of(digest, "AAPL", "애플", "BULLISH", BigDecimal.valueOf(0.8))));
-        given(telegramPostReader.findByChannelAndStatusAndPublishedAtBetween(
+        given(telegramPostReader.findPublishedBetween(
             eq(channel), eq(TelegramPostStatus.SELECTED), any(), any()))
             .willReturn(List.of(
                 TelegramPost.of(channel, "insidertracking/1", 1L, "본문", date.atTime(9, 0), 10L, LocalDateTime.now(), false)));
@@ -203,7 +203,7 @@ class TelegramFeedServiceTest {
         TelegramDigest digest = digestOfWithoutMacroPoints(1L, channel, LocalDate.of(2026, 8, 15), "요약1");
         given(telegramDigestReader.findByIdWithChannel(1L)).willReturn(Optional.of(digest));
         given(telegramDigestTickerReader.findByTelegramDigest(digest)).willReturn(List.of());
-        given(telegramPostReader.findByChannelAndStatusAndPublishedAtBetween(
+        given(telegramPostReader.findPublishedBetween(
             eq(channel), eq(TelegramPostStatus.SELECTED), any(), any()))
             .willReturn(List.of());
 

@@ -28,13 +28,13 @@ class ChannelQueryServiceTest {
         ChannelQueryService channelQueryService = new ChannelQueryService(channelReader);
         Channel channel = Channel.of(Platform.YOUTUBE, "UCF8AeLlUbEpKju6v1H6p8Eg", "UUF8AeLlUbEpKju6v1H6p8Eg",
             "한국경제TV", 10, new ChannelFilterConfig(300, 1.5, 5, List.of(), List.of()));
-        when(channelReader.findAllByOrderByPriorityAsc()).thenReturn(List.of(channel));
+        when(channelReader.findAll()).thenReturn(List.of(channel));
 
         // when
         List<Channel> result = channelQueryService.findAllOrderByPriority();
 
         // then
         assertThat(result).containsExactly(channel);
-        verify(channelReader).findAllByOrderByPriorityAsc();
+        verify(channelReader).findAll();
     }
 }

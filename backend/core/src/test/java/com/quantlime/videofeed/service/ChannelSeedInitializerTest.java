@@ -68,8 +68,8 @@ class ChannelSeedInitializerTest {
     @DisplayName("[이미 있는 채널은 건너뛰고, 없는 채널은 업로드 플레이리스트 ID(UU+채널ID 뒷부분)와 함께 저장한다]")
     void seedIfAbsent_skipsExisting_savesNewWithUploadsPlaylist() {
         // given
-        given(channelReader.existsByPlatformAndExternalChannelId(Platform.YOUTUBE, "UCexisting")).willReturn(true);
-        given(channelReader.existsByPlatformAndExternalChannelId(Platform.YOUTUBE, "UCnewchannel")).willReturn(false);
+        given(channelReader.isRegistered(Platform.YOUTUBE, "UCexisting")).willReturn(true);
+        given(channelReader.isRegistered(Platform.YOUTUBE, "UCnewchannel")).willReturn(false);
         ChannelFilterConfig filter = new ChannelFilterConfig(180, 0.0, 3, List.of(), List.of());
 
         // when
@@ -89,8 +89,8 @@ class ChannelSeedInitializerTest {
     @Test
     @DisplayName("[기동 시 5개 기본 채널을 시딩하고, 프로필 사진이 없는 채널이 없으면 유튜브 API를 호출하지 않는다]")
     void run_seedsFiveChannels_noImageBackfillWhenNothingMissing() {
-        given(channelReader.existsByPlatformAndExternalChannelId(any(), anyString())).willReturn(false);
-        given(channelReader.findByPlatformAndProfileImageUrlIsNull(Platform.YOUTUBE)).willReturn(List.of());
+        given(channelReader.isRegistered(any(), anyString())).willReturn(false);
+        given(channelReader.findWithoutProfileImage(Platform.YOUTUBE)).willReturn(List.of());
 
         initializer.run(null);
 
@@ -106,10 +106,10 @@ class ChannelSeedInitializerTest {
     void run_backfillsMissingProfileImages() {
         // given
         Channel missing = youtubeChannel("UCmissing01", "사진없음");
-        given(channelReader.existsByPlatformAndExternalChannelId(any(), anyString())).willReturn(true);
-        given(channelReader.findByPlatformAndProfileImageUrlIsNull(Platform.YOUTUBE)).willReturn(List.of(missing));
+        given(channelReader.isRegistered(any(), anyString())).willReturn(true);
+        given(channelReader.findWithoutProfileImage(Platform.YOUTUBE)).willReturn(List.of(missing));
         given(youtubeApiClient.getChannels(List.of("UCmissing01"))).willReturn(thumbnails("UCmissing01", "https://img/1.png"));
-        given(channelReader.findByPlatformAndExternalChannelId(Platform.YOUTUBE, "UCmissing01"))
+        given(channelReader.findByExternalChannelId(Platform.YOUTUBE, "UCmissing01"))
             .willReturn(Optional.of(missing));
 
         // when
@@ -124,8 +124,8 @@ class ChannelSeedInitializerTest {
     @DisplayName("[썸네일 정보가 없는 항목은 건너뛴다]")
     void run_skipsItemsWithoutThumbnail() {
         Channel missing = youtubeChannel("UCmissing01", "사진없음");
-        given(channelReader.existsByPlatformAndExternalChannelId(any(), anyString())).willReturn(true);
-        given(channelReader.findByPlatformAndProfileImageUrlIsNull(Platform.YOUTUBE)).willReturn(List.of(missing));
+        given(channelReader.isRegistered(any(), anyString())).willReturn(true);
+        given(channelReader.findWithoutProfileImage(Platform.YOUTUBE)).willReturn(List.of(missing));
         given(youtubeApiClient.getChannels(anyList())).willReturn(new YoutubeChannelsResponse(
             List.of(new YoutubeChannelsResponse.Item("UCmissing01", new YoutubeChannelsResponse.Snippet(null)))));
 
@@ -139,11 +139,11 @@ class ChannelSeedInitializerTest {
     @DisplayName("[유튜브 API 장애로 사진 백필이 실패해도 앱 기동을 막지 않는다(다음 기동에 재시도)]")
     void run_backfillFailure_doesNotBlockStartup() {
         Channel missing = youtubeChannel("UCmissing01", "사진없음");
-        given(channelReader.existsByPlatformAndExternalChannelId(any(), anyString())).willReturn(true);
-        given(channelReader.findByPlatformAndProfileImageUrlIsNull(Platform.YOUTUBE)).willReturn(List.of(missing));
+        given(channelReader.isRegistered(any(), anyString())).willReturn(true);
+        given(channelReader.findWithoutProfileImage(Platform.YOUTUBE)).willReturn(List.of(missing));
         willThrow(new IllegalStateException("quota exceeded")).given(youtubeApiClient).getChannels(anyList());
 
         assertThatCode(() -> initializer.run(null)).doesNotThrowAnyException();
-        verify(channelReader, never()).findByPlatformAndExternalChannelId(any(), eq("UCmissing01"));
+        verify(channelReader, never()).findByExternalChannelId(any(), eq("UCmissing01"));
     }
 }

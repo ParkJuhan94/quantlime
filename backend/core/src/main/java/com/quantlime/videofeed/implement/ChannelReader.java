@@ -19,27 +19,27 @@ public class ChannelReader {
 
     private final ChannelRepository channelRepository;
 
-    public boolean existsByPlatformAndExternalChannelId(Platform platform, String externalChannelId) {
+    public boolean isRegistered(Platform platform, String externalChannelId) {
         return channelRepository.existsByPlatformAndExternalChannelId(platform, externalChannelId);
     }
 
-    public Optional<Channel> findByPlatformAndExternalChannelId(Platform platform, String externalChannelId) {
+    public Optional<Channel> findByExternalChannelId(Platform platform, String externalChannelId) {
         return channelRepository.findByPlatformAndExternalChannelId(platform, externalChannelId);
     }
 
-    public List<Channel> findAllByOrderByPriorityAsc() {
+    public List<Channel> findAll() {
         return channelRepository.findAllByOrderByPriorityAsc();
     }
 
-    public List<Channel> findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform platform) {
+    public List<Channel> findActive(Platform platform) {
         return channelRepository.findByPlatformAndEnabledTrueOrderByPriorityAsc(platform);
     }
 
-    public List<Channel> findByPlatformAndProfileImageUrlIsNull(Platform platform) {
+    public List<Channel> findWithoutProfileImage(Platform platform) {
         return channelRepository.findByPlatformAndProfileImageUrlIsNull(platform);
     }
 
-    public List<Channel> findByPlatformOrderByPriorityAsc(Platform platform) {
+    public List<Channel> findByPlatform(Platform platform) {
         return channelRepository.findByPlatformOrderByPriorityAsc(platform);
     }
 

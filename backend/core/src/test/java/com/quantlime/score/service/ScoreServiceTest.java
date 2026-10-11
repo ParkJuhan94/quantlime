@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willAnswer;
@@ -585,6 +586,77 @@ class ScoreServiceTest {
         given(stockLiquidityReader.findAllByStockCodes(anyList())).willReturn(List.of());
 
         assertThat(scoreService.getDashboardScores(1L, "all")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("[관심종목 점수 변화 랭킹은 scope에 맞는 관심종목만 대상으로 캐시 없이 계산한다]")
+    void getScoreChangeRanking_watchlistOnly_filtersByScopeWithoutCache() {
+        // given: 관심종목은 국내/해외 하나씩, scope는 domestic
+        Stock samsung = StockFixture.createStock(STOCK_CODE, "삼성전자");
+        Stock apple = StockFixture.createOverseasStock("AAPL", "Apple");
+        given(watchlistReader.findAllWithStockByUserId(1L)).willReturn(List.of(watchlistOf(samsung), watchlistOf(apple)));
+        Score latest = latestScore(STOCK_CODE, 80.0);
+        Score base = Score.of(STOCK_CODE, LocalDate.of(2026, 9, 23), 50.0, 40.0, 60.0, null, null,
+            Divergence.of(false, null), false);
+        given(scoreReader.findLatestScores(List.of(STOCK_CODE))).willReturn(List.of(latest));
+        given(scoreReader.findLatestScoresOnOrBefore(List.of(STOCK_CODE), LocalDate.of(2026, 9, 23)))
+            .willReturn(List.of(base));
+        given(stockMasterService.getStocksByCodesInOrder(List.of(STOCK_CODE))).willReturn(List.of(samsung));
+
+        // when
+        var result = scoreService.getScoreChangeRanking(1L, true, 10, "domestic", RankingPeriod.WEEK);
+
+        // then
+        assertThat(result).extracting(ScoreRankingResponse::stockCode).containsExactly(STOCK_CODE);
+        assertThat(result.get(0).scoreChange()).isEqualTo(20.0);
+        verify(scoreRankingCacheStore, never()).find(anyString());
+        verify(scoreRankingCacheStore, never()).save(anyString(), any());
+    }
+
+    @Test
+    @DisplayName("[관심종목 점수 변화 랭킹 - 대상 스코어가 없으면 빈 목록이다]")
+    void getScoreChangeRanking_watchlistOnly_noScores_returnsEmpty() {
+        given(watchlistReader.findAllWithStockByUserId(1L)).willReturn(List.of());
+        given(scoreReader.findLatestScores(List.of())).willReturn(List.of());
+
+        assertThat(scoreService.getScoreChangeRanking(1L, true, 10, "all", RankingPeriod.WEEK)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("[점수 변화 랭킹 - 종목 마스터에서 사라진 종목은 건너뛴다]")
+    void getScoreChangeRanking_stockMissingFromMaster_isSkipped() {
+        given(watchlistReader.findAllWithStockByUserId(1L))
+            .willReturn(List.of(watchlistOf(StockFixture.createStock(STOCK_CODE, "삼성전자"))));
+        Score base = Score.of(STOCK_CODE, LocalDate.of(2026, 9, 23), 50.0, 40.0, 60.0, null, null,
+            Divergence.of(false, null), false);
+        given(scoreReader.findLatestScores(List.of(STOCK_CODE))).willReturn(List.of(latestScore(STOCK_CODE, 80.0)));
+        given(scoreReader.findLatestScoresOnOrBefore(List.of(STOCK_CODE), LocalDate.of(2026, 9, 23)))
+            .willReturn(List.of(base));
+        given(stockMasterService.getStocksByCodesInOrder(List.of(STOCK_CODE))).willReturn(List.of());
+
+        assertThat(scoreService.getScoreChangeRanking(1L, true, 10, "all", RankingPeriod.WEEK)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("[종합점수 랭킹 - 종목 마스터에 없는 종목은 NPE 없이 건너뛴다]")
+    void getAllStocksScoreRanking_stockMissingFromMaster_isSkipped() {
+        given(scoreRankingCacheStore.find("all")).willReturn(Optional.empty());
+        given(scoreReader.findTopScoresOrderByCompositeScoreDesc(50, null))
+            .willReturn(List.of(latestScore(STOCK_CODE, 90.0)));
+        given(stockMasterService.getStocksByCodesInOrder(List.of(STOCK_CODE))).willReturn(List.of());
+
+        assertThat(scoreService.getAllStocksScoreRanking(10, "all")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("[횡단면 정규화 - 대상 스코어가 하나도 없으면 퀀트 엔진을 호출하지 않는다]")
+    void normalizeCrossSection_noLatestScores_skipsEngineCall() {
+        given(scoreReader.findLatestScoresForNormalization(anyList())).willReturn(List.of());
+
+        scoreService.normalizeCrossSection(PeerGroup.OVERSEAS);
+
+        verify(pythonEngineClient, never()).normalizeCrossSection(any());
+        verify(scoreAppender, never()).applyNormalization(any(), any(), any());
     }
 
     private DomesticDailyPrice domesticDailyPrice(LocalDate tradeDate) {

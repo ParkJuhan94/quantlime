@@ -23,7 +23,7 @@ public class SummaryReader {
         return summaryRepository.findByVideo(video);
     }
 
-    public List<Summary> findByVideo_IdIn(List<Long> videoIds) {
+    public List<Summary> findByVideoIds(List<Long> videoIds) {
         return summaryRepository.findByVideo_IdIn(videoIds);
     }
 }

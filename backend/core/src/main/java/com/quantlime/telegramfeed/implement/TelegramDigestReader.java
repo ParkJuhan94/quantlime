@@ -29,7 +29,7 @@ public class TelegramDigestReader {
         return telegramDigestRepository.findByIdWithChannel(telegramDigestId);
     }
 
-    public List<Long> findIdsByDigestDateBefore(LocalDate cutoff) {
+    public List<Long> findExpiredIds(LocalDate cutoff) {
         return telegramDigestRepository.findIdsByDigestDateBefore(cutoff);
     }
 }

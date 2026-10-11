@@ -66,7 +66,7 @@ public class TelegramDigestGenerationFacade {
     // 락 없이 발행 로직만 실행 - 테스트에서 직접 호출. 스케줄러/관리자 엔드포인트는
     // 반드시 runAllExclusively()를 통해서만 호출할 것.
     public int publishAll() {
-        List<Channel> channels = channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.TELEGRAM);
+        List<Channel> channels = channelReader.findActive(Platform.TELEGRAM);
         LocalDate today = LocalDate.now();
         channels.forEach(channel ->
             eventPublisher.publishEvent(new TelegramDigestGenerationRequestedEvent(channel.getId(), today)));
@@ -102,7 +102,7 @@ public class TelegramDigestGenerationFacade {
     }
 
     private TelegramDigestGenerateResult generateForChannel(Channel channel, LocalDate date) {
-        List<TelegramPost> posts = telegramPostReader.findByChannelAndStatusAndPublishedAtBetween(
+        List<TelegramPost> posts = telegramPostReader.findPublishedBetween(
             channel, TelegramPostStatus.SELECTED, date.atStartOfDay(), date.plusDays(1).atStartOfDay());
         if (posts.isEmpty()) {
             return TelegramDigestGenerateResult.skipped(channel.getName());

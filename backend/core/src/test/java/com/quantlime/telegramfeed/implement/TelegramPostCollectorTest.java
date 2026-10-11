@@ -68,7 +68,7 @@ class TelegramPostCollectorTest {
     void collect_incremental_followsCursorForward() {
         // given
         LocalDateTime now = LocalDateTime.now();
-        given(telegramPostReader.findMaxMessageIdByChannel(channel)).willReturn(Optional.of(100L));
+        given(telegramPostReader.findLastMessageId(channel)).willReturn(Optional.of(100L));
         given(previewClient.fetchPage(HANDLE, 100L, null))
             .willReturn(page("첫페이지제목", message(101, now), message(103, now), message(102, now)));
         given(previewClient.fetchPage(HANDLE, 103L, null)).willReturn(page("무시될제목", message(104, now)));
@@ -87,7 +87,7 @@ class TelegramPostCollectorTest {
     @Test
     @DisplayName("[증분 수집에서 새 글이 없으면 빈 목록이지만 채널 메타는 받아 둔다]")
     void collect_incremental_noNewPosts_stillReturnsMeta() {
-        given(telegramPostReader.findMaxMessageIdByChannel(channel)).willReturn(Optional.of(500L));
+        given(telegramPostReader.findLastMessageId(channel)).willReturn(Optional.of(500L));
         given(previewClient.fetchPage(HANDLE, 500L, null)).willReturn(page("제목"));
 
         TelegramCollectionOutcome outcome = collector.collect(channel);
@@ -100,7 +100,7 @@ class TelegramPostCollectorTest {
     @DisplayName("[증분 수집은 최대 5페이지에서 멈춘다 - 글이 계속 나와도 한 번의 실행이 무한히 이어지지 않는다]")
     void collect_incremental_stopsAtMaxPages() {
         LocalDateTime now = LocalDateTime.now();
-        given(telegramPostReader.findMaxMessageIdByChannel(channel)).willReturn(Optional.of(0L));
+        given(telegramPostReader.findLastMessageId(channel)).willReturn(Optional.of(0L));
         for (long cursor = 0; cursor < 5; cursor++) {
             given(previewClient.fetchPage(HANDLE, cursor, null)).willReturn(page("제목", message(cursor + 1, now)));
         }
@@ -116,7 +116,7 @@ class TelegramPostCollectorTest {
     @DisplayName("[저장된 글이 없으면 최초 수집: 최신 페이지부터 가장 작은 messageId 이전으로 과거 방향으로 내려간다]")
     void collect_initial_walksBackwardByMinMessageId() {
         LocalDateTime now = LocalDateTime.now();
-        given(telegramPostReader.findMaxMessageIdByChannel(channel)).willReturn(Optional.empty());
+        given(telegramPostReader.findLastMessageId(channel)).willReturn(Optional.empty());
         given(previewClient.fetchPage(HANDLE, null, null))
             .willReturn(page("제목", message(200, now), message(190, now), message(195, now)));
         given(previewClient.fetchPage(HANDLE, null, 190L)).willReturn(page("무시", message(180, now)));
@@ -132,7 +132,7 @@ class TelegramPostCollectorTest {
     @DisplayName("[최초 수집은 보존기간(14일)을 넘긴 글이 나오는 페이지에서 멈춘다 - 더 파봐야 전부 하드필터에 걸린다]")
     void collect_initial_stopsWhenRetentionCutoffReached() {
         LocalDateTime now = LocalDateTime.now();
-        given(telegramPostReader.findMaxMessageIdByChannel(channel)).willReturn(Optional.empty());
+        given(telegramPostReader.findLastMessageId(channel)).willReturn(Optional.empty());
         given(previewClient.fetchPage(HANDLE, null, null))
             .willReturn(page("제목", message(300, now), message(299, now.minusDays(15))));
 
@@ -146,7 +146,7 @@ class TelegramPostCollectorTest {
     @DisplayName("[최초 수집은 최대 4페이지에서 멈춘다]")
     void collect_initial_stopsAtMaxPages() {
         LocalDateTime now = LocalDateTime.now();
-        given(telegramPostReader.findMaxMessageIdByChannel(channel)).willReturn(Optional.empty());
+        given(telegramPostReader.findLastMessageId(channel)).willReturn(Optional.empty());
         given(previewClient.fetchPage(HANDLE, null, null)).willReturn(page("제목", message(100, now)));
         given(previewClient.fetchPage(HANDLE, null, 100L)).willReturn(page("제목", message(90, now)));
         given(previewClient.fetchPage(HANDLE, null, 90L)).willReturn(page("제목", message(80, now)));
@@ -161,7 +161,7 @@ class TelegramPostCollectorTest {
     @Test
     @DisplayName("[최초 수집에서 첫 페이지가 비어 있으면 빈 결과다]")
     void collect_initial_emptyFirstPage() {
-        given(telegramPostReader.findMaxMessageIdByChannel(channel)).willReturn(Optional.empty());
+        given(telegramPostReader.findLastMessageId(channel)).willReturn(Optional.empty());
         given(previewClient.fetchPage(HANDLE, null, null)).willReturn(page("제목"));
 
         assertThat(collector.collect(channel).posts()).isEmpty();

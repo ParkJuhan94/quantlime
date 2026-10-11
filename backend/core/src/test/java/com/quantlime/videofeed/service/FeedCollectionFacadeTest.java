@@ -79,7 +79,7 @@ class FeedCollectionFacadeTest {
     void reevaluatePendingReview_withCandidates_fetchesFreshViewCountsBeforeReevaluating() {
         // given
         Channel channel = channelOf(1L);
-        given(channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.YOUTUBE)).willReturn(List.of(channel));
+        given(channelReader.findActive(Platform.YOUTUBE)).willReturn(List.of(channel));
         Video candidate = videoOf(channel, 10L, "vid-pending");
         given(videoFilterService.findReevaluationCandidates(channel)).willReturn(List.of(candidate));
         Map<String, Long> freshViewCounts = Map.of("vid-pending", 5000L);
@@ -98,7 +98,7 @@ class FeedCollectionFacadeTest {
     void reevaluatePendingReview_noCandidates_skipsApiCall() {
         // given
         Channel channel = channelOf(1L);
-        given(channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.YOUTUBE)).willReturn(List.of(channel));
+        given(channelReader.findActive(Platform.YOUTUBE)).willReturn(List.of(channel));
         given(videoFilterService.findReevaluationCandidates(channel)).willReturn(List.of());
 
         // when
@@ -115,7 +115,7 @@ class FeedCollectionFacadeTest {
         // given
         Channel failingChannel = channelOf(1L);
         Channel okChannel = channelOf(2L);
-        given(channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.YOUTUBE))
+        given(channelReader.findActive(Platform.YOUTUBE))
             .willReturn(List.of(failingChannel, okChannel));
         given(videoFilterService.findReevaluationCandidates(failingChannel))
             .willThrow(new RuntimeException("유튜브 API 장애"));
@@ -135,7 +135,7 @@ class FeedCollectionFacadeTest {
     void runAll_success_upsertsFiltersAndStampsLastCollectedAt() {
         // given
         Channel channel = channelOf(1L);
-        given(channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.YOUTUBE)).willReturn(List.of(channel));
+        given(channelReader.findActive(Platform.YOUTUBE)).willReturn(List.of(channel));
         List<CollectedVideo> collected = List.of(mock(CollectedVideo.class), mock(CollectedVideo.class));
         given(youtubeVideoCollector.collect(channel)).willReturn(collected);
         given(videoAppender.upsertAll(channel, collected)).willReturn(2);
@@ -157,7 +157,7 @@ class FeedCollectionFacadeTest {
         // given
         Channel failing = channelOf(1L);
         Channel ok = channelOf(2L);
-        given(channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.YOUTUBE))
+        given(channelReader.findActive(Platform.YOUTUBE))
             .willReturn(List.of(failing, ok));
         given(youtubeVideoCollector.collect(failing)).willThrow(new IllegalStateException("쿼터 초과"));
         given(youtubeVideoCollector.collect(ok)).willReturn(List.of());
@@ -180,7 +180,7 @@ class FeedCollectionFacadeTest {
     void runAll_channelVanishedBeforeStamp_recordsFailure() {
         // given
         Channel channel = channelOf(1L);
-        given(channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.YOUTUBE)).willReturn(List.of(channel));
+        given(channelReader.findActive(Platform.YOUTUBE)).willReturn(List.of(channel));
         given(youtubeVideoCollector.collect(channel)).willReturn(List.of());
         given(channelReader.findById(1L)).willReturn(Optional.empty());
 
@@ -198,14 +198,14 @@ class FeedCollectionFacadeTest {
         // given
         given(redisLockService.runExclusively(eq("lock:feed-collect"), any(Duration.class), any()))
             .willAnswer(invocation -> Optional.of(((Supplier<?>) invocation.getArgument(2)).get()));
-        given(channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.YOUTUBE)).willReturn(List.of());
+        given(channelReader.findActive(Platform.YOUTUBE)).willReturn(List.of());
 
         // when
         Optional<List<CollectResult>> result = feedCollectionFacade.runAllExclusively();
 
         // then: 수집(runAll)과 재평가가 각각 채널 목록을 한 번씩 조회한다
         assertThat(result).contains(List.of());
-        verify(channelReader, times(2)).findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.YOUTUBE);
+        verify(channelReader, times(2)).findActive(Platform.YOUTUBE);
     }
 
     @Test

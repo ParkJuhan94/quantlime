@@ -19,6 +19,6 @@ public class TelegramChannelQueryService {
 
     @Transactional(readOnly = true)
     public List<Channel> findAllOrderByPriority() {
-        return channelReader.findByPlatformOrderByPriorityAsc(Platform.TELEGRAM);
+        return channelReader.findByPlatform(Platform.TELEGRAM);
     }
 }

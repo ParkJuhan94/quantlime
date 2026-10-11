@@ -45,13 +45,13 @@ public class TelegramPostRetentionService {
     // (VideoRetentionService와 동일 패턴).
     public TelegramRetentionResult deleteOlderThanRetention() {
         LocalDateTime postCutoff = LocalDate.now().minusDays(RETENTION_DAYS).atStartOfDay();
-        List<Long> postIds = telegramPostReader.findIdsByPublishedAtBefore(postCutoff);
+        List<Long> postIds = telegramPostReader.findExpiredIds(postCutoff);
         if (!postIds.isEmpty()) {
             telegramPostRemover.deletePostBatch(postIds);
         }
 
         LocalDate digestCutoff = LocalDate.now().minusDays(RETENTION_DAYS);
-        List<Long> digestIds = telegramDigestReader.findIdsByDigestDateBefore(digestCutoff);
+        List<Long> digestIds = telegramDigestReader.findExpiredIds(digestCutoff);
         if (!digestIds.isEmpty()) {
             telegramPostRemover.deleteDigestBatch(digestIds);
         }

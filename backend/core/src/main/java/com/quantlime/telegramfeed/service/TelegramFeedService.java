@@ -49,7 +49,7 @@ public class TelegramFeedService {
         List<Long> digestIds = digests.getContent().stream().map(TelegramDigest::getId).toList();
         Map<Long, String> summaryByDigestId = toSummaryTextMap(digests.getContent());
         Map<Long, List<TelegramDigestTicker>> tickersByDigestId =
-            groupByDigestId(telegramDigestTickerReader.findByTelegramDigest_IdIn(digestIds));
+            groupByDigestId(telegramDigestTickerReader.findByDigestIds(digestIds));
         Map<String, Integer> sourcePostCountByChannelAndDate = countSourcePostsByDigest(digests.getContent());
 
         return digests.map(digest -> TelegramFeedMapper.toDigestResponse(
@@ -64,7 +64,7 @@ public class TelegramFeedService {
     // .getChannels()가 Platform.YOUTUBE로 한정한 것과 대칭).
     @Transactional(readOnly = true)
     public List<TelegramFeedChannelResponse> getChannels() {
-        return channelReader.findByPlatformAndEnabledTrueOrderByPriorityAsc(Platform.TELEGRAM).stream()
+        return channelReader.findActive(Platform.TELEGRAM).stream()
             .map(TelegramFeedMapper::toFeedChannelResponse)
             .toList();
     }
@@ -102,7 +102,7 @@ public class TelegramFeedService {
         LocalDate maxDate = digests.stream().map(TelegramDigest::getDigestDate)
             .max(Comparator.naturalOrder()).orElseThrow();
 
-        List<Object[]> rows = telegramPostReader.findChannelIdAndPublishedAtForCounting(
+        List<Object[]> rows = telegramPostReader.findPublishedAtForCounting(
             channelIds, TelegramPostStatus.SELECTED, minDate.atStartOfDay(), maxDate.plusDays(1).atStartOfDay());
 
         Map<String, Integer> countByChannelAndDate = new HashMap<>();
@@ -120,7 +120,7 @@ public class TelegramFeedService {
 
     private List<TelegramPost> findSourcePosts(TelegramDigest digest) {
         LocalDate date = digest.getDigestDate();
-        return telegramPostReader.findByChannelAndStatusAndPublishedAtBetween(
+        return telegramPostReader.findPublishedBetween(
                 digest.getChannel(), TelegramPostStatus.SELECTED, date.atStartOfDay(), date.plusDays(1).atStartOfDay())
             .stream()
             .sorted(Comparator.comparing(TelegramPost::getPublishedAt))

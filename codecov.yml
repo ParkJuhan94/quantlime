@@ -20,6 +20,8 @@ flags:
   quant-engine:
     paths:
       - quant-engine/
-  frontend:
+  # 프론트 커버리지는 src/utils/ 순수 함수만 측정한다(컴포넌트·훅은 대상 아님, vite.config.ts 참고).
+  # 이름에 범위를 드러내 전체 프론트 안전도로 오해하지 않게 한다(2026-10-09)
+  frontend-utils:
     paths:
       - frontend/
