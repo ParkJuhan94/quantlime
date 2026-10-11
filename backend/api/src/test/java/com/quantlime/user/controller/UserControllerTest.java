@@ -5,7 +5,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.quantlime.auth.jwt.JwtTokenProvider;
-import com.quantlime.support.ApiTestSupport;
+import com.quantlime.support.MockedServicesApiTestSupport;
 import com.quantlime.user.UserFixture;
 import com.quantlime.user.domain.User;
 import com.quantlime.user.repository.UserRepository;
@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 @Tag("integration")
-class UserControllerTest extends ApiTestSupport {
+class UserControllerTest extends MockedServicesApiTestSupport {
 
     @Autowired
     private UserRepository userRepository;

@@ -11,12 +11,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.quantlime.auth.jwt.JwtTokenProvider;
-import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.toss.dto.TossCandleResponse;
 import com.quantlime.stock.StockFixture;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.repository.StockRepository;
-import com.quantlime.support.ApiTestSupport;
+import com.quantlime.support.MockedServicesApiTestSupport;
 import com.quantlime.user.UserFixture;
 import com.quantlime.user.domain.User;
 import com.quantlime.user.repository.UserRepository;
@@ -29,11 +28,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 
 @Tag("integration")
-class WatchlistControllerTest extends ApiTestSupport {
+class WatchlistControllerTest extends MockedServicesApiTestSupport {
 
     @Autowired
     private UserRepository userRepository;
@@ -51,8 +49,6 @@ class WatchlistControllerTest extends ApiTestSupport {
     // 트리거한다. 실제 빈을 그대로 두면 이 통합테스트가 매번 진짜 토스증권
     // API를 호출하는데, 토스 토큰은 1개만 유효해(CLAUDE.md §4) CI가 재발급받는
     // 순간 로컬/운영에서 쓰던 토큰이 즉시 무효화된다 - 반드시 mock으로 격리.
-    @MockBean
-    private TossApiClient tossApiClient;
 
     private Stock stock;
     private String accessToken;

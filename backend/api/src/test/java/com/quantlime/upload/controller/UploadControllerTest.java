@@ -6,7 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.quantlime.auth.jwt.JwtTokenProvider;
-import com.quantlime.support.ApiTestSupport;
+import com.quantlime.support.MockedServicesApiTestSupport;
 import com.quantlime.user.UserFixture;
 import com.quantlime.user.domain.User;
 import com.quantlime.user.repository.UserRepository;
@@ -18,7 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mock.web.MockMultipartFile;
 
 @Tag("integration")
-class UploadControllerTest extends ApiTestSupport {
+class UploadControllerTest extends MockedServicesApiTestSupport {
 
     @Autowired
     private UserRepository userRepository;

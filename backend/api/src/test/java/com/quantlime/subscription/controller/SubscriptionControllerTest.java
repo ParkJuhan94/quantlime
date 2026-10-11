@@ -9,13 +9,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.quantlime.auth.jwt.JwtTokenProvider;
-import com.quantlime.infra.tosspayments.TossPaymentsApiClient;
 import com.quantlime.infra.tosspayments.dto.TossBillingKeyResponse;
 import com.quantlime.infra.tosspayments.dto.TossPaymentApprovalResponse;
 import com.quantlime.subscription.SubscriptionPlanFixture;
 import com.quantlime.subscription.domain.SubscriptionPlan;
 import com.quantlime.subscription.repository.SubscriptionPlanRepository;
-import com.quantlime.support.ApiTestSupport;
+import com.quantlime.support.MockedServicesApiTestSupport;
 import com.quantlime.user.UserFixture;
 import com.quantlime.user.domain.User;
 import com.quantlime.user.repository.UserRepository;
@@ -24,11 +23,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 
 @Tag("integration")
-class SubscriptionControllerTest extends ApiTestSupport {
+class SubscriptionControllerTest extends MockedServicesApiTestSupport {
 
     @Autowired
     private UserRepository userRepository;
@@ -41,8 +39,6 @@ class SubscriptionControllerTest extends ApiTestSupport {
 
     // 실제 토스페이먼츠를 호출하지 않도록 격리(WatchlistControllerTest가
     // TossApiClient를 목킹하는 것과 동일한 이유).
-    @MockBean
-    private TossPaymentsApiClient tossPaymentsApiClient;
 
     private String accessToken;
     private SubscriptionPlan plan;
