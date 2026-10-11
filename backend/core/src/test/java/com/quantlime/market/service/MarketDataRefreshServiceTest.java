@@ -93,6 +93,9 @@ class MarketDataRefreshServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private PostCloseRescorePolicy postCloseRescorePolicy;
+
     private MarketDataRefreshService marketDataRefreshService;
 
     @BeforeEach
@@ -102,7 +105,7 @@ class MarketDataRefreshServiceTest {
             dailyPriceReader, scoreReader, priceRefreshFailureHandler,
             priceGapFillService, stockLiquidityService, scoreService,
             scoreRankingCacheStore, benchmarkIndexBackfillService, investorTradingBackfillService,
-            redisLockService, priceRefreshBatchGate, eventPublisher);
+            redisLockService, priceRefreshBatchGate, eventPublisher, postCloseRescorePolicy);
     }
 
     /**
@@ -177,6 +180,24 @@ class MarketDataRefreshServiceTest {
         verify(scoreRankingCacheStore).evictAll();
         verify(benchmarkIndexBackfillService).refreshRecentIfNeeded();
         verify(investorTradingBackfillService).refreshAllIfNeeded();
+        // 국내가 전부 끝났으니 마감 후 재계산 마커를 남긴다(정책이 장중이면 스스로 무시).
+        verify(postCloseRescorePolicy).markDoneIfPostClose();
+    }
+
+    @Test
+    @DisplayName("[국내 fan-in이 타임아웃으로 끝나면 마감 후 재계산 마커를 남기지 않는다 - 다음 실행이 다시 재계산]")
+    void refreshAll_domesticTimeout_doesNotMarkPostCloseDone() {
+        // given
+        Stock domestic = Stock.of(DOMESTIC_CODE, "삼성전자", MarketType.KOSPI, ListingStatus.LISTED, "전기전자");
+        given(stockMasterService.getAllListedStocks()).willReturn(List.of(domestic));
+        given(priceRefreshBatchGate.awaitCompletion(any(), eq(PeerGroup.DOMESTIC), any())).willReturn(false);
+        given(priceRefreshBatchGate.awaitCompletion(any(), eq(PeerGroup.OVERSEAS), any())).willReturn(true);
+
+        // when
+        marketDataRefreshService.refreshAll();
+
+        // then
+        verify(postCloseRescorePolicy, never()).markDoneIfPostClose();
     }
 
     @Test
@@ -250,6 +271,24 @@ class MarketDataRefreshServiceTest {
 
         // when
         marketDataRefreshService.refreshSingleStockFromFanOut(DOMESTIC_CODE, today.minusDays(1));
+
+        // then
+        verify(scoreService).recalculateDomesticScore(DOMESTIC_CODE);
+    }
+
+    @Test
+    @DisplayName("[마감 후 첫 배치면 오늘 스코어가 이미 있어도(낮 캐치업이 만든 것) 다시 계산한다]")
+    void refreshSingleStockFromFanOut_postCloseRescore_recalculatesEvenIfScoreIsToday() {
+        // given
+        Stock domestic = Stock.of(DOMESTIC_CODE, "삼성전자", MarketType.KOSPI, ListingStatus.LISTED, "전기전자");
+        given(stockMasterService.getStockByCode(DOMESTIC_CODE)).willReturn(domestic);
+        LocalDate today = LocalDate.now();
+        given(priceGapFillService.fillDomesticGap(DOMESTIC_CODE))
+            .willReturn(PriceGapFillService.GapFillOutcome.apiSkipped(today));
+        given(postCloseRescorePolicy.shouldRescore(today, today)).willReturn(true);
+
+        // when
+        marketDataRefreshService.refreshSingleStockFromFanOut(DOMESTIC_CODE, today);
 
         // then
         verify(scoreService).recalculateDomesticScore(DOMESTIC_CODE);
