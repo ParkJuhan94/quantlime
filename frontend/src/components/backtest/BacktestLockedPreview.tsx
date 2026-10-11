@@ -16,6 +16,7 @@ export function BacktestLockedPreview() {
         <p className="mb-3 text-xs font-semibold text-gray-700">사분면 분포</p>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
+            // oxlint-disable-next-line react/no-array-index-key -- 고정 개수 로딩 스켈레톤
             <div key={i} className="rounded-lg bg-gray-100 p-3 text-center">
               <span className="inline-block h-3 w-10 rounded bg-gray-200" />
             </div>

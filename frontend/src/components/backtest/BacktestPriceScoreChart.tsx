@@ -75,6 +75,7 @@ export function BacktestPriceScoreChart({ dailyScores }: { dailyScores: DailySco
       <svg width="100%" viewBox={`0 0 ${WIDTH} ${TOTAL_HEIGHT}`} preserveAspectRatio="none">
         {/* 가격 패널 */}
         {priceSegments.map((points, i) => (
+          // oxlint-disable-next-line react/no-array-index-key -- 재계산 시 통째로 교체되는 차트 구간(순서가 곧 정체성)
           <polyline key={i} points={points} fill="none" stroke="#111827" strokeWidth="1.5" />
         ))}
 
@@ -82,9 +83,11 @@ export function BacktestPriceScoreChart({ dailyScores }: { dailyScores: DailySco
         <g transform={`translate(0, ${PRICE_HEIGHT + GAP})`}>
           <line x1={0} y1={SCORE_HEIGHT / 2} x2={WIDTH} y2={SCORE_HEIGHT / 2} stroke="#e5e7eb" strokeDasharray="4 4" />
           {trendSegments.map((points, i) => (
+            // oxlint-disable-next-line react/no-array-index-key -- 재계산 시 통째로 교체되는 차트 구간(순서가 곧 정체성)
             <polyline key={`trend-${i}`} points={points} fill="none" stroke="#7c3aed" strokeWidth="1.5" />
           ))}
           {meanReversionSegments.map((points, i) => (
+            // oxlint-disable-next-line react/no-array-index-key -- 재계산 시 통째로 교체되는 차트 구간(순서가 곧 정체성)
             <polyline key={`mr-${i}`} points={points} fill="none" stroke="#0d9488" strokeWidth="1.5" />
           ))}
         </g>
@@ -93,6 +96,7 @@ export function BacktestPriceScoreChart({ dailyScores }: { dailyScores: DailySco
         <g transform={`translate(0, ${PRICE_HEIGHT + GAP + SCORE_HEIGHT + GAP})`}>
           {dailyScores.map((d, i) => (
             <rect
+              // oxlint-disable-next-line react/no-array-index-key -- 재계산 시 통째로 교체되는 차트 구간(순서가 곧 정체성)
               key={i}
               x={i * stepX}
               y={0}

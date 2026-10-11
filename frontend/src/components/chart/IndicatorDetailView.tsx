@@ -155,6 +155,7 @@ function MaDetail({ maLines, onChange }: { maLines: MaLineSettings[]; onChange: 
   return (
     <div className="flex flex-col gap-3">
       {maLines.map((line, index) => (
+        // oxlint-disable-next-line react/no-array-index-key -- 값이 전부 props로 제어되는 입력이라 index key로도 상태가 어긋나지 않는다(안정 id가 없는 설정 객체)
         <div key={index} className="rounded-xl border border-gray-100 p-3">
           <div className="mb-2.5 flex items-center justify-between">
             <label className="flex items-center gap-2 text-sm font-semibold text-gray-900">
