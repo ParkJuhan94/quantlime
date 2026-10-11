@@ -15,7 +15,9 @@ import subprocess
 import sys
 
 JAVAC = re.compile(r"^(?P<file>/\S+?\.java):(?P<line>\d+): warning: \[(?P<rule>\w+)\] (?P<msg>.*)$")
-OXLINT = re.compile(r"^(?P<file>\S+?):(?P<line>\d+):(?P<col>\d+): warning (?P<rule>\S+?): (?P<msg>.*)$")
+# --format unix 출력: "파일:줄:열: 메시지 [Warning/규칙]". oxlint는 CI 환경에서 기본 형식이 github로 바뀌어
+# 로그에서 파싱할 수 없으므로 워크플로에서 --format unix를 명시한다(2026-10-12, 요약이 0개로 찍히던 문제)
+OXLINT = re.compile(r"^(?P<file>\S+?):(?P<line>\d+):(?P<col>\d+): (?P<msg>.*) \[Warning/(?P<rule>[^\]]+)\]$")
 ANNOTATION_LIMIT = 10
 
 
