@@ -32,3 +32,11 @@ logging:
     root: info
     com.quantlime: info
     org.hibernate.SQL: warn
+
+# 운영에서는 API 명세/Swagger UI를 끈다 - nginx가 /api/만 프록시해 외부에서는 이미 닿지 않지만,
+# 백엔드 포트가 열리는 사고에 대비한 이중 방어(SecurityConfig는 두 경로를 permitAll로 연다).
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

@@ -494,3 +494,13 @@ logging:
       max-file-size: 20MB
       max-history: 7
       total-size-cap: 200MB
+
+# Swagger UI 편의 설정 (운영은 application-prod.yml에서 비활성화)
+springdoc:
+  swagger-ui:
+    persist-authorization: true   # 새로고침해도 JWT 유지
+    tags-sorter: alpha
+    operations-sorter: method
+    display-request-duration: true
+    default-models-expand-depth: -1   # 하단 Schemas 섹션 접기
+  default-produces-media-type: application/json
