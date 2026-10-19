@@ -32,7 +32,8 @@ class UserControllerTest extends MockedServicesApiTestSupport {
         mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + token))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.nickname").value("테스트유저"))
-            .andExpect(jsonPath("$.email").value("test@example.com"));
+            .andExpect(jsonPath("$.email").value("test@example.com"))
+            .andExpect(jsonPath("$.role").value("USER"));
     }
 
     @Test

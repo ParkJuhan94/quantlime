@@ -88,4 +88,54 @@ class AdminNotificationControllerTest extends MockedServicesApiTestSupport {
                 .content("{\"title\":\"\",\"content\":\"내용\"}"))
             .andExpect(status().isBadRequest());
     }
+
+    @Test
+    @DisplayName("[테스트 발송은 호출한 관리자 본인에게만 인앱 알림이 저장된다]")
+    void sendTest_asAdmin_savesOnlyForCaller() throws Exception {
+        // given
+        User admin = userRepository.save(UserFixture.createUser(OAuthProvider.GOOGLE, "admin"));
+        userRepository.save(UserFixture.createUser(OAuthProvider.GOOGLE, "u1"));
+        userRepository.save(UserFixture.createUser(OAuthProvider.GOOGLE, "u2"));
+        String adminToken = jwtTokenProvider.createAccessToken(admin.getId(), UserRole.ADMIN);
+
+        // when & then
+        mockMvc.perform(post("/api/admin/notifications/test")
+                .header("Authorization", "Bearer " + adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(BODY))
+            .andExpect(status().isAccepted());
+
+        assertThat(notificationRepository.findAll()).hasSize(1)
+            .allSatisfy(n -> assertThat(n.getUser().getId()).isEqualTo(admin.getId()));
+    }
+
+    @Test
+    @DisplayName("[일반 사용자 토큰으로 테스트 발송하면 403, 알림은 저장되지 않는다]")
+    void sendTest_asNormalUser_returns403() throws Exception {
+        User user = userRepository.save(UserFixture.createUser(OAuthProvider.GOOGLE, "u"));
+        String userToken = jwtTokenProvider.createAccessToken(user.getId(), user.getRole());
+
+        mockMvc.perform(post("/api/admin/notifications/test")
+                .header("Authorization", "Bearer " + userToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(BODY))
+            .andExpect(status().isForbidden());
+
+        assertThat(notificationRepository.findAll()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("[제목이 100자를 넘으면 400 - DB 컬럼 한도 초과로 500이 나지 않게 입력 단계에서 거른다]")
+    void broadcast_titleTooLong_returns400() throws Exception {
+        User admin = userRepository.save(UserFixture.createUser(OAuthProvider.GOOGLE, "admin"));
+        String adminToken = jwtTokenProvider.createAccessToken(admin.getId(), UserRole.ADMIN);
+        String longTitle = "가".repeat(101);
+
+        mockMvc.perform(post("/api/admin/notifications/broadcast")
+                .header("Authorization", "Bearer " + adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"title\":\"" + longTitle + "\",\"content\":\"내용\"}"))
+            .andExpect(status().isBadRequest());
+        assertThat(notificationRepository.findAll()).isEmpty();
+    }
 }

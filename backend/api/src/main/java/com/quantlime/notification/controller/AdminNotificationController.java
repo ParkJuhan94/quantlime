@@ -1,5 +1,6 @@
 package com.quantlime.notification.controller;
 
+import com.quantlime.auth.resolver.LoginUser;
 import com.quantlime.notification.domain.NotificationType;
 import com.quantlime.notification.dto.request.BroadcastNotificationRequest;
 import com.quantlime.notification.service.FcmPushService;
@@ -34,6 +35,18 @@ public class AdminNotificationController {
     public ResponseEntity<Void> broadcast(@Valid @RequestBody BroadcastNotificationRequest request) {
         List<Long> allUserIds = userService.getAllUserIds();
         fcmPushService.sendToUsers(allUserIds, NotificationType.ADMIN_NOTICE,
+            request.title(), request.content(), request.linkUrl());
+        return ResponseEntity.accepted().build();
+    }
+
+    // 운영에서 전체 사용자에게 보내기 전에 내용과 푸시 도착을 본인 계정으로만 확인하는 용도 - 대상을 고를 수
+    // 없는 전용 엔드포인트라, broadcast에 대상 지정 파라미터를 두는 방식과 달리 실수로 전체 발송될 일이 없다.
+    @PostMapping("/test")
+    @Operation(summary = "내 계정에게만 테스트 공지 발송")
+    @ApiResponse(useReturnTypeSchema = true)
+    public ResponseEntity<Void> sendTest(@LoginUser Long userId,
+                                         @Valid @RequestBody BroadcastNotificationRequest request) {
+        fcmPushService.sendToUser(userId, NotificationType.ADMIN_NOTICE,
             request.title(), request.content(), request.linkUrl());
         return ResponseEntity.accepted().build();
     }
