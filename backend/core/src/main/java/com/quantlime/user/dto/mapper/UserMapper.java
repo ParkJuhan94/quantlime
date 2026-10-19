@@ -10,6 +10,6 @@ import lombok.NoArgsConstructor;
 public class UserMapper {
 
     public static UserMeResponse toUserMeResponse(User user) {
-        return new UserMeResponse(user.getNickname(), user.getEmail(), user.getProfileImageUrl());
+        return new UserMeResponse(user.getNickname(), user.getEmail(), user.getProfileImageUrl(), user.getRole().name());
     }
 }
