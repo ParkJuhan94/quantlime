@@ -168,6 +168,10 @@ services:
       # 반드시 같은 경로를 가리켜야 한다(안 그러면 컨테이너 재기동 시
       # 업로드 파일이 유실된다).
       UPLOAD_DIR: /app/uploads
+      # FCM 서비스 계정 키의 컨테이너 내부 경로 - 아래 volumes:의 마운트 대상과 같아야 한다. 시크릿이 아니라 토폴로지
+      # 값이라 compose에 고정한다(.env.prod에서 이 키가 비어 있거나 빠져도 푸시가 조용히 꺼지지 않게 - 2026-10-20
+      # 운영에서 "FCM 서비스 계정 키 미설정"으로 확인). environment:는 env_file보다 우선한다.
+      FCM_SERVICE_ACCOUNT_PATH: /app/firebase-service-account.json
       # 앱의 DLT 개별 알림(정보성) 채널. `.env.prod`에 `SLACK_INFO_WEBHOOK_URL=`처럼 값 없이 키만 있으면
       # env_file이 "빈 문자열이 정의된 환경변수"로 넘겨 Spring의 `${A:${B:}}` 기본값이 동작하지 않는다
       # (정의된 빈 값은 "없음"이 아님). compose의 `:-`는 빈 값도 "없음"으로 취급하므로 여기서
@@ -179,6 +183,11 @@ services:
       - "127.0.0.1:8080:8080"
     volumes:
       - upload_data:/app/uploads
+      # FCM 서비스 계정 키(시크릿)를 호스트 파일로 읽기 전용 마운트한다 - 이미지에 넣지 않고 커밋도 하지 않는다.
+      # 이 대상 경로는 위 environment:의 FCM_SERVICE_ACCOUNT_PATH와 같아야 한다. 호스트에 파일이 없으면 Docker가 같은 이름의
+      # **디렉터리**를 만들어 버려 푸시가 조용히 꺼지므로(FcmPushDisabled 알림) 배포 전에 파일부터 올릴 것
+      # (`scp ... quantlime:~/quantlime/secrets/` 후 chmod 600, docs/00-sre/DEPLOYMENT.md 참고).
+      - ./secrets/firebase-service-account.json:/app/firebase-service-account.json:ro
     depends_on:
       mysql:
         condition: service_healthy
