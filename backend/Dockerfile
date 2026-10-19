@@ -8,6 +8,9 @@ WORKDIR /workspace
 # 다시 하지 않도록 한다.
 COPY gradlew settings.gradle build.gradle ./
 COPY gradle ./gradle
+# 새 Gradle 모듈을 추가하면 아래 build.gradle COPY와 소스 COPY(아래쪽 `COPY api api` 목록)
+# 두 곳 모두에 한 줄씩 추가해야 한다. 빠뜨리면 Gradle 빌드는 통과하는데 이미지 빌드에서만
+# 실패한다(PR #75) - CI의 docker-backend 잡이 PR 단계에서 잡아준다.
 COPY api/build.gradle api/build.gradle
 COPY core/build.gradle core/build.gradle
 COPY common/build.gradle common/build.gradle
