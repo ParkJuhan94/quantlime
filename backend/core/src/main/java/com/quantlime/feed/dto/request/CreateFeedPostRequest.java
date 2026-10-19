@@ -1,17 +1,21 @@
 package com.quantlime.feed.dto.request;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 public record CreateFeedPostRequest(
+    @Schema(description = "글 주제(한글 라벨)", allowableValues = {"국내주식토론", "미국주식이야기", "아무말대잔치", "수익인증"}, example = "국내주식토론")
     @NotBlank(message = "주제는 필수입니다.")
     String category,
 
+    @Schema(description = "글 제목(최대 200자)", example = "삼성전자 이번 분기 실적 어떻게 보시나요?")
     @NotBlank(message = "제목은 필수입니다.")
     @Size(max = 200, message = "제목은 200자를 넘을 수 없습니다.")
     String title,
 
     // 이미지 첨부는 선택 - /api/uploads/images로 먼저 업로드해 받은 경로를 그대로 넘긴다.
+    @Schema(description = "첨부 이미지 경로(선택). /api/uploads/images로 먼저 업로드해 받은 경로를 그대로 넘긴다", example = "/uploads/images/3f2a1b.png", nullable = true)
     String imageUrl
 ) {
 }
