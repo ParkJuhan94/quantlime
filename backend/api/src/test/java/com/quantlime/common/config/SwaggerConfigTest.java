@@ -67,4 +67,12 @@ class SwaggerConfigTest extends ApiTestSupport {
         assertThat(category.get("example").asText()).isEqualTo("국내주식토론");
         assertThat(category.get("enum")).hasSize(4);
     }
+
+    @Test
+    @DisplayName("에러 응답 스키마에 설명과 예시가 노출된다")
+    void errorSchemaHasExample() throws Exception {
+        JsonNode code = docs("1. 사용자").at("/components/schemas/ErrorResponseTemplate/properties/code");
+
+        assertThat(code.get("example").asText()).isEqualTo("AU_000");
+    }
 }
