@@ -36,3 +36,7 @@ cd quant-engine && uvicorn main:app --reload --port 8000
 cd frontend && npm run dev
 ```
 
+
+## 라이선스
+
+[PolyForm Noncommercial 1.0.0](LICENSE) — 채용 검토·학습 목적의 열람과 비상업적 이용은 자유지만, 상업적 이용(서비스 운영, 판매 등)은 허용하지 않습니다.
