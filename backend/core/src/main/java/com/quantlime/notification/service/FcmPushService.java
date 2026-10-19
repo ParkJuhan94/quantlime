@@ -8,9 +8,10 @@ import com.google.firebase.messaging.MulticastMessage;
 import com.google.firebase.messaging.SendResponse;
 import com.quantlime.notification.domain.FcmToken;
 import com.quantlime.notification.domain.NotificationType;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Collection;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
@@ -22,11 +23,18 @@ import org.springframework.stereotype.Service;
  * (세션 설계 합의). FirebaseMessaging 빈은 FCM_SERVICE_ACCOUNT_PATH
  * 미설정 시 null일 수 있다(FirebaseConfig 참고) - 이 경우 푸시만
  * 건너뛰고 인앱 저장은 그대로 진행한다.
+ *
+ * <p>인앱 저장을 항상 푸시보다 먼저 한다(단건/다건 동일) - 푸시 경로(토큰
+ * 조회, FCM 호출)에서 무슨 일이 생겨도 source of truth인 인앱 알림이
+ * 막히지 않게 하기 위함. 푸시 결과는 `fcm.push.sends{outcome}` 카운터로
+ * 노출해, 키 파일 누락(skipped)이나 발송 실패 증가를 Prometheus 알림으로
+ * 잡는다(`alerts.yml` FcmPushDisabled/FcmPushFailureHigh).
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class FcmPushService {
+
+    static final String METRIC_SENDS = "fcm.push.sends";
 
     // FCM sendEachForMulticast 1회 호출 상한(500 토큰)
     private static final int FCM_BATCH_SIZE = 500;
@@ -38,10 +46,40 @@ public class FcmPushService {
     private final FirebaseMessaging firebaseMessaging;
     private final FcmTokenService fcmTokenService;
     private final NotificationService notificationService;
+    private final MeterRegistry meterRegistry;
+
+    // outcome 태그: success(발송 성공) / failure(토큰 단위 실패) / unregistered(만료 토큰 정리,
+    // 실패가 아님) / batch_error(청크 호출 자체가 실패) / skipped(Firebase 미설정으로 건너뜀).
+    // 기동 시 0으로 선등록해 rate()/increase()가 첫 발송 전에도 시리즈를 볼 수 있게 한다.
+    private final Counter success;
+    private final Counter failure;
+    private final Counter unregistered;
+    private final Counter batchError;
+    private final Counter skipped;
+
+    public FcmPushService(@Nullable FirebaseMessaging firebaseMessaging, FcmTokenService fcmTokenService,
+                          NotificationService notificationService, MeterRegistry meterRegistry) {
+        this.firebaseMessaging = firebaseMessaging;
+        this.fcmTokenService = fcmTokenService;
+        this.notificationService = notificationService;
+        this.meterRegistry = meterRegistry;
+        this.success = outcomeCounter("success");
+        this.failure = outcomeCounter("failure");
+        this.unregistered = outcomeCounter("unregistered");
+        this.batchError = outcomeCounter("batch_error");
+        this.skipped = outcomeCounter("skipped");
+    }
+
+    private Counter outcomeCounter(String outcome) {
+        return Counter.builder(METRIC_SENDS)
+            .description("FCM 푸시 토큰 단위 발송 결과")
+            .tag("outcome", outcome)
+            .register(meterRegistry);
+    }
 
     public void sendToUser(Long userId, NotificationType type, String title, String content, String linkUrl) {
-        pushToTokens(fcmTokenService.getTokensForUser(userId), title, content, linkUrl);
         notificationService.save(userId, type, title, content, linkUrl);
+        pushToTokens(fcmTokenService.getTokensForUser(userId), title, content, linkUrl);
     }
 
     public void sendToUsers(Collection<Long> userIds, NotificationType type, String title, String content,
@@ -54,7 +92,11 @@ public class FcmPushService {
     }
 
     private void pushToTokens(List<FcmToken> tokens, String title, String content, String linkUrl) {
-        if (firebaseMessaging == null || tokens.isEmpty()) {
+        if (tokens.isEmpty()) {
+            return;
+        }
+        if (firebaseMessaging == null) {
+            skipped.increment(tokens.size());
             return;
         }
         for (int i = 0; i < tokens.size(); i += FCM_BATCH_SIZE) {
@@ -79,22 +121,29 @@ public class FcmPushService {
             BatchResponse response = firebaseMessaging.sendEachForMulticast(message);
             List<SendResponse> responses = response.getResponses();
             for (int i = 0; i < responses.size(); i++) {
-                if (!responses.get(i).isSuccessful()) {
-                    handleFailure(chunk.get(i), responses.get(i).getException());
+                if (responses.get(i).isSuccessful()) {
+                    success.increment();
+                } else if (handleFailure(chunk.get(i), responses.get(i).getException())) {
+                    unregistered.increment();
+                } else {
+                    failure.increment();
                 }
             }
         } catch (Exception e) {
+            batchError.increment(chunk.size());
             log.error("FCM 푸시 발송 실패(청크 전체): error={}", e.getMessage(), e);
         }
     }
 
-    private void handleFailure(FcmToken token, FirebaseMessagingException exception) {
+    /** 만료된 토큰을 정리했으면 true(발송 실패가 아니라 정상적인 정리), 그 외 실패면 false. */
+    private boolean handleFailure(FcmToken token, FirebaseMessagingException exception) {
         if (exception != null && exception.getMessagingErrorCode() == MessagingErrorCode.UNREGISTERED) {
             fcmTokenService.deleteToken(token.getToken());
             log.info("무효 FCM 토큰 정리: tokenId={}", token.getId());
-            return;
+            return true;
         }
         log.warn("FCM 푸시 발송 실패: tokenId={}, error={}",
             token.getId(), exception != null ? exception.getMessage() : "unknown");
+        return false;
     }
 }

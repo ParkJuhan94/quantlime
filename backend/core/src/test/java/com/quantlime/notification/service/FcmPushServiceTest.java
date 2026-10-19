@@ -18,6 +18,7 @@ import com.google.firebase.messaging.SendResponse;
 import com.quantlime.notification.domain.FcmToken;
 import com.quantlime.notification.domain.NotificationType;
 import com.quantlime.user.UserFixture;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -41,8 +42,15 @@ class FcmPushServiceTest {
     @Mock
     private NotificationService notificationService;
 
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+
     private FcmPushService service(boolean firebaseEnabled) {
-        return new FcmPushService(firebaseEnabled ? firebaseMessaging : null, fcmTokenService, notificationService);
+        return new FcmPushService(firebaseEnabled ? firebaseMessaging : null, fcmTokenService, notificationService,
+            meterRegistry);
+    }
+
+    private double count(String outcome) {
+        return meterRegistry.counter(FcmPushService.METRIC_SENDS, "outcome", outcome).count();
     }
 
     private FcmToken token(String value) {
@@ -162,5 +170,70 @@ class FcmPushServiceTest {
         ArgumentCaptor<MulticastMessage> captor = ArgumentCaptor.forClass(MulticastMessage.class);
         verify(firebaseMessaging, org.mockito.Mockito.times(3)).sendEachForMulticast(captor.capture());
         assertThat(captor.getAllValues()).hasSize(3);
+    }
+
+    @Test
+    @DisplayName("[토큰 조회가 실패해도 인앱 알림은 먼저 저장돼 있다(저장 후 푸시 순서)]")
+    void sendToUser_tokenLookupFails_inAppAlreadySaved() {
+        // given
+        given(fcmTokenService.getTokensForUser(1L)).willThrow(new IllegalStateException("db down"));
+
+        // when
+        assertThatCode(() -> service(true).sendToUser(1L, NotificationType.SYSTEM, "t", "c", null))
+            .isInstanceOf(IllegalStateException.class);
+
+        // then
+        verify(notificationService).save(1L, NotificationType.SYSTEM, "t", "c", null);
+    }
+
+    @Test
+    @DisplayName("[발송 결과를 success/unregistered/failure 카운터로 센다 - 만료 토큰 정리는 실패로 세지 않는다]")
+    void sendToUser_countsOutcomes() throws Exception {
+        // given
+        List<FcmToken> userTokens = List.of(token("good"), token("dead"), token("flaky"));
+        BatchResponse response =
+            batch(ok(), failed(MessagingErrorCode.UNREGISTERED), failed(MessagingErrorCode.INTERNAL));
+        given(fcmTokenService.getTokensForUser(1L)).willReturn(userTokens);
+        given(firebaseMessaging.sendEachForMulticast(any(MulticastMessage.class))).willReturn(response);
+
+        // when
+        service(true).sendToUser(1L, NotificationType.SYSTEM, "t", "c", "/l");
+
+        // then
+        assertThat(count("success")).isEqualTo(1);
+        assertThat(count("unregistered")).isEqualTo(1);
+        assertThat(count("failure")).isEqualTo(1);
+        assertThat(count("batch_error")).isZero();
+        assertThat(count("skipped")).isZero();
+    }
+
+    @Test
+    @DisplayName("[Firebase가 설정되지 않으면 건너뛴 토큰 수만큼 skipped로 센다]")
+    void sendToUser_firebaseDisabled_countsSkipped() {
+        given(fcmTokenService.getTokensForUser(1L)).willReturn(tokens(3));
+
+        service(false).sendToUser(1L, NotificationType.SYSTEM, "t", "c", "/l");
+
+        assertThat(count("skipped")).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("[청크 호출 자체가 예외로 실패하면 그 청크의 토큰 수만큼 batch_error로 센다]")
+    void sendToUser_chunkThrows_countsBatchError() throws Exception {
+        given(fcmTokenService.getTokensForUser(1L)).willReturn(tokens(4));
+        given(firebaseMessaging.sendEachForMulticast(any(MulticastMessage.class)))
+            .willThrow(new RuntimeException("fcm down"));
+
+        service(true).sendToUser(1L, NotificationType.SYSTEM, "t", "c", "/l");
+
+        assertThat(count("batch_error")).isEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("[카운터는 발송 전에도 0으로 노출된다(알림 규칙이 시리즈 부재로 비지 않게)]")
+    void counters_preRegisteredAtZero() {
+        service(true);
+
+        assertThat(meterRegistry.find(FcmPushService.METRIC_SENDS).counters()).hasSize(5);
     }
 }
