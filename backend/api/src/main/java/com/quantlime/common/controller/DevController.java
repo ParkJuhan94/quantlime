@@ -158,8 +158,9 @@ public class DevController {
     @Operation(summary = "[개발용/1회성 마이그레이션] close_price를 정규장 종가로 전환(2026-09-21)하기 전 "
         + "저장된 최근 거래일 행들을 1분봉 API로 소급 확정한다. stockCodes 생략 시 국내 전종목, days 생략 시 "
         + "재확정 윈도우(20일). 이미 확정된 행은 건너뛰므로 멱등 - 중단됐다 재호출해도 이어서 진행된다. "
-        + "전종목×20일은 종목당 150ms 페이싱 기준 약 2시간 이상 걸릴 수 있어, 관심종목 등 소규모로 먼저 "
-        + "검증 후 전체를 실행할 것.")
+        + "전종목×20일(달력 기준)은 실측 약 1.5시간(2026-10-11, 2,589종목·27,654건, 건당 약 0.2초)이 걸려, "
+        + "관심종목 등 소규모로 먼저 검증 후 전체를 실행할 것. 서버 기동 직후엔 캐치업이 새 행을 만들어 "
+        + "백필이 지나간 종목에 미확정 행이 남을 수 있으니 캐치업이 끝난 뒤 한 번 더 호출할 것.")
     public ResponseEntity<RegularCloseBackfillResult> triggerRegularCloseBackfill(
             @RequestParam(required = false) List<String> stockCodes,
             @RequestParam(required = false) Integer days) {
