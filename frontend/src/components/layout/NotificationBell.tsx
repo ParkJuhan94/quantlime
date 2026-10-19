@@ -6,6 +6,7 @@ import {
   useNotificationsQuery,
   useUnreadNotificationCountQuery,
 } from '../../hooks/queries/useNotifications'
+import { formatRelativeTime } from '../../utils/relativeTime'
 
 export function NotificationBell() {
   const [open, setOpen] = useState(false)
@@ -84,7 +85,16 @@ export function NotificationBell() {
                   notification.isRead ? 'text-gray-500' : 'bg-gray-50 text-gray-900'
                 }`}
               >
-                <span className="text-sm font-semibold">{notification.title}</span>
+                <span className="flex items-baseline justify-between gap-2">
+                  <span className="text-sm font-semibold">{notification.title}</span>
+                  <time
+                    dateTime={notification.createdAt}
+                    title={notification.createdAt.replace('T', ' ')}
+                    className="shrink-0 text-xs text-gray-400"
+                  >
+                    {formatRelativeTime(notification.createdAt)}
+                  </time>
+                </span>
                 <span className="text-xs">{notification.content}</span>
               </button>
             ))}
