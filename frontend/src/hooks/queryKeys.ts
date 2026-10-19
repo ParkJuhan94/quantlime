@@ -49,6 +49,6 @@ export const queryKeys = {
   // 읽음 처리 후 페이지 무관하게 전부 무효화해야 해 접두 키를 따로 둔다
   // (dashboardScoresAll과 동일한 이유).
   notificationsAll: ['notifications'] as const,
-  notifications: (page: number) => ['notifications', page] as const,
+  notificationsList: ['notifications', 'list'] as const,
   notificationsUnreadCount: ['notifications', 'unread-count'] as const,
 }

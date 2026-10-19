@@ -3,18 +3,21 @@ import { useNavigate } from 'react-router-dom'
 import {
   useMarkAllNotificationsAsRead,
   useMarkNotificationAsRead,
-  useNotificationsQuery,
+  useNotificationsInfiniteQuery,
   useUnreadNotificationCountQuery,
 } from '../../hooks/queries/useNotifications'
+import { getNotificationTypeStyle, NOTIFICATION_TONE_CLASSES } from '../../utils/notificationType'
 import { formatRelativeTime } from '../../utils/relativeTime'
 
 export function NotificationBell() {
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+  const sentinelRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
   const unreadCountQuery = useUnreadNotificationCountQuery()
   // 목록은 드롭다운을 열었을 때만 조회한다(배지 카운트는 항상 폴링).
-  const notificationsQuery = useNotificationsQuery(0, open)
+  const notificationsQuery = useNotificationsInfiniteQuery(open)
   const markAsRead = useMarkNotificationAsRead()
   const markAllAsRead = useMarkAllNotificationsAsRead()
 
@@ -30,7 +33,22 @@ export function NotificationBell() {
   }, [open])
 
   const unreadCount = unreadCountQuery.data?.unreadCount ?? 0
-  const notifications = notificationsQuery.data?.content ?? []
+  const notifications = notificationsQuery.data?.pages.flatMap((page) => page.content) ?? []
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = notificationsQuery
+
+  // 목록 맨 끝의 감시 요소가 스크롤 영역 안으로 들어오면 다음 페이지를 받는다.
+  useEffect(() => {
+    const sentinel = sentinelRef.current
+    if (!open || !sentinel || !hasNextPage) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && !isFetchingNextPage) void fetchNextPage()
+      },
+      { root: listRef.current },
+    )
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [open, hasNextPage, isFetchingNextPage, fetchNextPage, notifications.length])
 
   function handleSelect(notificationId: number, isRead: boolean, linkUrl: string | null) {
     if (!isRead) {
@@ -72,7 +90,7 @@ export function NotificationBell() {
             )}
           </div>
 
-          <div className="max-h-96 divide-y divide-gray-100 overflow-y-auto border-t border-gray-100">
+          <div ref={listRef} className="max-h-96 divide-y divide-gray-100 overflow-y-auto border-t border-gray-100">
             {notifications.length === 0 && (
               <p className="px-1 py-6 text-center text-sm text-gray-400">받은 알림이 없어요.</p>
             )}
@@ -85,6 +103,13 @@ export function NotificationBell() {
                   notification.isRead ? 'text-gray-500' : 'bg-gray-50 text-gray-900'
                 }`}
               >
+                <span
+                  className={`self-start rounded-md px-1.5 py-0.5 text-xs font-semibold ${
+                    NOTIFICATION_TONE_CLASSES[getNotificationTypeStyle(notification.type).tone]
+                  }`}
+                >
+                  {getNotificationTypeStyle(notification.type).label}
+                </span>
                 <span className="flex items-baseline justify-between gap-2">
                   <span className="text-sm font-semibold">{notification.title}</span>
                   <time
@@ -98,6 +123,11 @@ export function NotificationBell() {
                 <span className="text-xs">{notification.content}</span>
               </button>
             ))}
+            {hasNextPage && (
+              <div ref={sentinelRef} className="py-3 text-center text-xs text-gray-400">
+                {isFetchingNextPage ? '불러오는 중…' : ''}
+              </div>
+            )}
           </div>
         </div>
       )}

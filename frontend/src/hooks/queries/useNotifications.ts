@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   getNotifications,
   getUnreadNotificationCount,
@@ -8,11 +8,14 @@ import {
 import { queryKeys } from '../queryKeys'
 import { useAuth } from '../../auth/useAuth'
 
-export function useNotificationsQuery(page = 0, enabled = true) {
+// 드롭다운 스크롤이 끝에 닿을 때마다 다음 페이지를 이어 받는다(백엔드 PageResponse.hasNext 기준).
+export function useNotificationsInfiniteQuery(enabled = true) {
   const { isAuthenticated } = useAuth()
-  return useQuery({
-    queryKey: queryKeys.notifications(page),
-    queryFn: () => getNotifications(page),
+  return useInfiniteQuery({
+    queryKey: queryKeys.notificationsList,
+    queryFn: ({ pageParam }) => getNotifications(pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => (lastPage.hasNext ? allPages.length : undefined),
     enabled: enabled && isAuthenticated,
   })
 }
