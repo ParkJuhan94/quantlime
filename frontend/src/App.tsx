@@ -19,6 +19,7 @@ import { PaymentResultPage } from './pages/PaymentResultPage'
 import { ProtectedRoute } from './auth/ProtectedRoute'
 import { AdminRoute } from './auth/AdminRoute'
 import { AdminLayout } from './pages/admin/AdminLayout'
+import { AdminModerationPage } from './pages/admin/AdminModerationPage'
 import { AdminNotificationPage } from './pages/admin/AdminNotificationPage'
 import { logoutToast } from './auth/logoutToast'
 
@@ -76,6 +77,7 @@ function App() {
                 <Route path="/admin" element={<AdminLayout />}>
                   <Route index element={<Navigate to="notifications" replace />} />
                   <Route path="notifications" element={<AdminNotificationPage />} />
+                  <Route path="moderation" element={<AdminModerationPage />} />
                 </Route>
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />

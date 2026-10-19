@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { broadcastNotification, sendTestNotification } from '../../api/admin'
+import { ConfirmDialog } from '../../components/common/ConfirmDialog'
 import { Toast } from '../../components/common/Toast'
 import { NOTIFICATION_LIMITS, validateNotificationForm } from '../../utils/adminNotification'
 import { NOTIFICATION_TONE_CLASSES, getNotificationTypeStyle } from '../../utils/notificationType'
@@ -151,44 +152,14 @@ export function AdminNotificationPage() {
         </div>
       </section>
 
-      {confirmOpen && (
-        <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35 px-4"
-          onClick={() => setConfirmOpen(false)}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="admin-broadcast-confirm"
-            onClick={(event) => event.stopPropagation()}
-            className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl"
-          >
-            <p id="admin-broadcast-confirm" className="mb-1 text-sm font-semibold text-gray-900">
-              전체 사용자에게 발송할까요?
-            </p>
-            <p className="mb-4 text-sm text-gray-500">
-              "{request.title}" 공지가 모든 사용자에게 알림으로 저장되고 푸시로 전달돼요. 보내면 되돌릴 수 없어요.
-            </p>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setConfirmOpen(false)}
-                className="flex-1 rounded-lg border border-gray-200 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-              >
-                취소
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleBroadcastConfirm()}
-                className="flex-1 rounded-lg bg-gray-900 py-2.5 text-sm font-semibold text-white hover:bg-gray-800"
-              >
-                발송
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
+      <ConfirmDialog
+        open={confirmOpen}
+        title="전체 사용자에게 발송할까요?"
+        description={`"${request.title}" 공지가 모든 사용자에게 알림으로 저장되고 푸시로 전달돼요. 보내면 되돌릴 수 없어요.`}
+        confirmLabel="발송"
+        onConfirm={() => void handleBroadcastConfirm()}
+        onCancel={() => setConfirmOpen(false)}
+      />
       {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
     </div>
   )

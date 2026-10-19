@@ -51,4 +51,8 @@ export const queryKeys = {
   notificationsAll: ['notifications'] as const,
   notificationsList: ['notifications', 'list'] as const,
   notificationsUnreadCount: ['notifications', 'unread-count'] as const,
+  // 관리자 신고 관리 - 복구/삭제 뒤 글·댓글 두 목록을 접두 키로 한 번에 무효화한다
+  adminModerationAll: ['admin', 'moderation'] as const,
+  adminHiddenPosts: ['admin', 'moderation', 'posts'] as const,
+  adminHiddenComments: ['admin', 'moderation', 'comments'] as const,
 }
