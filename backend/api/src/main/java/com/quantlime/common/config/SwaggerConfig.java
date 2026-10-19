@@ -28,7 +28,8 @@ import org.springframework.core.MethodParameter;
 import org.springframework.core.ParameterNameDiscoverer;
 import org.springframework.web.bind.annotation.RequestMapping;
 
-// 운영에서는 application-prod.yml의 springdoc.*.enabled=false로 문서 자체가 꺼진다.
+// 운영에서는 application-prod.yml의 SPRINGDOC_ENABLED(기본 false)로 문서 자체가 꺼지고, 서버 URL을 상대 경로("/")로
+// 둬 어느 포트/호스트로 접속하든 "Try it out"이 그 서버로 요청한다(포트를 바꿔 띄워도 라이브 서버를 건드리지 않음).
 @OpenAPIDefinition(
     info = @Info(
         title = "QuantLime API",
@@ -36,7 +37,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
         version = "v0.1"
     ),
     servers = {
-        @Server(url = "${app.swagger.server-url:http://localhost:8080}", description = "API Server")
+        @Server(url = "/", description = "현재 접속 호스트")
     }
 )
 @SecurityScheme(

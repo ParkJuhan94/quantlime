@@ -33,10 +33,12 @@ logging:
     com.quantlime: info
     org.hibernate.SQL: warn
 
-# 운영에서는 API 명세/Swagger UI를 끈다 - nginx가 /api/만 프록시해 외부에서는 이미 닿지 않지만,
-# 백엔드 포트가 열리는 사고에 대비한 이중 방어(SecurityConfig는 두 경로를 permitAll로 연다).
+# 운영에서는 API 명세/Swagger UI를 기본으로 끈다 - SecurityConfig가 두 경로를 permitAll로 열어두므로
+# 켜져 있으면 누구나 전체 API 명세를 볼 수 있다. 필요할 때만 서버의 .env.prod에 SPRINGDOC_ENABLED=true를
+# 넣고, nginx는 /swagger-ui·/v3/api-docs를 프록시하지 않으니 SSH 터널(호스트 127.0.0.1:8080)로만 접근한다
+# (docs/00-sre/DEPLOYMENT.md "운영 Swagger 접근" 참고).
 springdoc:
   api-docs:
-    enabled: false
+    enabled: ${SPRINGDOC_ENABLED:false}
   swagger-ui:
-    enabled: false
+    enabled: ${SPRINGDOC_ENABLED:false}
