@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.quantlime.support.ApiTestSupport;
+import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -17,7 +18,7 @@ class SwaggerConfigTest extends ApiTestSupport {
     private JsonNode docs(String group) throws Exception {
         String body = mockMvc.perform(get("/v3/api-docs/" + group))
             .andExpect(status().isOk())
-            .andReturn().getResponse().getContentAsString();
+            .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
         return objectMapper.readTree(body);
     }
 
@@ -55,5 +56,15 @@ class SwaggerConfigTest extends ApiTestSupport {
 
         paths.fieldNames().forEachRemaining(path -> assertThat(path).startsWith("/api/webhooks/"));
         assertThat(paths.toString()).doesNotContain("bearerAuth");
+    }
+
+    @Test
+    @DisplayName("요청 DTO 필드에 설명과 예시가 문서에 노출된다")
+    void requestSchemaHasDescriptionAndExample() throws Exception {
+        JsonNode category = docs("1. 사용자").at("/components/schemas/CreateFeedPostRequest/properties/category");
+
+        assertThat(category.get("description").asText()).contains("글 주제");
+        assertThat(category.get("example").asText()).isEqualTo("국내주식토론");
+        assertThat(category.get("enum")).hasSize(4);
     }
 }
