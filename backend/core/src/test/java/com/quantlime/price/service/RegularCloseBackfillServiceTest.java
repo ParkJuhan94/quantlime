@@ -66,11 +66,11 @@ class RegularCloseBackfillServiceTest {
             STOCK_CODE, tradeDate, 70000L, 71000L, 69000L, 70800L, 1_000_000L);
         given(dailyPriceReader.findDomesticBetween(
             eq(STOCK_CODE), any(), any())).willReturn(List.of(unconfirmed));
-        // before는 KST 15:30을 UTC(Z 표기)로 변환해 넘긴다 - TossApiClient
+        // before는 KST 15:35 컷오프(종가 단일가가 15:30~15:35에 끝나는 종목 포함)를 UTC(Z 표기)로 변환해 넘긴다 - TossApiClient
         // .get1MinuteCandleBefore는 +09:00처럼 +가 든 값을 있는 그대로도, 미리
         // %2B로 인코딩해도 정상 전달하지 못한다(실측 확인, 그 클래스 javadoc
         // 참고) - 이 구체적 문자열 매칭이 Z 표기 변환을 지킨다.
-        String expectedBeforeUtc = tradeDate.atTime(LocalTime.of(15, 30))
+        String expectedBeforeUtc = tradeDate.atTime(LocalTime.of(15, 35))
             .atZone(ZoneId.of("Asia/Seoul")).toInstant().toString();
         given(tossApiClient.get1MinuteCandleBefore(STOCK_CODE, expectedBeforeUtc))
             .willReturn(minuteCandlePage("70500"));

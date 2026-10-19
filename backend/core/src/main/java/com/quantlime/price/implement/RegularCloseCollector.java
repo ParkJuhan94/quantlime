@@ -11,7 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
- * 정규장(15:30) 종가를 Toss 1분봉으로 복원해 {@code domestic_daily_price}에 확정하는 구현
+ * 정규장 종가(15:35 컷오프 직전 마지막 1분봉)를 Toss 1분봉으로 복원해 {@code domestic_daily_price}에 확정하는 구현
  * 레이어(Implementation) - 외부 호출·변환·저장을 이 컴포넌트가 맡고,
  * {@code RegularCloseBackfillService}는 대상 종목·기간 선정과 결과 집계만 한다.
  *
@@ -26,7 +26,9 @@ import org.springframework.stereotype.Component;
 public class RegularCloseCollector {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-    private static final LocalTime REGULAR_CLOSE_TIME = LocalTime.of(15, 30);
+    // 종가 단일가 체결이 15:30~15:35 사이에 끝나는 종목이 있어 15:30이 아니라 15:35를 컷오프로 쓴다
+    // (운영 실시간 캡처 DomesticRegularCloseCaptureScheduler도 15:35). NXT 애프터(15:40~)와는 5분 여유.
+    private static final LocalTime REGULAR_CLOSE_CUTOFF_TIME = LocalTime.of(15, 35);
 
     private final DailyPriceAppender dailyPriceAppender;
     private final TossApiClient tossApiClient;
@@ -37,7 +39,7 @@ public class RegularCloseCollector {
         // .get1MinuteCandleBefore 클라이언트로는 쿼리스트링에 리터럴 +를 보내지도,
         // %2B로 사전 인코딩해 보내지도 못한다(실측 확인, 그 메서드 javadoc 참고).
         // +가 아예 없는 Z 표기를 쓰면 이 문제 자체를 피할 수 있다.
-        String before = price.getTradeDate().atTime(REGULAR_CLOSE_TIME)
+        String before = price.getTradeDate().atTime(REGULAR_CLOSE_CUTOFF_TIME)
             .atZone(KST).toInstant().toString();
         try {
             TossCandleResponse response = tossApiClient.get1MinuteCandleBefore(stockCode, before);
