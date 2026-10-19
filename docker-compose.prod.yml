@@ -173,6 +173,10 @@ services:
       # (정의된 빈 값은 "없음"이 아님). compose의 `:-`는 빈 값도 "없음"으로 취급하므로 여기서
       # SLACK_ALERT_WEBHOOK_URL로 대체한다(monitoring 오버레이의 Alertmanager와 같은 규칙).
       SLACK_INFO_WEBHOOK_URL: ${SLACK_INFO_WEBHOOK_URL:-${SLACK_ALERT_WEBHOOK_URL:-}}
+    # 호스트 루프백에만 공개 - 외부(보안 그룹/nginx)로는 노출되지 않고, 운영 Swagger를 SSH 터널
+    # (`ssh -N quantlime-tunnel`의 LocalForward)로 볼 때만 쓴다. frontend(nginx)는 compose 네트워크로 접근하므로 무관.
+    ports:
+      - "127.0.0.1:8080:8080"
     volumes:
       - upload_data:/app/uploads
     depends_on:

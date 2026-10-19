@@ -75,4 +75,10 @@ class SwaggerConfigTest extends ApiTestSupport {
 
         assertThat(code.get("example").asText()).isEqualTo("AU_000");
     }
+
+    @Test
+    @DisplayName("서버 URL은 상대 경로라 접속한 호스트로 요청이 나간다")
+    void serverUrlIsRelative() throws Exception {
+        assertThat(docs("1. 사용자").at("/servers/0/url").asText()).isEqualTo("/");
+    }
 }
