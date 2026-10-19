@@ -178,6 +178,30 @@ groups:
           summary: "퀀트 엔진 호출 실패율 20% 초과"
           description: "스코어 재계산 호출이 실패해 직전 스코어로 fallback되는 비율이 높습니다(ScoreService/PythonEngineClient)."
 
+      # FCM 푸시: 키 파일 누락(FirebaseConfig가 null 반환)이면 푸시가 조용히 건너뛰어지고 인앱 알림만 쌓인다
+      # (2026-10-19 로컬에서 발견). 토큰이 있는 사용자에게 알림이 나갔는데 skipped만 늘면 운영 설정 문제다.
+      - alert: FcmPushDisabled
+        expr: increase(fcm_push_sends_total{outcome="skipped"}[1h]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "FCM 푸시가 건너뛰어지고 있음(Firebase 미설정)"
+          description: "푸시 대상 토큰이 있는데 FirebaseMessaging 빈이 없어 발송을 건너뛰었습니다. FCM_SERVICE_ACCOUNT_PATH 파일이 컨테이너 안에 있는지 확인하세요(인앱 알림은 정상 저장됩니다)."
+
+      - alert: FcmPushFailureHigh
+        expr: |
+          sum(increase(fcm_push_sends_total{outcome=~"failure|batch_error"}[30m])) >= 5
+          and
+          sum(increase(fcm_push_sends_total{outcome=~"failure|batch_error"}[30m]))
+          / sum(increase(fcm_push_sends_total{outcome=~"success|failure|batch_error"}[30m])) > 0.3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "FCM 푸시 실패율 30% 초과"
+          description: "최근 30분 푸시 발송의 30% 이상이 실패했습니다(만료 토큰 정리는 제외). 서비스 계정 키 권한/만료, FCM 장애, 네트워크를 확인하세요. 인앱 알림은 정상 저장됩니다."
+
   # --- 백업(scripts/backup-mysql.sh·backup-uploads.sh가 node-exporter
   # textfile collector로 직접 기록하는 성공 시각) ---
   - name: quantlime-backup
