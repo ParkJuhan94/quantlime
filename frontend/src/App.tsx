@@ -17,10 +17,13 @@ import { MyInfoPage } from './pages/MyInfoPage'
 import { SubscribePage } from './pages/SubscribePage'
 import { PaymentResultPage } from './pages/PaymentResultPage'
 import { ProtectedRoute } from './auth/ProtectedRoute'
+import { AdminRoute } from './auth/AdminRoute'
+import { AdminLayout } from './pages/admin/AdminLayout'
+import { AdminNotificationPage } from './pages/admin/AdminNotificationPage'
 import { logoutToast } from './auth/logoutToast'
 
 // OAuth 콜백/결제 체크아웃 화면에는 관심종목 패널을 띄우지 않는다.
-const ROUTE_PREFIXES_WITHOUT_SIDE_PANEL = ['/oauth/callback', '/subscribe']
+const ROUTE_PREFIXES_WITHOUT_SIDE_PANEL = ['/oauth/callback', '/subscribe', '/admin']
 
 function App() {
   const [panelWidth, setPanelWidth] = useState(0)
@@ -68,6 +71,12 @@ function App() {
                 <Route path="/me" element={<MyInfoPage />} />
                 <Route path="/subscribe" element={<SubscribePage />} />
                 <Route path="/subscribe/result" element={<PaymentResultPage />} />
+              </Route>
+              <Route element={<AdminRoute />}>
+                <Route path="/admin" element={<AdminLayout />}>
+                  <Route index element={<Navigate to="notifications" replace />} />
+                  <Route path="notifications" element={<AdminNotificationPage />} />
+                </Route>
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

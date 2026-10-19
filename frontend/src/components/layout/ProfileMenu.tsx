@@ -36,6 +36,11 @@ export function ProfileMenu({ onLogout }: ProfileMenuProps) {
     navigate('/subscribe')
   }
 
+  function handleAdmin() {
+    setOpen(false)
+    navigate('/admin')
+  }
+
   function handleLogout() {
     setOpen(false)
     onLogout()
@@ -76,6 +81,16 @@ export function ProfileMenu({ onLogout }: ProfileMenuProps) {
               구독 관리
               <span className="text-gray-300">›</span>
             </button>
+            {me?.role === 'ADMIN' && (
+              <button
+                type="button"
+                onClick={handleAdmin}
+                className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                관리자
+                <span className="text-gray-300">›</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={handleLogout}
