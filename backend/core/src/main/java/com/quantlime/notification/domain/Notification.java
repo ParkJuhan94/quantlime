@@ -17,9 +17,12 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.util.List;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.springframework.util.Assert;
 
 // 브로드캐스트(관리자 공지, 전체 스코어 랭킹)도 사용자별로 별도 row를
@@ -58,27 +61,40 @@ public class Notification extends TimeBaseEntity {
     @Column(name = "link_url", length = 500)
     private String linkUrl;
 
+    // 랭킹·사분면 알림의 종목 목록(화면에서 종목명마다 상세 링크). 종목이 없는 알림과 이 컬럼 도입 전 행은 null.
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "stocks", columnDefinition = "json")
+    private List<NotificationStock> stocks;
+
     @Column(name = "is_read", nullable = false)
     private boolean isRead;
 
     @Builder
-    private Notification(User user, NotificationType type, String title, String content, String linkUrl) {
+    private Notification(User user, NotificationType type, String title, String content, String linkUrl,
+                         List<NotificationStock> stocks) {
         validateNotification(user, type, title, content);
         this.user = user;
         this.type = type;
         this.title = title;
         this.content = content;
         this.linkUrl = linkUrl;
+        this.stocks = (stocks == null || stocks.isEmpty()) ? null : List.copyOf(stocks);
         this.isRead = false;
     }
 
     public static Notification of(User user, NotificationType type, String title, String content, String linkUrl) {
+        return of(user, type, title, content, linkUrl, null);
+    }
+
+    public static Notification of(User user, NotificationType type, String title, String content, String linkUrl,
+                                  List<NotificationStock> stocks) {
         return Notification.builder()
             .user(user)
             .type(type)
             .title(title)
             .content(content)
             .linkUrl(linkUrl)
+            .stocks(stocks)
             .build();
     }
 

@@ -3,6 +3,7 @@ package com.quantlime.notification.service;
 import com.quantlime.common.dto.PageResponse;
 import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.notification.domain.Notification;
+import com.quantlime.notification.domain.NotificationStock;
 import com.quantlime.notification.domain.NotificationType;
 import com.quantlime.notification.dto.mapper.NotificationMapper;
 import com.quantlime.notification.dto.response.NotificationResponse;
@@ -31,8 +32,14 @@ public class NotificationService {
 
     @Transactional
     public void save(Long userId, NotificationType type, String title, String content, String linkUrl) {
+        save(userId, type, title, content, linkUrl, List.of());
+    }
+
+    @Transactional
+    public void save(Long userId, NotificationType type, String title, String content, String linkUrl,
+                     List<NotificationStock> stocks) {
         User user = userService.getById(userId);
-        notificationAppender.save(Notification.of(user, type, title, content, linkUrl));
+        notificationAppender.save(Notification.of(user, type, title, content, linkUrl, stocks));
     }
 
     // 관리자 공지/전체 스코어 랭킹처럼 다수 사용자에게 동시에 보내는
@@ -41,8 +48,14 @@ public class NotificationService {
     @Transactional
     public void saveAll(Collection<Long> userIds, NotificationType type, String title, String content,
                         String linkUrl) {
+        saveAll(userIds, type, title, content, linkUrl, List.of());
+    }
+
+    @Transactional
+    public void saveAll(Collection<Long> userIds, NotificationType type, String title, String content,
+                        String linkUrl, List<NotificationStock> stocks) {
         List<Notification> notifications = userReader.findAllById(userIds).stream()
-            .map(user -> Notification.of(user, type, title, content, linkUrl))
+            .map(user -> Notification.of(user, type, title, content, linkUrl, stocks))
             .toList();
         notificationAppender.saveAll(notifications);
     }

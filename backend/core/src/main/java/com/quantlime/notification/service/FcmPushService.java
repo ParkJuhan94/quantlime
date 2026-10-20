@@ -7,6 +7,7 @@ import com.google.firebase.messaging.MessagingErrorCode;
 import com.google.firebase.messaging.MulticastMessage;
 import com.google.firebase.messaging.SendResponse;
 import com.quantlime.notification.domain.FcmToken;
+import com.quantlime.notification.domain.NotificationStock;
 import com.quantlime.notification.domain.NotificationType;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -78,16 +79,27 @@ public class FcmPushService {
     }
 
     public void sendToUser(Long userId, NotificationType type, String title, String content, String linkUrl) {
-        notificationService.save(userId, type, title, content, linkUrl);
+        sendToUser(userId, type, title, content, linkUrl, List.of());
+    }
+
+    // stocks는 인앱 알림에만 저장돼 화면의 종목명 링크가 되고, 푸시 페이로드에는 싣지 않는다.
+    public void sendToUser(Long userId, NotificationType type, String title, String content, String linkUrl,
+                           List<NotificationStock> stocks) {
+        notificationService.save(userId, type, title, content, linkUrl, stocks);
         pushToTokens(fcmTokenService.getTokensForUser(userId), title, content, linkUrl);
     }
 
     public void sendToUsers(Collection<Long> userIds, NotificationType type, String title, String content,
                             String linkUrl) {
+        sendToUsers(userIds, type, title, content, linkUrl, List.of());
+    }
+
+    public void sendToUsers(Collection<Long> userIds, NotificationType type, String title, String content,
+                            String linkUrl, List<NotificationStock> stocks) {
         if (userIds.isEmpty()) {
             return;
         }
-        notificationService.saveAll(userIds, type, title, content, linkUrl);
+        notificationService.saveAll(userIds, type, title, content, linkUrl, stocks);
         pushToTokens(fcmTokenService.getTokensForUsers(userIds), title, content, linkUrl);
     }
 

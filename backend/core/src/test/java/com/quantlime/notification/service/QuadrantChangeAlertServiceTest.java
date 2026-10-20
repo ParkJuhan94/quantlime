@@ -16,6 +16,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.quantlime.notification.cache.QuadrantAlertSentStore;
+import com.quantlime.notification.domain.NotificationStock;
 import com.quantlime.notification.domain.NotificationType;
 import com.quantlime.score.domain.Quadrant;
 import com.quantlime.score.domain.Score;
@@ -94,7 +95,8 @@ class QuadrantChangeAlertServiceTest {
 
         assertThat(count).isEqualTo(1);
         verify(fcmPushService).sendToUser(eq(USER_ID), eq(NotificationType.QUADRANT_CHANGE),
-            eq("관심종목 사분면 변화 1건"), eq("삼성전자 상승추세 눌림목→추세 연장·과열"), anyString());
+            eq("관심종목 사분면 변화 1건"), eq("삼성전자 상승추세 눌림목→추세 연장·과열"), anyString(),
+            eq(List.of(new NotificationStock("005930", "삼성전자"))));
         verify(sentStore, never()).markIfNew(USER_ID, "000660", TODAY);
     }
 
@@ -150,7 +152,7 @@ class QuadrantChangeAlertServiceTest {
         assertThat(service.notifyUser(USER_ID, TODAY)).isEqualTo(2);
 
         verify(fcmPushService).sendToUser(eq(USER_ID), eq(NotificationType.QUADRANT_CHANGE),
-            eq("관심종목 사분면 변화 2건"), anyString(), anyString());
+            eq("관심종목 사분면 변화 2건"), anyString(), anyString(), anyList());
     }
 
     @Test
@@ -168,7 +170,7 @@ class QuadrantChangeAlertServiceTest {
         service.notifyUser(USER_ID, TODAY);
 
         verify(fcmPushService).sendToUser(eq(USER_ID), eq(NotificationType.QUADRANT_CHANGE),
-            eq("관심종목 사분면 변화 5건"), contains("외 2건"), anyString());
+            eq("관심종목 사분면 변화 5건"), contains("외 2건"), anyString(), anyList());
     }
 
     @Test
@@ -183,7 +185,7 @@ class QuadrantChangeAlertServiceTest {
         Stock samsung = stock("005930", "삼성전자");
         given(stockReader.findByStockCodeIn(anyList())).willReturn(List.of(samsung));
         willThrow(new IllegalStateException("fcm down")).given(fcmPushService)
-            .sendToUser(any(), any(), anyString(), anyString(), anyString());
+            .sendToUser(any(), any(), anyString(), anyString(), anyString(), anyList());
 
         assertThatThrownBy(() -> service.notifyUser(USER_ID, TODAY)).isInstanceOf(IllegalStateException.class);
 

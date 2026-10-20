@@ -2,6 +2,7 @@ package com.quantlime.notification.scheduler;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -10,6 +11,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.quantlime.notification.domain.NotificationStock;
 import com.quantlime.notification.domain.NotificationType;
 import com.quantlime.notification.service.FcmPushService;
 import com.quantlime.score.dto.response.ScoreRankingResponse;
@@ -77,10 +79,11 @@ class ScoreRankingNotificationSchedulerTest {
 
         // then
         verify(fcmPushService).sendToUsers(List.of(1L, 2L), NotificationType.SCORE_RANKING_GLOBAL,
-            "오늘의 스코어 상위 종목", "삼성전자(STRONG_BUY), 카카오", "/");
+            "오늘의 스코어 상위 종목", "삼성전자(STRONG_BUY), 카카오", "/", List.of(
+                new NotificationStock("000001", "삼성전자"), new NotificationStock("000001", "카카오")));
         verify(fcmPushService).sendToUser(1L, NotificationType.SCORE_RANKING_WATCHLIST,
-            "내 관심종목 스코어 상위", "네이버(BUY)", "/");
-        verify(fcmPushService, never()).sendToUser(eq(2L), any(), anyString(), anyString(), anyString());
+            "내 관심종목 스코어 상위", "네이버(BUY)", "/", List.of(new NotificationStock("000001", "네이버")));
+        verify(fcmPushService, never()).sendToUser(eq(2L), any(), anyString(), anyString(), anyString(), anyList());
     }
 
     @Test
@@ -97,8 +100,8 @@ class ScoreRankingNotificationSchedulerTest {
         scheduler.notifyAfterMarketClose();
 
         // then
-        verify(fcmPushService).sendToUser(1L, NotificationType.SCORE_RANKING_WATCHLIST,
-            "내 관심종목 스코어 상위", "A(BUY), B(BUY), C(BUY), D(BUY), E(BUY)", "/");
+        verify(fcmPushService).sendToUser(eq(1L), eq(NotificationType.SCORE_RANKING_WATCHLIST),
+            eq("내 관심종목 스코어 상위"), eq("A(BUY), B(BUY), C(BUY), D(BUY), E(BUY)"), eq("/"), anyList());
     }
 
     @Test
@@ -113,9 +116,9 @@ class ScoreRankingNotificationSchedulerTest {
         scheduler.notifyAfterMarketClose();
 
         // then
-        verify(fcmPushService, never()).sendToUsers(any(), any(), anyString(), anyString(), anyString());
+        verify(fcmPushService, never()).sendToUsers(any(), any(), anyString(), anyString(), anyString(), anyList());
         verify(fcmPushService).sendToUser(eq(1L), eq(NotificationType.SCORE_RANKING_WATCHLIST),
-            anyString(), anyString(), anyString());
+            anyString(), anyString(), anyString(), anyList());
     }
 
     @Test
@@ -130,7 +133,7 @@ class ScoreRankingNotificationSchedulerTest {
         // when & then
         assertThatCode(() -> scheduler.notifyAfterMarketClose()).doesNotThrowAnyException();
         verify(fcmPushService).sendToUser(eq(2L), eq(NotificationType.SCORE_RANKING_WATCHLIST),
-            anyString(), anyString(), anyString());
+            anyString(), anyString(), anyString(), anyList());
     }
 
     @Test
