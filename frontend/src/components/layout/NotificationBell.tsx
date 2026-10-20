@@ -6,6 +6,7 @@ import {
   useNotificationsInfiniteQuery,
   useUnreadNotificationCountQuery,
 } from '../../hooks/queries/useNotifications'
+import { splitContentByStocks } from '../../utils/notificationContent'
 import { getNotificationTypeStyle, NOTIFICATION_TONE_CLASSES } from '../../utils/notificationType'
 import { formatRelativeTime } from '../../utils/relativeTime'
 
@@ -95,51 +96,56 @@ export function NotificationBell() {
               <p className="px-1 py-6 text-center text-sm text-gray-400">받은 알림이 없어요.</p>
             )}
             {notifications.map((notification) => (
+              // 알림 전체를 누를 수 있게 제목 버튼을 카드 크기로 펼치고(after:absolute), 본문 속 종목명 버튼은 그 위(z-10)에
+              // 띄운다 - 버튼 안에 버튼을 넣을 수 없어서 쓰는 stretched-link 방식이다.
               <div
                 key={notification.id}
-                className={`flex flex-col gap-1.5 rounded-lg px-2 py-2 transition hover:bg-gray-100 ${
+                className={`relative flex flex-col gap-0.5 rounded-lg px-2 py-2 transition hover:bg-gray-100 ${
                   notification.isRead ? 'text-gray-500' : 'bg-gray-50 text-gray-900'
                 }`}
               >
-                <button
-                  type="button"
-                  onClick={() => handleSelect(notification.id, notification.isRead, notification.linkUrl)}
-                  className="flex w-full flex-col gap-0.5 text-left"
+                <span
+                  className={`self-start rounded-md px-1.5 py-0.5 text-xs font-semibold ${
+                    NOTIFICATION_TONE_CLASSES[getNotificationTypeStyle(notification.type).tone]
+                  }`}
                 >
-                  <span
-                    className={`self-start rounded-md px-1.5 py-0.5 text-xs font-semibold ${
-                      NOTIFICATION_TONE_CLASSES[getNotificationTypeStyle(notification.type).tone]
-                    }`}
+                  {getNotificationTypeStyle(notification.type).label}
+                </span>
+                <span className="flex items-baseline justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleSelect(notification.id, notification.isRead, notification.linkUrl)}
+                    className="text-left text-sm font-semibold after:absolute after:inset-0 after:content-['']"
                   >
-                    {getNotificationTypeStyle(notification.type).label}
-                  </span>
-                  <span className="flex items-baseline justify-between gap-2">
-                    <span className="text-sm font-semibold">{notification.title}</span>
-                    <time
-                      dateTime={notification.createdAt}
-                      title={notification.createdAt.replace('T', ' ')}
-                      className="shrink-0 text-xs text-gray-400"
-                    >
-                      {formatRelativeTime(notification.createdAt)}
-                    </time>
-                  </span>
-                  <span className="text-xs">{notification.content}</span>
-                </button>
-                {/* 배포 중 옛 백엔드 응답(stocks 없음)에도 깨지지 않게 ?? [] 로 받는다. 종목명을 누르면 알림 전체 링크 대신 그 종목의 상세로 간다(버튼 안에 버튼을 못 넣어 본문과 분리) */}
-                {(notification.stocks ?? []).length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {(notification.stocks ?? []).map((stock) => (
+                    {notification.title}
+                  </button>
+                  <time
+                    dateTime={notification.createdAt}
+                    title={notification.createdAt.replace('T', ' ')}
+                    className="shrink-0 text-xs text-gray-400"
+                  >
+                    {formatRelativeTime(notification.createdAt)}
+                  </time>
+                </span>
+                {/* 배포 중 옛 백엔드 응답(stocks 없음)에도 깨지지 않게 ?? [] 로 받는다 */}
+                <p className="text-xs">
+                  {splitContentByStocks(notification.content, notification.stocks ?? []).map((segment, index) =>
+                    segment.kind === 'stock' ? (
                       <button
-                        key={stock.code}
+                        // oxlint-disable-next-line react/no-array-index-key -- 본문을 쪼갠 조각은 위치로만 구분되고(안정 id가 없음) 알림이 바뀌면 통째로 다시 그려진다
+                        key={index}
                         type="button"
-                        onClick={() => handleSelect(notification.id, notification.isRead, `/stocks/${stock.code}`)}
-                        className="rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-xs font-semibold text-gray-700 hover:bg-gray-100"
+                        onClick={() => handleSelect(notification.id, notification.isRead, `/stocks/${segment.code}`)}
+                        className="relative z-10 font-semibold text-gray-900 underline decoration-gray-300 decoration-2 underline-offset-2 hover:decoration-gray-900"
                       >
-                        {stock.name}
+                        {segment.text}
                       </button>
-                    ))}
-                  </div>
-                )}
+                    ) : (
+                      // oxlint-disable-next-line react/no-array-index-key -- 위와 같은 이유(본문 조각은 위치가 곧 식별자)
+                      <span key={index}>{segment.text}</span>
+                    ),
+                  )}
+                </p>
               </div>
             ))}
             {hasNextPage && (
