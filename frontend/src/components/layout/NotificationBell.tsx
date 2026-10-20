@@ -95,33 +95,52 @@ export function NotificationBell() {
               <p className="px-1 py-6 text-center text-sm text-gray-400">받은 알림이 없어요.</p>
             )}
             {notifications.map((notification) => (
-              <button
+              <div
                 key={notification.id}
-                type="button"
-                onClick={() => handleSelect(notification.id, notification.isRead, notification.linkUrl)}
-                className={`flex w-full flex-col gap-0.5 rounded-lg px-2 py-2 text-left transition hover:bg-gray-100 ${
+                className={`flex flex-col gap-1.5 rounded-lg px-2 py-2 transition hover:bg-gray-100 ${
                   notification.isRead ? 'text-gray-500' : 'bg-gray-50 text-gray-900'
                 }`}
               >
-                <span
-                  className={`self-start rounded-md px-1.5 py-0.5 text-xs font-semibold ${
-                    NOTIFICATION_TONE_CLASSES[getNotificationTypeStyle(notification.type).tone]
-                  }`}
+                <button
+                  type="button"
+                  onClick={() => handleSelect(notification.id, notification.isRead, notification.linkUrl)}
+                  className="flex w-full flex-col gap-0.5 text-left"
                 >
-                  {getNotificationTypeStyle(notification.type).label}
-                </span>
-                <span className="flex items-baseline justify-between gap-2">
-                  <span className="text-sm font-semibold">{notification.title}</span>
-                  <time
-                    dateTime={notification.createdAt}
-                    title={notification.createdAt.replace('T', ' ')}
-                    className="shrink-0 text-xs text-gray-400"
+                  <span
+                    className={`self-start rounded-md px-1.5 py-0.5 text-xs font-semibold ${
+                      NOTIFICATION_TONE_CLASSES[getNotificationTypeStyle(notification.type).tone]
+                    }`}
                   >
-                    {formatRelativeTime(notification.createdAt)}
-                  </time>
-                </span>
-                <span className="text-xs">{notification.content}</span>
-              </button>
+                    {getNotificationTypeStyle(notification.type).label}
+                  </span>
+                  <span className="flex items-baseline justify-between gap-2">
+                    <span className="text-sm font-semibold">{notification.title}</span>
+                    <time
+                      dateTime={notification.createdAt}
+                      title={notification.createdAt.replace('T', ' ')}
+                      className="shrink-0 text-xs text-gray-400"
+                    >
+                      {formatRelativeTime(notification.createdAt)}
+                    </time>
+                  </span>
+                  <span className="text-xs">{notification.content}</span>
+                </button>
+                {/* 배포 중 옛 백엔드 응답(stocks 없음)에도 깨지지 않게 ?? [] 로 받는다. 종목명을 누르면 알림 전체 링크 대신 그 종목의 상세로 간다(버튼 안에 버튼을 못 넣어 본문과 분리) */}
+                {(notification.stocks ?? []).length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {(notification.stocks ?? []).map((stock) => (
+                      <button
+                        key={stock.code}
+                        type="button"
+                        onClick={() => handleSelect(notification.id, notification.isRead, `/stocks/${stock.code}`)}
+                        className="rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-xs font-semibold text-gray-700 hover:bg-gray-100"
+                      >
+                        {stock.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             ))}
             {hasNextPage && (
               <div ref={sentinelRef} className="py-3 text-center text-xs text-gray-400">
