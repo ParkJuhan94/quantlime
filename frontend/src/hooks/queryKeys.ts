@@ -55,4 +55,6 @@ export const queryKeys = {
   adminModerationAll: ['admin', 'moderation'] as const,
   adminHiddenPosts: ['admin', 'moderation', 'posts'] as const,
   adminHiddenComments: ['admin', 'moderation', 'comments'] as const,
+  adminVideoChannels: ['admin', 'video-channels'] as const,
+  adminTelegramChannels: ['admin', 'telegram-channels'] as const,
 }
