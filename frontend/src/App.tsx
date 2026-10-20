@@ -10,6 +10,8 @@ import { HomePage } from './pages/HomePage'
 import { FeedPage } from './pages/FeedPage'
 import { VideoFeedPage } from './pages/VideoFeedPage'
 import { TelegramFeedPage } from './pages/TelegramFeedPage'
+import { NoticeDetailPage } from './pages/NoticeDetailPage'
+import { NoticeListPage } from './pages/NoticeListPage'
 import { StockDetailPage } from './pages/StockDetailPage'
 import { BacktestPage } from './pages/BacktestPage'
 import { IndexDetailPage } from './pages/IndexDetailPage'
@@ -21,6 +23,7 @@ import { AdminRoute } from './auth/AdminRoute'
 import { AdminLayout } from './pages/admin/AdminLayout'
 import { AdminBacktestPage } from './pages/admin/AdminBacktestPage'
 import { AdminModerationPage } from './pages/admin/AdminModerationPage'
+import { AdminNoticePage } from './pages/admin/AdminNoticePage'
 import { AdminNotificationPage } from './pages/admin/AdminNotificationPage'
 import { AdminTelegramFeedPage } from './pages/admin/AdminTelegramFeedPage'
 import { AdminVideoFeedPage } from './pages/admin/AdminVideoFeedPage'
@@ -71,6 +74,8 @@ function App() {
               <Route path="/feed" element={<FeedPage />} />
               <Route path="/videos" element={<VideoFeedPage />} />
               <Route path="/telegram" element={<TelegramFeedPage />} />
+              <Route path="/notices" element={<NoticeListPage />} />
+              <Route path="/notices/:noticeId" element={<NoticeDetailPage />} />
               <Route element={<ProtectedRoute />}>
                 <Route path="/me" element={<MyInfoPage />} />
                 <Route path="/subscribe" element={<SubscribePage />} />
@@ -79,6 +84,7 @@ function App() {
               <Route element={<AdminRoute />}>
                 <Route path="/admin" element={<AdminLayout />}>
                   <Route index element={<Navigate to="notifications" replace />} />
+                  <Route path="notices" element={<AdminNoticePage />} />
                   <Route path="notifications" element={<AdminNotificationPage />} />
                   <Route path="moderation" element={<AdminModerationPage />} />
                   <Route path="video-feed" element={<AdminVideoFeedPage />} />
