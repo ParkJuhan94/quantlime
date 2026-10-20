@@ -1,12 +1,20 @@
 import { NavLink, Outlet } from 'react-router-dom'
 
-// 관리 기능이 늘어나면 그룹과 항목만 추가한다(공지 발송 -> 신고 관리 -> 수집·백테스트 트리거 순으로 이관 중).
+// 관리 기능이 늘어나면 그룹과 항목만 추가한다.
 const ADMIN_MENU_GROUPS = [
   {
     title: '커뮤니티',
     menus: [
       { to: '/admin/notifications', label: '공지 발송' },
       { to: '/admin/moderation', label: '신고 관리' },
+    ],
+  },
+  {
+    title: '데이터',
+    menus: [
+      { to: '/admin/video-feed', label: '영상 수집' },
+      { to: '/admin/telegram-feed', label: '텔레그램 수집' },
+      { to: '/admin/backtest', label: '백테스트' },
     ],
   },
 ]
