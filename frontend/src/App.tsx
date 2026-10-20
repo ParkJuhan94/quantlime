@@ -21,9 +21,12 @@ import { PaymentResultPage } from './pages/PaymentResultPage'
 import { ProtectedRoute } from './auth/ProtectedRoute'
 import { AdminRoute } from './auth/AdminRoute'
 import { AdminLayout } from './pages/admin/AdminLayout'
+import { AdminBacktestPage } from './pages/admin/AdminBacktestPage'
 import { AdminModerationPage } from './pages/admin/AdminModerationPage'
 import { AdminNoticePage } from './pages/admin/AdminNoticePage'
 import { AdminNotificationPage } from './pages/admin/AdminNotificationPage'
+import { AdminTelegramFeedPage } from './pages/admin/AdminTelegramFeedPage'
+import { AdminVideoFeedPage } from './pages/admin/AdminVideoFeedPage'
 import { logoutToast } from './auth/logoutToast'
 
 // OAuth 콜백/결제 체크아웃 화면에는 관심종목 패널을 띄우지 않는다.
@@ -84,6 +87,9 @@ function App() {
                   <Route path="notices" element={<AdminNoticePage />} />
                   <Route path="notifications" element={<AdminNotificationPage />} />
                   <Route path="moderation" element={<AdminModerationPage />} />
+                  <Route path="video-feed" element={<AdminVideoFeedPage />} />
+                  <Route path="telegram-feed" element={<AdminTelegramFeedPage />} />
+                  <Route path="backtest" element={<AdminBacktestPage />} />
                 </Route>
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />

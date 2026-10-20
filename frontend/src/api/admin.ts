@@ -1,5 +1,12 @@
 import { apiClient } from './client'
-import type { AdminFeedComment, AdminFeedPost } from '../types/admin'
+import type {
+  AdminChannel,
+  AdminFeedComment,
+  AdminFeedPost,
+  CollectResult,
+  CrossSectionalParams,
+  TelegramRetentionResult,
+} from '../types/admin'
 import type { PageResponse } from '../types/stock'
 
 export interface AdminNotificationRequest {
@@ -49,4 +56,81 @@ export async function deletePost(postId: number): Promise<void> {
 
 export async function deleteComment(commentId: number): Promise<void> {
   await apiClient.delete(`/api/admin/feed-moderation/comments/${commentId}`)
+}
+
+// ---- 영상(유튜브) 수집 ----
+
+export async function getVideoChannels(): Promise<AdminChannel[]> {
+  const { data } = await apiClient.get<AdminChannel[]>('/api/admin/feed/channels')
+  return data
+}
+
+export async function collectVideos(): Promise<CollectResult[]> {
+  const { data } = await apiClient.post<CollectResult[]>('/api/admin/feed/collect')
+  return data
+}
+
+// 아래 두 호출의 응답은 처리 결과가 아니라 이벤트 "발행 건수"다(실제 처리는 Kafka 컨슈머가 비동기로 한다)
+export async function republishTranscribe(): Promise<number> {
+  const { data } = await apiClient.post<number>('/api/admin/feed/transcribe')
+  return data
+}
+
+export async function republishSummarize(): Promise<number> {
+  const { data } = await apiClient.post<number>('/api/admin/feed/summarize')
+  return data
+}
+
+export async function initializeVelocity(channelId: number): Promise<number> {
+  const { data } = await apiClient.post<number>(`/api/admin/feed/channels/${channelId}/velocity/initialize`)
+  return data
+}
+
+export async function cleanupVideos(): Promise<number> {
+  const { data } = await apiClient.post<number>('/api/admin/feed/retention/cleanup')
+  return data
+}
+
+// ---- 텔레그램 수집 ----
+
+export async function getTelegramChannels(): Promise<AdminChannel[]> {
+  const { data } = await apiClient.get<AdminChannel[]>('/api/admin/telegram-feed/channels')
+  return data
+}
+
+export async function collectTelegram(): Promise<CollectResult[]> {
+  const { data } = await apiClient.post<CollectResult[]>('/api/admin/telegram-feed/collect')
+  return data
+}
+
+export async function republishDigest(): Promise<number> {
+  const { data } = await apiClient.post<number>('/api/admin/telegram-feed/digest/generate')
+  return data
+}
+
+export async function cleanupTelegram(): Promise<TelegramRetentionResult> {
+  const { data } = await apiClient.post<TelegramRetentionResult>('/api/admin/telegram-feed/retention/cleanup')
+  return data
+}
+
+// ---- 백테스트(무거운 작업, 응답은 시작/완료 안내 문자열) ----
+
+export async function prepareBacktestDataset(): Promise<string> {
+  const { data } = await apiClient.post<string>('/api/admin/backtest/prepare-dataset')
+  return data
+}
+
+export async function runBacktest(stockCode: string): Promise<string> {
+  const { data } = await apiClient.post<string>('/api/admin/backtest/run', null, { params: { stockCode } })
+  return data
+}
+
+export async function runUniverseBacktest(force: boolean): Promise<string> {
+  const { data } = await apiClient.post<string>('/api/admin/backtest/run-universe', null, { params: { force } })
+  return data
+}
+
+export async function runCrossSectionalBacktest(params: CrossSectionalParams): Promise<string> {
+  const { data } = await apiClient.post<string>('/api/admin/backtest/cross-sectional', null, { params })
+  return data
 }
