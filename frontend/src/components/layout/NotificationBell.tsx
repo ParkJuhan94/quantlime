@@ -97,7 +97,9 @@ export function NotificationBell() {
             )}
             {notifications.map((notification) => (
               // 알림 전체를 누를 수 있게 제목 버튼을 카드 크기로 펼치고(after:absolute), 본문 속 종목명 버튼은 그 위(z-10)에
-              // 띄운다 - 버튼 안에 버튼을 넣을 수 없어서 쓰는 stretched-link 방식이다.
+              // 띄운다 - 버튼 안에 버튼을 넣을 수 없어서 쓰는 stretched-link 방식이다. 제목 버튼은 전역 hover filter(index.css)를
+              // 꺼야 한다: filter가 걸리면 그 버튼이 absolute 자식(펼친 영역)의 기준 박스가 돼 영역이 글자 크기로 줄고 호버가
+              // 풀렸다 다시 걸리는 깜빡임이 생긴다.
               <div
                 key={notification.id}
                 className={`relative flex flex-col gap-0.5 rounded-lg px-2 py-2 transition hover:bg-gray-100 ${
@@ -115,7 +117,7 @@ export function NotificationBell() {
                   <button
                     type="button"
                     onClick={() => handleSelect(notification.id, notification.isRead, notification.linkUrl)}
-                    className="text-left text-sm font-semibold after:absolute after:inset-0 after:content-['']"
+                    className="text-left text-sm font-semibold after:absolute after:inset-0 after:content-[''] hover:filter-none!"
                   >
                     {notification.title}
                   </button>
@@ -136,7 +138,7 @@ export function NotificationBell() {
                         key={index}
                         type="button"
                         onClick={() => handleSelect(notification.id, notification.isRead, `/stocks/${segment.code}`)}
-                        className="relative z-10 font-semibold text-gray-900 underline decoration-gray-300 decoration-2 underline-offset-2 hover:decoration-gray-900"
+                        className="relative z-10 rounded font-semibold text-gray-900 hover:bg-gray-200"
                       >
                         {segment.text}
                       </button>
