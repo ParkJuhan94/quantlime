@@ -5,7 +5,8 @@ const ADMIN_MENU_GROUPS = [
   {
     title: '커뮤니티',
     menus: [
-      { to: '/admin/notifications', label: '공지 발송' },
+      { to: '/admin/notices', label: '공지 관리' },
+      { to: '/admin/notifications', label: '알림 발송' },
       { to: '/admin/moderation', label: '신고 관리' },
     ],
   },

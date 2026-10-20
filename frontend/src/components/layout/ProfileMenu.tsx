@@ -31,6 +31,11 @@ export function ProfileMenu({ onLogout }: ProfileMenuProps) {
     navigate('/me')
   }
 
+  function handleNotices() {
+    setOpen(false)
+    navigate('/notices')
+  }
+
   function handleAdmin() {
     setOpen(false)
     navigate('/admin')
@@ -66,6 +71,14 @@ export function ProfileMenu({ onLogout }: ProfileMenuProps) {
               className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
               내 정보
+              <span className="text-gray-300">›</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleNotices}
+              className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              공지사항
               <span className="text-gray-300">›</span>
             </button>
             {me?.role === 'ADMIN' && (

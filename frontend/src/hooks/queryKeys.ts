@@ -35,6 +35,10 @@ export const queryKeys = {
   feedPostsAll: ['feed', 'posts'] as const,
   feedPosts: (category?: string) => ['feed', 'posts', category ?? 'all'] as const,
   feedComments: (postId: number) => ['feed', 'posts', postId, 'comments'] as const,
+  // 공지 목록·상세를 접두 키 하나로 함께 무효화한다(등록·수정·삭제 뒤)
+  noticesAll: ['notices'] as const,
+  noticesList: ['notices', 'list'] as const,
+  notice: (noticeId: number) => ['notices', 'detail', noticeId] as const,
   videoFeed: (tickerCode?: string, channelId?: number, date?: string) =>
     ['videoFeed', tickerCode ?? 'all', channelId ?? 'all', date ?? 'all'] as const,
   videoFeedDetail: (videoId: number) => ['videoFeed', 'detail', videoId] as const,
