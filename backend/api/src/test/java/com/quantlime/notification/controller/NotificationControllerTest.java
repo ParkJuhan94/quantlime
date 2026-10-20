@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.quantlime.auth.jwt.JwtTokenProvider;
 import com.quantlime.notification.domain.Notification;
+import com.quantlime.notification.domain.NotificationStock;
 import com.quantlime.notification.domain.NotificationType;
 import com.quantlime.notification.repository.FcmTokenRepository;
 import com.quantlime.notification.repository.NotificationRepository;
@@ -18,6 +19,7 @@ import com.quantlime.user.UserFixture;
 import com.quantlime.user.domain.OAuthProvider;
 import com.quantlime.user.domain.User;
 import com.quantlime.user.repository.UserRepository;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -160,5 +162,21 @@ class NotificationControllerTest extends MockedServicesApiTestSupport {
                 .header("Authorization", "Bearer " + accessToken))
             .andExpect(status().isNotFound());
         assertThat(notificationRepository.findById(others.getId()).orElseThrow().isRead()).isFalse();
+    }
+
+    @Test
+    @DisplayName("[종목이 딸린 알림은 JSON 컬럼에 저장됐다가 stocks로 내려오고, 종목이 없는 알림은 빈 배열이다]")
+    void getNotifications_returnsStocksFromJsonColumn() throws Exception {
+        notificationRepository.save(Notification.of(user, NotificationType.SCORE_RANKING_GLOBAL, "오늘의 스코어 상위 종목",
+            "삼성전자(A), SK하이닉스(B)", "/",
+            List.of(new NotificationStock("005930", "삼성전자"), new NotificationStock("000660", "SK하이닉스"))));
+        saveNotification(user, "종목 없는 알림");
+
+        mockMvc.perform(get("/api/notifications").header("Authorization", "Bearer " + accessToken))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content.length()").value(2))
+            .andExpect(jsonPath("$.content[?(@.title=='종목 없는 알림')].stocks.length()").value(0))
+            .andExpect(jsonPath("$.content[?(@.title=='오늘의 스코어 상위 종목')].stocks[0].code").value("005930"))
+            .andExpect(jsonPath("$.content[?(@.title=='오늘의 스코어 상위 종목')].stocks[1].name").value("SK하이닉스"));
     }
 }

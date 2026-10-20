@@ -16,6 +16,7 @@ import com.google.firebase.messaging.MessagingErrorCode;
 import com.google.firebase.messaging.MulticastMessage;
 import com.google.firebase.messaging.SendResponse;
 import com.quantlime.notification.domain.FcmToken;
+import com.quantlime.notification.domain.NotificationStock;
 import com.quantlime.notification.domain.NotificationType;
 import com.quantlime.user.UserFixture;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -96,7 +97,7 @@ class FcmPushServiceTest {
         service(false).sendToUser(1L, NotificationType.SYSTEM, "t", "c", "/l");
 
         // then
-        verify(notificationService).save(1L, NotificationType.SYSTEM, "t", "c", "/l");
+        verify(notificationService).save(1L, NotificationType.SYSTEM, "t", "c", "/l", List.of());
         verifyNoInteractions(firebaseMessaging);
     }
 
@@ -111,7 +112,7 @@ class FcmPushServiceTest {
         // when & then
         assertThatCode(() -> service(true).sendToUser(1L, NotificationType.SYSTEM, "t", "c", null))
             .doesNotThrowAnyException();
-        verify(notificationService).save(1L, NotificationType.SYSTEM, "t", "c", null);
+        verify(notificationService).save(1L, NotificationType.SYSTEM, "t", "c", null, List.of());
     }
 
     @Test
@@ -122,7 +123,7 @@ class FcmPushServiceTest {
         service(true).sendToUser(1L, NotificationType.SYSTEM, "t", "c", "/l");
 
         verifyNoInteractions(firebaseMessaging);
-        verify(notificationService).save(1L, NotificationType.SYSTEM, "t", "c", "/l");
+        verify(notificationService).save(1L, NotificationType.SYSTEM, "t", "c", "/l", List.of());
     }
 
     @Test
@@ -166,7 +167,7 @@ class FcmPushServiceTest {
         service(true).sendToUsers(List.of(1L, 2L), NotificationType.ADMIN_NOTICE, "공지", "내용", "/n");
 
         // then
-        verify(notificationService).saveAll(List.of(1L, 2L), NotificationType.ADMIN_NOTICE, "공지", "내용", "/n");
+        verify(notificationService).saveAll(List.of(1L, 2L), NotificationType.ADMIN_NOTICE, "공지", "내용", "/n", List.of());
         ArgumentCaptor<MulticastMessage> captor = ArgumentCaptor.forClass(MulticastMessage.class);
         verify(firebaseMessaging, org.mockito.Mockito.times(3)).sendEachForMulticast(captor.capture());
         assertThat(captor.getAllValues()).hasSize(3);
@@ -183,7 +184,7 @@ class FcmPushServiceTest {
             .isInstanceOf(IllegalStateException.class);
 
         // then
-        verify(notificationService).save(1L, NotificationType.SYSTEM, "t", "c", null);
+        verify(notificationService).save(1L, NotificationType.SYSTEM, "t", "c", null, List.of());
     }
 
     @Test
@@ -235,5 +236,21 @@ class FcmPushServiceTest {
         service(true);
 
         assertThat(meterRegistry.find(FcmPushService.METRIC_SENDS).counters()).hasSize(5);
+    }
+
+    @Test
+    @DisplayName("[종목 목록은 인앱 알림 저장으로만 전달되고 푸시 페이로드에는 실리지 않는다]")
+    void sendToUser_withStocks_passesStocksToInAppSave() throws Exception {
+        // given
+        List<NotificationStock> stocks = List.of(new NotificationStock("005930", "삼성전자"));
+        BatchResponse response = batch(ok());
+        given(fcmTokenService.getTokensForUser(1L)).willReturn(List.of(token("a")));
+        given(firebaseMessaging.sendEachForMulticast(any(MulticastMessage.class))).willReturn(response);
+
+        // when
+        service(true).sendToUser(1L, NotificationType.SCORE_RANKING_GLOBAL, "t", "c", "/", stocks);
+
+        // then
+        verify(notificationService).save(1L, NotificationType.SCORE_RANKING_GLOBAL, "t", "c", "/", stocks);
     }
 }

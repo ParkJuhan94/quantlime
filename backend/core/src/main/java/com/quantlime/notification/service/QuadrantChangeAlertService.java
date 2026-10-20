@@ -1,6 +1,7 @@
 package com.quantlime.notification.service;
 
 import com.quantlime.notification.cache.QuadrantAlertSentStore;
+import com.quantlime.notification.domain.NotificationStock;
 import com.quantlime.notification.domain.NotificationType;
 import com.quantlime.score.domain.Quadrant;
 import com.quantlime.score.domain.Score;
@@ -36,6 +37,7 @@ public class QuadrantChangeAlertService {
     private static final int MAX_STALENESS_DAYS = 4;
     private static final int NAMES_IN_CONTENT = 3;
     private static final String LINK_URL = "/";
+    private static final int MAX_STOCK_LINKS = 20;
 
     private final WatchlistReader watchlistReader;
     private final ScoreReader scoreReader;
@@ -62,8 +64,10 @@ public class QuadrantChangeAlertService {
         }
 
         try {
+            Map<String, String> nameByCode = findStockNames(changes);
             fcmPushService.sendToUser(userId, NotificationType.QUADRANT_CHANGE,
-                "관심종목 사분면 변화 " + changes.size() + "건", formatContent(changes), LINK_URL);
+                "관심종목 사분면 변화 " + changes.size() + "건", formatContent(changes, nameByCode), LINK_URL,
+                toStocks(changes, nameByCode));
         } catch (RuntimeException e) {
             // 재시도(Kafka)에서 다시 통지되도록 장부를 되돌린다.
             changes.forEach(change -> sentStore.unmark(userId, change.stockCode(), change.scoreDate()));
@@ -99,11 +103,13 @@ public class QuadrantChangeAlertService {
         return changes;
     }
 
-    private String formatContent(List<QuadrantChange> changes) {
-        Map<String, String> nameByCode = stockReader
+    private Map<String, String> findStockNames(List<QuadrantChange> changes) {
+        return stockReader
             .findByStockCodeIn(changes.stream().map(QuadrantChange::stockCode).toList()).stream()
             .collect(Collectors.toMap(Stock::getStockCode, Stock::getDisplayName, (a, b) -> a));
+    }
 
+    private String formatContent(List<QuadrantChange> changes, Map<String, String> nameByCode) {
         String head = changes.stream()
             .limit(NAMES_IN_CONTENT)
             .map(change -> nameByCode.getOrDefault(change.stockCode(), change.stockCode())
@@ -111,6 +117,16 @@ public class QuadrantChangeAlertService {
             .collect(Collectors.joining(", "));
         int rest = changes.size() - NAMES_IN_CONTENT;
         return rest > 0 ? head + " 외 " + rest + "건" : head;
+    }
+
+    // 알림 화면에서 종목명마다 상세 링크를 거는 종목 목록. 본문에 이름이 안 나오는 "외 N건"도 누를 수 있게
+    // 변화 종목을 모두 싣되, 저장 크기가 무한히 커지지 않게 상한을 둔다.
+    private List<NotificationStock> toStocks(List<QuadrantChange> changes, Map<String, String> nameByCode) {
+        return changes.stream()
+            .limit(MAX_STOCK_LINKS)
+            .map(change -> new NotificationStock(change.stockCode(),
+                nameByCode.getOrDefault(change.stockCode(), change.stockCode())))
+            .toList();
     }
 
     private record QuadrantChange(String stockCode, LocalDate scoreDate, Quadrant from, Quadrant to) {

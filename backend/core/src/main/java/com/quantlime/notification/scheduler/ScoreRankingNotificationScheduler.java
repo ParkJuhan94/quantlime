@@ -1,6 +1,7 @@
 package com.quantlime.notification.scheduler;
 
 import com.quantlime.common.util.SafeExecutor;
+import com.quantlime.notification.domain.NotificationStock;
 import com.quantlime.notification.domain.NotificationType;
 import com.quantlime.notification.service.FcmPushService;
 import com.quantlime.score.dto.response.ScoreRankingResponse;
@@ -66,7 +67,7 @@ public class ScoreRankingNotificationScheduler {
             return;
         }
         fcmPushService.sendToUsers(subscriberIds, NotificationType.SCORE_RANKING_GLOBAL,
-            "오늘의 스코어 상위 종목", formatRanking(ranking), "/");
+            "오늘의 스코어 상위 종목", formatRanking(ranking), "/", toStocks(ranking));
     }
 
     private void sendWatchlistRanking(Long userId) {
@@ -77,7 +78,14 @@ public class ScoreRankingNotificationScheduler {
             return;
         }
         fcmPushService.sendToUser(userId, NotificationType.SCORE_RANKING_WATCHLIST,
-            "내 관심종목 스코어 상위", formatRanking(ranking), "/");
+            "내 관심종목 스코어 상위", formatRanking(ranking), "/", toStocks(ranking));
+    }
+
+    // 알림 화면에서 종목명마다 상세 링크를 걸기 위한 종목 목록(순위 순서 그대로)
+    private List<NotificationStock> toStocks(List<ScoreRankingResponse> ranking) {
+        return ranking.stream()
+            .map(score -> new NotificationStock(score.stockCode(), score.stockName()))
+            .toList();
     }
 
     // "종목명(등급)" 형식 - 백분위(compositePercentile)는 관심종목 등록 직후
