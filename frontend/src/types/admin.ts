@@ -48,3 +48,20 @@ export interface CrossSectionalParams {
   nullTest: boolean
   nullRepeats: number
 }
+
+export type PriceRepairMarket = 'domestic' | 'overseas' | 'all'
+
+export interface PriceJumpReport {
+  stockCode: string
+  tradeDate: string
+  previousTradeDate: string
+  previousClose: number
+  close: number
+  ratio: number
+}
+
+export interface RegularCloseBackfillResult {
+  confirmed: number
+  skipped: number
+  failed: number
+}

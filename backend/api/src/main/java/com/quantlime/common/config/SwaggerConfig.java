@@ -89,12 +89,41 @@ public class SwaggerConfig {
             .build();
     }
 
+    // /dev/** 트리거가 15개라 한 그룹에 두면 스크롤이 길어 목적별로 나눈다. 새 /dev 경로를 추가하면 아래 네 그룹 중
+    // 맞는 곳의 패턴에도 넣을 것(어느 그룹에도 안 걸리면 Swagger에 보이지 않는다).
     @Bean
     @Profile("dev")
-    public GroupedOpenApi devApi(OperationCustomizer operationCustomizer, OpenApiCustomizer errorSchemaCustomizer) {
+    public GroupedOpenApi devMarketApi(OperationCustomizer operationCustomizer, OpenApiCustomizer errorSchemaCustomizer) {
+        return devGroup("4. 개발용 - 시세·스코어", operationCustomizer, errorSchemaCustomizer,
+            "/dev/stock-master/**", "/dev/refresh", "/dev/prices/**", "/dev/scores/**");
+    }
+
+    @Bean
+    @Profile("dev")
+    public GroupedOpenApi devBacktestApi(OperationCustomizer operationCustomizer, OpenApiCustomizer errorSchemaCustomizer) {
+        return devGroup("5. 개발용 - 백테스트", operationCustomizer, errorSchemaCustomizer, "/dev/backtest/**");
+    }
+
+    @Bean
+    @Profile("dev")
+    public GroupedOpenApi devAuthSubscriptionApi(OperationCustomizer operationCustomizer,
+                                                 OpenApiCustomizer errorSchemaCustomizer) {
+        return devGroup("6. 개발용 - 인증·구독", operationCustomizer, errorSchemaCustomizer,
+            "/dev/auth/**", "/dev/subscriptions/**");
+    }
+
+    @Bean
+    @Profile("dev")
+    public GroupedOpenApi devNotificationApi(OperationCustomizer operationCustomizer,
+                                             OpenApiCustomizer errorSchemaCustomizer) {
+        return devGroup("7. 개발용 - 알림", operationCustomizer, errorSchemaCustomizer, "/dev/notifications/**");
+    }
+
+    private GroupedOpenApi devGroup(String group, OperationCustomizer operationCustomizer,
+                                    OpenApiCustomizer errorSchemaCustomizer, String... paths) {
         return GroupedOpenApi.builder()
-            .group("4. 개발용")
-            .pathsToMatch("/dev/**")
+            .group(group)
+            .pathsToMatch(paths)
             .addOperationCustomizer(operationCustomizer)
             .addOpenApiCustomizer(errorSchemaCustomizer)
             .build();
