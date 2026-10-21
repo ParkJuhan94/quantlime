@@ -7,7 +7,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import com.quantlime.common.config.ClockConfig;
 import com.quantlime.common.exception.ExternalApiException;
 import com.quantlime.common.lock.RedisLockService;
 import com.quantlime.infra.toss.exception.TossApiErrorCode;
@@ -107,7 +106,7 @@ class MarketDataRefreshServiceTest {
             dailyPriceReader, scoreReader, priceRefreshFailureHandler,
             priceGapFillService, stockLiquidityService, scoreService,
             scoreRankingCacheStore, benchmarkIndexBackfillService, investorTradingBackfillService,
-            redisLockService, priceRefreshBatchGate, eventPublisher, postCloseRescorePolicy, Clock.system(ClockConfig.KST));
+            redisLockService, priceRefreshBatchGate, eventPublisher, postCloseRescorePolicy, Clock.systemDefaultZone());
     }
 
     /**

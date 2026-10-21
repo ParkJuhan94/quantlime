@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
-import com.quantlime.common.config.ClockConfig;
 import com.quantlime.price.implement.OverseasDailyPriceCollector;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -32,7 +31,7 @@ class OverseasDailyPriceBackfillServiceTest {
     private OverseasDailyPriceCollector overseasDailyPriceCollector;
 
     @Spy
-    private Clock clock = Clock.system(ClockConfig.KST);
+    private Clock clock = Clock.systemDefaultZone();
 
     @InjectMocks
     private OverseasDailyPriceBackfillService overseasDailyPriceBackfillService;

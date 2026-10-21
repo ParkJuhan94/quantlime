@@ -3,7 +3,6 @@ package com.quantlime.telegramfeed.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 
-import com.quantlime.common.config.ClockConfig;
 import com.quantlime.telegramfeed.domain.TelegramPost;
 import com.quantlime.telegramfeed.domain.TelegramPostStatus;
 import com.quantlime.telegramfeed.implement.TelegramPostReader;
@@ -29,7 +28,7 @@ class TelegramPostFilterServiceTest {
     private TelegramPostReader telegramPostReader;
 
     @Spy
-    private Clock clock = Clock.system(ClockConfig.KST);
+    private Clock clock = Clock.systemDefaultZone();
 
     @InjectMocks
     private TelegramPostFilterService telegramPostFilterService;

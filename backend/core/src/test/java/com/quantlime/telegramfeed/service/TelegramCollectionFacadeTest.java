@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
-import com.quantlime.common.config.ClockConfig;
 import com.quantlime.telegramfeed.dto.CollectedTelegramPost;
 import com.quantlime.telegramfeed.dto.TelegramChannelMeta;
 import com.quantlime.telegramfeed.dto.TelegramCollectResult;
@@ -52,7 +51,7 @@ class TelegramCollectionFacadeTest {
     private TelegramPostFilterService telegramPostFilterService;
 
     @Spy
-    private Clock clock = Clock.system(ClockConfig.KST);
+    private Clock clock = Clock.systemDefaultZone();
 
     @InjectMocks
     private TelegramCollectionFacade telegramCollectionFacade;

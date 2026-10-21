@@ -14,7 +14,6 @@ import com.quantlime.backtest.exception.BacktestErrorCode;
 import com.quantlime.backtest.implement.BacktestAppender;
 import com.quantlime.backtest.implement.BacktestEngineProcessor;
 import com.quantlime.backtest.implement.BacktestReader;
-import com.quantlime.common.config.ClockConfig;
 import com.quantlime.common.exception.ValidationException;
 import com.quantlime.infra.python.PythonEngineClient;
 import com.quantlime.infra.python.dto.CrossSectionalBacktestApiResponse;
@@ -62,7 +61,7 @@ class CrossSectionalBacktestServiceTest {
     @BeforeEach
     void setUpService() {
         crossSectionalBacktestService = new CrossSectionalBacktestService(stockMasterService, backtestReader,
-            benchmarkIndexReader, new BacktestEngineProcessor(pythonEngineClient, Clock.system(ClockConfig.KST)), backtestAppender, Clock.system(ClockConfig.KST));
+            benchmarkIndexReader, new BacktestEngineProcessor(pythonEngineClient, Clock.systemDefaultZone()), backtestAppender, Clock.systemDefaultZone());
     }
 
     @Test

@@ -6,7 +6,6 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import com.quantlime.common.config.ClockConfig;
 import com.quantlime.price.domain.StockLiquidity;
 import com.quantlime.price.dto.LiquiditySnapshot;
 import com.quantlime.price.implement.DailyPriceReader;
@@ -47,7 +46,7 @@ class StockLiquidityServiceTest {
     private StockLiquidityAppender stockLiquidityAppender;
 
     @Spy
-    private Clock clock = Clock.system(ClockConfig.KST);
+    private Clock clock = Clock.systemDefaultZone();
 
     @InjectMocks
     private StockLiquidityService service;

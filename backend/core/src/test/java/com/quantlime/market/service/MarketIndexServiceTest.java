@@ -5,7 +5,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 
-import com.quantlime.common.config.ClockConfig;
 import com.quantlime.market.cache.BitcoinChartCache;
 import com.quantlime.market.cache.DomesticIndexChartCache;
 import com.quantlime.market.cache.DomesticIndexMinuteChartCache;
@@ -54,7 +53,7 @@ class MarketIndexServiceTest {
     private BenchmarkIndexReader benchmarkIndexReader;
 
     @Spy
-    private Clock clock = Clock.system(ClockConfig.KST);
+    private Clock clock = Clock.systemDefaultZone();
 
     @InjectMocks
     private MarketIndexService marketIndexService;

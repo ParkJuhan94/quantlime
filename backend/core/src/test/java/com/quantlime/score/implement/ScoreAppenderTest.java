@@ -8,7 +8,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import com.quantlime.common.config.ClockConfig;
 import com.quantlime.infra.python.dto.CrossSectionNormalizeApiResponse.NormalizedItemApiResponse;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.DailyScoreSeriesApiResponse;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.DivergenceApiResponse;
@@ -49,7 +48,7 @@ class ScoreAppenderTest {
     private EntityManager entityManager;
 
     @Spy
-    private Clock clock = Clock.system(ClockConfig.KST);
+    private Clock clock = Clock.systemDefaultZone();
 
     @InjectMocks
     private ScoreAppender scoreAppender;

@@ -8,7 +8,6 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import com.quantlime.common.config.ClockConfig;
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.dto.PriceJumpReport;
 import com.quantlime.price.implement.DailyPriceReader;
@@ -43,7 +42,7 @@ class DailyPriceIntegrityServiceTest {
     private DomesticDailyPriceService domesticDailyPriceService;
 
     @Spy
-    private Clock clock = Clock.system(ClockConfig.KST);
+    private Clock clock = Clock.systemDefaultZone();
 
     @InjectMocks
     private DailyPriceIntegrityService service;

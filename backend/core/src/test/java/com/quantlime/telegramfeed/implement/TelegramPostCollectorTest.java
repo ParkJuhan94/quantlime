@@ -9,7 +9,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import com.quantlime.common.config.ClockConfig;
 import com.quantlime.infra.telegram.TelegramApiProperties;
 import com.quantlime.infra.telegram.TelegramWebPreviewClient;
 import com.quantlime.infra.telegram.dto.TelegramPreviewMessage;
@@ -52,7 +51,7 @@ class TelegramPostCollectorTest {
     @BeforeEach
     void setUp() {
         collector = new TelegramPostCollector(previewClient, telegramPostReader,
-            new TelegramApiProperties("https://t.me/s", "test-agent", 0L), Clock.system(ClockConfig.KST));
+            new TelegramApiProperties("https://t.me/s", "test-agent", 0L), Clock.systemDefaultZone());
         channel = Channel.of(Platform.TELEGRAM, HANDLE, HANDLE, "텔레그램 채널", 10,
             new ChannelFilterConfig(0, 0.0, 0, List.of(), List.of()));
     }

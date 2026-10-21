@@ -10,7 +10,6 @@ import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import com.quantlime.common.config.ClockConfig;
 import com.quantlime.common.exception.ExternalApiException;
 import com.quantlime.infra.naver.NaverFinanceApiClient;
 import com.quantlime.infra.naver.dto.NaverExchangeRateBasicResponse;
@@ -74,7 +73,7 @@ class MarketIndexCacheTest {
     private MeterRegistry meterRegistry = new SimpleMeterRegistry();
 
     @Spy
-    private Clock clock = Clock.system(ClockConfig.KST);
+    private Clock clock = Clock.systemDefaultZone();
 
     @InjectMocks
     private MarketIndexCache marketIndexCache;
