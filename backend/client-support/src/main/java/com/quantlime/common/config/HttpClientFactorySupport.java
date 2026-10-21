@@ -25,6 +25,8 @@ public final class HttpClientFactorySupport {
     }
 
     /**
+     * 타임아웃과 HTTP 버전을 지정한 요청 팩토리를 만든다.
+     *
      * @param version JDK HttpClient는 평문(http://) 연결에서도 기본적으로 HTTP/2
      *                cleartext(h2c) 업그레이드를 시도한다. uvicorn(h11) 같은 h2c
      *                미지원 서버와 통신할 때는 {@link HttpClient.Version#HTTP_1_1}로

@@ -29,6 +29,8 @@ public class PaymentWebhookDedupStore {
     private final StringRedisTemplate redisTemplate;
 
     /**
+     * 웹훅 payload 해시를 처리 완료로 표시하고 최초 처리인지 반환한다.
+     *
      * @return true면 이번이 최초 처리(계속 진행), false면 이미 처리된
      *     payloadHash(중복이므로 스킵)
      */

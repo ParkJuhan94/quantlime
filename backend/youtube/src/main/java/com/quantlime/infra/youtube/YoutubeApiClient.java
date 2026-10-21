@@ -50,6 +50,8 @@ public class YoutubeApiClient {
     }
 
     /**
+     * 영상 ID 목록의 상세 정보(videos.list)를 조회한다.
+     *
      * @param videoIds 최대 50개(그 이상은 호출측에서 분할해야 함)
      */
     @Retry(name = "youtube")

@@ -42,6 +42,8 @@ public class BacktestUniverseService {
     }
 
     /**
+     * 유니버스 전 종목의 백테스트를 실행한다.
+     *
      * @param force true면 오늘 이미 백테스트가 돈 종목도 다시 실행한다 -
      *     가격이 소급 복구된 직후처럼 "오늘 이미 돌았어도 반드시 다시
      *     돌려야" 하는 경우를 위한 강제 실행(DailyPriceIntegrityService

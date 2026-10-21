@@ -45,7 +45,7 @@ public class KafkaEventSender {
 
     public void send(String topic, String key, Object payload) {
         try {
-            kafkaTemplate.send(topic, key, payload).whenComplete((result, error) -> {
+            var unused = kafkaTemplate.send(topic, key, payload).whenComplete((result, error) -> {
                 if (error != null) {
                     recordFailure(topic, key, error);
                 }

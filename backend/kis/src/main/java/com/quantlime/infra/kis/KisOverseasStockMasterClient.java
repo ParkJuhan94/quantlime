@@ -56,6 +56,8 @@ public class KisOverseasStockMasterClient {
             });
     }
 
+    // split("\n")이 끝의 빈 줄을 버리는 동작에 의존한다(빈 줄은 어차피 parseLine이 건너뜀)
+    @SuppressWarnings("StringSplitter")
     private List<KisOverseasStockMasterEntry> parseMasterFile(byte[] zipBytes) {
         try (ZipInputStream zipIn = new ZipInputStream(new ByteArrayInputStream(zipBytes))) {
             ZipEntry entry = zipIn.getNextEntry();

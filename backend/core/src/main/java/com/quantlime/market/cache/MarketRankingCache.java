@@ -114,7 +114,7 @@ public class MarketRankingCache {
     }
 
     private boolean isStale() {
-        return Duration.between(localRefreshedAt, Instant.now()).getSeconds() >= LOCAL_TTL_SECONDS;
+        return Duration.between(localRefreshedAt, Instant.now()).toSeconds() >= LOCAL_TTL_SECONDS;
     }
 
     private synchronized void refresh() {

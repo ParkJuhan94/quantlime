@@ -47,6 +47,8 @@ public class PriceGapFillService {
     private final Clock clock;
 
     /**
+     * 국내 종목의 일봉 공백을 외부 API로 메운다.
+     *
      * @return 실제로 외부 API 호출이 발생했는지 여부와, API를 호출하지
      * 않은 경우(gap 없음)에 한해 이 메서드가 이미 읽은 최신 저장일. 두
      * 용도로 쓰인다 - (1) 호출측(MarketDataRefreshService)이 종목 간
@@ -96,6 +98,8 @@ public class PriceGapFillService {
     }
 
     /**
+     * 일봉 공백 보충 결과.
+     *
      * @see #fillDomesticGap(String) 동일한 계약 - calledApi=false일 때만
      * latestTradeDate가 유효하다.
      */
@@ -121,7 +125,11 @@ public class PriceGapFillService {
             && DailyPriceSettlementPolicy.isRecentlyRefreshed(latest.getUpdatedAt(), LocalDateTime.now(clock));
     }
 
-    /** @see #fillDomesticGap(String) 국내와 동일한 계약(calledApi/latestTradeDate). */
+    /**
+     * 해외 종목의 일봉 공백을 외부 API로 메운다.
+     *
+     * @see #fillDomesticGap(String) 국내와 동일한 계약(calledApi/latestTradeDate).
+     */
     public GapFillOutcome fillOverseasGap(String stockCode) {
         Optional<LocalDate> latestTradeDate = dailyPriceReader
             .findLatestOverseas(stockCode)

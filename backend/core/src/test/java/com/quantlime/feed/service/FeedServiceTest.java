@@ -25,7 +25,6 @@ import com.quantlime.feed.implement.FeedPostLikeAppender;
 import com.quantlime.feed.implement.FeedPostLikeReader;
 import com.quantlime.feed.implement.FeedPostReader;
 import com.quantlime.feed.implement.FeedReportAppender;
-import com.quantlime.feed.implement.FeedReportReader;
 import com.quantlime.feed.repository.FeedCommentRepository;
 import com.quantlime.feed.repository.FeedPostLikeRepository;
 import com.quantlime.feed.repository.FeedPostRepository;
@@ -75,7 +74,7 @@ class FeedServiceTest {
             new FeedPostReader(feedPostRepository), new FeedPostAppender(feedPostRepository),
             new FeedPostLikeReader(feedPostLikeRepository), new FeedPostLikeAppender(feedPostLikeRepository),
             new FeedCommentReader(feedCommentRepository), new FeedCommentAppender(feedCommentRepository),
-            new FeedReportReader(feedReportRepository), new FeedReportAppender(feedReportRepository),
+            new FeedReportAppender(feedReportRepository),
             new UserReader(userRepository));
     }
 

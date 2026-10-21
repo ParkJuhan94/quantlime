@@ -45,7 +45,7 @@ public class WatchlistedStockCodeCache {
     }
 
     private boolean isStale() {
-        return Duration.between(lastRefreshedAt, Instant.now()).getSeconds() >= REFRESH_INTERVAL_SECONDS;
+        return Duration.between(lastRefreshedAt, Instant.now()).toSeconds() >= REFRESH_INTERVAL_SECONDS;
     }
 
     private synchronized void refresh() {

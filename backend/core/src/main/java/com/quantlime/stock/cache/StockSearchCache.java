@@ -108,12 +108,12 @@ public class StockSearchCache {
     }
 
     private boolean isStale() {
-        return Duration.between(lastRefreshedAt, Instant.now()).getSeconds() >= REFRESH_INTERVAL_SECONDS;
+        return Duration.between(lastRefreshedAt, Instant.now()).toSeconds() >= REFRESH_INTERVAL_SECONDS;
     }
 
     private void triggerBackgroundRefresh() {
         if (refreshing.compareAndSet(false, true)) {
-            CompletableFuture.runAsync(this::refresh)
+            var unused = CompletableFuture.runAsync(this::refresh)
                 .whenComplete((ignored, ex) -> {
                     refreshing.set(false);
                     if (ex != null) {

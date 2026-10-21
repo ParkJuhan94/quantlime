@@ -45,7 +45,7 @@ public class StockFundamentalsCache {
 
     private record CacheEntry(StockFundamentalsResponse response, Instant cachedAt) {
         boolean isStale() {
-            return Duration.between(cachedAt, Instant.now()).getSeconds() >= TTL_SECONDS;
+            return Duration.between(cachedAt, Instant.now()).toSeconds() >= TTL_SECONDS;
         }
     }
 }

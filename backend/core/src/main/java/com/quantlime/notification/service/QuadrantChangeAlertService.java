@@ -47,7 +47,11 @@ public class QuadrantChangeAlertService {
     private final QuadrantAlertSentStore sentStore;
     private final Clock clock;
 
-    /** @return 통지한 변화 건수(알림을 보내지 않았으면 0) */
+    /**
+     * 오늘 기준으로 사용자의 사분면 변화를 알린다.
+     *
+     * @return 통지한 변화 건수(알림을 보내지 않았으면 0)
+     */
     public int notifyUser(Long userId) {
         return notifyUser(userId, LocalDate.now(clock));
     }

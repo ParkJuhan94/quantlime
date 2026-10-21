@@ -69,7 +69,7 @@ public class MarketDataRefreshService {
     // TTL이 소요시간보다 짧으면 락이 만료돼 다른 트리거가 끼어들어 이 락의 목적(동시 실행
     // 방지)이 무의미해진다. 크래시 시 락이 TTL만큼 남아 재기동 캐치업이 그동안 스킵되는
     // 비용과의 절충으로 120분.
-    private static final Duration LOCK_TTL = Duration.ofMinutes(120);
+    private static final Duration LOCK_TTL = Duration.ofHours(2);
     // fan-out 완료 대기 상한(국내+해외가 하나의 데드라인을 공유) - 대기가 끝난 뒤에도
     // 유동성/정규화/지수 갭필이 이어지므로 LOCK_TTL보다 충분히 짧게 둔다.
     private static final Duration BATCH_AWAIT_TIMEOUT = Duration.ofMinutes(100);

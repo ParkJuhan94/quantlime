@@ -14,7 +14,6 @@ import com.quantlime.feed.implement.FeedCommentAppender;
 import com.quantlime.feed.implement.FeedCommentReader;
 import com.quantlime.feed.implement.FeedPostAppender;
 import com.quantlime.feed.implement.FeedPostLikeAppender;
-import com.quantlime.feed.implement.FeedPostLikeReader;
 import com.quantlime.feed.implement.FeedPostReader;
 import com.quantlime.feed.implement.FeedReportAppender;
 import com.quantlime.feed.implement.FeedReportReader;
@@ -50,7 +49,6 @@ public class FeedModerationService {
     private final FeedPostAppender feedPostAppender;
     private final FeedCommentReader feedCommentReader;
     private final FeedCommentAppender feedCommentAppender;
-    private final FeedPostLikeReader feedPostLikeReader;
     private final FeedPostLikeAppender feedPostLikeAppender;
     private final FeedReportReader feedReportReader;
     private final FeedReportAppender feedReportAppender;

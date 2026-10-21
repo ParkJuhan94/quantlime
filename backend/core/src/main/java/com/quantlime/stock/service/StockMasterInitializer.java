@@ -55,6 +55,8 @@ public class StockMasterInitializer implements ApplicationRunner {
         }
     }
 
+    // split(",")이 끝의 빈 컬럼을 버려 fields.length < 4 검사가 불완전한 행을 걸러내는 동작에 의존한다
+    @SuppressWarnings("StringSplitter")
     private List<Stock> parseCsv(InputStream inputStream) {
         List<Stock> stocks = new ArrayList<>();
 

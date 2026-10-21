@@ -42,7 +42,7 @@ public class PopularStocksCache {
     }
 
     private boolean isStale() {
-        return cached == null || Duration.between(cachedAt, Instant.now()).getSeconds() >= TTL_SECONDS;
+        return cached == null || Duration.between(cachedAt, Instant.now()).toSeconds() >= TTL_SECONDS;
     }
 
     private synchronized void refresh() {

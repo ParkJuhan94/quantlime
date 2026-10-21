@@ -30,7 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>클래스/메서드를 public으로 둔다(2026-08-10). 처음엔 "package-private이면
  * AnnotationTransactionAttributeSource의 publicMethodsOnly 기본값(true) 때문에
- * @Transactional이 무시돼 위와 동일한 TransactionRequiredException이 재현될
+ * {@code @Transactional}이 무시돼 위와 동일한 TransactionRequiredException이 재현될
  * 것"이라 추정했는데, VideoFeedTransactionProxyIntegrationTest(ApiTestSupport
  * 기반, 실제 프록시 체인 경유)로 직접 되돌려 검증해보니 이 앱에서는
  * package-private이어도 트랜잭션이 정상적으로 열려 재현되지 않았다 - 즉 이

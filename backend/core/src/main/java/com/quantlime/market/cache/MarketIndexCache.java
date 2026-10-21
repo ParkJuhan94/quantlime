@@ -128,12 +128,12 @@ public class MarketIndexCache {
     }
 
     private boolean isStale() {
-        return Duration.between(cachedAt, Instant.now()).getSeconds() >= TTL_SECONDS;
+        return Duration.between(cachedAt, Instant.now()).toSeconds() >= TTL_SECONDS;
     }
 
     private void triggerBackgroundRefresh() {
         if (refreshing.compareAndSet(false, true)) {
-            CompletableFuture.runAsync(this::refresh)
+            var unused = CompletableFuture.runAsync(this::refresh)
                 .whenComplete((ignored, ex) -> {
                     refreshing.set(false);
                     if (ex != null) {
