@@ -34,12 +34,19 @@ jobs:
           ./gradlew build --parallel --console=plain 2>&1 | tee "$GITHUB_WORKSPACE/backend-build.log"
 
       # NullAway/Error Prone 경고를 실행 화면 상단 요약표와 PR 변경 파일의 해당 줄에 보여준다.
+      # 성격이 달라(null 계약 vs 일반 버그 패턴) 리포트를 둘로 나눈다 - 어노테이션 10개 상한도 각각 갖는다.
       # 경고가 있어도 실패시키지 않는다(보기 위한 스텝)
-      - name: 경고 요약
+      - name: 경고 요약 (NullAway)
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 .github/scripts/warning_report.py javac backend-build.log "backend (NullAway · Error Prone)" --root "$GITHUB_WORKSPACE"
+        run: python3 .github/scripts/warning_report.py javac backend-build.log "backend (NullAway)" --root "$GITHUB_WORKSPACE" --only NullAway
+
+      - name: 경고 요약 (Error Prone)
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/warning_report.py javac backend-build.log "backend (Error Prone)" --root "$GITHUB_WORKSPACE" --except NullAway
 
       # 모듈별 jacoco XML을 Codecov가 합쳐 PR에 코멘트한다. 포크 PR처럼 시크릿이
       # 없는 경우에도 CI가 깨지지 않게 fail_ci_if_error는 끈다
