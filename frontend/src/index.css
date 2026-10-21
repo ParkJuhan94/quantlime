@@ -16,6 +16,15 @@
 
   --color-brand-lime: #bfff3a;
 
+  /* 앱 바탕색. 라이트에선 gray-100과 같은 값이지만, 다크에선 카드(white)보다
+     어두워야 해서 gray-100과 따로 둔다(gray-100은 카드 안 선택/호버 배경으로도
+     쓰이기 때문). */
+  --color-page: #f2f4f7;
+  /* 테마가 바뀌어도 변하지 않는 색 - 브랜드/이미지/색 배경 위 글자처럼 배경이
+     테마와 무관할 때 쓴다. text-white/text-gray-900는 다크에서 값이 뒤집힌다. */
+  --color-fixed-white: #ffffff;
+  --color-fixed-ink: #101828;
+
   --color-gray-50: #f9fafb;
   --color-gray-100: #f2f4f7;
   --color-gray-200: #eaecf0;
@@ -27,6 +36,61 @@
   --color-gray-800: #1d2939;
   --color-gray-900: #101828;
   --color-gray-950: #0c111d;
+}
+
+/* 다크 모드(2026-10-21) - 컴포넌트마다 dark: 클래스를 붙이는 대신 위 팔레트
+   변수를 data-theme="dark"일 때만 덮어쓴다. bg-white/text-gray-900 같은
+   기존 클래스가 그대로 다크 값으로 바뀌므로 화면 코드는 건드리지 않는다.
+   gray 스케일은 "단계 번호는 같고 명암만 뒤집힌" 의미로 매핑했다:
+   white=카드, gray-50=카드 위 호버, gray-100=카드 안 선택/칩, gray-200=테두리,
+   gray-900=본문 글자(라이트에선 검정 버튼 배경이라 다크에선 밝은 버튼+어두운 글자가 된다).
+   red/blue는 같은 클래스가 글자색과 칩 배경에 함께 쓰여서, 다크 배경 위
+   글자로 읽히는 밝기(600)와 칩 배경(50~200)을 따로 잡았다. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --color-page: #0b1120;
+  --color-white: #121a2d;
+
+  --color-gray-50: #172036;
+  --color-gray-100: #1c2740;
+  --color-gray-200: #263350;
+  --color-gray-300: #34415f;
+  --color-gray-400: #7482a0;
+  --color-gray-500: #8d99b3;
+  --color-gray-600: #a6b0c5;
+  --color-gray-700: #c3cbd9;
+  --color-gray-800: #e1e6ee;
+  --color-gray-900: #f2f4f7;
+  --color-gray-950: #fafbfc;
+
+  --color-red-50: #2b1318;
+  --color-red-100: #3a1a21;
+  --color-red-200: #5c2630;
+  --color-red-400: #ff7b73;
+  --color-red-500: #ff6b63;
+  --color-red-600: #ff5c54;
+  --color-red-700: #ff8a84;
+
+  --color-blue-50: #11203d;
+  --color-blue-100: #15294b;
+  --color-blue-200: #1f3a6b;
+  --color-blue-600: #4c8dff;
+  --color-blue-700: #8bb7ff;
+
+  --color-amber-100: #3a2f12;
+  --color-amber-700: #fbbf24;
+  --color-emerald-100: #0f3128;
+  --color-emerald-700: #34d399;
+  --color-purple-100: #2c1f4d;
+  --color-purple-700: #c4a5ff;
+  --color-pink-100: #3d1a2f;
+  --color-pink-700: #f9a8d4;
+}
+
+/* 다크일 때 첫 페인트 전에 흰 바탕이 번쩍이지 않도록(React가 뜨기 전). */
+html[data-theme='dark'] {
+  background: #0b1120;
 }
 
 body {
@@ -74,7 +138,7 @@ button:not(:disabled):hover,
 }
 
 .shimmer-text {
-  background-image: linear-gradient(110deg, #101828 40%, #fbbf24 50%, #101828 60%);
+  background-image: linear-gradient(110deg, var(--color-gray-900) 40%, #fbbf24 50%, var(--color-gray-900) 60%);
   background-size: 250% 100%;
   -webkit-background-clip: text;
   background-clip: text;
