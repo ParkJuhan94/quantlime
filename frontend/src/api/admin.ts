@@ -5,6 +5,9 @@ import type {
   AdminFeedPost,
   CollectResult,
   CrossSectionalParams,
+  PriceJumpReport,
+  PriceRepairMarket,
+  RegularCloseBackfillResult,
   TelegramRetentionResult,
 } from '../types/admin'
 import type { PageResponse } from '../types/stock'
@@ -132,5 +135,50 @@ export async function runUniverseBacktest(force: boolean): Promise<string> {
 
 export async function runCrossSectionalBacktest(params: CrossSectionalParams): Promise<string> {
   const { data } = await apiClient.post<string>('/api/admin/backtest/cross-sectional', null, { params })
+  return data
+}
+
+// ---- 데이터 운영(시세·스코어 복구, 응답은 완료 안내 문자열이거나 결과 객체) ----
+
+export async function syncDomesticStockMaster(): Promise<string> {
+  const { data } = await apiClient.post<string>('/api/admin/data/stock-master/sync')
+  return data
+}
+
+export async function syncOverseasStockMaster(): Promise<string> {
+  const { data } = await apiClient.post<string>('/api/admin/data/stock-master/overseas/sync')
+  return data
+}
+
+export async function refreshPricesAndScores(stockCode?: string): Promise<string> {
+  const { data } = await apiClient.post<string>('/api/admin/data/refresh', null, { params: { stockCode } })
+  return data
+}
+
+export async function resettlePrices(market: PriceRepairMarket, from: string): Promise<string> {
+  const { data } = await apiClient.post<string>('/api/admin/data/prices/resettle', null, { params: { market, from } })
+  return data
+}
+
+export async function repairAdjustedPrices(from: string, dryRun: boolean): Promise<PriceJumpReport[]> {
+  const { data } = await apiClient.post<PriceJumpReport[]>('/api/admin/data/prices/repair-adjusted', null, {
+    params: { from, dryRun },
+  })
+  return data
+}
+
+export async function backfillRegularClose(stockCodes: string[], days?: number): Promise<RegularCloseBackfillResult> {
+  const { data } = await apiClient.post<RegularCloseBackfillResult>(
+    '/api/admin/data/prices/backfill-regular-close',
+    null,
+    { params: { stockCodes: stockCodes.length > 0 ? stockCodes.join(',') : undefined, days } },
+  )
+  return data
+}
+
+export async function rebuildScores(from: string): Promise<string> {
+  const { data } = await apiClient.post<string>('/api/admin/data/scores/rebuild', null, {
+    params: { from, confirm: true },
+  })
   return data
 }

@@ -22,6 +22,7 @@ import { ProtectedRoute } from './auth/ProtectedRoute'
 import { AdminRoute } from './auth/AdminRoute'
 import { AdminLayout } from './pages/admin/AdminLayout'
 import { AdminBacktestPage } from './pages/admin/AdminBacktestPage'
+import { AdminDataOpsPage } from './pages/admin/AdminDataOpsPage'
 import { AdminModerationPage } from './pages/admin/AdminModerationPage'
 import { AdminNoticePage } from './pages/admin/AdminNoticePage'
 import { AdminNotificationPage } from './pages/admin/AdminNotificationPage'
@@ -90,6 +91,7 @@ function App() {
                   <Route path="video-feed" element={<AdminVideoFeedPage />} />
                   <Route path="telegram-feed" element={<AdminTelegramFeedPage />} />
                   <Route path="backtest" element={<AdminBacktestPage />} />
+                  <Route path="data-ops" element={<AdminDataOpsPage />} />
                 </Route>
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
