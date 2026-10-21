@@ -86,14 +86,15 @@ quantlime/
 ## 로컬 실행
 
 ```bash
-# 인프라 (MySQL 3308, Redis 6381, Redpanda)
+# 인프라 + 퀀트 엔진 (MySQL 3308, Redis 6381, Redpanda, quant-engine 8000)
+# quant-engine은 compose에 포함돼 함께 뜨고, 코드를 바꾸면 자동으로 다시 로드됩니다.
 docker-compose up -d
 
 # 백엔드 (backend/.env.example을 복사해 .env 작성)
 cd backend && ./gradlew :api:bootRun
 
-# 퀀트 엔진
-cd quant-engine && uvicorn main:app --reload --port 8000
+# (선택) 퀀트 엔진을 Docker 없이 직접 실행하려면 compose의 quant-engine을 끄고
+# cd quant-engine && uvicorn main:app --reload --port 8000
 
 # 프론트엔드
 cd frontend && npm run dev
