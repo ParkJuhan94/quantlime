@@ -35,6 +35,17 @@ class SwaggerConfigTest extends ApiTestSupport {
     }
 
     @Test
+    @DisplayName("데이터 운영 API는 관리자 그룹에서 빠지고 자기 그룹에만 있다")
+    void dataOpsGroup() throws Exception {
+        JsonNode dataOps = docs("2-1. 관리자 - 데이터 운영").get("paths");
+        JsonNode admin = docs("2. 관리자").get("paths");
+
+        assertThat(dataOps.size()).isPositive();
+        dataOps.fieldNames().forEachRemaining(path -> assertThat(path).startsWith("/api/admin/data/"));
+        admin.fieldNames().forEachRemaining(path -> assertThat(path).doesNotStartWith("/api/admin/data/"));
+    }
+
+    @Test
     @DisplayName("사용자 그룹은 관리자/웹훅 경로를 제외하고, 로그인 파라미터를 요청 파라미터로 노출하지 않는다")
     void userGroup() throws Exception {
         JsonNode doc = docs("1. 사용자");

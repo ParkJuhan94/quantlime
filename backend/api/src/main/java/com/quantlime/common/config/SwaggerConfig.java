@@ -52,6 +52,7 @@ public class SwaggerConfig {
     static final String BEARER_AUTH = "bearerAuth";
 
     private static final String ADMIN_PATH = "/api/admin/**";
+    private static final String DATA_OPS_PATH = "/api/admin/data/**";
     private static final String WEBHOOK_PATH = "/api/webhooks/**";
     private static final ParameterNameDiscoverer NAME_DISCOVERER = new DefaultParameterNameDiscoverer();
     private static final String ERROR_SCHEMA = "ErrorResponseTemplate";
@@ -74,6 +75,19 @@ public class SwaggerConfig {
         return GroupedOpenApi.builder()
             .group("2. 관리자")
             .pathsToMatch(ADMIN_PATH)
+            .pathsToExclude(DATA_OPS_PATH)
+            .addOperationCustomizer(operationCustomizer)
+            .addOpenApiCustomizer(errorSchemaCustomizer)
+            .build();
+    }
+
+    // 운영 데이터를 바로 바꾸는 복구 트리거라, 일상적인 관리 API와 섞이지 않게 따로 둔다.
+    @Bean
+    public GroupedOpenApi dataOpsAdminApi(OperationCustomizer operationCustomizer,
+                                          OpenApiCustomizer errorSchemaCustomizer) {
+        return GroupedOpenApi.builder()
+            .group("2-1. 관리자 - 데이터 운영")
+            .pathsToMatch(DATA_OPS_PATH)
             .addOperationCustomizer(operationCustomizer)
             .addOpenApiCustomizer(errorSchemaCustomizer)
             .build();
