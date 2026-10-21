@@ -20,6 +20,7 @@ import com.quantlime.infra.toss.dto.TossUsMarketCalendarResponse;
 import com.quantlime.infra.toss.exception.TossApiErrorCode;
 import io.github.resilience4j.bulkhead.annotation.Bulkhead;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.util.function.Function;
@@ -40,6 +41,12 @@ import org.springframework.web.client.RestClient;
  * {@link com.quantlime.common.resilience.RateLimitAwareFailurePredicate}로
  * 제외해, 레이트리밋을 "서버가 살아있다는 신호"로 계속 다루던 기존 설계와
  * 충돌하지 않게 한다(2026-08-17).
+ *
+ * <p>일시 장애(connect 실패/5xx) 재시도는 {@code @Retry("toss")}가 맡는다(2026-10-08).
+ * 시세 스윕 경로({@link #getCurrentPrices})와 사용자 요청 직결 조회(호가·체결·상하한가·
+ * 매수유의)에는 붙이지 않는다 - 대기가 곧 전체 지연이 되는 경로라 fail-fast가 맞다.
+ * 429는 {@code @Retry}가 아니라 {@link #withRateLimitRetry}가 Retry-After 기반으로
+ * 저빈도 엔드포인트에만 적용한다({@code TossTransientFailurePredicate}가 429를 제외).
  */
 @Slf4j
 @Component
@@ -99,10 +106,11 @@ public class TossApiClient {
     private final Object candleRateLimitLock = new Object();
     private volatile long lastCandleCallAtMillis = 0;
 
+    @Retry(name = "toss")
     @CircuitBreaker(name = "toss")
     @Bulkhead(name = "toss")
     public TossCandleResponse getDailyCandles(String symbol, int count, String before) {
-        return fetchCandlesWithRateLimitRetry(symbol, () -> fetchDailyCandles(symbol, count, before));
+        return withRateLimitRetry("candles:" + symbol, () -> fetchDailyCandles(symbol, count, before));
     }
 
     /**
@@ -125,10 +133,11 @@ public class TossApiClient {
      * 호출측이 아예 {@code +} 없는 UTC {@code Z} 표기(예: {@code
      * "2026-09-01T06:30:00Z"})로 넘겨 문제 자체를 피해야 한다.
      */
+    @Retry(name = "toss")
     @CircuitBreaker(name = "toss")
     @Bulkhead(name = "toss")
     public TossCandleResponse get1MinuteCandleBefore(String symbol, String before) {
-        return fetchCandlesWithRateLimitRetry(symbol, () -> fetchMinuteCandle(symbol, before));
+        return withRateLimitRetry("candles:" + symbol, () -> fetchMinuteCandle(symbol, before));
     }
 
     /**
@@ -137,18 +146,29 @@ public class TossApiClient {
      * 조회한다(페이지네이션 커서). {@code before}는 {@link #get1MinuteCandleBefore}와
      * 동일한 이유로 {@code +} 오프셋이 아닌 UTC {@code Z} 표기여야 한다.
      */
+    @Retry(name = "toss")
     @CircuitBreaker(name = "toss")
     @Bulkhead(name = "toss")
     public TossCandleResponse getMinuteCandles(String symbol, int count, String before) {
-        return fetchCandlesWithRateLimitRetry(symbol, () -> fetchMinuteCandles(symbol, count, before));
+        return withRateLimitRetry("candles:" + symbol, () -> fetchMinuteCandles(symbol, count, before));
     }
 
     /**
-     * getDailyCandles/get1MinuteCandleBefore가 공유하는 429 재시도 루프 -
-     * 두 엔드포인트 모두 같은 {@code /api/v1/candles} 경로·레이트리밋 그룹
-     * (MARKET_DATA_CHART)을 쓴다.
+     * 429(Rate Limit)를 Retry-After 헤더 기반 대기 후 재시도하는 공용 루프.
+     * 최초 시도 포함 최대 {@code MAX_RATE_LIMIT_RETRIES + 1}회.
+     *
+     * <p><b>저빈도·배치성 엔드포인트에만 쓴다</b>(캔들, 종목정보, 랭킹, 환율,
+     * 장 캘린더, 시장지표, 투자자 매매대금). 다음 시도까지 간격이 길어 429 한 번에
+     * 한 사이클이 통째로 비는 경로라 대기할 가치가 있다. 반대로 {@link
+     * #getCurrentPrices}(100ms 주기 전종목 스윕이 쓰는 경로)와 호가·체결·상하한가·
+     * 매수유의(사용자 요청에 직결)에는 <b>일부러 쓰지 않는다</b> - 스윕은 429를 받은
+     * 청크를 건너뛰고 다음 틱(약 2초 뒤)에 다시 받는 게 이미 재시도인데, 여기서 대기하면
+     * 429를 받지 않은 종목까지 전종목 시세·랭킹이 수십 초 멈추고(토큰 버킷이 비면 뒤따르는
+     * 청크도 연달아 429), 사용자 경로는 요청 스레드와 Bulkhead 슬롯을 최대 약 20초 붙잡는다.
+     *
+     * @param target 로그에 남길 대상 식별자(예: "candles:005930", "rankings")
      */
-    private TossCandleResponse fetchCandlesWithRateLimitRetry(String symbol, Supplier<TossCandleResponse> fetcher) {
+    private <T> T withRateLimitRetry(String target, Supplier<T> fetcher) {
         for (int attempt = 0; ; attempt++) {
             try {
                 return fetcher.get();
@@ -158,8 +178,8 @@ public class TossApiClient {
                     throw e;
                 }
                 long backoffMs = resolveRateLimitBackoffMillis(e);
-                log.warn("캔들 조회 Rate Limit 도달({}/{}), {}ms 대기 후 재시도: symbol={}",
-                    attempt + 1, MAX_RATE_LIMIT_RETRIES, backoffMs, symbol);
+                log.warn("토스 API Rate Limit 도달({}/{}), {}ms 대기 후 재시도: target={}",
+                    attempt + 1, MAX_RATE_LIMIT_RETRIES, backoffMs, target);
                 if (!SleepUtil.sleepMillis(backoffMs)) {
                     throw new ExternalApiException(TossApiErrorCode.RATE_LIMIT_EXCEEDED, e);
                 }
@@ -262,10 +282,11 @@ public class TossApiClient {
      * (DART corpCode API에는 시장구분 필드가 없음, 2026-09 KIND→DART
      * 전환). 최대 200종목 일괄(§4 Toss Open API 문서 참고).
      */
+    @Retry(name = "toss")
     @CircuitBreaker(name = "toss")
     @Bulkhead(name = "toss")
     public TossStockInfoResponse getStockInfo(String symbols) {
-        return withTokenRetry("stocks", token -> ExternalApiInvoker.call(
+        return withRateLimitRetry("stocks", () -> withTokenRetry("stocks", token -> ExternalApiInvoker.call(
             TossApiErrorCode.STOCK_INFO_INQUIRY_FAILED,
             () -> tossRestClient.get()
                 .uri(uriBuilder -> uriBuilder
@@ -276,7 +297,7 @@ public class TossApiClient {
                 .retrieve()
                 .body(TossStockInfoResponse.class),
             HttpClientErrorException.TooManyRequests.class,
-            TossApiErrorCode.RATE_LIMIT_EXCEEDED));
+            TossApiErrorCode.RATE_LIMIT_EXCEEDED)));
     }
 
     @CircuitBreaker(name = "toss")
@@ -373,10 +394,11 @@ public class TossApiClient {
      * MARKET_INFO라 별도 예산을 쓴다(장 운영 캘린더와 동일 그룹) -
      * 호출 측(MarketIndexCache)이 짧게 캐싱해 재호출을 줄인다.
      */
+    @Retry(name = "toss")
     @CircuitBreaker(name = "toss")
     @Bulkhead(name = "toss")
     public TossExchangeRateResponse getExchangeRate(String baseCurrency, String quoteCurrency) {
-        return withTokenRetry("exchange-rate", token -> ExternalApiInvoker.call(
+        return withRateLimitRetry("exchange-rate", () -> withTokenRetry("exchange-rate", token -> ExternalApiInvoker.call(
             TossApiErrorCode.EXCHANGE_RATE_INQUIRY_FAILED,
             () -> tossRestClient.get()
                 .uri(uriBuilder -> uriBuilder
@@ -386,7 +408,9 @@ public class TossApiClient {
                     .build())
                 .header("authorization", "Bearer " + token)
                 .retrieve()
-                .body(TossExchangeRateResponse.class)));
+                .body(TossExchangeRateResponse.class),
+            HttpClientErrorException.TooManyRequests.class,
+            TossApiErrorCode.RATE_LIMIT_EXCEEDED)));
     }
 
     /**
@@ -394,16 +418,19 @@ public class TossApiClient {
      * 조회(MARKET_DATA)와 분리된 MARKET_INFO라 별도 예산을 쓴다 - 호출
      * 측(DomesticMarketCalendarCache)이 하루 1회만 호출하도록 캐싱한다.
      */
+    @Retry(name = "toss")
     @CircuitBreaker(name = "toss")
     @Bulkhead(name = "toss")
     public TossMarketCalendarResponse getMarketCalendar() {
-        return withTokenRetry("market-calendar", token -> ExternalApiInvoker.call(
+        return withRateLimitRetry("market-calendar", () -> withTokenRetry("market-calendar", token -> ExternalApiInvoker.call(
             TossApiErrorCode.MARKET_CALENDAR_INQUIRY_FAILED,
             () -> tossRestClient.get()
                 .uri("/api/v1/market-calendar/KR")
                 .header("authorization", "Bearer " + token)
                 .retrieve()
-                .body(TossMarketCalendarResponse.class)));
+                .body(TossMarketCalendarResponse.class),
+            HttpClientErrorException.TooManyRequests.class,
+            TossApiErrorCode.RATE_LIMIT_EXCEEDED)));
     }
 
     /**
@@ -418,10 +445,11 @@ public class TossApiClient {
      * 비율(0.0125=1.25%)이라 호출 측에서 ×100 필요(TossRankingResponse
      * 참고).
      */
+    @Retry(name = "toss")
     @CircuitBreaker(name = "toss")
     @Bulkhead(name = "toss")
     public TossRankingResponse getRankings(String type, String marketCountry, String duration, int count) {
-        return withTokenRetry("rankings", token -> ExternalApiInvoker.call(
+        return withRateLimitRetry("rankings", () -> withTokenRetry("rankings", token -> ExternalApiInvoker.call(
             TossApiErrorCode.RANKING_INQUIRY_FAILED,
             () -> tossRestClient.get()
                 .uri(uriBuilder -> uriBuilder
@@ -435,7 +463,7 @@ public class TossApiClient {
                 .retrieve()
                 .body(TossRankingResponse.class),
             HttpClientErrorException.TooManyRequests.class,
-            TossApiErrorCode.RATE_LIMIT_EXCEEDED));
+            TossApiErrorCode.RATE_LIMIT_EXCEEDED)));
     }
 
     /**
@@ -444,16 +472,19 @@ public class TossApiClient {
      * (OverseasMarketCalendarCache)이 하루 1회만 호출하도록 캐싱한다. 국내
      * 캘린더와 응답 형태가 다르다(TossUsMarketCalendarResponse 주석 참고).
      */
+    @Retry(name = "toss")
     @CircuitBreaker(name = "toss")
     @Bulkhead(name = "toss")
     public TossUsMarketCalendarResponse getUsMarketCalendar() {
-        return withTokenRetry("us-market-calendar", token -> ExternalApiInvoker.call(
+        return withRateLimitRetry("us-market-calendar", () -> withTokenRetry("us-market-calendar", token -> ExternalApiInvoker.call(
             TossApiErrorCode.US_MARKET_CALENDAR_INQUIRY_FAILED,
             () -> tossRestClient.get()
                 .uri("/api/v1/market-calendar/US")
                 .header("authorization", "Bearer " + token)
                 .retrieve()
-                .body(TossUsMarketCalendarResponse.class)));
+                .body(TossUsMarketCalendarResponse.class),
+            HttpClientErrorException.TooManyRequests.class,
+            TossApiErrorCode.RATE_LIMIT_EXCEEDED)));
     }
 
     /**
@@ -463,10 +494,11 @@ public class TossApiClient {
      * {@code lastPrice}만 있고 등락률·장중여부는 없어 호출 측(MarketIndexCache)이
      * 직접 계산해야 한다.
      */
+    @Retry(name = "toss")
     @CircuitBreaker(name = "toss")
     @Bulkhead(name = "toss")
     public TossMarketIndicatorPriceResponse getMarketIndicatorPrices(String symbols) {
-        return withTokenRetry("market-indicator-prices", token -> ExternalApiInvoker.call(
+        return withRateLimitRetry("market-indicator-prices", () -> withTokenRetry("market-indicator-prices", token -> ExternalApiInvoker.call(
             TossApiErrorCode.MARKET_INDICATOR_PRICE_INQUIRY_FAILED,
             () -> tossRestClient.get()
                 .uri(uriBuilder -> uriBuilder
@@ -477,7 +509,7 @@ public class TossApiClient {
                 .retrieve()
                 .body(TossMarketIndicatorPriceResponse.class),
             HttpClientErrorException.TooManyRequests.class,
-            TossApiErrorCode.RATE_LIMIT_EXCEEDED));
+            TossApiErrorCode.RATE_LIMIT_EXCEEDED)));
     }
 
     /**
@@ -486,11 +518,12 @@ public class TossApiClient {
      * 지원한다(호출 측이 지수 코드에 맞게 선택). Rate Limits Group은 위
      * 현재가 조회와 동일한 MARKET_INDICATOR.
      */
+    @Retry(name = "toss")
     @CircuitBreaker(name = "toss")
     @Bulkhead(name = "toss")
     public TossMarketIndicatorCandleResponse getMarketIndicatorCandles(
         String symbol, String interval, int count, String before) {
-        return withTokenRetry("market-indicator-candles", token -> ExternalApiInvoker.call(
+        return withRateLimitRetry("market-indicator-candles", () -> withTokenRetry("market-indicator-candles", token -> ExternalApiInvoker.call(
             TossApiErrorCode.MARKET_INDICATOR_CANDLE_INQUIRY_FAILED,
             () -> tossRestClient.get()
                 .uri(uriBuilder -> {
@@ -507,7 +540,7 @@ public class TossApiClient {
                 .retrieve()
                 .body(TossMarketIndicatorCandleResponse.class),
             HttpClientErrorException.TooManyRequests.class,
-            TossApiErrorCode.RATE_LIMIT_EXCEEDED));
+            TossApiErrorCode.RATE_LIMIT_EXCEEDED)));
     }
 
     /**
@@ -517,11 +550,12 @@ public class TossApiClient {
      * 전달, 최초 호출 시 null). Rate Limits Group은 MARKET_INDICATOR로
      * 위 두 메서드와 동일.
      */
+    @Retry(name = "toss")
     @CircuitBreaker(name = "toss")
     @Bulkhead(name = "toss")
     public TossInvestorTradingResponse getInvestorTrading(
         String symbol, String interval, int count, String until) {
-        return withTokenRetry("investor-trading", token -> ExternalApiInvoker.call(
+        return withRateLimitRetry("investor-trading", () -> withTokenRetry("investor-trading", token -> ExternalApiInvoker.call(
             TossApiErrorCode.INVESTOR_TRADING_INQUIRY_FAILED,
             () -> tossRestClient.get()
                 .uri(uriBuilder -> {
@@ -538,7 +572,7 @@ public class TossApiClient {
                 .retrieve()
                 .body(TossInvestorTradingResponse.class),
             HttpClientErrorException.TooManyRequests.class,
-            TossApiErrorCode.RATE_LIMIT_EXCEEDED));
+            TossApiErrorCode.RATE_LIMIT_EXCEEDED)));
     }
 
     /**

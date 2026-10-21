@@ -247,6 +247,44 @@ resilience4j:
         base-config: default
       tradingview:
         base-config: default
+  # 멱등 GET 외부 클라이언트의 일시 장애 재시도(2026-10-08). 대상은 connect 실패/
+  # 5xx/429뿐이다(read timeout·4xx·파싱 실패는 제외 - TransientFailurePredicate
+  # 주석 참고). 결제 POST·quant-engine·slack·oauth는 중복 부작용/쿼터/지연
+  # 때문에 의도적으로 붙이지 않았다.
+  #
+  # aspect 순서는 기본값(Retry가 CircuitBreaker·Bulkhead 바깥)을 유지한다 -
+  # 재시도 대기가 Bulkhead 슬롯을 점유하지 않고, 각 시도가 서킷 실패율에 집계돼
+  # 실제 장애 시 서킷이 더 빨리 열린다. 서킷 open(CallNotPermittedException)은
+  # predicate가 false라 재시도하지 않는다. 최악 추가 지연 = 대기 0.5s + 1s
+  # (+ 시도별 connect 3s).
+  retry:
+    configs:
+      default:
+        max-attempts: 3
+        wait-duration: 500ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        retry-exception-predicate: com.quantlime.common.resilience.TransientFailurePredicate
+    instances:
+      # Toss 429는 클라이언트가 엔드포인트별로 직접 처리하므로 이 인스턴스는
+      # 429를 재시도하지 않는 변형을 쓴다(TossTransientFailurePredicate 주석 참고).
+      toss:
+        base-config: default
+        retry-exception-predicate: com.quantlime.common.resilience.TossTransientFailurePredicate
+      naver-finance:
+        base-config: default
+      upbit:
+        base-config: default
+      tradingview:
+        base-config: default
+      dart:
+        base-config: default
+      kis:
+        base-config: default
+      youtube:
+        base-config: default
+      telegram:
+        base-config: default
   # 요약 생성(2026-09-14) - Gemini 무료 티어 분당 한도(RPM=15, gemini-3.5-flash-lite
   # 실측)에 여유를 둔 값. 이 인스턴스도 PythonEngineClient.summarize() 하나에 걸려
   # 있어 유튜브/텔레그램 두 경로가 함께 보호받는다. circuitbreaker/bulkhead는

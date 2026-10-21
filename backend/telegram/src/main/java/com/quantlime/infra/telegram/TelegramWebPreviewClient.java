@@ -4,6 +4,7 @@ import com.quantlime.common.util.ExternalApiInvoker;
 import com.quantlime.infra.telegram.dto.TelegramPreviewMessage;
 import com.quantlime.infra.telegram.dto.TelegramPreviewPage;
 import com.quantlime.infra.telegram.exception.TelegramApiErrorCode;
+import io.github.resilience4j.retry.annotation.Retry;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -46,6 +47,7 @@ public class TelegramWebPreviewClient {
 
     private final RestClient telegramRestClient;
 
+    @Retry(name = "telegram")
     public TelegramPreviewPage fetchPage(String channelHandle, Long afterMessageId, Long beforeMessageId) {
         if (afterMessageId != null && beforeMessageId != null) {
             throw new IllegalArgumentException("afterMessageId와 beforeMessageId는 동시에 지정할 수 없습니다.");

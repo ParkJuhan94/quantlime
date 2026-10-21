@@ -6,6 +6,7 @@ import com.quantlime.infra.upbit.dto.UpbitTicker;
 import com.quantlime.infra.upbit.exception.UpbitApiErrorCode;
 import io.github.resilience4j.bulkhead.annotation.Bulkhead;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import java.util.Arrays;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,7 @@ public class UpbitApiClient {
 
     private final RestClient upbitRestClient;
 
+    @Retry(name = "upbit")
     @CircuitBreaker(name = "upbit")
     @Bulkhead(name = "upbit")
     public List<UpbitTicker> getTicker(String market) {
@@ -42,6 +44,7 @@ public class UpbitApiClient {
     }
 
     // 홈 카드의 "최근 24시간" 비트코인 차트용 - 30분봉 48개 = 24시간.
+    @Retry(name = "upbit")
     @CircuitBreaker(name = "upbit")
     @Bulkhead(name = "upbit")
     public List<UpbitMinuteCandle> getMinuteCandles(String market, int unitMinutes, int count) {

@@ -4,6 +4,7 @@ import com.quantlime.common.exception.ExternalApiException;
 import com.quantlime.common.util.ExternalApiInvoker;
 import com.quantlime.infra.dart.dto.DartCorpInfo;
 import com.quantlime.infra.dart.exception.DartApiErrorCode;
+import io.github.resilience4j.retry.annotation.Retry;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -44,6 +45,7 @@ public class DartApiClient {
     private final RestClient dartRestClient;
     private final DartApiProperties properties;
 
+    @Retry(name = "dart")
     public List<DartCorpInfo> fetchCorpList() {
         return ExternalApiInvoker.call(
             DartApiErrorCode.CORP_LIST_INQUIRY_FAILED,

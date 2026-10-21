@@ -3,6 +3,7 @@ dependencies {
     implementation project(':client-support')
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'io.github.resilience4j:resilience4j-annotations'
     // 텔레그램 웹 프리뷰 HTML 파싱
     implementation 'org.jsoup:jsoup:1.18.1'
 }
