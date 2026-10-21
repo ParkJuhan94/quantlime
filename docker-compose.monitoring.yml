@@ -191,6 +191,10 @@ services:
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
       GF_USERS_ALLOW_SIGN_UP: "false"
+      # 브라우저 쿠키는 포트를 구분하지 않아 로컬(3002)·운영 터널(13002) Grafana가
+      # 같은 localhost 쿠키를 공유한다 - 이름이 같으면 한쪽 로그인이 다른 쪽
+      # 세션을 덮어써 로그아웃시키므로 환경별로 다르게 둔다
+      GF_AUTH_LOGIN_COOKIE_NAME: grafana_session_prod
     ports:
       # 로컬 개발 환경의 다른 프로젝트 Grafana(3000)/QuantLime 프론트(3001)와
       # 포트가 겹치지 않도록 3002로 매핑.

@@ -138,6 +138,9 @@ services:
       # 없음(로컬호스트 3002만 바인딩).
       GF_SECURITY_ADMIN_PASSWORD: admin
       GF_USERS_ALLOW_SIGN_UP: "false"
+      # 운영 터널(localhost:13002) Grafana와 쿠키 이름이 같으면 서로 로그아웃시킨다
+      # (docker-compose.monitoring.yml 주석 참고)
+      GF_AUTH_LOGIN_COOKIE_NAME: grafana_session_local
     ports:
       - "3002:3000"
     depends_on:
