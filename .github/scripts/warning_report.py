@@ -88,7 +88,7 @@ def main():
         lines += ["", "| 파일 (상위 10) | 개수 |", "|---|---:|"]
         lines += [f"| `{f}` | {c} |" for f, c in by_file.most_common(10)]
     else:
-        lines.append("경고 없음")
+        lines.append("✅ 경고 없음 - 통과")
     summary = "\n".join(lines) + "\n\n"
 
     out = os.environ.get("GITHUB_STEP_SUMMARY")
