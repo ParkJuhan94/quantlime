@@ -16,6 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -59,7 +60,7 @@ public class SummaryAppender {
     }
 
     @Transactional
-    public void markSummarizeFailed(Long videoId, String reason) {
+    public void markSummarizeFailed(Long videoId, @Nullable String reason) {
         findVideo(videoId).markFailed(reason);
     }
 

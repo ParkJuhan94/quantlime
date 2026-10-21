@@ -23,6 +23,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 
 // 브로드캐스트(관리자 공지, 전체 스코어 랭킹)도 사용자별로 별도 row를
@@ -82,7 +83,7 @@ public class Notification extends TimeBaseEntity {
         this.isRead = false;
     }
 
-    public static Notification of(User user, NotificationType type, String title, String content, String linkUrl) {
+    public static Notification of(@Nullable User user, NotificationType type, String title, String content, String linkUrl) {
         return of(user, type, title, content, linkUrl, null);
     }
 

@@ -9,6 +9,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
@@ -77,6 +78,7 @@ public class StockFundamentalsCollector {
     }
 
     /** trTitleList는 연도 오름차순으로 내려온다 - isConsensus="N"(확정치) 중 가장 최근 연도를 쓴다. */
+    @Nullable
     private String latestActualYearKey(NaverStockFinanceAnnualResponse finance) {
         if (finance.financeInfo() == null) return null;
         List<NaverStockFinanceAnnualResponse.TrTitle> titles = finance.financeInfo().trTitleList();
@@ -118,6 +120,7 @@ public class StockFundamentalsCollector {
     }
 
     /** "22.59배", "29.94", "-" 등을 숫자로 변환한다("-"·빈값은 null). */
+    @Nullable
     private Double parseRatio(String raw) {
         if (raw == null || raw.isBlank() || raw.equals("-")) return null;
         String cleaned = raw.replace(",", "").replace("배", "").replace("%", "").trim();

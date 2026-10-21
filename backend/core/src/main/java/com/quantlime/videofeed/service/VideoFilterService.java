@@ -21,6 +21,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -153,6 +154,7 @@ public class VideoFilterService {
         return classifyByVelocity(video, channel, config, hoursSincePublish);
     }
 
+    @Nullable
     private String hardFilterRejectionReason(Video video, ChannelFilterConfig config) {
         LocalDateTime retentionCutoff = LocalDateTime.now(SEOUL).minusDays(RETENTION_DAYS);
         if (video.getPublishedAt().isBefore(retentionCutoff)) {

@@ -33,6 +33,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -210,7 +211,7 @@ public class PaymentService {
         handleRenewalFailure(subscription, errorMessage);
     }
 
-    private void handleRenewalFailure(Subscription subscription, String errorMessage) {
+    private void handleRenewalFailure(Subscription subscription, @Nullable String errorMessage) {
         Long userId = subscription.getUser().getId();
         Long subscriptionId = subscription.getId();
         subscription.recordRenewalFailure();

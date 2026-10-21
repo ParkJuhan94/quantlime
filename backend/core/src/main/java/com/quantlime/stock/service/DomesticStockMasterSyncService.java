@@ -10,6 +10,7 @@ import com.quantlime.stock.implement.StockAppender;
 import com.quantlime.stock.implement.StockReader;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -74,7 +75,7 @@ public class DomesticStockMasterSyncService {
                 unresolvedMarketCount++;
                 continue;
             }
-            DartCorpInfo info = latestByCode.get(code);
+            DartCorpInfo info = Objects.requireNonNull(latestByCode.get(code));
             // DART corpCode API는 업종(sector) 정보를 주지 않는다 - KIND
             // 시절 빈 값 폴백과 동일하게 "기타"로 남긴다(없는 데이터를
             // 지어내지 않음).

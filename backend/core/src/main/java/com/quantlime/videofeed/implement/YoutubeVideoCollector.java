@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
@@ -110,7 +111,7 @@ public class YoutubeVideoCollector {
         return detailsById;
     }
 
-    private CollectedVideo toCollectedVideo(PlaylistItemRef ref, YoutubeVideosResponse.Item details) {
+    private CollectedVideo toCollectedVideo(PlaylistItemRef ref, @Nullable YoutubeVideosResponse.Item details) {
         Integer durationSec = details != null && details.contentDetails() != null
             ? (int) Duration.parse(details.contentDetails().duration()).toSeconds()
             : null;

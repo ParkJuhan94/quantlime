@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.quantlime.videofeed.domain.ChannelFilterConfig;
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
+import org.springframework.lang.Nullable;
 
 @Converter
 public class ChannelFilterConfigConverter implements AttributeConverter<ChannelFilterConfig, String> {
@@ -11,6 +12,7 @@ public class ChannelFilterConfigConverter implements AttributeConverter<ChannelF
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @Override
+    @Nullable
     public String convertToDatabaseColumn(ChannelFilterConfig attribute) {
         if (attribute == null) {
             return null;
@@ -23,6 +25,7 @@ public class ChannelFilterConfigConverter implements AttributeConverter<ChannelF
     }
 
     @Override
+    @Nullable
     public ChannelFilterConfig convertToEntityAttribute(String dbData) {
         if (dbData == null || dbData.isBlank()) {
             return null;

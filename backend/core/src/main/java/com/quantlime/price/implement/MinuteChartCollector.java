@@ -10,6 +10,7 @@ import java.util.Comparator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
@@ -57,6 +58,7 @@ public class MinuteChartCollector {
 
     // 토스가 돌려주는 nextBefore는 +09:00 같은 오프셋을 가질 수 있어, 그대로 다음 요청의
     // before로 쓰면 +가 공백으로 해석돼 깨진다 - 항상 UTC Z 표기로 정규화해 내려준다.
+    @Nullable
     private String toUtcCursor(String nextBefore) {
         if (nextBefore == null || nextBefore.isBlank()) {
             return null;

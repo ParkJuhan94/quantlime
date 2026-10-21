@@ -30,6 +30,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
 /**
@@ -246,12 +247,12 @@ public class MarketDataRefreshService {
      * @return 이 종목이 속한 모집단 - 호출부(컨슈머)가 어느 카운터를
      *     감소시켜야 할지 판단하는 데 쓴다.
      */
-    public PeerGroup refreshSingleStockFromFanOut(String stockCode, LocalDate latestScoreDate) {
+    public PeerGroup refreshSingleStockFromFanOut(String stockCode, @Nullable LocalDate latestScoreDate) {
         Stock stock = stockMasterService.getStockByCode(stockCode);
         return refreshSingleStock(stock, latestScoreDate);
     }
 
-    private PeerGroup refreshSingleStock(Stock stock, LocalDate latestScoreDate) {
+    private PeerGroup refreshSingleStock(Stock stock, @Nullable LocalDate latestScoreDate) {
         String stockCode = stock.getStockCode();
         if (stock.getMarketType().isDomestic()) {
             StockRefreshOutcome outcome = refreshDomesticStock(stock, latestScoreDate);
@@ -273,7 +274,7 @@ public class MarketDataRefreshService {
      * (순차 배치는 {@link #finishDomesticBatch}에서 한 번에, fan-out은
      * {@link #refreshSingleStockFromFanOut}이 종목별로 즉시).
      */
-    private StockRefreshOutcome refreshDomesticStock(Stock stock, LocalDate latestScoreDate) {
+    private StockRefreshOutcome refreshDomesticStock(Stock stock, @Nullable LocalDate latestScoreDate) {
         String stockCode = stock.getStockCode();
         Optional<LocalDate> latestPriceDate = Optional.empty();
         try {
@@ -296,7 +297,7 @@ public class MarketDataRefreshService {
     }
 
     /** 해외 버전 - {@link #refreshDomesticStock}과 대칭. */
-    private StockRefreshOutcome refreshOverseasStock(Stock stock, LocalDate latestScoreDate) {
+    private StockRefreshOutcome refreshOverseasStock(Stock stock, @Nullable LocalDate latestScoreDate) {
         String stockCode = stock.getStockCode();
         Optional<LocalDate> latestPriceDate = Optional.empty();
         try {
@@ -359,7 +360,7 @@ public class MarketDataRefreshService {
      * 종목분만 이미 뽑아 전달받은 값이다 - 이전엔 종목마다 개별 쿼리를
      * 날렸다(2026-09 성능 감사).
      */
-    private boolean needsScoreRefresh(Optional<LocalDate> latestPriceDate, LocalDate latestScoreDate) {
+    private boolean needsScoreRefresh(Optional<LocalDate> latestPriceDate, @Nullable LocalDate latestScoreDate) {
         if (latestPriceDate.isEmpty()) {
             return false;
         }

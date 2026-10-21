@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Date;
 import javax.crypto.SecretKey;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -51,6 +52,7 @@ public class JwtTokenProvider {
         return Long.valueOf(parseClaims(token).getSubject());
     }
 
+    @Nullable
     public UserRole getRole(String token) {
         String role = parseClaims(token).get(CLAIM_ROLE, String.class);
         return role != null ? UserRole.valueOf(role) : null;
@@ -78,7 +80,7 @@ public class JwtTokenProvider {
         );
     }
 
-    public record ParsedToken(Long userId, UserRole role, boolean isRefreshToken) {
+    public record ParsedToken(Long userId, @Nullable UserRole role, boolean isRefreshToken) {
     }
 
     public long getAccessTokenValidity() {
@@ -89,7 +91,7 @@ public class JwtTokenProvider {
         return jwtProperties.getRefreshTokenValidity();
     }
 
-    private String createToken(Long userId, String type, UserRole role, long validityMs) {
+    private String createToken(Long userId, String type, @Nullable UserRole role, long validityMs) {
         Instant now = Instant.now();
         JwtBuilder builder = Jwts.builder()
             .subject(String.valueOf(userId))

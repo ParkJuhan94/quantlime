@@ -5,6 +5,7 @@ import com.quantlime.market.event.PriceRefreshRequestedEvent;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
+import org.springframework.lang.Nullable;
 
 /**
  * {@code price.refresh.requested} 토픽의 Kafka payload. videofeed의 "thin
@@ -14,7 +15,7 @@ import java.util.UUID;
  */
 public record PriceRefreshRequestedMessage(
     UUID eventId, Instant occurredAt, int version,
-    String runId, String stockCode, String peerGroup, LocalDate latestScoreDate)
+    String runId, String stockCode, String peerGroup, @Nullable LocalDate latestScoreDate)
     implements DomainEventEnvelope {
 
     public static PriceRefreshRequestedMessage of(PriceRefreshRequestedEvent event) {

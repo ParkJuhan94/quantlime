@@ -16,6 +16,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
@@ -169,10 +170,12 @@ public class TossMarketRankingCache {
     /** Toss changeRate는 소수 비율(0.0125=1.25%) - 기존 자체 계산 등락률
      * (퍼센트 숫자, 예: 1.25)과 단위를 맞추기 위해 ×100 한다. basePrice가
      * 0이면 null로 내려온다(스펙 명시). */
+    @Nullable
     private Double parseChangeRate(String changeRate) {
         return changeRate == null ? null : Double.parseDouble(changeRate) * 100.0;
     }
 
+    @Nullable
     private Double parseDecimal(String raw) {
         return raw == null ? null : Double.parseDouble(raw);
     }

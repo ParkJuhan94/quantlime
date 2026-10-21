@@ -1,6 +1,7 @@
 package com.quantlime.price.dto.response;
 
 import java.util.List;
+import org.springframework.lang.Nullable;
 
 /**
  * 분봉 차트 한 페이지. candles는 시간 오름차순이고 time은 epoch 초(UTC) -
@@ -10,7 +11,7 @@ import java.util.List;
  */
 public record MinuteChartResponse(
     List<Candle> candles,
-    String nextBefore
+    @Nullable String nextBefore
 ) {
 
     public record Candle(

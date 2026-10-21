@@ -26,6 +26,7 @@ import java.util.stream.IntStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.lang.Nullable;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -170,6 +171,7 @@ public class OverseasWatchlistPriceScheduler {
         return chunkRanking;
     }
 
+    @Nullable
     private PriceSnapshot toSnapshot(TossPriceResponse.TossPrice price, Map<String, Double> previousCloseByCode) {
         if (!StringUtils.hasText(price.lastPrice())) {
             return null;
@@ -193,6 +195,7 @@ public class OverseasWatchlistPriceScheduler {
      * .overseasWatchlistRanking}과 동일한 규칙(시세 자체는 브로드캐스트
      * 되지만 "관심종목만 보기" 랭킹에는 안 뜨는 것도 그대로).
      */
+    @Nullable
     private MarketRankingResponse toRanking(PriceSnapshot snapshot, Map<String, Stock> stockByCode) {
         if (snapshot.changeRate() == null) {
             return null;
@@ -208,6 +211,7 @@ public class OverseasWatchlistPriceScheduler {
             StockMapper.toLogoUrl(stock), true, null, null, null);
     }
 
+    @Nullable
     private Double parseLastPrice(String lastPrice) {
         try {
             return Double.parseDouble(lastPrice.trim());

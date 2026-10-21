@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.quantlime.videofeed.domain.TelegramFilterConfig;
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
+import org.springframework.lang.Nullable;
 
 @Converter
 public class TelegramFilterConfigConverter implements AttributeConverter<TelegramFilterConfig, String> {
@@ -11,6 +12,7 @@ public class TelegramFilterConfigConverter implements AttributeConverter<Telegra
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @Override
+    @Nullable
     public String convertToDatabaseColumn(TelegramFilterConfig attribute) {
         if (attribute == null) {
             return null;
@@ -23,6 +25,7 @@ public class TelegramFilterConfigConverter implements AttributeConverter<Telegra
     }
 
     @Override
+    @Nullable
     public TelegramFilterConfig convertToEntityAttribute(String dbData) {
         if (dbData == null || dbData.isBlank()) {
             return null;

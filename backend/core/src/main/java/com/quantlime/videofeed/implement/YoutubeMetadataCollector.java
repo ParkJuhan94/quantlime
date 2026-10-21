@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
@@ -69,7 +70,8 @@ public class YoutubeMetadataCollector {
             .toList();
     }
 
-    private BigDecimal toVelocity(YoutubePlaylistItemsResponse.Item item, YoutubeVideosResponse.Item details) {
+    @Nullable
+    private BigDecimal toVelocity(YoutubePlaylistItemsResponse.Item item, @Nullable YoutubeVideosResponse.Item details) {
         if (details == null || details.statistics() == null || details.statistics().viewCount() == null) {
             return null;
         }

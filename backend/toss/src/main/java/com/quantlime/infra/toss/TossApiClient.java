@@ -28,6 +28,7 @@ import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
@@ -109,7 +110,7 @@ public class TossApiClient {
     @Retry(name = "toss")
     @CircuitBreaker(name = "toss")
     @Bulkhead(name = "toss")
-    public TossCandleResponse getDailyCandles(String symbol, int count, String before) {
+    public TossCandleResponse getDailyCandles(String symbol, int count, @Nullable String before) {
         return withRateLimitRetry("candles:" + symbol, () -> fetchDailyCandles(symbol, count, before));
     }
 
@@ -209,6 +210,7 @@ public class TossApiClient {
         return RATE_LIMIT_BACKOFF_MS;
     }
 
+    @Nullable
     private Long parseSecondsHeader(String value) {
         if (value == null || value.isBlank()) {
             return null;
@@ -225,7 +227,7 @@ public class TossApiClient {
         return Math.min(Math.max(millis, MIN_RATE_LIMIT_BACKOFF_MS), MAX_RATE_LIMIT_BACKOFF_MS);
     }
 
-    private TossCandleResponse fetchDailyCandles(String symbol, int count, String before) {
+    private TossCandleResponse fetchDailyCandles(String symbol, int count, @Nullable String before) {
         awaitCandleRateLimit();
         return withTokenRetry("candles", token -> ExternalApiInvoker.call(
             TossApiErrorCode.CANDLE_INQUIRY_FAILED,
@@ -522,7 +524,7 @@ public class TossApiClient {
     @CircuitBreaker(name = "toss")
     @Bulkhead(name = "toss")
     public TossMarketIndicatorCandleResponse getMarketIndicatorCandles(
-        String symbol, String interval, int count, String before) {
+        String symbol, String interval, int count, @Nullable String before) {
         return withRateLimitRetry("market-indicator-candles", () -> withTokenRetry("market-indicator-candles", token -> ExternalApiInvoker.call(
             TossApiErrorCode.MARKET_INDICATOR_CANDLE_INQUIRY_FAILED,
             () -> tossRestClient.get()
@@ -554,7 +556,7 @@ public class TossApiClient {
     @CircuitBreaker(name = "toss")
     @Bulkhead(name = "toss")
     public TossInvestorTradingResponse getInvestorTrading(
-        String symbol, String interval, int count, String until) {
+        String symbol, String interval, int count, @Nullable String until) {
         return withRateLimitRetry("investor-trading", () -> withTokenRetry("investor-trading", token -> ExternalApiInvoker.call(
             TossApiErrorCode.INVESTOR_TRADING_INQUIRY_FAILED,
             () -> tossRestClient.get()

@@ -9,6 +9,7 @@ import java.time.ZoneId;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
@@ -48,7 +49,7 @@ public class PostCloseRescorePolicy {
     }
 
     /** 오늘 가격·스코어가 모두 오늘 날짜이고 마감 후이며 아직 마감 후 재계산을 끝내지 않았으면 true. */
-    public boolean shouldRescore(LocalDate latestScoreDate, LocalDate latestPriceDate) {
+    public boolean shouldRescore(@Nullable LocalDate latestScoreDate, LocalDate latestPriceDate) {
         LocalDateTime now = LocalDateTime.now(clock);
         LocalDate today = now.toLocalDate();
         if (!today.equals(latestScoreDate) || !today.equals(latestPriceDate) || !isPostClose(now)) {

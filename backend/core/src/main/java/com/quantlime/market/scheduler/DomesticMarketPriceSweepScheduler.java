@@ -26,6 +26,7 @@ import java.util.stream.IntStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.lang.Nullable;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -196,6 +197,7 @@ public class DomesticMarketPriceSweepScheduler {
      * 한다(과거 PriceBroadcastScheduler.toBroadcastMessage와 동일한 규칙).
      * 실제 Redis 저장은 fetchChunk가 청크 단위로 한 번에 파이프라인한다.
      */
+    @Nullable
     private CachedPrice cacheAndRank(
         TossPriceResponse.TossPrice price, Map<String, Stock> stockByCode,
         Map<String, Double> previousCloseByStockCode) {
@@ -234,9 +236,10 @@ public class DomesticMarketPriceSweepScheduler {
         return new CachedPrice(snapshot, ranking);
     }
 
-    private record CachedPrice(PriceSnapshot snapshot, MarketRankingResponse ranking) {
+    private record CachedPrice(PriceSnapshot snapshot, @Nullable MarketRankingResponse ranking) {
     }
 
+    @Nullable
     private Long parseLastPrice(String lastPrice) {
         try {
             return Long.parseLong(lastPrice.trim());

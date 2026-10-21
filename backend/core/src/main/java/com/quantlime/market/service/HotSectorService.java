@@ -49,10 +49,11 @@ public class HotSectorService {
         Map<String, List<Member>> membersBySector = new HashMap<>();
         for (MarketRankingResponse item : snapshot) {
             Double weight = weightByCode.get(item.stockCode());
-            if (weight == null || !StringUtils.hasText(item.sector()) || item.changeRate() == null) {
+            Double changeRate = item.changeRate();
+            if (weight == null || !StringUtils.hasText(item.sector()) || changeRate == null) {
                 continue;
             }
-            membersBySector.computeIfAbsent(item.sector(), key -> new ArrayList<>()).add(new Member(item, weight));
+            membersBySector.computeIfAbsent(item.sector(), key -> new ArrayList<>()).add(new Member(item, weight, changeRate));
         }
 
         return membersBySector.entrySet().stream()
@@ -74,15 +75,15 @@ public class HotSectorService {
 
     private HotSectorResponse toResponse(String sector, List<Member> members) {
         double totalWeight = members.stream().mapToDouble(Member::weight).sum();
-        double weighted = members.stream().mapToDouble(m -> m.item().changeRate() * m.weight()).sum() / totalWeight;
+        double weighted = members.stream().mapToDouble(m -> m.changeRate() * m.weight()).sum() / totalWeight;
         List<HotSectorResponse.Leader> leaders = members.stream()
             .sorted(Comparator.comparingDouble(Member::weight).reversed())
             .limit(LEADER_COUNT)
-            .map(m -> new HotSectorResponse.Leader(m.item().stockCode(), m.item().stockName(), m.item().changeRate()))
+            .map(m -> new HotSectorResponse.Leader(m.item().stockCode(), m.item().stockName(), m.changeRate()))
             .toList();
         return new HotSectorResponse(sector, weighted, members.size(), leaders);
     }
 
-    private record Member(MarketRankingResponse item, double weight) {
+    private record Member(MarketRankingResponse item, double weight, double changeRate) {
     }
 }

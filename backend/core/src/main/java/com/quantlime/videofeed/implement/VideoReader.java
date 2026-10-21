@@ -10,6 +10,7 @@ import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
@@ -59,7 +60,7 @@ public class VideoReader {
         return videoRepository.findSummarizeCandidates(statuses, maxRetryCount, pageable);
     }
 
-    public Slice<Video> findSummarizedVideos(String tickerCode, Long channelId, LocalDateTime publishedFrom, LocalDateTime publishedTo, Pageable pageable) {
+    public Slice<Video> findSummarizedVideos(String tickerCode, Long channelId, @Nullable LocalDateTime publishedFrom, @Nullable LocalDateTime publishedTo, Pageable pageable) {
         return videoRepository.findSummarizedVideos(tickerCode, channelId, publishedFrom, publishedTo, pageable);
     }
 

@@ -12,6 +12,7 @@ import com.quantlime.score.dto.response.ScoreRankingResponse;
 import com.quantlime.score.dto.response.ScoreResponse;
 import java.time.LocalDate;
 import lombok.NoArgsConstructor;
+import org.springframework.lang.Nullable;
 
 @NoArgsConstructor(access = PRIVATE)
 public final class ScoreMapper {
@@ -62,14 +63,14 @@ public final class ScoreMapper {
     }
 
     public static ScoreRankingResponse toScoreRankingResponse(
-        Score score, String stockName, String sector, String logoUrl, boolean overseas,
-        Double avgTradingValue) {
+        Score score, String stockName, String sector, @Nullable String logoUrl, boolean overseas,
+        @Nullable Double avgTradingValue) {
         return toScoreRankingResponse(score, stockName, sector, logoUrl, overseas, avgTradingValue, null);
     }
 
     public static ScoreRankingResponse toScoreRankingResponse(
-        Score score, String stockName, String sector, String logoUrl, boolean overseas,
-        Double avgTradingValue, Double scoreChange) {
+        Score score, String stockName, String sector, @Nullable String logoUrl, boolean overseas,
+        @Nullable Double avgTradingValue, @Nullable Double scoreChange) {
         return new ScoreRankingResponse(
             score.getStockCode(),
             stockName,
@@ -90,32 +91,39 @@ public final class ScoreMapper {
         );
     }
 
+    @Nullable
     private static Grade extractGrade(DailyScoreSeriesApiResponse apiResponse) {
         return apiResponse.grade() != null ? Grade.of(apiResponse.grade()) : null;
     }
 
+    @Nullable
     private static Quadrant extractQuadrant(DailyScoreSeriesApiResponse apiResponse) {
         return apiResponse.quadrant() != null ? Quadrant.of(apiResponse.quadrant()) : null;
     }
 
+    @Nullable
     private static Divergence extractDivergence(DailyScoreSeriesApiResponse apiResponse) {
         DivergenceApiResponse divergence = apiResponse.divergence();
         return divergence != null ? Divergence.of(divergence.flag(), divergence.message()) : null;
     }
 
-    private static String gradeLabel(Grade grade) {
+    @Nullable
+    private static String gradeLabel(@Nullable Grade grade) {
         return grade != null ? grade.getLabel() : null;
     }
 
-    private static String quadrantLabel(Quadrant quadrant) {
+    @Nullable
+    private static String quadrantLabel(@Nullable Quadrant quadrant) {
         return quadrant != null ? quadrant.getLabel() : null;
     }
 
-    private static Boolean divergenceFlag(Divergence divergence) {
+    @Nullable
+    private static Boolean divergenceFlag(@Nullable Divergence divergence) {
         return divergence != null ? divergence.getFlag() : null;
     }
 
-    private static String divergenceMessage(Divergence divergence) {
+    @Nullable
+    private static String divergenceMessage(@Nullable Divergence divergence) {
         return divergence != null ? divergence.getMessage() : null;
     }
 }

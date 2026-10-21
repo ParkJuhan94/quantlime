@@ -40,6 +40,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -234,7 +235,7 @@ public class ScoreService {
 
         return latestScores.stream()
             .map(score -> {
-                Stock stock = stockByCode.get(score.getStockCode());
+                Stock stock = Objects.requireNonNull(stockByCode.get(score.getStockCode()));
                 return ScoreMapper.toScoreRankingResponse(
                     score, stock.getDisplayName(), stock.getSector(), StockMapper.toLogoUrl(stock),
                     !stock.getMarketType().isDomestic(),
@@ -433,6 +434,7 @@ public class ScoreService {
      * 동일한 값 집합을 쓴다(2026-07-30 추가 - 이 필터가 없으면 국내/해외
      * 스코어 분포 차이 때문에 상위 N개가 한쪽 시장으로만 쏠렸음).
      */
+    @Nullable
     private List<MarketType> scopeToMarketTypes(String scope) {
         if ("domestic".equals(scope)) {
             return MarketType.domesticValues();
