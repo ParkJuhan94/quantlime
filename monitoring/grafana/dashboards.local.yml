@@ -1,0 +1,15 @@
+apiVersion: 1
+
+# 로컬 스택 전용 providers - provisioning/dashboards/dashboards.yml(운영 기준)과
+# 폴더명만 다르다. 로컬 compose가 그 파일 위에 덮어마운트한다. 이 파일을
+# provisioning 트리 안에 두면 Grafana가 둘 다 읽어 폴더가 중복되므로 바깥에 둔다.
+providers:
+  - name: QuantLime
+    orgId: 1
+    folder: QuantLime (로컬)
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/json

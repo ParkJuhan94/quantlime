@@ -3,7 +3,10 @@ apiVersion: 1
 providers:
   - name: QuantLime
     orgId: 1
-    folder: QuantLime
+    # 이 파일은 운영 기준이다. 로컬 스택은 docker-compose.monitoring.local.yml이
+    # monitoring/grafana/dashboards.local.yml을 이 경로에 덮어마운트해 폴더명만
+    # '(로컬)'로 바꾼다(대시보드 JSON은 공용).
+    folder: QuantLime (운영)
     type: file
     disableDeletion: false
     updateIntervalSeconds: 30

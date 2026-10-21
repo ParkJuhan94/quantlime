@@ -130,6 +130,8 @@ services:
     container_name: quantlime-local-grafana
     volumes:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      # 폴더명만 '(로컬)'로 바꾼 providers 파일로 운영용 dashboards.yml을 덮는다
+      - ./monitoring/grafana/dashboards.local.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
       - grafana_local_data:/var/lib/grafana
     environment:
       # 로컬 1회성 진단용이라 .env.prod 시크릿 없이 고정값 사용 - 외부 노출
