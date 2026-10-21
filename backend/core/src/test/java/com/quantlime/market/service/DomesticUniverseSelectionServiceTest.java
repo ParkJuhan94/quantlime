@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import com.quantlime.common.config.ClockConfig;
 import com.quantlime.price.dto.DomesticStockTradingValue;
 import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.price.service.DomesticDailyPriceService;
@@ -16,6 +17,7 @@ import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.StockMasterService;
+import java.time.Clock;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -23,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @Tag("unit")
@@ -37,6 +40,9 @@ class DomesticUniverseSelectionServiceTest {
 
     @Mock
     private DailyPriceReader dailyPriceReader;
+
+    @Spy
+    private Clock clock = Clock.system(ClockConfig.KST);
 
     @InjectMocks
     private DomesticUniverseSelectionService domesticUniverseSelectionService;

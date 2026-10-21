@@ -18,6 +18,7 @@ import com.quantlime.market.implement.BenchmarkIndexReader;
 import com.quantlime.price.cache.DomesticMarketCalendarCache;
 import com.quantlime.price.util.ChangeRateCalculator;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -82,6 +83,7 @@ public class MarketIndexCache {
     private final BenchmarkIndexReader benchmarkIndexReader;
     private final DomesticMarketCalendarCache domesticMarketCalendarCache;
     private final MeterRegistry meterRegistry;
+    private final Clock clock;
 
     private volatile MarketIndexResponse cached;
     private volatile Instant cachedAt = Instant.EPOCH;
@@ -301,7 +303,7 @@ public class MarketIndexCache {
         }
         double value = Double.parseDouble(lastPrice);
         Double previousClose = benchmarkIndexReader
-            .findLatestBefore(indexCode, LocalDate.now())
+            .findLatestBefore(indexCode, LocalDate.now(clock))
             .map(BenchmarkIndex::getClosePrice)
             .orElse(null);
         Double changeAmount = previousClose == null ? null : value - previousClose;

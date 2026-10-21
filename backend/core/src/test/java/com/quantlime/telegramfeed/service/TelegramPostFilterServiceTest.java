@@ -3,11 +3,13 @@ package com.quantlime.telegramfeed.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 
+import com.quantlime.common.config.ClockConfig;
 import com.quantlime.telegramfeed.domain.TelegramPost;
 import com.quantlime.telegramfeed.domain.TelegramPostStatus;
 import com.quantlime.telegramfeed.implement.TelegramPostReader;
 import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.TelegramFilterConfig;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -16,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @Tag("unit")
@@ -24,6 +27,9 @@ class TelegramPostFilterServiceTest {
 
     @Mock
     private TelegramPostReader telegramPostReader;
+
+    @Spy
+    private Clock clock = Clock.system(ClockConfig.KST);
 
     @InjectMocks
     private TelegramPostFilterService telegramPostFilterService;

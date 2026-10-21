@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import com.quantlime.common.config.ClockConfig;
 import com.quantlime.infra.python.dto.CrossSectionNormalizeApiResponse.NormalizedItemApiResponse;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.DailyScoreSeriesApiResponse;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse.DivergenceApiResponse;
@@ -19,6 +20,7 @@ import com.quantlime.score.domain.Score;
 import com.quantlime.score.repository.ScoreRepository;
 import com.quantlime.stock.domain.MarketType;
 import jakarta.persistence.EntityManager;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -29,6 +31,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 
@@ -44,6 +47,9 @@ class ScoreAppenderTest {
 
     @Mock
     private EntityManager entityManager;
+
+    @Spy
+    private Clock clock = Clock.system(ClockConfig.KST);
 
     @InjectMocks
     private ScoreAppender scoreAppender;

@@ -8,6 +8,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.quantlime.common.config.ClockConfig;
 import com.quantlime.common.exception.ExternalApiException;
 import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.common.lock.RedisLockService;
@@ -26,6 +27,7 @@ import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.Platform;
 import com.quantlime.videofeed.domain.TelegramFilterConfig;
 import com.quantlime.videofeed.implement.ChannelReader;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -78,7 +80,7 @@ class TelegramDigestGenerationFacadeTest {
     void setUpService() {
         telegramDigestGenerationFacade = new TelegramDigestGenerationFacade(
             redisLockService, channelReader, telegramPostReader,
-            new TelegramDigestGenerator(pythonEngineClient), telegramDigestAppender, eventPublisher);
+            new TelegramDigestGenerator(pythonEngineClient), telegramDigestAppender, eventPublisher, Clock.system(ClockConfig.KST));
     }
 
     private Channel channelOf(Long id, String handle) {

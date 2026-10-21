@@ -13,6 +13,7 @@ import com.quantlime.score.domain.PeerGroup;
 import com.quantlime.score.domain.Score;
 import com.quantlime.score.dto.mapper.ScoreRequestMapper;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +40,7 @@ public class ScoreEngineProcessor {
 
     private final PythonEngineClient pythonEngineClient;
     private final MeterRegistry meterRegistry;
+    private final Clock clock;
 
     /** 국내 종목들의 일봉 시계열로 날짜별 스코어를 계산한다. */
     public List<StockScoreSeriesApiResponse> calculateDomestic(
@@ -66,7 +68,7 @@ public class ScoreEngineProcessor {
      */
     public Optional<List<NormalizedItemApiResponse>> normalize(PeerGroup peerGroup, List<Score> latestScores) {
         CrossSectionNormalizeApiRequest request = ScoreRequestMapper.toNormalizeRequest(
-            LocalDate.now(), peerGroup, latestScores);
+            LocalDate.now(clock), peerGroup, latestScores);
         CrossSectionNormalizeApiResponse response = pythonEngineClient.normalizeCrossSection(request);
         if (!response.minSampleMet()) {
             return Optional.empty();

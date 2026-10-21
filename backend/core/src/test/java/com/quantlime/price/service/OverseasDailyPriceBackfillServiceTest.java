@@ -6,7 +6,9 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
+import com.quantlime.common.config.ClockConfig;
 import com.quantlime.price.implement.OverseasDailyPriceCollector;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import org.junit.jupiter.api.DisplayName;
@@ -16,6 +18,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /** 재백필 구간 계산 같은 정책만 검증한다 - 수집·저장 자체는 OverseasDailyPriceCollectorTest. */
@@ -27,6 +30,9 @@ class OverseasDailyPriceBackfillServiceTest {
 
     @Mock
     private OverseasDailyPriceCollector overseasDailyPriceCollector;
+
+    @Spy
+    private Clock clock = Clock.system(ClockConfig.KST);
 
     @InjectMocks
     private OverseasDailyPriceBackfillService overseasDailyPriceBackfillService;

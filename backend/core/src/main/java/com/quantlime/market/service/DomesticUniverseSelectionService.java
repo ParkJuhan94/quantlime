@@ -5,6 +5,7 @@ import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.price.service.DomesticDailyPriceService;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.StockMasterService;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
@@ -43,6 +44,7 @@ public class DomesticUniverseSelectionService {
     private final StockMasterService stockMasterService;
     private final DomesticDailyPriceService domesticDailyPriceService;
     private final DailyPriceReader dailyPriceReader;
+    private final Clock clock;
 
     /**
      * 1차: REIT 제외 전 상장종목의 최근 60거래일을 백필한다(이미 충분하면
@@ -58,7 +60,7 @@ public class DomesticUniverseSelectionService {
 
         backfillEach(candidates.stream().map(Stock::getStockCode).toList(), SCAN_TARGET_DAYS);
 
-        LocalDate since = LocalDate.now().minusMonths(3);
+        LocalDate since = LocalDate.now(clock).minusMonths(3);
         List<DomesticStockTradingValue> ranked = dailyPriceReader.findTopDomesticByTradingValue(since, UNIVERSE_SIZE);
         List<String> selected = ranked.stream().map(DomesticStockTradingValue::stockCode).toList();
         log.info("거래대금 상위 {}종목 선정 완료(기준일 {} 이후)", selected.size(), since);

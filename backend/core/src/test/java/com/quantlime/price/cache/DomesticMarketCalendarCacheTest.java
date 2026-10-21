@@ -5,12 +5,14 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import com.quantlime.common.config.ClockConfig;
 import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.toss.dto.TossMarketCalendarResponse;
 import com.quantlime.infra.toss.dto.TossMarketCalendarResponse.KrMarketCalendarResult;
 import com.quantlime.infra.toss.dto.TossMarketCalendarResponse.MarketDay;
 import com.quantlime.infra.toss.dto.TossMarketCalendarResponse.MarketSession;
 import com.quantlime.infra.toss.dto.TossMarketCalendarResponse.MarketSessions;
+import java.time.Clock;
 import java.time.OffsetDateTime;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -18,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @Tag("unit")
@@ -26,6 +29,9 @@ class DomesticMarketCalendarCacheTest {
 
     @Mock
     private TossApiClient tossApiClient;
+
+    @Spy
+    private Clock clock = Clock.system(ClockConfig.KST);
 
     @InjectMocks
     private DomesticMarketCalendarCache domesticMarketCalendarCache;

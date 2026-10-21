@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
+import com.quantlime.common.config.ClockConfig;
 import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.common.exception.ValidationException;
 import com.quantlime.notification.domain.NotificationType;
@@ -23,6 +24,7 @@ import com.quantlime.subscription.repository.SubscriptionRepository;
 import com.quantlime.user.UserFixture;
 import com.quantlime.user.domain.User;
 import com.quantlime.user.service.UserService;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -53,7 +55,7 @@ class SubscriptionServiceTest {
     void setUp() {
         subscriptionService = new SubscriptionService(
             new SubscriptionReader(subscriptionRepository), new SubscriptionAppender(subscriptionRepository),
-            userService, fcmPushService);
+            userService, fcmPushService, Clock.system(ClockConfig.KST));
     }
 
     private final User user = UserFixture.createUser();

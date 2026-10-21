@@ -14,6 +14,7 @@ import com.quantlime.backtest.exception.BacktestErrorCode;
 import com.quantlime.backtest.implement.BacktestAppender;
 import com.quantlime.backtest.implement.BacktestEngineProcessor;
 import com.quantlime.backtest.implement.BacktestReader;
+import com.quantlime.common.config.ClockConfig;
 import com.quantlime.common.exception.ValidationException;
 import com.quantlime.infra.python.PythonEngineClient;
 import com.quantlime.infra.python.dto.CrossSectionalBacktestApiResponse;
@@ -23,6 +24,7 @@ import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.StockMasterService;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,7 +62,7 @@ class CrossSectionalBacktestServiceTest {
     @BeforeEach
     void setUpService() {
         crossSectionalBacktestService = new CrossSectionalBacktestService(stockMasterService, backtestReader,
-            benchmarkIndexReader, new BacktestEngineProcessor(pythonEngineClient), backtestAppender);
+            benchmarkIndexReader, new BacktestEngineProcessor(pythonEngineClient, Clock.system(ClockConfig.KST)), backtestAppender, Clock.system(ClockConfig.KST));
     }
 
     @Test

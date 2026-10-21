@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.quantlime.common.config.ClockConfig;
 import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.ChannelFilterConfig;
 import com.quantlime.videofeed.domain.Platform;
@@ -13,6 +14,7 @@ import com.quantlime.videofeed.domain.Video;
 import com.quantlime.videofeed.domain.VideoStatus;
 import com.quantlime.videofeed.implement.VideoReader;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
@@ -23,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -42,6 +45,9 @@ class VideoFilterServiceTest {
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
+
+    @Spy
+    private Clock clock = Clock.system(ClockConfig.KST);
 
     @InjectMocks
     private VideoFilterService videoFilterService;

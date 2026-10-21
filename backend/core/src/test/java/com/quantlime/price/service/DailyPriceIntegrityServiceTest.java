@@ -8,12 +8,14 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.quantlime.common.config.ClockConfig;
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.dto.PriceJumpReport;
 import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.stock.StockFixture;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.StockMasterService;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -22,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @Tag("unit")
@@ -38,6 +41,9 @@ class DailyPriceIntegrityServiceTest {
 
     @Mock
     private DomesticDailyPriceService domesticDailyPriceService;
+
+    @Spy
+    private Clock clock = Clock.system(ClockConfig.KST);
 
     @InjectMocks
     private DailyPriceIntegrityService service;

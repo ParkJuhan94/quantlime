@@ -5,6 +5,7 @@ import com.quantlime.telegramfeed.dto.TelegramRetentionResult;
 import com.quantlime.telegramfeed.implement.TelegramDigestReader;
 import com.quantlime.telegramfeed.implement.TelegramPostReader;
 import com.quantlime.telegramfeed.implement.TelegramPostRemover;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -30,6 +31,7 @@ public class TelegramPostRetentionService {
     private final TelegramPostReader telegramPostReader;
     private final TelegramDigestReader telegramDigestReader;
     private final TelegramPostRemover telegramPostRemover;
+    private final Clock clock;
 
     /**
      * 락을 잡은 채로 deleteOlderThanRetention()을 실행한다.
@@ -44,13 +46,13 @@ public class TelegramPostRetentionService {
     // 붙이면 프록시를 안 타 무시된다 - 실제 삭제 실행은 별도 빈에 위임한다
     // (VideoRetentionService와 동일 패턴).
     public TelegramRetentionResult deleteOlderThanRetention() {
-        LocalDateTime postCutoff = LocalDate.now().minusDays(RETENTION_DAYS).atStartOfDay();
+        LocalDateTime postCutoff = LocalDate.now(clock).minusDays(RETENTION_DAYS).atStartOfDay();
         List<Long> postIds = telegramPostReader.findExpiredIds(postCutoff);
         if (!postIds.isEmpty()) {
             telegramPostRemover.deletePostBatch(postIds);
         }
 
-        LocalDate digestCutoff = LocalDate.now().minusDays(RETENTION_DAYS);
+        LocalDate digestCutoff = LocalDate.now(clock).minusDays(RETENTION_DAYS);
         List<Long> digestIds = telegramDigestReader.findExpiredIds(digestCutoff);
         if (!digestIds.isEmpty()) {
             telegramPostRemover.deleteDigestBatch(digestIds);

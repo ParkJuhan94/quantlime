@@ -6,9 +6,11 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
+import com.quantlime.common.config.ClockConfig;
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.price.implement.DomesticDailyPriceCollector;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -19,6 +21,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /** 기본 목표·조회 구간 같은 정책만 검증한다 - 수집·저장 자체는 DomesticDailyPriceCollectorTest. */
@@ -33,6 +36,9 @@ class DomesticDailyPriceServiceTest {
 
     @Mock
     private DomesticDailyPriceCollector domesticDailyPriceCollector;
+
+    @Spy
+    private Clock clock = Clock.system(ClockConfig.KST);
 
     @InjectMocks
     private DomesticDailyPriceService domesticDailyPriceService;

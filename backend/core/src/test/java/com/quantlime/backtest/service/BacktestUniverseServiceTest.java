@@ -9,8 +9,10 @@ import static org.mockito.Mockito.verify;
 import com.quantlime.backtest.domain.BacktestAxis;
 import com.quantlime.backtest.domain.BacktestResult;
 import com.quantlime.backtest.implement.BacktestReader;
+import com.quantlime.common.config.ClockConfig;
 import com.quantlime.market.service.DomesticUniverseSelectionService;
 import com.quantlime.market.service.OverseasUniverseSelectionService;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -20,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @Tag("unit")
@@ -37,6 +40,9 @@ class BacktestUniverseServiceTest {
 
     @Mock
     private BacktestReader backtestReader;
+
+    @Spy
+    private Clock clock = Clock.system(ClockConfig.KST);
 
     @InjectMocks
     private BacktestUniverseService backtestUniverseService;

@@ -12,6 +12,7 @@ import com.quantlime.market.dto.response.IndexChartResponse;
 import com.quantlime.market.dto.response.IndexMinuteChartResponse;
 import com.quantlime.market.dto.response.MarketIndexResponse;
 import com.quantlime.market.implement.BenchmarkIndexReader;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
@@ -35,6 +36,7 @@ public class MarketIndexService {
     private final BitcoinChartCache bitcoinChartCache;
     private final ExchangeRateChartCache exchangeRateChartCache;
     private final BenchmarkIndexReader benchmarkIndexReader;
+    private final Clock clock;
 
     public MarketIndexResponse getIndices() {
         return marketIndexCache.get();
@@ -52,7 +54,7 @@ public class MarketIndexService {
     public List<IndexChartResponse> getIndexChart(String code) {
         if (DOMESTIC_CODES.contains(code)) {
             return benchmarkIndexReader
-                .findBetween(code, LocalDate.now().minusDays(CHART_LOOKBACK_DAYS), LocalDate.now())
+                .findBetween(code, LocalDate.now(clock).minusDays(CHART_LOOKBACK_DAYS), LocalDate.now(clock))
                 .stream()
                 .map(this::toChartResponse)
                 .toList();

@@ -8,6 +8,7 @@ import com.quantlime.price.util.PriceJumpDetector;
 import com.quantlime.price.util.PriceJumpDetector.PricePoint;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.StockMasterService;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -37,6 +38,7 @@ public class DailyPriceIntegrityService {
     private final StockMasterService stockMasterService;
     private final DailyPriceReader dailyPriceReader;
     private final DomesticDailyPriceService domesticDailyPriceService;
+    private final Clock clock;
 
     /**
      * API 호출 없이 DB에 이미 저장된 값만으로 이상 점프를 스캔한다 - lag
@@ -53,7 +55,7 @@ public class DailyPriceIntegrityService {
         List<PriceJumpReport> jumps = new ArrayList<>();
         for (List<String> chunk : partition(stockCodes, SCAN_CHUNK_SIZE)) {
             List<DomesticDailyPrice> prices = dailyPriceReader
-                .findDomesticBetweenForCodes(chunk, from, LocalDate.now());
+                .findDomesticBetweenForCodes(chunk, from, LocalDate.now(clock));
             Map<String, List<DomesticDailyPrice>> byStockCode = prices.stream()
                 .collect(Collectors.groupingBy(DomesticDailyPrice::getStockCode));
             for (Map.Entry<String, List<DomesticDailyPrice>> entry : byStockCode.entrySet()) {

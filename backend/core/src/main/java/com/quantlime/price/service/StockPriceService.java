@@ -9,6 +9,7 @@ import com.quantlime.price.dto.response.PriceSnapshot;
 import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.StockMasterService;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -29,6 +30,7 @@ public class StockPriceService {
     private final DomesticDailyPriceService domesticDailyPriceService;
     private final DailyPriceReader dailyPriceReader;
     private final PriceCacheStore priceCacheStore;
+    private final Clock clock;
 
     /**
      * 전종목 시세 스윕 스케줄러({@code DomesticMarketPriceSweepScheduler})가 관심종목
@@ -124,7 +126,7 @@ public class StockPriceService {
     public List<DailyChartResponse> getChart(String stockCode, int days) {
         Stock stock = stockMasterService.getStockByCode(stockCode);
 
-        LocalDate end = LocalDate.now();
+        LocalDate end = LocalDate.now(clock);
         LocalDate start = end.minusDays(days);
 
         if (!stock.getMarketType().isDomestic()) {

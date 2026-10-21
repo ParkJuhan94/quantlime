@@ -3,8 +3,10 @@ package com.quantlime.notification.scheduler;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 
+import com.quantlime.common.config.ClockConfig;
 import com.quantlime.notification.implement.NotificationAppender;
 import com.quantlime.notification.repository.NotificationRepository;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -26,7 +28,7 @@ class NotificationCleanupSchedulerTest {
 
     @BeforeEach
     void setUp() {
-        scheduler = new NotificationCleanupScheduler(new NotificationAppender(notificationRepository));
+        scheduler = new NotificationCleanupScheduler(new NotificationAppender(notificationRepository), Clock.system(ClockConfig.KST));
     }
 
     @Test

@@ -6,11 +6,13 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.quantlime.common.config.ClockConfig;
 import com.quantlime.price.domain.StockLiquidity;
 import com.quantlime.price.dto.LiquiditySnapshot;
 import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.price.implement.StockLiquidityAppender;
 import com.quantlime.price.implement.StockLiquidityReader;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -22,6 +24,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -42,6 +45,9 @@ class StockLiquidityServiceTest {
 
     @Mock
     private StockLiquidityAppender stockLiquidityAppender;
+
+    @Spy
+    private Clock clock = Clock.system(ClockConfig.KST);
 
     @InjectMocks
     private StockLiquidityService service;

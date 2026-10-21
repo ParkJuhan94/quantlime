@@ -12,6 +12,7 @@ import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.Platform;
 import com.quantlime.videofeed.implement.ChannelAppender;
 import com.quantlime.videofeed.implement.ChannelReader;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -41,6 +42,7 @@ public class TelegramCollectionFacade {
     private final TelegramPostCollector telegramPostCollector;
     private final TelegramPostAppender telegramPostAppender;
     private final TelegramPostFilterService telegramPostFilterService;
+    private final Clock clock;
 
     public Optional<List<TelegramCollectResult>> runAllExclusively() {
         return redisLockService.runExclusively(LOCK_KEY, LOCK_TTL, this::runAll);
@@ -84,7 +86,7 @@ public class TelegramCollectionFacade {
     void updateChannelMeta(Long channelId, TelegramChannelMeta meta) {
         Channel channel = channelReader.findById(channelId)
             .orElseThrow(() -> new NotFoundException(TelegramFeedErrorCode.NOT_FOUND_CHANNEL));
-        channel.updateLastCollectedAt(LocalDateTime.now());
+        channel.updateLastCollectedAt(LocalDateTime.now(clock));
         if (meta != null && meta.photoUrl() != null && !meta.photoUrl().equals(channel.getProfileImageUrl())) {
             channel.updateProfileImageUrl(meta.photoUrl());
         }

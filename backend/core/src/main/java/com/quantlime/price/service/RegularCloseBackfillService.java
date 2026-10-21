@@ -7,6 +7,7 @@ import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.price.implement.RegularCloseCollector;
 import com.quantlime.price.util.DailyPriceSettlementPolicy;
 import com.quantlime.stock.domain.Stock;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -36,13 +37,14 @@ public class RegularCloseBackfillService {
     private final DailyPriceReader dailyPriceReader;
     private final DomesticListedStockCache domesticListedStockCache;
     private final RegularCloseCollector regularCloseCollector;
+    private final Clock clock;
 
     public RegularCloseBackfillResult backfill(List<String> stockCodes, Integer days) {
         List<String> targets = (stockCodes == null || stockCodes.isEmpty())
             ? domesticListedStockCache.get().stream().map(Stock::getStockCode).toList()
             : stockCodes;
         int windowDays = days != null ? days : DEFAULT_BACKFILL_DAYS;
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(clock);
         LocalDate windowStart = today.minusDays(windowDays);
 
         log.info("정규장 종가 백필 시작: 대상={}종목, 기간={}~{}", targets.size(), windowStart, today.minusDays(1));

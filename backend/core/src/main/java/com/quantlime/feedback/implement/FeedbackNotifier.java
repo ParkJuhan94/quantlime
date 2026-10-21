@@ -3,6 +3,7 @@ package com.quantlime.feedback.implement;
 import com.quantlime.common.upload.FileStorageProperties;
 import com.quantlime.feedback.dto.request.SendFeedbackRequest;
 import com.quantlime.infra.slack.SlackWebhookClient;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,7 @@ public class FeedbackNotifier {
 
     private final SlackWebhookClient slackWebhookClient;
     private final FileStorageProperties fileStorageProperties;
+    private final Clock clock;
 
     // Incoming Webhook은 파일 업로드 자체를 지원하지 않지만(SlackWebhookClient
     // 참고), 이미지를 먼저 /api/uploads/images로 올려 절대 URL 링크로
@@ -36,7 +38,7 @@ public class FeedbackNotifier {
         if (StringUtils.hasText(request.pageUrl())) {
             text.append("페이지: ").append(request.pageUrl()).append('\n');
         }
-        text.append("접수 시각: ").append(LocalDateTime.now().format(TIMESTAMP_FORMAT));
+        text.append("접수 시각: ").append(LocalDateTime.now(clock).format(TIMESTAMP_FORMAT));
         return text.toString();
     }
 

@@ -7,6 +7,7 @@ import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.watchlist.implement.WatchlistReader;
+import java.time.Clock;
 import java.util.stream.Collectors;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -27,19 +28,19 @@ public class PriceCacheConfig {
     // 필요했지만, domestic_daily_price 한 테이블이 이제 정답을 직접 갖고 있어
     // 해외와 동일한 단순 조회 패턴으로 통일했다.
     @Bean
-    public PreviousCloseCache domesticPreviousCloseCache(DailyPriceReader dailyPriceReader) {
+    public PreviousCloseCache domesticPreviousCloseCache(DailyPriceReader dailyPriceReader, Clock clock) {
         return new PreviousCloseCache((stockCodes, today) ->
             dailyPriceReader.findDomesticLatestBefore(stockCodes, today).stream()
                 .collect(Collectors.toMap(
                     DomesticDailyPrice::getStockCode,
-                    price -> price.getClosePrice().doubleValue())));
+                    price -> price.getClosePrice().doubleValue())), clock);
     }
 
     @Bean
-    public PreviousCloseCache overseasPreviousCloseCache(DailyPriceReader dailyPriceReader) {
+    public PreviousCloseCache overseasPreviousCloseCache(DailyPriceReader dailyPriceReader, Clock clock) {
         return new PreviousCloseCache((stockCodes, today) ->
             dailyPriceReader.findOverseasLatestBefore(stockCodes, today).stream()
-                .collect(Collectors.toMap(OverseasDailyPrice::getStockCode, OverseasDailyPrice::getClosePrice)));
+                .collect(Collectors.toMap(OverseasDailyPrice::getStockCode, OverseasDailyPrice::getClosePrice)), clock);
     }
 
     @Bean

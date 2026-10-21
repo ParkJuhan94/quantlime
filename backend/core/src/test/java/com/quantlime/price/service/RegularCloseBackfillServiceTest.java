@@ -8,6 +8,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.quantlime.common.config.ClockConfig;
 import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.toss.dto.TossCandleResponse;
 import com.quantlime.market.cache.DomesticListedStockCache;
@@ -17,6 +18,7 @@ import com.quantlime.price.implement.DailyPriceAppender;
 import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.price.implement.RegularCloseCollector;
 import com.quantlime.stock.StockFixture;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
@@ -54,7 +56,7 @@ class RegularCloseBackfillServiceTest {
     void setUp() {
         regularCloseBackfillService = new RegularCloseBackfillService(
             dailyPriceReader, domesticListedStockCache,
-            new RegularCloseCollector(dailyPriceAppender, tossApiClient));
+            new RegularCloseCollector(dailyPriceAppender, tossApiClient), Clock.system(ClockConfig.KST));
     }
 
     @Test

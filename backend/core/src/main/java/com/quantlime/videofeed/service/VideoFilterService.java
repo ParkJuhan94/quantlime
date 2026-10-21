@@ -8,6 +8,7 @@ import com.quantlime.videofeed.event.VideoSelectedEvent;
 import com.quantlime.videofeed.implement.VideoReader;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -62,7 +63,7 @@ public class VideoFilterService {
     private static final int RETENTION_DAYS = 3;
 
     // Video.publishedAt은 YoutubeVideoCollector가 SEOUL로 zone-strip해 저장한
-    // 값이라, 이와 비교하는 모든 "지금"은 bare LocalDateTime.now()(JVM 기본
+    // 값이라, 이와 비교하는 모든 "지금"은 bare LocalDateTime.now(clock)(JVM 기본
     // 타임존)가 아니라 이 zone을 명시해야 한다 - 프로덕션은 Dockerfile의
     // TZ=Asia/Seoul 고정 덕에 우연히 맞았지만 CI(기본 UTC)에서 9시간 밀리는
     // 버그를 실제로 재현해 확인함(2026-09-10, ChannelVelocityInitializationService
@@ -71,6 +72,7 @@ public class VideoFilterService {
 
     private final VideoReader videoReader;
     private final ApplicationEventPublisher eventPublisher;
+    private final Clock clock;
 
     @Transactional
     public void applyFilters(Channel channel) {
@@ -109,7 +111,7 @@ public class VideoFilterService {
         if (candidateVideoIds.isEmpty()) {
             return;
         }
-        LocalDateTime checkedAt = LocalDateTime.now();
+        LocalDateTime checkedAt = LocalDateTime.now(clock);
         List<Video> videos = videoReader.findAllById(candidateVideoIds);
         videos.forEach(video -> {
             Long freshViewCount = freshViewCountsByExternalId.get(video.getExternalVideoId());

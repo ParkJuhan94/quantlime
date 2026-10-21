@@ -3,6 +3,7 @@ package com.quantlime.payment.domain;
 import static jakarta.persistence.ConstraintMode.NO_CONSTRAINT;
 import static lombok.AccessLevel.PROTECTED;
 
+import com.quantlime.common.config.ClockConfig;
 import com.quantlime.common.domain.TimeBaseEntity;
 import com.quantlime.subscription.domain.Subscription;
 import com.quantlime.user.domain.User;
@@ -104,7 +105,7 @@ public class Payment extends TimeBaseEntity {
             .status(PaymentStatus.DONE)
             .tossPaymentKey(tossPaymentKey)
             .renewal(renewal)
-            .approvedAt(LocalDateTime.now())
+            .approvedAt(LocalDateTime.now(ClockConfig.KST))
             .build();
     }
 

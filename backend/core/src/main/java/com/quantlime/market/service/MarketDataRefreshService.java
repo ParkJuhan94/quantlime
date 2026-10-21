@@ -16,6 +16,7 @@ import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.DomesticStockMasterSyncService;
 import com.quantlime.stock.service.OverseasStockMasterSyncService;
 import com.quantlime.stock.service.StockMasterService;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -96,6 +97,7 @@ public class MarketDataRefreshService {
     private final PriceRefreshBatchGate priceRefreshBatchGate;
     private final ApplicationEventPublisher eventPublisher;
     private final PostCloseRescorePolicy postCloseRescorePolicy;
+    private final Clock clock;
 
     /**
      * 락을 잡은 채로만 {@link #refreshAll()}을 실행한다 - OhlcvCollectorScheduler
@@ -131,7 +133,7 @@ public class MarketDataRefreshService {
         // 가격 소스가 커버하지 않는 것으로 이미 표시된 종목(price_unsupported)은
         // 제외한다 - 매 기동마다 같은 stock-not-found(404)를 반복하지 않기 위함.
         List<Stock> stocks = stockMasterService.getAllListedStocks();
-        LocalDate tradingValueSince = LocalDate.now().minusMonths(TRADING_VALUE_LOOKBACK_MONTHS);
+        LocalDate tradingValueSince = LocalDate.now(clock).minusMonths(TRADING_VALUE_LOOKBACK_MONTHS);
         List<Stock> domestic = orderByTradingValueDesc(
             stocks.stream()
                 .filter(stock -> stock.getMarketType().isDomestic())
@@ -379,7 +381,7 @@ public class MarketDataRefreshService {
      * (안정 정렬 - {@link List#sort}는 TimSort라 동순위끼리 순서가 안 바뀐다).
      */
     private LocalDate liquidityLookbackSince() {
-        return LocalDate.now().minusDays(LIQUIDITY_LOOKBACK_CALENDAR_DAYS);
+        return LocalDate.now(clock).minusDays(LIQUIDITY_LOOKBACK_CALENDAR_DAYS);
     }
 
     private List<Stock> orderByTradingValueDesc(List<Stock> stocks, List<String> rankedCodesDesc) {

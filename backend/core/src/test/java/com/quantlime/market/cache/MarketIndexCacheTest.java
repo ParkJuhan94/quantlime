@@ -10,6 +10,7 @@ import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import com.quantlime.common.config.ClockConfig;
 import com.quantlime.common.exception.ExternalApiException;
 import com.quantlime.infra.naver.NaverFinanceApiClient;
 import com.quantlime.infra.naver.dto.NaverExchangeRateBasicResponse;
@@ -29,6 +30,7 @@ import com.quantlime.market.implement.BenchmarkIndexReader;
 import com.quantlime.price.cache.DomesticMarketCalendarCache;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -70,6 +72,9 @@ class MarketIndexCacheTest {
     // 실제 SimpleMeterRegistry를 감싼다.
     @Spy
     private MeterRegistry meterRegistry = new SimpleMeterRegistry();
+
+    @Spy
+    private Clock clock = Clock.system(ClockConfig.KST);
 
     @InjectMocks
     private MarketIndexCache marketIndexCache;

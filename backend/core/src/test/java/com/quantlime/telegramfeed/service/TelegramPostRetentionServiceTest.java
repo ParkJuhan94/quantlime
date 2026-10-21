@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 
+import com.quantlime.common.config.ClockConfig;
 import com.quantlime.common.lock.RedisLockService;
 import com.quantlime.support.DataJpaTestSupport;
 import com.quantlime.telegramfeed.domain.TelegramDigest;
@@ -21,6 +22,7 @@ import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.TelegramFilterConfig;
 import com.quantlime.videofeed.repository.ChannelRepository;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -61,7 +63,7 @@ class TelegramPostRetentionServiceTest extends DataJpaTestSupport {
             telegramPostRepository, telegramDigestRepository, telegramDigestTickerRepository);
         telegramPostRetentionService = new TelegramPostRetentionService(
             null, new TelegramPostReader(telegramPostRepository),
-            new TelegramDigestReader(telegramDigestRepository), telegramPostRemover);
+            new TelegramDigestReader(telegramDigestRepository), telegramPostRemover, Clock.system(ClockConfig.KST));
     }
 
     private Channel channelOf(String handle) {
@@ -140,7 +142,7 @@ class TelegramPostRetentionServiceTest extends DataJpaTestSupport {
             telegramPostRepository, telegramDigestRepository, telegramDigestTickerRepository);
         TelegramPostRetentionService serviceWithLock = new TelegramPostRetentionService(
             redisLockService, new TelegramPostReader(telegramPostRepository),
-            new TelegramDigestReader(telegramDigestRepository), telegramPostRemover);
+            new TelegramDigestReader(telegramDigestRepository), telegramPostRemover, Clock.system(ClockConfig.KST));
         Channel channel = channelOf("handle-old");
         seedPost(channel, 1L, LocalDateTime.now().minusDays(15));
         given(redisLockService.runExclusively(any(), any(), any())).willAnswer(invocation -> {
@@ -165,7 +167,7 @@ class TelegramPostRetentionServiceTest extends DataJpaTestSupport {
             telegramPostRepository, telegramDigestRepository, telegramDigestTickerRepository);
         TelegramPostRetentionService serviceWithLock = new TelegramPostRetentionService(
             redisLockService, new TelegramPostReader(telegramPostRepository),
-            new TelegramDigestReader(telegramDigestRepository), telegramPostRemover);
+            new TelegramDigestReader(telegramDigestRepository), telegramPostRemover, Clock.system(ClockConfig.KST));
         Channel channel = channelOf("handle-old");
         seedPost(channel, 1L, LocalDateTime.now().minusDays(15));
         given(redisLockService.runExclusively(any(), any(), any())).willReturn(Optional.empty());

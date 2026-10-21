@@ -4,6 +4,7 @@ import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.Video;
 import com.quantlime.videofeed.dto.CollectedVideo;
 import com.quantlime.videofeed.repository.VideoRepository;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class VideoAppender {
 
     private final VideoRepository videoRepository;
+    private final Clock clock;
 
     @Transactional
     public int upsertAll(Channel channel, List<CollectedVideo> collectedVideos) {
@@ -30,7 +32,7 @@ public class VideoAppender {
             if (videoRepository.existsByExternalVideoId(collected.externalVideoId())) {
                 continue;
             }
-            LocalDateTime viewCountCheckedAt = collected.viewCount() != null ? LocalDateTime.now() : null;
+            LocalDateTime viewCountCheckedAt = collected.viewCount() != null ? LocalDateTime.now(clock) : null;
             Video video = Video.of(
                 channel,
                 collected.externalVideoId(),

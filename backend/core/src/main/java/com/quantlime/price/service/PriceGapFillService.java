@@ -4,6 +4,7 @@ import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.price.util.DailyPriceSettlementPolicy;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -43,6 +44,7 @@ public class PriceGapFillService {
     private final DailyPriceReader dailyPriceReader;
     private final DomesticDailyPriceService domesticDailyPriceService;
     private final OverseasDailyPriceBackfillService overseasDailyPriceBackfillService;
+    private final Clock clock;
 
     /**
      * @return 실제로 외부 API 호출이 발생했는지 여부와, API를 호출하지
@@ -81,7 +83,7 @@ public class PriceGapFillService {
             return GapFillOutcome.apiSkipped(latestPrice.getTradeDate());
         }
 
-        long rawGapDays = ChronoUnit.DAYS.between(latestPrice.getTradeDate(), LocalDate.now());
+        long rawGapDays = ChronoUnit.DAYS.between(latestPrice.getTradeDate(), LocalDate.now(clock));
         int lookbackDays = (int) rawGapDays + GAP_BUFFER_DAYS;
         if (lookbackDays > SINGLE_CALL_CAP_DAYS) {
             log.info("가격 갭이 단일 호출 한도 초과, 깊은 백필로 대체: stockCode={}, 갭={}일",
@@ -108,15 +110,15 @@ public class PriceGapFillService {
     }
 
     private boolean isSettledToday(DomesticDailyPrice latest) {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(clock);
         return latest.getTradeDate().isEqual(today)
             && DailyPriceSettlementPolicy.isSettled(today, latest.getUpdatedAt());
     }
 
     /** 미확정이더라도 최근에 이미 재조회했다면 이번 실행에서는 다시 부르지 않는다(재기동 가드). */
     private boolean isRecentlyRefreshedToday(DomesticDailyPrice latest) {
-        return latest.getTradeDate().isEqual(LocalDate.now())
-            && DailyPriceSettlementPolicy.isRecentlyRefreshed(latest.getUpdatedAt(), LocalDateTime.now());
+        return latest.getTradeDate().isEqual(LocalDate.now(clock))
+            && DailyPriceSettlementPolicy.isRecentlyRefreshed(latest.getUpdatedAt(), LocalDateTime.now(clock));
     }
 
     /** @see #fillDomesticGap(String) 국내와 동일한 계약(calledApi/latestTradeDate). */
@@ -129,7 +131,7 @@ public class PriceGapFillService {
             return GapFillOutcome.apiCalled();
         }
 
-        long rawGapDays = ChronoUnit.DAYS.between(latestTradeDate.get(), LocalDate.now());
+        long rawGapDays = ChronoUnit.DAYS.between(latestTradeDate.get(), LocalDate.now(clock));
         if (rawGapDays <= 0) {
             log.debug("해외 가격 갭 없음(이미 최신): stockCode={}, 최신저장일={}", stockCode, latestTradeDate.get());
             return GapFillOutcome.apiSkipped(latestTradeDate.get());

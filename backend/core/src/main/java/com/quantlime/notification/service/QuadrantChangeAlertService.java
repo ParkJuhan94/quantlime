@@ -9,6 +9,7 @@ import com.quantlime.score.implement.ScoreReader;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.implement.StockReader;
 import com.quantlime.watchlist.implement.WatchlistReader;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -44,10 +45,11 @@ public class QuadrantChangeAlertService {
     private final StockReader stockReader;
     private final FcmPushService fcmPushService;
     private final QuadrantAlertSentStore sentStore;
+    private final Clock clock;
 
     /** @return 통지한 변화 건수(알림을 보내지 않았으면 0) */
     public int notifyUser(Long userId) {
-        return notifyUser(userId, LocalDate.now());
+        return notifyUser(userId, LocalDate.now(clock));
     }
 
     public int notifyUser(Long userId, LocalDate today) {

@@ -3,6 +3,7 @@ package com.quantlime.price.service;
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.price.implement.DomesticDailyPriceCollector;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -30,6 +31,7 @@ public class DomesticDailyPriceService {
 
     private final DailyPriceReader dailyPriceReader;
     private final DomesticDailyPriceCollector domesticDailyPriceCollector;
+    private final Clock clock;
 
     public void refreshRecent(String stockCode) {
         refreshRecent(stockCode, DAILY_COLLECT_LOOKBACK_DAYS);
@@ -88,7 +90,7 @@ public class DomesticDailyPriceService {
      * 결정적으로 쓰인다.
      */
     public int rebackfillAdjustedHistory(String stockCode, LocalDate from) {
-        long calendarGapDays = ChronoUnit.DAYS.between(from, LocalDate.now()) + REBACKFILL_BUFFER_DAYS;
+        long calendarGapDays = ChronoUnit.DAYS.between(from, LocalDate.now(clock)) + REBACKFILL_BUFFER_DAYS;
         int targetDays = (int) Math.max(1, calendarGapDays);
         return domesticDailyPriceCollector.rebackfill(stockCode, targetDays);
     }

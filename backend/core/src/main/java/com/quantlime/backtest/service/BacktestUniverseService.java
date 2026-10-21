@@ -3,6 +3,7 @@ package com.quantlime.backtest.service;
 import com.quantlime.backtest.implement.BacktestReader;
 import com.quantlime.market.service.DomesticUniverseSelectionService;
 import com.quantlime.market.service.OverseasUniverseSelectionService;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,6 +35,7 @@ public class BacktestUniverseService {
     private final OverseasUniverseSelectionService overseasUniverseSelectionService;
     private final BacktestService backtestService;
     private final BacktestReader backtestReader;
+    private final Clock clock;
 
     public void runUniverse() {
         runUniverse(false);
@@ -80,7 +82,7 @@ public class BacktestUniverseService {
 
     private boolean isAlreadyBacktestedToday(String stockCode) {
         return backtestReader.findLatestResult(stockCode)
-            .map(result -> !result.getBacktestDate().isBefore(LocalDate.now()))
+            .map(result -> !result.getBacktestDate().isBefore(LocalDate.now(clock)))
             .orElse(false);
     }
 }

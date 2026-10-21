@@ -1,6 +1,7 @@
 package com.quantlime.notification.scheduler;
 
 import com.quantlime.notification.implement.NotificationAppender;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -18,10 +19,11 @@ public class NotificationCleanupScheduler {
     private static final long RETENTION_DAYS = 14;
 
     private final NotificationAppender notificationAppender;
+    private final Clock clock;
 
     @Transactional
     @Scheduled(cron = "0 20 3 * * *", zone = "Asia/Seoul")
     public void deleteOldNotifications() {
-        notificationAppender.deleteByCreatedAtBefore(LocalDateTime.now().minusDays(RETENTION_DAYS));
+        notificationAppender.deleteByCreatedAtBefore(LocalDateTime.now(clock).minusDays(RETENTION_DAYS));
     }
 }

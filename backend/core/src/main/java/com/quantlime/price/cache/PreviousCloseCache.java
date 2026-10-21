@@ -1,5 +1,6 @@
 package com.quantlime.price.cache;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +25,7 @@ import java.util.function.BiFunction;
 public class PreviousCloseCache {
 
     private final BiFunction<List<String>, LocalDate, Map<String, Double>> priceFetcher;
+    private final Clock clock;
 
     private volatile Map<String, Double> closeByStockCode = Map.of();
     // needsRefresh가 "값이 있는 코드"가 아니라 "이미 시도해본 코드"를 기준으로
@@ -36,12 +38,13 @@ public class PreviousCloseCache {
     private volatile Set<String> triedStockCodes = Set.of();
     private volatile LocalDate cachedDate = LocalDate.MIN;
 
-    public PreviousCloseCache(BiFunction<List<String>, LocalDate, Map<String, Double>> priceFetcher) {
+    public PreviousCloseCache(BiFunction<List<String>, LocalDate, Map<String, Double>> priceFetcher, Clock clock) {
         this.priceFetcher = priceFetcher;
+        this.clock = clock;
     }
 
     public Map<String, Double> get(List<String> stockCodes) {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(clock);
         if (needsRefresh(stockCodes, today)) {
             refresh(stockCodes, today);
         }
