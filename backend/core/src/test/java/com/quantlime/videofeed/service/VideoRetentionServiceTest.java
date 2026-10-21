@@ -5,7 +5,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 
-import com.quantlime.common.config.ClockConfig;
 import com.quantlime.common.lock.RedisLockService;
 import com.quantlime.support.DataJpaTestSupport;
 import com.quantlime.videofeed.domain.Channel;
@@ -78,7 +77,7 @@ class VideoRetentionServiceTest extends DataJpaTestSupport {
         // 로직 자체(자식 테이블부터 정확히 지워지는지)의 정확성만 검증한다.
         VideoRemover videoRemover = new VideoRemover(
             videoRepository, transcriptRepository, summaryRepository, videoTickerRepository);
-        videoRetentionService = new VideoRetentionService(null, new VideoReader(videoRepository), videoRemover, Clock.system(ClockConfig.KST));
+        videoRetentionService = new VideoRetentionService(null, new VideoReader(videoRepository), videoRemover, Clock.systemDefaultZone());
     }
 
     private Video seedVideo(String externalVideoId, LocalDateTime publishedAt) {
@@ -142,7 +141,7 @@ class VideoRetentionServiceTest extends DataJpaTestSupport {
         VideoRemover videoRemover = new VideoRemover(
             videoRepository, transcriptRepository, summaryRepository, videoTickerRepository);
         VideoRetentionService serviceWithLock = new VideoRetentionService(
-            redisLockService, new VideoReader(videoRepository), videoRemover, Clock.system(ClockConfig.KST));
+            redisLockService, new VideoReader(videoRepository), videoRemover, Clock.systemDefaultZone());
         seedVideo("vid-old", LocalDateTime.now().minusDays(15));
         given(redisLockService.runExclusively(any(), any(), any())).willAnswer(invocation -> {
             Supplier<Integer> task = invocation.getArgument(2);
@@ -164,7 +163,7 @@ class VideoRetentionServiceTest extends DataJpaTestSupport {
         VideoRemover videoRemover = new VideoRemover(
             videoRepository, transcriptRepository, summaryRepository, videoTickerRepository);
         VideoRetentionService serviceWithLock = new VideoRetentionService(
-            redisLockService, new VideoReader(videoRepository), videoRemover, Clock.system(ClockConfig.KST));
+            redisLockService, new VideoReader(videoRepository), videoRemover, Clock.systemDefaultZone());
         seedVideo("vid-old", LocalDateTime.now().minusDays(15));
         given(redisLockService.runExclusively(any(), any(), any())).willReturn(Optional.empty());
 

@@ -7,7 +7,6 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import com.quantlime.common.config.ClockConfig;
 import com.quantlime.market.cache.DomesticListedStockCache;
 import com.quantlime.price.cache.DomesticMarketCalendarCache;
 import com.quantlime.price.cache.PriceCacheStore;
@@ -52,7 +51,7 @@ class DomesticRegularCloseCaptureSchedulerTest {
     private DailyPriceAppender dailyPriceAppender;
 
     @Spy
-    private Clock clock = Clock.system(ClockConfig.KST);
+    private Clock clock = Clock.systemDefaultZone();
 
     @InjectMocks
     private DomesticRegularCloseCaptureScheduler scheduler;

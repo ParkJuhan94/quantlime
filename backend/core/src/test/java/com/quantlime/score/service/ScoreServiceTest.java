@@ -13,7 +13,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import com.quantlime.common.config.ClockConfig;
 import com.quantlime.common.exception.ExternalApiException;
 import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.infra.python.PythonEngineClient;
@@ -114,8 +113,8 @@ class ScoreServiceTest {
     @BeforeEach
     void setUp() {
         scoreService = new ScoreService(domesticDailyPriceService, dailyPriceReader,
-            new ScoreEngineProcessor(pythonEngineClient, meterRegistry, Clock.system(ClockConfig.KST)), scoreAppender, scoreReader,
-            stockLiquidityReader, watchlistReader, stockMasterService, scoreRankingCacheStore, Clock.system(ClockConfig.KST));
+            new ScoreEngineProcessor(pythonEngineClient, meterRegistry, Clock.systemDefaultZone()), scoreAppender, scoreReader,
+            stockLiquidityReader, watchlistReader, stockMasterService, scoreRankingCacheStore, Clock.systemDefaultZone());
     }
 
     @Test

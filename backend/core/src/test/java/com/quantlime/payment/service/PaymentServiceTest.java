@@ -11,7 +11,6 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import com.quantlime.common.config.ClockConfig;
 import com.quantlime.common.exception.ExternalApiException;
 import com.quantlime.common.exception.ValidationException;
 import com.quantlime.common.lock.RedisLockService;
@@ -92,7 +91,7 @@ class PaymentServiceTest {
     private ApplicationEventPublisher eventPublisher;
 
     @Spy
-    private Clock clock = Clock.system(ClockConfig.KST);
+    private Clock clock = Clock.systemDefaultZone();
 
     @InjectMocks
     private PaymentService paymentService;

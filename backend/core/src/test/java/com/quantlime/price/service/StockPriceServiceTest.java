@@ -5,7 +5,6 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import com.quantlime.common.config.ClockConfig;
 import com.quantlime.price.DomesticDailyPriceFixture;
 import com.quantlime.price.OverseasDailyPriceFixture;
 import com.quantlime.price.cache.PriceCacheStore;
@@ -54,7 +53,7 @@ class StockPriceServiceTest {
     @BeforeEach
     void setUp() {
         stockPriceService = new StockPriceService(
-            stockMasterService, domesticDailyPriceService, dailyPriceReader, priceCacheStore, Clock.system(ClockConfig.KST));
+            stockMasterService, domesticDailyPriceService, dailyPriceReader, priceCacheStore, Clock.systemDefaultZone());
     }
 
     @Test

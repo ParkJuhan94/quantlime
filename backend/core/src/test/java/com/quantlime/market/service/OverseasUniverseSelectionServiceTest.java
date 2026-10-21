@@ -7,7 +7,6 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import com.quantlime.common.config.ClockConfig;
 import com.quantlime.price.dto.OverseasStockTradingValue;
 import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.price.service.OverseasDailyPriceBackfillService;
@@ -40,7 +39,7 @@ class OverseasUniverseSelectionServiceTest {
     private DailyPriceReader dailyPriceReader;
 
     @Spy
-    private Clock clock = Clock.system(ClockConfig.KST);
+    private Clock clock = Clock.systemDefaultZone();
 
     @InjectMocks
     private OverseasUniverseSelectionService overseasUniverseSelectionService;

@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
-import com.quantlime.common.config.ClockConfig;
 import com.quantlime.common.upload.FileStorageProperties;
 import com.quantlime.feedback.dto.request.SendFeedbackRequest;
 import com.quantlime.infra.slack.SlackWebhookClient;
@@ -30,7 +29,7 @@ class FeedbackNotifierTest {
     private FileStorageProperties fileStorageProperties;
 
     @Spy
-    private Clock clock = Clock.system(ClockConfig.KST);
+    private Clock clock = Clock.systemDefaultZone();
 
     @InjectMocks
     private FeedbackNotifier feedbackNotifier;

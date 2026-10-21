@@ -9,7 +9,6 @@ import static org.mockito.Mockito.verify;
 import com.quantlime.backtest.domain.BacktestAxis;
 import com.quantlime.backtest.domain.BacktestResult;
 import com.quantlime.backtest.implement.BacktestReader;
-import com.quantlime.common.config.ClockConfig;
 import com.quantlime.market.service.DomesticUniverseSelectionService;
 import com.quantlime.market.service.OverseasUniverseSelectionService;
 import java.time.Clock;
@@ -42,7 +41,7 @@ class BacktestUniverseServiceTest {
     private BacktestReader backtestReader;
 
     @Spy
-    private Clock clock = Clock.system(ClockConfig.KST);
+    private Clock clock = Clock.systemDefaultZone();
 
     @InjectMocks
     private BacktestUniverseService backtestUniverseService;

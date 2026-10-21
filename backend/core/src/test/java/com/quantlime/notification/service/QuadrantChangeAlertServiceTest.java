@@ -15,7 +15,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-import com.quantlime.common.config.ClockConfig;
 import com.quantlime.notification.cache.QuadrantAlertSentStore;
 import com.quantlime.notification.domain.NotificationStock;
 import com.quantlime.notification.domain.NotificationType;
@@ -57,7 +56,7 @@ class QuadrantChangeAlertServiceTest {
     private QuadrantAlertSentStore sentStore;
 
     @Spy
-    private Clock clock = Clock.system(ClockConfig.KST);
+    private Clock clock = Clock.systemDefaultZone();
 
     @InjectMocks
     private QuadrantChangeAlertService service;

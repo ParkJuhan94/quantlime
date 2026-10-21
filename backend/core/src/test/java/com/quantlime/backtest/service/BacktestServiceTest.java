@@ -15,7 +15,6 @@ import com.quantlime.backtest.exception.BacktestErrorCode;
 import com.quantlime.backtest.implement.BacktestAppender;
 import com.quantlime.backtest.implement.BacktestEngineProcessor;
 import com.quantlime.backtest.implement.BacktestReader;
-import com.quantlime.common.config.ClockConfig;
 import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.common.exception.ValidationException;
 import com.quantlime.infra.python.PythonEngineClient;
@@ -78,7 +77,7 @@ class BacktestServiceTest {
     @BeforeEach
     void setUpService() {
         backtestService = new BacktestService(stockMasterService, domesticDailyPriceService, backtestReader,
-            benchmarkIndexReader, dailyPriceReader, new BacktestEngineProcessor(pythonEngineClient, Clock.system(ClockConfig.KST)), backtestAppender, Clock.system(ClockConfig.KST));
+            benchmarkIndexReader, dailyPriceReader, new BacktestEngineProcessor(pythonEngineClient, Clock.systemDefaultZone()), backtestAppender, Clock.systemDefaultZone());
     }
 
     @Test
