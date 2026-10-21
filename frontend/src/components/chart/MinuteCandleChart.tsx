@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { CandlestickSeries, ColorType, HistogramSeries, createChart, type UTCTimestamp } from 'lightweight-charts'
 import type { MinuteCandle } from '../../types/stock'
+import { chartPalette } from './chartTheme'
+import { useTheme } from '../../hooks/useTheme'
 
 const UP_COLOR = '#dc2626'
 const DOWN_COLOR = '#2563eb'
@@ -31,6 +33,7 @@ interface MinuteCandleChartProps {
 // lightweight-charts는 epoch 초를 UTC로 표시하므로 라벨은 KST로 직접 포맷한다.
 export function MinuteCandleChart({ candles, currency }: MinuteCandleChartProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const { theme } = useTheme()
 
   // 페이지를 이어 붙이면 경계에서 같은 시각이 겹칠 수 있어 time 기준으로 중복을 제거한다.
   const sorted = useMemo(() => {
@@ -43,13 +46,14 @@ export function MinuteCandleChart({ candles, currency }: MinuteCandleChartProps)
     const container = containerRef.current
     if (!container) return
 
+    const palette = chartPalette(theme)
     const chart = createChart(container, {
-      layout: { textColor: '#374151', background: { type: ColorType.Solid, color: '#ffffff' } },
-      grid: { vertLines: { color: '#f3f4f6' }, horzLines: { color: '#f3f4f6' } },
+      layout: { textColor: palette.text, background: { type: ColorType.Solid, color: palette.background } },
+      grid: { vertLines: { color: palette.grid }, horzLines: { color: palette.grid } },
       autoSize: true,
       height: 360,
       timeScale: {
-        borderColor: '#e5e7eb',
+        borderColor: palette.border,
         timeVisible: true,
         secondsVisible: false,
         tickMarkFormatter: (time: number) => timeFormatter.format(new Date(time * 1000)),
@@ -89,7 +93,7 @@ export function MinuteCandleChart({ candles, currency }: MinuteCandleChartProps)
 
     chart.timeScale().fitContent()
     return () => chart.remove()
-  }, [sorted, currency])
+  }, [sorted, currency, theme])
 
   return <div ref={containerRef} className="w-full" />
 }

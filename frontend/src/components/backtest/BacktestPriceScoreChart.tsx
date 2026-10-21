@@ -64,7 +64,7 @@ export function BacktestPriceScoreChart({ dailyScores }: { dailyScores: DailySco
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
       <div className="mb-2 flex flex-wrap items-center gap-4 text-xs text-gray-500">
-        <LegendDot color="#111827" label="종가" />
+        <LegendDot color="var(--color-gray-900)" label="종가" />
         <LegendDot color="#7c3aed" label="추세추종 점수" />
         <LegendDot color="#0d9488" label="평균회귀 점수" />
         <span className="text-gray-400">
@@ -76,12 +76,19 @@ export function BacktestPriceScoreChart({ dailyScores }: { dailyScores: DailySco
         {/* 가격 패널 */}
         {priceSegments.map((points, i) => (
           // oxlint-disable-next-line react/no-array-index-key -- 재계산 시 통째로 교체되는 차트 구간(순서가 곧 정체성)
-          <polyline key={i} points={points} fill="none" stroke="#111827" strokeWidth="1.5" />
+          <polyline key={i} points={points} fill="none" className="stroke-gray-900" strokeWidth="1.5" />
         ))}
 
         {/* 스코어 패널(0~100) */}
         <g transform={`translate(0, ${PRICE_HEIGHT + GAP})`}>
-          <line x1={0} y1={SCORE_HEIGHT / 2} x2={WIDTH} y2={SCORE_HEIGHT / 2} stroke="#e5e7eb" strokeDasharray="4 4" />
+          <line
+            x1={0}
+            y1={SCORE_HEIGHT / 2}
+            x2={WIDTH}
+            y2={SCORE_HEIGHT / 2}
+            className="stroke-gray-200"
+            strokeDasharray="4 4"
+          />
           {trendSegments.map((points, i) => (
             // oxlint-disable-next-line react/no-array-index-key -- 재계산 시 통째로 교체되는 차트 구간(순서가 곧 정체성)
             <polyline key={`trend-${i}`} points={points} fill="none" stroke="#7c3aed" strokeWidth="1.5" />
@@ -102,7 +109,11 @@ export function BacktestPriceScoreChart({ dailyScores }: { dailyScores: DailySco
               y={0}
               width={Math.max(stepX, 1)}
               height={RIBBON_HEIGHT}
-              fill={d.quadrant ? (QUADRANT_LINE_COLORS[d.quadrant] ?? '#d1d5db') : '#e5e7eb'}
+              style={{
+                fill: d.quadrant
+                  ? (QUADRANT_LINE_COLORS[d.quadrant] ?? 'var(--color-gray-300)')
+                  : 'var(--color-gray-200)',
+              }}
             />
           ))}
         </g>

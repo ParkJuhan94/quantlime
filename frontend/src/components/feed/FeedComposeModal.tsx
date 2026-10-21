@@ -198,7 +198,7 @@ export function FeedComposeModal({ open, onClose, editingPost }: FeedComposeModa
               type="button"
               onClick={handleImageRemove}
               aria-label="이미지 제거"
-              className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
+              className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-fixed-white hover:bg-black/80"
             >
               ×
             </button>
