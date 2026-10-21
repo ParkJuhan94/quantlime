@@ -8,6 +8,7 @@ import { useFcmRegistration } from '../../notification/useFcmRegistration'
 import { SearchOverlay } from '../search/SearchOverlay'
 import { ProfileMenu } from './ProfileMenu'
 import { NotificationBell } from './NotificationBell'
+import { ThemeToggle } from './ThemeToggle'
 import { LoginModal } from '../auth/LoginModal'
 import { PlatformLogo } from '../common/PlatformLogo'
 
@@ -18,9 +19,12 @@ const navLinkClassName = ({ isActive }: { isActive: boolean }) =>
 
 interface AppHeaderProps {
   onLoggedOut: () => void
+  // 테마 토글은 평소엔 오른쪽 사이드 레일(의견 버튼 위)에 있다. 레일이 없는 화면
+  // (모바일, 구독/관리자/로그인 콜백)에서만 헤더에 대신 보여준다.
+  showThemeToggle?: boolean
 }
 
-export function AppHeader({ onLoggedOut }: AppHeaderProps) {
+export function AppHeader({ onLoggedOut, showThemeToggle = false }: AppHeaderProps) {
   const { isAuthenticated, clearAuth } = useAuth()
   const navigate = useNavigate()
   const [searchOpen, setSearchOpen] = useState(false)
@@ -85,7 +89,7 @@ export function AppHeader({ onLoggedOut }: AppHeaderProps) {
 
   return (
     <header className="border-b border-gray-200 bg-white">
-      <div className="mx-auto flex max-w-7xl items-center gap-6 px-4 py-3">
+      <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 lg:gap-6">
         <div ref={mobileNavRef} className="relative lg:hidden">
           <button
             type="button"
@@ -168,7 +172,7 @@ export function AppHeader({ onLoggedOut }: AppHeaderProps) {
               <path d="M0,-32 L0,38" stroke="#1f4a10" strokeWidth="2" opacity=".5" />
             </g>
           </svg>
-          <span className="font-logo text-lg font-bold tracking-tight text-gray-900">퀀트라임</span>
+          <span className="font-logo text-lg font-bold tracking-tight whitespace-nowrap text-gray-900">퀀트라임</span>
         </NavLink>
 
         <nav className="hidden items-center gap-1 lg:flex">
@@ -218,6 +222,8 @@ export function AppHeader({ onLoggedOut }: AppHeaderProps) {
           </span>
         </button>
 
+        {showThemeToggle && <ThemeToggle variant="header" />}
+
         {isAuthenticated ? (
           <div className="flex items-center gap-1">
             <NotificationBell />
@@ -228,7 +234,7 @@ export function AppHeader({ onLoggedOut }: AppHeaderProps) {
             <button
               type="button"
               onClick={() => setLoginModalOpen((prev) => !prev)}
-              className="rounded-lg bg-brand-lime px-4 py-1.5 text-sm font-semibold text-gray-900 transition hover:brightness-95"
+              className="rounded-lg bg-brand-lime px-4 py-1.5 text-sm font-semibold whitespace-nowrap text-fixed-ink transition hover:brightness-95"
             >
               로그인
             </button>

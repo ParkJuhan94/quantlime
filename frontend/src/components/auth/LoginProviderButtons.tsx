@@ -48,7 +48,7 @@ function NaverIcon() {
 const PROVIDER_BUTTON_CLASSES: Record<OAuthProviderName, string> = {
   google: 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50',
   kakao: 'bg-[#FEE500] text-black hover:opacity-90',
-  naver: 'bg-[#03C75A] text-white hover:opacity-90',
+  naver: 'bg-[#03C75A] text-fixed-white hover:opacity-90',
 }
 
 const PROVIDER_LABELS: Record<OAuthProviderName, string> = {

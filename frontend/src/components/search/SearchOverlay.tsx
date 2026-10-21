@@ -48,8 +48,7 @@ function WatchHeartButton({ isWatched, onToggle }: { isWatched: boolean; onToggl
         width="14"
         height="14"
         viewBox="0 0 24 24"
-        fill={isWatched ? '#dc2626' : 'none'}
-        stroke={isWatched ? '#dc2626' : '#c6c6c6'}
+        className={isWatched ? 'fill-red-600 stroke-red-600' : 'fill-none stroke-gray-300'}
         strokeWidth="2"
       >
         <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z" />

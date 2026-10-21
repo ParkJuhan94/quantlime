@@ -24,6 +24,8 @@ import {
   type LineStyleSettings,
 } from '../../utils/indicators'
 import { BandFillPrimitive, type BandFillPoint } from './BandFillPrimitive'
+import { chartPalette } from './chartTheme'
+import { useTheme } from '../../hooks/useTheme'
 
 // lightweight-charts의 LineWidth는 1~4 정수만 허용한다 - 설정값은
 // 자유 입력(number)으로 저장하므로 차트에 넘기기 직전에 클램프한다.
@@ -148,11 +150,14 @@ export const CandleChart = forwardRef<CandleChartHandle, CandleChartProps>(funct
     },
   }))
 
+  const { theme } = useTheme()
+
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
 
     lineRegistryRef.current = {}
+    const palette = chartPalette(theme)
 
     // 거래량/MACD는 하위 패널로 분리한다. 켜진 것만 패널을 배정해 빈
     // 패널이 생기지 않게 한다.
@@ -162,15 +167,15 @@ export const CandleChart = forwardRef<CandleChartHandle, CandleChartProps>(funct
     const subPaneCount = (volumePaneIndex >= 0 ? 1 : 0) + (macdPaneIndex >= 0 ? 1 : 0)
 
     const chart = createChart(container, {
-      layout: { textColor: '#374151', background: { type: ColorType.Solid, color: '#ffffff' } },
-      grid: { vertLines: { color: '#f3f4f6' }, horzLines: { color: '#f3f4f6' } },
+      layout: { textColor: palette.text, background: { type: ColorType.Solid, color: palette.background } },
+      grid: { vertLines: { color: palette.grid }, horzLines: { color: palette.grid } },
       // 직접 만든 ResizeObserver + clientWidth 조합은 좁은 화면에서 20px 정도
       // 우측이 컨테이너 밖으로 삐져나가는 문제가 있었다(Playwright로 375px
       // 뷰포트를 실제로 확인하며 발견) - 라이브러리 자체가 제공하는
       // autoSize로 바꿔 컨테이너 크기 측정/반영을 온전히 위임한다.
       autoSize: true,
       height: 360 + subPaneCount * 130,
-      timeScale: { borderColor: '#e5e7eb' },
+      timeScale: { borderColor: palette.border },
     })
 
     // 백엔드는 최신순(내림차순)으로 내려주므로 차트가 요구하는 오름차순으로 정렬한다.
@@ -466,7 +471,7 @@ export const CandleChart = forwardRef<CandleChartHandle, CandleChartProps>(funct
       lineRegistryRef.current = {}
       chart.remove()
     }
-  }, [data, displayDays, indicators])
+  }, [data, displayDays, indicators, theme])
 
   // 일별 배치가 아직 안 돈 시간대(장중)에도 오늘자 캔들이 실시간 가격을
   // 따라 움직이도록, 틱마다 마지막 봉(또는 아직 없으면 오늘자 신규 봉)을

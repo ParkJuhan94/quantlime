@@ -129,7 +129,7 @@ export function FeedbackModal({ open, onClose }: FeedbackModalProps) {
                   type="button"
                   onClick={handleImageRemove}
                   aria-label="이미지 제거"
-                  className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-xs text-white hover:bg-black/80"
+                  className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-xs text-fixed-white hover:bg-black/80"
                 >
                   ×
                 </button>

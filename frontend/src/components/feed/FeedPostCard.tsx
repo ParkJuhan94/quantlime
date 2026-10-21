@@ -164,7 +164,7 @@ export function FeedPostCard({ post }: { post: FeedPostResponse }) {
             type="button"
             onClick={() => setImageViewerOpen(false)}
             aria-label="닫기"
-            className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
+            className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-fixed-white hover:bg-black/80"
           >
             ✕
           </button>
@@ -182,7 +182,7 @@ export function FeedPostCard({ post }: { post: FeedPostResponse }) {
             width="14"
             height="14"
             viewBox="0 0 24 24"
-            fill={post.likedByMe ? '#dc2626' : 'none'}
+            fill={post.likedByMe ? 'currentColor' : 'none'}
             stroke="currentColor"
             strokeWidth="2"
           >

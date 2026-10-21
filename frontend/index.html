@@ -13,6 +13,17 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
     <title>QuantLime</title>
+    <!-- 다크 모드: React가 뜨기 전에 저장값(없으면 시스템 설정)으로 data-theme를 먼저
+         채워 흰 화면이 번쩍이지 않게 한다. 키/규칙은 src/storage/themeStorage.ts와 같다. -->
+    <script>
+      ;(function () {
+        try {
+          var stored = localStorage.getItem('ql_theme')
+          var dark = stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches
+          if (dark) document.documentElement.dataset.theme = 'dark'
+        } catch (e) {}
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

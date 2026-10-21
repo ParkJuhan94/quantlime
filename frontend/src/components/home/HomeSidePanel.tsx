@@ -11,6 +11,7 @@ import { WatchlistGroupEditModal } from './WatchlistGroupEditModal'
 import { GroupQuickActionModal } from './GroupQuickActionModal'
 import { AddStockToGroupPopover } from './AddStockToGroupPopover'
 import { FeedbackModal } from '../layout/FeedbackModal'
+import { ThemeToggle } from '../layout/ThemeToggle'
 import { useCreateWatchlistGroup, useRenameWatchlistGroup } from '../../hooks/queries/useWatchlistGroups'
 
 export type SidePanelTab = 'watch' | 'recent'
@@ -94,7 +95,7 @@ function StockRow({
 function EmptyState({ icon, message }: { icon: 'heart' | 'clock' | 'document'; message: string }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
-      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="1.6">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" className="stroke-gray-300" strokeWidth="1.6">
         {icon === 'heart' && (
           <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z" />
         )}
@@ -338,17 +339,20 @@ export function HomeSidePanel({
           </button>
         ))}
 
-        <button
-          type="button"
-          onClick={() => setFeedbackOpen(true)}
-          aria-label="의견 보내기"
-          className="mt-auto flex flex-col items-center gap-1 rounded-lg px-1 py-1.5 hover:bg-gray-100"
-        >
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2">
-            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z" />
-          </svg>
-          <span className="text-[10px] font-semibold text-gray-400">의견</span>
-        </button>
+        <div className="mt-auto flex flex-col items-center gap-1">
+          <ThemeToggle variant="rail" />
+          <button
+            type="button"
+            onClick={() => setFeedbackOpen(true)}
+            aria-label="의견 보내기"
+            className="flex flex-col items-center gap-1 rounded-lg px-1 py-1.5 hover:bg-gray-100"
+          >
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2">
+              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z" />
+            </svg>
+            <span className="text-[10px] font-semibold text-gray-400">의견</span>
+          </button>
+        </div>
       </div>
 
       <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
@@ -411,16 +415,17 @@ export function HomeSidePanel({
 }
 
 function TabIcon({ tab, active }: { tab: SidePanelTab; active: boolean }) {
-  const color = active ? '#111827' : '#999'
+  // 활성 색은 테마 따라 바뀌는 gray-900 - 다크에서 하드코딩 검정은 안 보인다.
+  const color = active ? 'stroke-gray-900' : 'stroke-[#999]'
   if (tab === 'watch') {
     return (
-      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" className={color} strokeWidth="2">
         <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z" />
       </svg>
     )
   }
   return (
-    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" className={color} strokeWidth="2">
       <circle cx="12" cy="12" r="9" />
       <path d="M12 7v5l3 3" />
     </svg>

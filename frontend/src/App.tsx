@@ -54,12 +54,12 @@ function App() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-page">
       <div
         className="transition-[margin-right] duration-200 ease-in-out"
         style={{ marginRight: showSidePanel ? panelWidth : 0 }}
       >
-        <AppHeader onLoggedOut={() => setShowLogoutToast(true)} />
+        <AppHeader onLoggedOut={() => setShowLogoutToast(true)} showThemeToggle={!showSidePanel} />
         <main className="mx-auto max-w-7xl px-4 py-6">
           {/* key=pathname으로 라우트가 바뀔 때마다 경계 상태를 리셋한다 -
               한 페이지에서 렌더 에러가 나도 다른 페이지로 이동하면 다시
