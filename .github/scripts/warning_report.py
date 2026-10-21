@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """린트/컴파일 경고 로그를 요약해 GitHub Actions 실행 화면과 PR 변경 줄에 보여준다.
 
-사용법: warning_report.py <javac|oxlint> <로그 파일> <제목> [--root 작업 디렉터리]
+사용법: warning_report.py <javac|oxlint> <로그 파일> <제목> [--root 작업 디렉터리] [--only 규칙,...] [--except 규칙,...]
 
 - 요약표(규칙별 개수, 파일별 상위 10개)를 $GITHUB_STEP_SUMMARY에 쓴다. 없으면 표준 출력.
 - PR 실행이면 "PR이 바꾼 파일"의 경고만 ::warning 어노테이션으로 낸다(Files changed에 표시).
   Actions는 스텝당 어노테이션을 10개까지만 보여주므로 상한을 두고, 나머지는 요약표로 본다.
+- --only/--except로 규칙을 골라 한 로그를 여러 리포트(예: NullAway와 Error Prone)로 나눠 낼 수 있다.
+  어노테이션 10개 상한이 스텝마다 따로 적용되므로 나누면 각 리포트가 자기 몫을 갖는다.
 - 경고가 있어도 종료 코드는 0이다 - 보기 위한 도구이지 게이트가 아니다.
 """
 import collections
@@ -65,8 +67,18 @@ def main():
         i = args.index("--root")
         root = args[i + 1].rstrip("/") + "/"
         del args[i : i + 2]
+    only, exclude = set(), set()
+    for flag, target in (("--only", only), ("--except", exclude)):
+        if flag in args:
+            i = args.index(flag)
+            target.update(r for r in args[i + 1].split(",") if r)
+            del args[i : i + 2]
     kind, log, title = args[0], args[1], args[2]
     items = parse(kind, log, root)
+    if only:
+        items = [i for i in items if i["rule"] in only]
+    if exclude:
+        items = [i for i in items if i["rule"] not in exclude]
 
     by_rule = collections.Counter(i["rule"] for i in items)
     by_file = collections.Counter(i["file"] for i in items)
