@@ -15,6 +15,7 @@ import jakarta.persistence.UniqueConstraint;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 
 @Entity
@@ -61,7 +62,7 @@ public class User extends TimeBaseEntity {
         this.role = role;
     }
 
-    public static User of(String email, String nickname, String profileImageUrl,
+    public static User of(@Nullable String email, String nickname, @Nullable String profileImageUrl,
                           OAuthProvider provider, String providerId) {
         return User.builder()
             .email(email)
@@ -73,7 +74,7 @@ public class User extends TimeBaseEntity {
             .build();
     }
 
-    public void updateProfile(String email, String nickname, String profileImageUrl) {
+    public void updateProfile(@Nullable String email, String nickname, @Nullable String profileImageUrl) {
         Assert.hasText(nickname, "닉네임은 필수입니다.");
         this.email = email;
         this.nickname = nickname;

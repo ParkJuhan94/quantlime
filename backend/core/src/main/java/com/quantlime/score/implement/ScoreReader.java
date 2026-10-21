@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
@@ -33,7 +34,7 @@ public class ScoreReader {
         return scoreRepository.findTopByStockCodeOrderByScoreDateDesc(stockCode);
     }
 
-    public List<Score> findLatestScoresForNormalization(List<MarketType> marketTypes) {
+    public List<Score> findLatestScoresForNormalization(@Nullable List<MarketType> marketTypes) {
         return scoreRepository.findLatestScoresForNormalization(marketTypes);
     }
 
@@ -41,7 +42,7 @@ public class ScoreReader {
         return scoreRepository.findLatestScoresOnOrBefore(stockCodes, date);
     }
 
-    public List<Score> findTopScoresOrderByCompositeScoreDesc(int limit, List<MarketType> marketTypes) {
+    public List<Score> findTopScoresOrderByCompositeScoreDesc(int limit, @Nullable List<MarketType> marketTypes) {
         return scoreRepository.findTopScoresOrderByCompositeScoreDesc(limit, marketTypes);
     }
 }

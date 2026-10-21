@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -45,7 +46,7 @@ public class ScoreQueryRepositoryImpl implements ScoreQueryRepository {
     }
 
     @Override
-    public List<Score> findTopScoresOrderByCompositeScoreDesc(int limit, List<MarketType> marketTypes) {
+    public List<Score> findTopScoresOrderByCompositeScoreDesc(int limit, @Nullable List<MarketType> marketTypes) {
         QScore score = QScore.score;
 
         List<String> eligibleStockCodes = eligibleStockCodes(marketTypes);
@@ -68,7 +69,7 @@ public class ScoreQueryRepositoryImpl implements ScoreQueryRepository {
     }
 
     @Override
-    public List<Score> findLatestScoresForNormalization(List<MarketType> marketTypes) {
+    public List<Score> findLatestScoresForNormalization(@Nullable List<MarketType> marketTypes) {
         QScore score = QScore.score;
 
         List<String> eligibleStockCodes = eligibleStockCodes(marketTypes);
@@ -98,7 +99,7 @@ public class ScoreQueryRepositoryImpl implements ScoreQueryRepository {
      * 항상 적용한다 - 잡주를 걸러내는 게 이번 감사의 핵심 목적이라 scope로
      * 우회할 수 있으면 안 된다.
      */
-    private List<String> eligibleStockCodes(List<MarketType> marketTypes) {
+    private List<String> eligibleStockCodes(@Nullable List<MarketType> marketTypes) {
         QStock stock = QStock.stock;
         BooleanExpression stockFilter = stock.listingStatus.eq(ListingStatus.LISTED)
             .and(stock.priceUnsupported.isFalse());
@@ -135,7 +136,7 @@ public class ScoreQueryRepositoryImpl implements ScoreQueryRepository {
         return latestScoreDateTuple(latest, stockCodes, null);
     }
 
-    private BooleanExpression latestScoreDateTuple(QScore latest, List<String> stockCodes, LocalDate onOrBefore) {
+    private BooleanExpression latestScoreDateTuple(QScore latest, List<String> stockCodes, @Nullable LocalDate onOrBefore) {
         JPAQuery<Tuple> latestDates = queryFactory
             .select(latest.stockCode, latest.scoreDate.max())
             .from(latest)
@@ -150,7 +151,7 @@ public class ScoreQueryRepositoryImpl implements ScoreQueryRepository {
     }
 
     @Override
-    public List<Score> findLatestScoresOnOrBefore(List<String> stockCodes, LocalDate date) {
+    public List<Score> findLatestScoresOnOrBefore(List<String> stockCodes, @Nullable LocalDate date) {
         if (stockCodes.isEmpty()) {
             return List.of();
         }

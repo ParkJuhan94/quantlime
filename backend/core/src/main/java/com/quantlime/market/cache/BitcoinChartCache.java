@@ -8,8 +8,10 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
@@ -29,6 +31,7 @@ public class BitcoinChartCache {
 
     private final UpbitApiClient upbitApiClient;
 
+    @Nullable
     private volatile List<IndexMinuteChartResponse> cached;
     private volatile Instant cachedAt = Instant.EPOCH;
 
@@ -36,7 +39,8 @@ public class BitcoinChartCache {
         if (isStale()) {
             refresh();
         }
-        return cached;
+        // refresh()가 값을 못 채우면 예외를 던지므로 여기서는 항상 채워져 있다
+        return Objects.requireNonNull(cached);
     }
 
     private boolean isStale() {

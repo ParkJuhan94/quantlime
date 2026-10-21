@@ -26,11 +26,13 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
@@ -85,6 +87,7 @@ public class MarketIndexCache {
     private final MeterRegistry meterRegistry;
     private final Clock clock;
 
+    @Nullable
     private volatile MarketIndexResponse cached;
     private volatile Instant cachedAt = Instant.EPOCH;
     // refresh()는 최초 1회는 ensureWarm()의 synchronized 블록 안에서,
@@ -102,7 +105,8 @@ public class MarketIndexCache {
         // 백그라운드 갱신을 트리거하기 전에 스냅샷을 먼저 캡처한다 - trigger 이후에
         // cached를 다시 읽으면, 비동기 refresh()가 그 사이 끝나 cached를 새 값으로
         // 덮어썼을 때 "이번 호출은 stale 값을 반환한다"는 계약이 깨진다(레이스 컨디션).
-        MarketIndexResponse snapshot = cached;
+        // ensureWarm()이 최초 적재를 끝냈으므로 null일 수 없다
+        MarketIndexResponse snapshot = Objects.requireNonNull(cached);
         if (isStale()) {
             meterRegistry.counter(METRIC_ACCESS, "result", "miss").increment();
             triggerBackgroundRefresh();
@@ -178,7 +182,7 @@ public class MarketIndexCache {
      * 패턴을 그대로 적용한다 - 이전 값도 없으면(최초 기동 직후 등) 보여줄
      * 값 자체가 없으므로 예외를 그대로 전파한다.
      */
-    private ExchangeRateSnapshot fetchExchangeRateSnapshot(MarketIndexResponse previous) {
+    private ExchangeRateSnapshot fetchExchangeRateSnapshot(@Nullable MarketIndexResponse previous) {
         try {
             TossExchangeRateResponse.ExchangeRateResult result = tossApiClient.getExchangeRate(USD, KRW).result();
             return new ExchangeRateSnapshot(Double.parseDouble(result.rate()), result.rateChangeType());
@@ -191,7 +195,7 @@ public class MarketIndexCache {
         }
     }
 
-    private BitcoinSnapshot fetchBitcoinSnapshot(MarketIndexResponse previous) {
+    private BitcoinSnapshot fetchBitcoinSnapshot(@Nullable MarketIndexResponse previous) {
         try {
             UpbitTicker bitcoinTicker = getBitcoinTicker();
             return new BitcoinSnapshot(bitcoinTicker.tradePrice(), bitcoinTicker.signedChangeRate() * 100);
@@ -211,6 +215,7 @@ public class MarketIndexCache {
     }
 
     /** TradingView 조회 실패는 흡수하고 null 반환 - 다른 지수와 동일한 폴백 원칙. */
+    @Nullable
     private TradingViewSymbolResponse fetchUsTreasuryYield() {
         try {
             return tradingViewApiClient.getSymbolQuote(US_10Y_TREASURY_SYMBOL);
@@ -233,7 +238,7 @@ public class MarketIndexCache {
      * 페이지에서는 아예 차트를 비워둔다). 조회 실패 시에는 추가하지
      * 않고 마지막까지 쌓인 이력을 그대로 유지한다.
      */
-    private void recordTreasuryYieldHistory(TradingViewSymbolResponse treasuryYield) {
+    private void recordTreasuryYieldHistory(@Nullable TradingViewSymbolResponse treasuryYield) {
         if (treasuryYield == null || treasuryYield.close() == null) {
             return;
         }
@@ -245,6 +250,7 @@ public class MarketIndexCache {
 
     /** 네이버 조회 실패는 흡수하고 null 반환 - 토스 기반 환율(rate)은 이미 확보돼 있으므로
      * 등락률(%) 하나 못 채운다고 환율 카드 전체가 깨지면 안 된다. */
+    @Nullable
     private Double fetchUsdKrwChangeRate() {
         try {
             return parseNumber(naverFinanceApiClient.getExchangeRateBasic(USD_KRW_PAIR).exchangeInfo().fluctuationsRatio());
@@ -295,6 +301,7 @@ public class MarketIndexCache {
      * 종가를 아직 못 구했으면(백필 전 등) 등락률만 null로 두고 현재가는
      * 그대로 보여준다(값을 꾸며내지 않음).
      */
+    @Nullable
     private MarketIndexResponse.IndexQuote fetchIndexQuote(String indexCode, Map<String, String> prices) {
         String lastPrice = prices.get(indexCode);
         if (lastPrice == null) {
@@ -318,6 +325,7 @@ public class MarketIndexCache {
      * ETF인 경우 지수 엔드포인트가 아니라 종목 엔드포인트를 쓴다. 미국
      * 시장이라 정규장 마감 중엔 overMarketPriceInfo로 프리/애프터마켓
      * 시세가 함께 온다(실제 호출로 확인).  */
+    @Nullable
     private MarketIndexResponse.IndexQuote fetchWorldIndexQuote(OverseasIndexCode code) {
         try {
             NaverIndexBasicResponse basic = code.isEtf()

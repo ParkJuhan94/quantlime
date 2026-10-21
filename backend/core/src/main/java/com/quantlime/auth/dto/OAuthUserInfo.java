@@ -1,12 +1,13 @@
 package com.quantlime.auth.dto;
 
 import com.quantlime.user.domain.OAuthProvider;
+import org.springframework.lang.Nullable;
 
 public record OAuthUserInfo(
     OAuthProvider provider,
     String providerId,
-    String email,
+    @Nullable String email,
     String nickname,
-    String profileImageUrl
+    @Nullable String profileImageUrl
 ) {
 }

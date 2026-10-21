@@ -1,9 +1,10 @@
 package com.quantlime.infra.python.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import org.springframework.lang.Nullable;
 
 public record SummarizeApiRequest(
-    @JsonProperty("video_title") String videoTitle,
+    @Nullable @JsonProperty("video_title") String videoTitle,
     @JsonProperty("channel_name") String channelName,
     @JsonProperty("transcript_content") String transcriptContent,
     @JsonProperty("source_kind") String sourceKind

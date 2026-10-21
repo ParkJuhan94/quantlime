@@ -2,6 +2,7 @@ package com.quantlime.market.event;
 
 import com.quantlime.score.domain.PeerGroup;
 import java.time.LocalDate;
+import org.springframework.lang.Nullable;
 
 /**
  * 전종목 가격·스코어 fan-out(2026-09-24)이 종목별로 발행하는 순수 도메인
@@ -12,5 +13,5 @@ import java.time.LocalDate;
  * 재발한다.
  */
 public record PriceRefreshRequestedEvent(
-    String runId, String stockCode, PeerGroup peerGroup, LocalDate latestScoreDate) {
+    String runId, String stockCode, PeerGroup peerGroup, @Nullable LocalDate latestScoreDate) {
 }

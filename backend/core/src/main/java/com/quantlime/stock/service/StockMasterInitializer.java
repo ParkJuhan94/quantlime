@@ -17,6 +17,7 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -97,6 +98,7 @@ public class StockMasterInitializer implements ApplicationRunner {
         return stocks;
     }
 
+    @Nullable
     private MarketType parseMarketType(String marketLabel) {
         try {
             return MarketType.of(marketLabel);

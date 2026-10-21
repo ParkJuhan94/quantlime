@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -83,7 +84,7 @@ public class TelegramCollectionFacade {
     // CDN URL이 회전될 수 있는데 "없을 때만"이면 만료된 URL이 영구히
     // 깨진 채로 남기 때문(값이 실제로 바뀐 경우에만 write).
     @Transactional
-    void updateChannelMeta(Long channelId, TelegramChannelMeta meta) {
+    void updateChannelMeta(Long channelId, @Nullable TelegramChannelMeta meta) {
         Channel channel = channelReader.findById(channelId)
             .orElseThrow(() -> new NotFoundException(TelegramFeedErrorCode.NOT_FOUND_CHANNEL));
         channel.updateLastCollectedAt(LocalDateTime.now(clock));

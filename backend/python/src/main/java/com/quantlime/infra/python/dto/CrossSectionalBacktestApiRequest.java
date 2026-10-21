@@ -3,6 +3,7 @@ package com.quantlime.infra.python.dto;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.quantlime.infra.python.dto.BacktestApiRequest.OhlcvApiItem;
 import java.util.List;
+import org.springframework.lang.Nullable;
 
 // (축, horizon) 하나당 1건씩 호출한다 - 500종목 규모에서 8개 조합을 한
 // 호출에 몰아넣으면 PythonEngineClient read timeout(60초)을 넘긴다는 게
@@ -13,7 +14,7 @@ public record CrossSectionalBacktestApiRequest(
     @JsonProperty("score_version") String scoreVersion,
     List<StockDailyScoreApiItem> stocks,
     @JsonProperty("benchmark_ohlcv") List<OhlcvApiItem> benchmarkOhlcv,
-    String axis,
+    @Nullable String axis,
     int horizon,
     @JsonProperty("null_test") boolean nullTest,
     @JsonProperty("null_repeats") int nullRepeats

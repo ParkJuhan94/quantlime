@@ -20,6 +20,7 @@ import org.jsoup.nodes.Element;
 import org.jsoup.nodes.Node;
 import org.jsoup.nodes.TextNode;
 import org.jsoup.select.Elements;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -48,7 +49,7 @@ public class TelegramWebPreviewClient {
     private final RestClient telegramRestClient;
 
     @Retry(name = "telegram")
-    public TelegramPreviewPage fetchPage(String channelHandle, Long afterMessageId, Long beforeMessageId) {
+    public TelegramPreviewPage fetchPage(String channelHandle, @Nullable Long afterMessageId, @Nullable Long beforeMessageId) {
         if (afterMessageId != null && beforeMessageId != null) {
             throw new IllegalArgumentException("afterMessageId와 beforeMessageId는 동시에 지정할 수 없습니다.");
         }
@@ -115,6 +116,7 @@ public class TelegramWebPreviewClient {
         return messages;
     }
 
+    @Nullable
     private TelegramPreviewMessage parseMessage(Element element) {
         String externalPostId = element.attr("data-post");
         Long messageId = parseMessageId(externalPostId);
@@ -152,6 +154,7 @@ public class TelegramWebPreviewClient {
         return new TelegramPreviewMessage(externalPostId, messageId, content, publishedAt, viewCount, hasMedia);
     }
 
+    @Nullable
     private Long parseMessageId(String externalPostId) {
         int slashIndex = externalPostId.indexOf('/');
         if (slashIndex < 0) {
@@ -191,6 +194,7 @@ public class TelegramWebPreviewClient {
     // "3.93K" -> 3930, "1.1M" -> 1100000, "820" -> 820. 예상 밖 형식은
     // null로 두고 계속 진행한다(조회수는 부가 정보라 전체 파싱을 막을
     // 이유가 없음).
+    @Nullable
     private Long parseViewCount(String text) {
         String trimmed = text.trim();
         Matcher matcher = VIEW_COUNT_PATTERN.matcher(trimmed);

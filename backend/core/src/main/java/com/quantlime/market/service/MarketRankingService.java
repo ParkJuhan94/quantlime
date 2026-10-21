@@ -12,6 +12,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
 /**
@@ -53,7 +54,7 @@ public class MarketRankingService {
     }
 
     public List<MarketRankingResponse> getRanking(
-            String scope, String sort, int limit, Set<String> watchlistCodes, RankingPeriod period) {
+            String scope, String sort, int limit, @Nullable Set<String> watchlistCodes, RankingPeriod period) {
         boolean isGainersOrLosers = SORT_GAINERS.equals(sort) || SORT_LOSERS.equals(sort);
         // 관심종목 자체계산 경로는 "오늘" 등락률만 계산하므로 실시간/1일일 때만
         // 쓴다 - 1주 이상 기간은 토스 랭킹(top100)을 관심종목으로 걸러서 보여준다.
@@ -100,7 +101,7 @@ public class MarketRankingService {
         return rows.stream().map(row -> withScore(row, scoreByCode.get(row.stockCode()))).toList();
     }
 
-    private MarketRankingResponse withScore(MarketRankingResponse row, Score score) {
+    private MarketRankingResponse withScore(MarketRankingResponse row, @Nullable Score score) {
         if (score == null) {
             return row;
         }

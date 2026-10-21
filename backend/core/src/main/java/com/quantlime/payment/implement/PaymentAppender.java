@@ -5,6 +5,7 @@ import com.quantlime.payment.repository.PaymentRepository;
 import com.quantlime.subscription.domain.Subscription;
 import com.quantlime.user.domain.User;
 import lombok.RequiredArgsConstructor;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
@@ -28,7 +29,7 @@ public class PaymentAppender {
 
     public void appendFailure(
         User user, Subscription subscription, String orderId, int amount,
-        int installmentMonths, boolean renewal, String failReason) {
+        int installmentMonths, boolean renewal, @Nullable String failReason) {
         paymentRepository.save(Payment.failure(
             user, subscription, orderId, amount, installmentMonths, renewal, failReason));
     }

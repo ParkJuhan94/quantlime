@@ -11,6 +11,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
 /**
@@ -103,7 +104,7 @@ public class PriceGapFillService {
      * @see #fillDomesticGap(String) 동일한 계약 - calledApi=false일 때만
      * latestTradeDate가 유효하다.
      */
-    public record GapFillOutcome(boolean calledApi, LocalDate latestTradeDate) {
+    public record GapFillOutcome(boolean calledApi, @Nullable LocalDate latestTradeDate) {
         public static GapFillOutcome apiCalled() {
             return new GapFillOutcome(true, null);
         }

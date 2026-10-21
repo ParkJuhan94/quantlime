@@ -10,6 +10,7 @@ import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -34,6 +35,7 @@ public class BillingKeyConverter implements AttributeConverter<String, String> {
     private String encryptionKeyBase64;
 
     @Override
+    @Nullable
     public String convertToDatabaseColumn(String attribute) {
         if (attribute == null) {
             return null;
@@ -58,6 +60,7 @@ public class BillingKeyConverter implements AttributeConverter<String, String> {
     }
 
     @Override
+    @Nullable
     public String convertToEntityAttribute(String dbData) {
         if (dbData == null) {
             return null;

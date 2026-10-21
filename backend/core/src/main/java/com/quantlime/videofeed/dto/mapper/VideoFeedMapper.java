@@ -13,6 +13,7 @@ import com.quantlime.videofeed.dto.response.VideoFeedItemResponse;
 import com.quantlime.videofeed.dto.response.VideoFeedTickerResponse;
 import java.util.List;
 import lombok.NoArgsConstructor;
+import org.springframework.lang.Nullable;
 
 @NoArgsConstructor(access = PRIVATE)
 public final class VideoFeedMapper {
@@ -85,6 +86,7 @@ public final class VideoFeedMapper {
     // 분기는 도달 불가능하다 - 삭제하지 않고 exhaustive switch로 남겨 향후
     // Video가 실수로 텔레그램에도 재사용되는 변경이 생기면 컴파일 에러로
     // 바로 드러나게 한다.
+    @Nullable
     private static String toVideoUrl(Video video) {
         return switch (video.getChannel().getPlatform()) {
             case YOUTUBE -> "https://www.youtube.com/watch?v=" + video.getExternalVideoId();

@@ -107,16 +107,17 @@ public class FcmPushService {
         if (tokens.isEmpty()) {
             return;
         }
-        if (firebaseMessaging == null) {
+        FirebaseMessaging messaging = firebaseMessaging;
+        if (messaging == null) {
             skipped.increment(tokens.size());
             return;
         }
         for (int i = 0; i < tokens.size(); i += FCM_BATCH_SIZE) {
-            sendChunk(tokens.subList(i, Math.min(i + FCM_BATCH_SIZE, tokens.size())), title, content, linkUrl);
+            sendChunk(messaging, tokens.subList(i, Math.min(i + FCM_BATCH_SIZE, tokens.size())), title, content, linkUrl);
         }
     }
 
-    private void sendChunk(List<FcmToken> chunk, String title, String content, String linkUrl) {
+    private void sendChunk(FirebaseMessaging messaging, List<FcmToken> chunk, String title, String content, String linkUrl) {
         // 데이터 전용(data-only)으로 보낸다 - notification 필드를 실으면
         // Firebase SW가 백그라운드일 때 알림을 자체적으로 한 번 띄운 뒤
         // 우리 onBackgroundMessage도 호출해 알림이 두 번 뜬다(firebase
@@ -130,7 +131,7 @@ public class FcmPushService {
             .addAllTokens(chunk.stream().map(FcmToken::getToken).toList())
             .build();
         try {
-            BatchResponse response = firebaseMessaging.sendEachForMulticast(message);
+            BatchResponse response = messaging.sendEachForMulticast(message);
             List<SendResponse> responses = response.getResponses();
             for (int i = 0; i < responses.size(); i++) {
                 if (responses.get(i).isSuccessful()) {

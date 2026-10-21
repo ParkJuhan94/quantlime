@@ -12,6 +12,7 @@ import com.quantlime.price.dto.response.TradeResponse;
 import com.quantlime.stock.service.StockMasterService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
 /**
@@ -74,6 +75,7 @@ public class StockMarketDepthService {
             .toList();
     }
 
+    @Nullable
     private static Double parse(String decimal) {
         return decimal == null ? null : Double.valueOf(decimal);
     }

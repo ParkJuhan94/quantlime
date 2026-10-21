@@ -15,6 +15,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.RedisOperations;
 import org.springframework.data.redis.core.SessionCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
@@ -78,6 +79,7 @@ public class PriceCacheStore {
         try {
             redisTemplate.executePipelined(new SessionCallback<Object>() {
                 @Override
+    @Nullable
                 public Object execute(RedisOperations operations) {
                     for (PriceSnapshot snapshot : snapshots) {
                         try {
@@ -142,6 +144,7 @@ public class PriceCacheStore {
         try {
             rawResults = redisTemplate.executePipelined(new SessionCallback<Object>() {
                 @Override
+    @Nullable
                 public Object execute(RedisOperations operations) {
                     for (String stockCode : stockCodes) {
                         operations.opsForValue().get(key(stockCode));

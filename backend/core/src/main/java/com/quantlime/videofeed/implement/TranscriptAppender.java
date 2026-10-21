@@ -10,6 +10,7 @@ import com.quantlime.videofeed.repository.TranscriptRepository;
 import com.quantlime.videofeed.repository.VideoRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,7 +48,7 @@ public class TranscriptAppender {
     }
 
     @Transactional
-    public void markFetchFailed(Long videoId, String reason) {
+    public void markFetchFailed(Long videoId, @Nullable String reason) {
         findVideo(videoId).markFailed(reason);
     }
 

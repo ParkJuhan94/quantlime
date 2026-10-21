@@ -1,8 +1,10 @@
 package com.quantlime.price.dto.response;
 
+import org.springframework.lang.Nullable;
+
 public record TradeResponse(
-    Double price,
-    Double volume,
+    @Nullable Double price,
+    @Nullable Double volume,
     String timestamp,
     String currency
 ) {

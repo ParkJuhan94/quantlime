@@ -11,6 +11,7 @@ import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.lang.Nullable;
 
 public interface VideoRepository extends JpaRepository<Video, Long> {
 
@@ -94,8 +95,8 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
     Slice<Video> findSummarizedVideos(
         @Param("tickerCode") String tickerCode,
         @Param("channelId") Long channelId,
-        @Param("publishedFrom") LocalDateTime publishedFrom,
-        @Param("publishedTo") LocalDateTime publishedTo,
+        @Param("publishedFrom") @Nullable LocalDateTime publishedFrom,
+        @Param("publishedTo") @Nullable LocalDateTime publishedTo,
         Pageable pageable);
 
     @Query("select v from Video v join fetch v.channel "

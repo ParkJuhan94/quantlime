@@ -9,6 +9,7 @@ import com.quantlime.price.dto.response.DailyChartResponse;
 import com.quantlime.price.dto.response.PriceSnapshot;
 import com.quantlime.price.util.ChangeRateCalculator;
 import lombok.NoArgsConstructor;
+import org.springframework.lang.Nullable;
 
 @NoArgsConstructor(access = PRIVATE)
 public final class PriceMapper {
@@ -22,7 +23,7 @@ public final class PriceMapper {
     // 청크 페이싱과 무관하게 동작하던 무페이싱 직접 호출이 429 반복
     // 발생의 원인이었다(2026-07-17). 등락률은 호출 측이 PreviousCloseCache로
     // 조회해 넘겨준 전일종가와 비교해 계산한다.
-    public static CurrentPriceResponse toCurrentPriceResponse(DomesticDailyPrice latestClose, Double previousClose) {
+    public static CurrentPriceResponse toCurrentPriceResponse(DomesticDailyPrice latestClose, @Nullable Double previousClose) {
         Long price = latestClose.getClosePrice();
         Double priceAsDouble = price == null ? null : price.doubleValue();
         Double changeRate = ChangeRateCalculator.calculate(priceAsDouble, previousClose);
@@ -34,7 +35,7 @@ public final class PriceMapper {
     // 해외 종목의 캐시 미스 폴백(StockPriceService 참고) - 국내와 동일한
     // "DB의 마지막 확정 종가로 응답, Toss는 다시 호출 안 함" 원칙이지만
     // OverseasDailyPrice는 가격이 Double(USD)이라 별도 오버로드로 둔다.
-    public static CurrentPriceResponse toCurrentPriceResponse(OverseasDailyPrice latestClose, Double previousClose) {
+    public static CurrentPriceResponse toCurrentPriceResponse(OverseasDailyPrice latestClose, @Nullable Double previousClose) {
         Double price = latestClose.getClosePrice();
         Double changeRate = ChangeRateCalculator.calculate(price, previousClose);
         return new CurrentPriceResponse(

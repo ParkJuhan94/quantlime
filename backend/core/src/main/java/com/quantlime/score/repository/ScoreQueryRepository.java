@@ -5,6 +5,7 @@ import com.quantlime.stock.domain.MarketType;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import org.springframework.lang.Nullable;
 
 public interface ScoreQueryRepository {
 
@@ -25,7 +26,7 @@ public interface ScoreQueryRepository {
      *                     필터가 없으면 국내/해외 스코어 분포 차이 때문에
      *                     상위 N개가 한쪽 시장으로 쏠리는 문제가 있었음).
      */
-    List<Score> findTopScoresOrderByCompositeScoreDesc(int limit, List<MarketType> marketTypes);
+    List<Score> findTopScoresOrderByCompositeScoreDesc(int limit, @Nullable List<MarketType> marketTypes);
 
     /**
      * {@code marketTypes}(상장·가격지원·유동성 조건을 모두 만족하는
@@ -33,7 +34,7 @@ public interface ScoreQueryRepository {
      * 횡단면 정규화(quant-engine `/normalize/cross-section`) 입력 모집단으로
      * 쓰인다({@link com.quantlime.score.service.ScoreService#normalizeCrossSection}).
      */
-    List<Score> findLatestScoresForNormalization(List<MarketType> marketTypes);
+    List<Score> findLatestScoresForNormalization(@Nullable List<MarketType> marketTypes);
 
     /**
      * 전 종목의 "종목코드 → 최신 스코어 산출일" 맵을 한 번에 반환한다.

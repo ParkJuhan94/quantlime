@@ -3,6 +3,7 @@ package com.quantlime.common.config;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.lang.Nullable;
 
 /**
  * 외부 RestClient 빈들이 공유하는 connect/read 타임아웃 팩토리.
@@ -35,7 +36,7 @@ public final class HttpClientFactorySupport {
      *                필요 없으면 {@code null}.
      */
     public static JdkClientHttpRequestFactory create(
-        Duration connectTimeout, Duration readTimeout, HttpClient.Version version) {
+        Duration connectTimeout, Duration readTimeout, @Nullable HttpClient.Version version) {
         HttpClient.Builder builder = HttpClient.newBuilder().connectTimeout(connectTimeout);
         if (version != null) {
             builder.version(version);
