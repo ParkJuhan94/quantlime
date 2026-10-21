@@ -20,6 +20,7 @@ import com.quantlime.price.service.DomesticDailyPriceService;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.StockMasterService;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -66,6 +67,7 @@ public class BacktestService {
     private final DailyPriceReader dailyPriceReader;
     private final BacktestEngineProcessor backtestEngineProcessor;
     private final BacktestAppender backtestAppender;
+    private final Clock clock;
 
     public void runBacktest(String stockCode) {
         Stock stock = stockMasterService.getStockByCode(stockCode);
@@ -74,7 +76,7 @@ public class BacktestService {
             throw new ValidationException(BacktestErrorCode.UNSUPPORTED_MARKET);
         }
 
-        LocalDate end = LocalDate.now();
+        LocalDate end = LocalDate.now(clock);
         LocalDate start = end.minusDays(OHLCV_LOOKBACK_CALENDAR_DAYS);
         List<BenchmarkIndex> benchmarkPrices = benchmarkIndexReader
             .findBetween(benchmarkIndexCode, start, end);

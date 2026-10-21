@@ -1,6 +1,7 @@
 package com.quantlime.price.service;
 
 import com.quantlime.price.implement.OverseasDailyPriceCollector;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ public class OverseasDailyPriceBackfillService {
     private static final int REBACKFILL_BUFFER_DAYS = 5;
 
     private final OverseasDailyPriceCollector overseasDailyPriceCollector;
+    private final Clock clock;
 
     /**
      * lookbackDays는 호출측({@link PriceGapFillService})이 "마지막 저장일부터 오늘까지의 실제
@@ -39,7 +41,7 @@ public class OverseasDailyPriceBackfillService {
 
     /** {@link DomesticDailyPriceService#rebackfillAdjustedHistory(String, LocalDate)}와 대칭. */
     public int rebackfillAdjustedHistory(String stockCode, LocalDate from) {
-        long calendarGapDays = ChronoUnit.DAYS.between(from, LocalDate.now()) + REBACKFILL_BUFFER_DAYS;
+        long calendarGapDays = ChronoUnit.DAYS.between(from, LocalDate.now(clock)) + REBACKFILL_BUFFER_DAYS;
         int targetDays = (int) Math.max(1, calendarGapDays);
         return overseasDailyPriceCollector.rebackfill(stockCode, targetDays);
     }

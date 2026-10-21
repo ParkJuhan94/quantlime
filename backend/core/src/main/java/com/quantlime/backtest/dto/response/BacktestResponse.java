@@ -2,11 +2,12 @@ package com.quantlime.backtest.dto.response;
 
 import java.time.LocalDate;
 import java.util.List;
+import org.springframework.lang.Nullable;
 
 public record BacktestResponse(
     String stockCode,
     String scoreVersion,
-    LocalDate backtestDate,
+    @Nullable LocalDate backtestDate,
     List<AxisBacktestResponse> axes,
     List<DailyScoreResponse> dailyScores
 ) {
@@ -19,8 +20,8 @@ public record BacktestResponse(
         Double closePrice,
         Double trendScore,
         Double meanReversionScore,
-        String quadrant,
-        String grade
+        @Nullable String quadrant,
+        @Nullable String grade
     ) {
     }
 

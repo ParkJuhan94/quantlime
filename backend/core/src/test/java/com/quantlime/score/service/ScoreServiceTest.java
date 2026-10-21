@@ -50,6 +50,7 @@ import com.quantlime.watchlist.domain.Watchlist;
 import com.quantlime.watchlist.implement.WatchlistReader;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -112,8 +113,8 @@ class ScoreServiceTest {
     @BeforeEach
     void setUp() {
         scoreService = new ScoreService(domesticDailyPriceService, dailyPriceReader,
-            new ScoreEngineProcessor(pythonEngineClient, meterRegistry), scoreAppender, scoreReader,
-            stockLiquidityReader, watchlistReader, stockMasterService, scoreRankingCacheStore);
+            new ScoreEngineProcessor(pythonEngineClient, meterRegistry, Clock.systemDefaultZone()), scoreAppender, scoreReader,
+            stockLiquidityReader, watchlistReader, stockMasterService, scoreRankingCacheStore, Clock.systemDefaultZone());
     }
 
     @Test

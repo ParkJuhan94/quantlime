@@ -5,6 +5,7 @@ import com.quantlime.price.dto.LiquiditySnapshot;
 import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.price.implement.StockLiquidityAppender;
 import com.quantlime.price.implement.StockLiquidityReader;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -51,6 +52,7 @@ public class StockLiquidityService {
     private final DailyPriceReader dailyPriceReader;
     private final StockLiquidityReader stockLiquidityReader;
     private final StockLiquidityAppender stockLiquidityAppender;
+    private final Clock clock;
 
     @Transactional
     public void refreshDomestic(LocalDate since) {
@@ -63,7 +65,7 @@ public class StockLiquidityService {
     }
 
     private void upsertSnapshots(List<LiquiditySnapshot> snapshots, double minAvgTradingValue) {
-        LocalDate asOf = LocalDate.now();
+        LocalDate asOf = LocalDate.now(clock);
         for (LiquiditySnapshot snapshot : snapshots) {
             int zeroVolumeDays = snapshot.zeroVolumeDays() == null ? 0 : snapshot.zeroVolumeDays().intValue();
             boolean liquid = snapshot.avgTradingValue() != null

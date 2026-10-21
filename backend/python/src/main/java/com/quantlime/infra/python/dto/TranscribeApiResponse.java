@@ -1,6 +1,7 @@
 package com.quantlime.infra.python.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import org.springframework.lang.Nullable;
 
 public record TranscribeApiResponse(
     boolean available,
@@ -8,6 +9,6 @@ public record TranscribeApiResponse(
     String lang,
     String content,
     @JsonProperty("char_count") Integer charCount,
-    String reason
+    @Nullable String reason
 ) {
 }

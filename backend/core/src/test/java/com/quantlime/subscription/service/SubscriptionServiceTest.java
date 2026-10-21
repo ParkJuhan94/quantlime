@@ -23,6 +23,7 @@ import com.quantlime.subscription.repository.SubscriptionRepository;
 import com.quantlime.user.UserFixture;
 import com.quantlime.user.domain.User;
 import com.quantlime.user.service.UserService;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -53,7 +54,7 @@ class SubscriptionServiceTest {
     void setUp() {
         subscriptionService = new SubscriptionService(
             new SubscriptionReader(subscriptionRepository), new SubscriptionAppender(subscriptionRepository),
-            userService, fcmPushService);
+            userService, fcmPushService, Clock.systemDefaultZone());
     }
 
     private final User user = UserFixture.createUser();

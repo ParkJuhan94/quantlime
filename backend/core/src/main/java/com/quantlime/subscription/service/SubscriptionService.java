@@ -12,6 +12,7 @@ import com.quantlime.subscription.implement.SubscriptionAppender;
 import com.quantlime.subscription.implement.SubscriptionReader;
 import com.quantlime.user.domain.User;
 import com.quantlime.user.service.UserService;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -29,6 +30,7 @@ public class SubscriptionService {
     private final SubscriptionAppender subscriptionAppender;
     private final UserService userService;
     private final FcmPushService fcmPushService;
+    private final Clock clock;
 
     @Transactional(readOnly = true)
     public Optional<Subscription> findByUserId(Long userId) {
@@ -73,11 +75,11 @@ public class SubscriptionService {
         User user = userService.getById(userId);
         return subscriptionReader.findByUserId(userId)
             .map(existing -> {
-                existing.resubscribe(plan, billingKey, installmentMonths, LocalDate.now());
+                existing.resubscribe(plan, billingKey, installmentMonths, LocalDate.now(clock));
                 return existing;
             })
             .orElseGet(() -> subscriptionAppender.save(
-                Subscription.activate(user, plan, billingKey, installmentMonths, LocalDate.now())));
+                Subscription.activate(user, plan, billingKey, installmentMonths, LocalDate.now(clock))));
     }
 
     // 자동 갱신 스케줄러가 오늘 청구해야 할 구독의 id만 뽑아온다(엔티티를
@@ -87,7 +89,7 @@ public class SubscriptionService {
     @Transactional(readOnly = true)
     public List<Long> findSubscriptionIdsDueForRenewal() {
         return subscriptionReader
-            .findAllByNextBillingAtAndAutoRenewTrueAndStatus(LocalDate.now(), SubscriptionStatus.ACTIVE)
+            .findAllByNextBillingAtAndAutoRenewTrueAndStatus(LocalDate.now(clock), SubscriptionStatus.ACTIVE)
             .stream()
             .map(Subscription::getId)
             .toList();
@@ -98,7 +100,7 @@ public class SubscriptionService {
     @Transactional
     public void expireLapsedSubscriptions() {
         List<Subscription> lapsed = subscriptionReader
-            .findAllExpiredWithoutAutoRenew(SubscriptionStatus.ACTIVE, LocalDate.now());
+            .findAllExpiredWithoutAutoRenew(SubscriptionStatus.ACTIVE, LocalDate.now(clock));
         lapsed.forEach(Subscription::expire);
         if (!lapsed.isEmpty()) {
             log.info("자동갱신 해지 후 기간 만료 처리: count={}", lapsed.size());

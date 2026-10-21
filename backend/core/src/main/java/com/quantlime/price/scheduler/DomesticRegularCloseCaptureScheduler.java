@@ -9,6 +9,7 @@ import com.quantlime.price.dto.response.PriceSnapshot;
 import com.quantlime.price.implement.DailyPriceAppender;
 import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.stock.domain.Stock;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -75,6 +76,7 @@ public class DomesticRegularCloseCaptureScheduler {
     private final PriceCacheStore priceCacheStore;
     private final DailyPriceReader dailyPriceReader;
     private final DailyPriceAppender dailyPriceAppender;
+    private final Clock clock;
 
     @Scheduled(cron = "0 35 15 * * MON-FRI", zone = "Asia/Seoul")
     public void captureRegularClose() {
@@ -115,7 +117,7 @@ public class DomesticRegularCloseCaptureScheduler {
             return;
         }
 
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(clock);
         List<Stock> stocks = domesticListedStockCache.get();
         List<String> stockCodes = stocks.stream().map(Stock::getStockCode).toList();
 

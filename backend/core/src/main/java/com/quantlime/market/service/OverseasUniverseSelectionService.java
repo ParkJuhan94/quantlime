@@ -5,6 +5,7 @@ import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.price.service.OverseasDailyPriceBackfillService;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.StockMasterService;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
@@ -46,6 +47,7 @@ public class OverseasUniverseSelectionService {
     private final StockMasterService stockMasterService;
     private final OverseasDailyPriceBackfillService overseasDailyPriceBackfillService;
     private final DailyPriceReader dailyPriceReader;
+    private final Clock clock;
 
     public List<String> selectAndBackfillUniverse() {
         List<Stock> candidates = stockMasterService.getAllListedStocks().stream()
@@ -56,7 +58,7 @@ public class OverseasUniverseSelectionService {
 
         backfillEach(candidates, SCAN_TARGET_DAYS);
 
-        LocalDate since = LocalDate.now().minusMonths(3);
+        LocalDate since = LocalDate.now(clock).minusMonths(3);
         List<OverseasStockTradingValue> ranked =
             dailyPriceReader.findTopOverseasByTradingValue(since, UNIVERSE_SIZE);
         List<String> selectedCodes = ranked.stream().map(OverseasStockTradingValue::stockCode).toList();

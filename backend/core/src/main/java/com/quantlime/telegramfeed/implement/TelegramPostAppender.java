@@ -4,6 +4,7 @@ import com.quantlime.telegramfeed.domain.TelegramPost;
 import com.quantlime.telegramfeed.dto.CollectedTelegramPost;
 import com.quantlime.telegramfeed.repository.TelegramPostRepository;
 import com.quantlime.videofeed.domain.Channel;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class TelegramPostAppender {
 
     private final TelegramPostRepository telegramPostRepository;
+    private final Clock clock;
 
     @Transactional
     public int upsertAll(Channel channel, List<CollectedTelegramPost> collectedPosts) {
@@ -30,7 +32,7 @@ public class TelegramPostAppender {
             if (telegramPostRepository.existsByExternalPostId(collected.externalPostId())) {
                 continue;
             }
-            LocalDateTime viewCountCheckedAt = collected.viewCount() != null ? LocalDateTime.now() : null;
+            LocalDateTime viewCountCheckedAt = collected.viewCount() != null ? LocalDateTime.now(clock) : null;
             TelegramPost post = TelegramPost.of(
                 channel,
                 collected.externalPostId(),

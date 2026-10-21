@@ -5,11 +5,13 @@ import com.quantlime.telegramfeed.domain.TelegramPostStatus;
 import com.quantlime.telegramfeed.implement.TelegramPostReader;
 import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.TelegramFilterConfig;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,6 +37,7 @@ public class TelegramPostFilterService {
     private static final int RETENTION_DAYS = 14;
 
     private final TelegramPostReader telegramPostReader;
+    private final Clock clock;
 
     @Transactional
     public void applyFilters(Channel channel) {
@@ -57,8 +60,9 @@ public class TelegramPostFilterService {
         post.markSelected();
     }
 
+    @Nullable
     private String hardFilterRejectionReason(TelegramPost post, TelegramFilterConfig config) {
-        LocalDateTime retentionCutoff = LocalDateTime.now().minusDays(RETENTION_DAYS);
+        LocalDateTime retentionCutoff = LocalDateTime.now(clock).minusDays(RETENTION_DAYS);
         if (post.getPublishedAt().isBefore(retentionCutoff)) {
             return "TOO_OLD_FOR_RETENTION(publishedAt=%s)".formatted(post.getPublishedAt());
         }

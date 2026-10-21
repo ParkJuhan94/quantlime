@@ -3,6 +3,7 @@ package com.quantlime.backtest.service;
 import com.quantlime.backtest.implement.BacktestReader;
 import com.quantlime.market.service.DomesticUniverseSelectionService;
 import com.quantlime.market.service.OverseasUniverseSelectionService;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,12 +35,15 @@ public class BacktestUniverseService {
     private final OverseasUniverseSelectionService overseasUniverseSelectionService;
     private final BacktestService backtestService;
     private final BacktestReader backtestReader;
+    private final Clock clock;
 
     public void runUniverse() {
         runUniverse(false);
     }
 
     /**
+     * 유니버스 전 종목의 백테스트를 실행한다.
+     *
      * @param force true면 오늘 이미 백테스트가 돈 종목도 다시 실행한다 -
      *     가격이 소급 복구된 직후처럼 "오늘 이미 돌았어도 반드시 다시
      *     돌려야" 하는 경우를 위한 강제 실행(DailyPriceIntegrityService
@@ -80,7 +84,7 @@ public class BacktestUniverseService {
 
     private boolean isAlreadyBacktestedToday(String stockCode) {
         return backtestReader.findLatestResult(stockCode)
-            .map(result -> !result.getBacktestDate().isBefore(LocalDate.now()))
+            .map(result -> !result.getBacktestDate().isBefore(LocalDate.now(clock)))
             .orElse(false);
     }
 }

@@ -9,6 +9,7 @@ import com.quantlime.price.cache.PreviousCloseCache;
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.price.implement.DailyPriceReader;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -45,7 +46,7 @@ class PriceCacheConfigTest {
         given(dailyPriceReader.findDomesticLatestBefore(anyList(), any())).willReturn(
             List.of(DomesticDailyPrice.of(
                 STOCK_CODE, LocalDate.now().minusDays(1), 70000L, 70000L, 70000L, 70000L, 0L)));
-        PreviousCloseCache cache = priceCacheConfig.domesticPreviousCloseCache(dailyPriceReader);
+        PreviousCloseCache cache = priceCacheConfig.domesticPreviousCloseCache(dailyPriceReader, Clock.systemDefaultZone());
 
         // when
         Map<String, Double> result = cache.get(List.of(STOCK_CODE));
@@ -60,7 +61,7 @@ class PriceCacheConfigTest {
         // given
         given(dailyPriceReader.findOverseasLatestBefore(anyList(), any())).willReturn(
             List.of(OverseasDailyPrice.of("AAPL", LocalDate.now().minusDays(1), 185.70, 185.70, 185.70, 185.70, 1_000_000L)));
-        PreviousCloseCache cache = priceCacheConfig.overseasPreviousCloseCache(dailyPriceReader);
+        PreviousCloseCache cache = priceCacheConfig.overseasPreviousCloseCache(dailyPriceReader, Clock.systemDefaultZone());
 
         // when
         Map<String, Double> result = cache.get(List.of("AAPL"));

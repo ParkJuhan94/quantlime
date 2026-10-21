@@ -32,6 +32,7 @@ import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.StockMasterService;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -76,7 +77,7 @@ class BacktestServiceTest {
     @BeforeEach
     void setUpService() {
         backtestService = new BacktestService(stockMasterService, domesticDailyPriceService, backtestReader,
-            benchmarkIndexReader, dailyPriceReader, new BacktestEngineProcessor(pythonEngineClient), backtestAppender);
+            benchmarkIndexReader, dailyPriceReader, new BacktestEngineProcessor(pythonEngineClient, Clock.systemDefaultZone()), backtestAppender, Clock.systemDefaultZone());
     }
 
     @Test

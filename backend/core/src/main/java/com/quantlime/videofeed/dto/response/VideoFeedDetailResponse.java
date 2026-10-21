@@ -2,6 +2,7 @@ package com.quantlime.videofeed.dto.response;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import org.springframework.lang.Nullable;
 
 public record VideoFeedDetailResponse(
     Long videoId,
@@ -9,7 +10,7 @@ public record VideoFeedDetailResponse(
     String channelProfileImageUrl,
     String channelUrl,
     String title,
-    String videoUrl,
+    @Nullable String videoUrl,
     LocalDateTime publishedAt,
     Integer durationSec,
     String summary,

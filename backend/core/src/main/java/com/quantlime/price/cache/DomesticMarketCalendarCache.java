@@ -2,6 +2,7 @@ package com.quantlime.price.cache;
 
 import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.toss.dto.TossMarketCalendarResponse;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -44,6 +45,7 @@ public class DomesticMarketCalendarCache {
     private static final String SYNTHETIC_MODE = "synthetic";
 
     private final TossApiClient tossApiClient;
+    private final Clock clock;
 
     // 로컬 scale-out 검증 전용(SyntheticPriceFeedScheduler 참고,
     // 2026-09-25) - price-feed.mode=synthetic이면 Toss 장 운영 캘린더를
@@ -61,14 +63,14 @@ public class DomesticMarketCalendarCache {
         if (SYNTHETIC_MODE.equals(priceFeedMode)) {
             return true;
         }
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(clock);
         if (!cachedDate.equals(today)) {
             refresh(today);
         }
         if (tradingSessions.isEmpty()) {
             return false;
         }
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = OffsetDateTime.now(clock);
         return tradingSessions.stream().anyMatch(session -> isWithin(now, session));
     }
 
@@ -79,7 +81,7 @@ public class DomesticMarketCalendarCache {
      * 캐시를 재사용한다.
      */
     public boolean isTradingDayToday() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(clock);
         if (!cachedDate.equals(today)) {
             refresh(today);
         }

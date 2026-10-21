@@ -1,5 +1,7 @@
 package com.quantlime.price.util;
 
+import org.springframework.lang.Nullable;
+
 /**
  * "전일 종가 대비 등락률(%)" 계산을 국내 전종목 스윕(DomesticMarketPriceSweepScheduler)과
  * 해외 관심종목 랭킹/실시간가(MarketRankingService)가 각자 재구현하고
@@ -11,8 +13,9 @@ public final class ChangeRateCalculator {
     private ChangeRateCalculator() {
     }
 
-    public static Double calculate(Double currentPrice, Double previousClose) {
-        if (previousClose == null || previousClose == 0) {
+    @Nullable
+    public static Double calculate(@Nullable Double currentPrice, @Nullable Double previousClose) {
+        if (currentPrice == null || previousClose == null || previousClose == 0) {
             return null;
         }
         return (currentPrice - previousClose) * 100.0 / previousClose;

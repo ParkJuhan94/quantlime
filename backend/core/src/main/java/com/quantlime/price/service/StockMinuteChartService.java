@@ -21,6 +21,8 @@ public class StockMinuteChartService {
     private final MinuteChartCacheStore minuteChartCacheStore;
 
     /**
+     * 종목의 1분봉 차트를 조회한다.
+     *
      * @param before null이면 가장 최근부터. 값이 있으면 UTC {@code Z} 표기 시각 직전부터 과거 방향
      *               ({@code +09:00} 오프셋 금지 - {@link MinuteChartCollector#fetch} 참고)
      */

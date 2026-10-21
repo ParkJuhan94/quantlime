@@ -24,6 +24,7 @@ import com.quantlime.score.implement.ScoreReader;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.implement.StockReader;
 import com.quantlime.watchlist.implement.WatchlistReader;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -32,6 +33,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @Tag("unit")
@@ -52,6 +54,9 @@ class QuadrantChangeAlertServiceTest {
     private FcmPushService fcmPushService;
     @Mock
     private QuadrantAlertSentStore sentStore;
+
+    @Spy
+    private Clock clock = Clock.systemDefaultZone();
 
     @InjectMocks
     private QuadrantChangeAlertService service;

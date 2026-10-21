@@ -10,6 +10,7 @@ import java.util.Comparator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
@@ -27,6 +28,8 @@ public class MinuteChartCollector {
     private final TossApiClient tossApiClient;
 
     /**
+     * 토스에서 1분봉을 조회한다.
+     *
      * @param before null이면 가장 최근부터. 값이 있으면 UTC {@code Z} 표기 시각 직전부터 과거 방향
      *               (토스 쿼리스트링의 {@code +}가 공백으로 해석되는 문제 때문에 {@code +09:00} 오프셋 금지 -
      *               {@link TossApiClient#get1MinuteCandleBefore} 참고)
@@ -55,6 +58,7 @@ public class MinuteChartCollector {
 
     // 토스가 돌려주는 nextBefore는 +09:00 같은 오프셋을 가질 수 있어, 그대로 다음 요청의
     // before로 쓰면 +가 공백으로 해석돼 깨진다 - 항상 UTC Z 표기로 정규화해 내려준다.
+    @Nullable
     private String toUtcCursor(String nextBefore) {
         if (nextBefore == null || nextBefore.isBlank()) {
             return null;

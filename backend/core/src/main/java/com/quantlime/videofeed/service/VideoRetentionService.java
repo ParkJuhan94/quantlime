@@ -3,6 +3,7 @@ package com.quantlime.videofeed.service;
 import com.quantlime.common.lock.RedisLockService;
 import com.quantlime.videofeed.implement.VideoReader;
 import com.quantlime.videofeed.implement.VideoRemover;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -31,6 +32,7 @@ public class VideoRetentionService {
     private final RedisLockService redisLockService;
     private final VideoReader videoReader;
     private final VideoRemover videoRemover;
+    private final Clock clock;
 
     /**
      * 락을 잡은 채로 deleteVideosOlderThanRetention()을 실행한다.
@@ -48,7 +50,7 @@ public class VideoRetentionService {
     // 조용히 무시된다 - 실제 삭제 실행은 별도 빈(VideoRemover)에
     // 위임해 정상적으로 트랜잭션 프록시를 타게 한다(그 클래스 javadoc 참고).
     public int deleteVideosOlderThanRetention() {
-        LocalDateTime cutoff = LocalDate.now().minusDays(RETENTION_DAYS).atStartOfDay();
+        LocalDateTime cutoff = LocalDate.now(clock).minusDays(RETENTION_DAYS).atStartOfDay();
         List<Long> videoIds = videoReader.findExpiredIds(cutoff);
         if (videoIds.isEmpty()) {
             log.info("보존 기간({}일) 초과 영상 없음 - 삭제할 데이터 없음", RETENTION_DAYS);

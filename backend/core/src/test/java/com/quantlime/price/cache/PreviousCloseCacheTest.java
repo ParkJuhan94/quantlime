@@ -2,6 +2,7 @@ package com.quantlime.price.cache;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -67,7 +68,7 @@ class PreviousCloseCacheTest {
             callCount.incrementAndGet() == 1
                 ? Map.of(STOCK_CODE, 70000.0)
                 : Map.of(STOCK_CODE, 70000.0, newCode, 50000.0);
-        PreviousCloseCache cache = new PreviousCloseCache(fetcher);
+        PreviousCloseCache cache = new PreviousCloseCache(fetcher, Clock.systemDefaultZone());
 
         // when: 처음엔 기존 종목만, 두 번째엔 캐시에 없는 신규 종목이 섞임
         cache.get(List.of(STOCK_CODE));
@@ -106,7 +107,7 @@ class PreviousCloseCacheTest {
             callCount.incrementAndGet();
             return Map.of(STOCK_CODE, 70000.0);
         };
-        PreviousCloseCache cache = new PreviousCloseCache(fetcher);
+        PreviousCloseCache cache = new PreviousCloseCache(fetcher, Clock.systemDefaultZone());
 
         // when: 같은 (STOCK_CODE, missingCode) 조합으로 여러 번 조회(100ms 주기 스윕 재현)
         cache.get(List.of(STOCK_CODE, missingCode));
@@ -122,6 +123,6 @@ class PreviousCloseCacheTest {
             callCount.incrementAndGet();
             return fixedResult;
         };
-        return new PreviousCloseCache(fetcher);
+        return new PreviousCloseCache(fetcher, Clock.systemDefaultZone());
     }
 }

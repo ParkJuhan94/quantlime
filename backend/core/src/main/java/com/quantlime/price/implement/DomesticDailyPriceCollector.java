@@ -8,6 +8,7 @@ import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.dto.DailyCandleSaveResult;
 import com.quantlime.price.dto.mapper.TossPriceMapper;
 import com.quantlime.price.util.DailyPriceSettlementPolicy;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +40,7 @@ public class DomesticDailyPriceCollector {
     private final DailyPriceReader dailyPriceReader;
     private final DailyPriceAppender dailyPriceAppender;
     private final TossApiClient tossApiClient;
+    private final Clock clock;
 
     /**
      * lookbackDays를 고정값이 아니라 호출측이 지정할 수 있게 한 버전 -
@@ -188,7 +190,7 @@ public class DomesticDailyPriceCollector {
      */
     private DailyCandleSaveResult saveNewCandles(
             String stockCode, List<TossCandleResponse.TossCandle> candles, boolean overwriteAll) {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(clock);
         int saved = 0;
         boolean restatementDetected = false;
         for (TossCandleResponse.TossCandle candle : candles) {

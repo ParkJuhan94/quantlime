@@ -22,6 +22,7 @@ import java.time.LocalDateTime;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 
 /**
@@ -108,7 +109,7 @@ public class TelegramPost extends TimeBaseEntity {
     }
 
     public static TelegramPost of(Channel channel, String externalPostId, long messageId, String content,
-                                   LocalDateTime publishedAt, Long viewCount, LocalDateTime viewCountCheckedAt,
+                                   LocalDateTime publishedAt, @Nullable Long viewCount, @Nullable LocalDateTime viewCountCheckedAt,
                                    boolean hasMedia) {
         return TelegramPost.builder()
             .channel(channel)

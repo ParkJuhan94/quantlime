@@ -7,8 +7,10 @@ import com.quantlime.watchlist.service.WatchlistService;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
@@ -31,6 +33,7 @@ public class PopularStocksCache {
 
     private final WatchlistService watchlistService;
 
+    @Nullable
     private volatile List<StockDetailResponse> cached;
     private volatile Instant cachedAt = Instant.EPOCH;
 
@@ -38,11 +41,13 @@ public class PopularStocksCache {
         if (isStale()) {
             refresh();
         }
-        return cached.subList(0, Math.min(limit, cached.size()));
+        // refresh()가 값을 못 채우면 예외를 던지므로 여기서는 항상 채워져 있다
+        List<StockDetailResponse> snapshot = Objects.requireNonNull(cached);
+        return snapshot.subList(0, Math.min(limit, snapshot.size()));
     }
 
     private boolean isStale() {
-        return cached == null || Duration.between(cachedAt, Instant.now()).getSeconds() >= TTL_SECONDS;
+        return cached == null || Duration.between(cachedAt, Instant.now()).toSeconds() >= TTL_SECONDS;
     }
 
     private synchronized void refresh() {

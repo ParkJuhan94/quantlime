@@ -24,6 +24,7 @@ import com.quantlime.user.domain.User;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.HexFormat;
@@ -32,6 +33,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -81,6 +83,7 @@ public class PaymentService {
     private final RedisLockService redisLockService;
     private final PaymentWebhookDedupStore paymentWebhookDedupStore;
     private final ApplicationEventPublisher eventPublisher;
+    private final Clock clock;
 
     // 카드 등록(빌링키 발급) 위젯 성공 콜백에서 호출한다 - 빌링키 발급과
     // 즉시 첫 결제를 한 번에 처리한다. Toss API 호출 자체는 트랜잭션
@@ -208,7 +211,7 @@ public class PaymentService {
         handleRenewalFailure(subscription, errorMessage);
     }
 
-    private void handleRenewalFailure(Subscription subscription, String errorMessage) {
+    private void handleRenewalFailure(Subscription subscription, @Nullable String errorMessage) {
         Long userId = subscription.getUser().getId();
         Long subscriptionId = subscription.getId();
         subscription.recordRenewalFailure();
@@ -219,7 +222,7 @@ public class PaymentService {
                 userId, subscriptionId, errorMessage);
             paymentNotifier.notifyPastDue(userId);
         } else {
-            subscription.scheduleRenewalRetry(LocalDate.now().plusDays(1));
+            subscription.scheduleRenewalRetry(LocalDate.now(clock).plusDays(1));
             log.warn("구독 자동 갱신 결제 실패, 내일 재시도: "
                     + "userId={}, subscriptionId={}, 시도횟수={}, error={}",
                 userId, subscriptionId, subscription.getRenewalFailureCount(), errorMessage);

@@ -2,6 +2,7 @@ package com.quantlime.score.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import java.time.LocalDate;
+import org.springframework.lang.Nullable;
 
 public record ScoreResponse(
     String stockCode,
@@ -14,10 +15,10 @@ public record ScoreResponse(
     Double trendPercentile,
     Double meanReversionPercentile,
     Double compositePercentile,
-    String grade,
-    String quadrant,
-    Boolean divergenceFlag,
-    String divergenceMessage,
+    @Nullable String grade,
+    @Nullable String quadrant,
+    @Nullable Boolean divergenceFlag,
+    @Nullable String divergenceMessage,
     boolean insufficientData
 ) {
 }

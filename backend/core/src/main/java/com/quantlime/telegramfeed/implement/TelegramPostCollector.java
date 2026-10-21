@@ -9,6 +9,7 @@ import com.quantlime.telegramfeed.dto.CollectedTelegramPost;
 import com.quantlime.telegramfeed.dto.TelegramChannelMeta;
 import com.quantlime.telegramfeed.dto.TelegramCollectionOutcome;
 import com.quantlime.videofeed.domain.Channel;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -37,6 +38,7 @@ public class TelegramPostCollector {
     private final TelegramWebPreviewClient telegramWebPreviewClient;
     private final TelegramPostReader telegramPostReader;
     private final TelegramApiProperties telegramApiProperties;
+    private final Clock clock;
 
     public TelegramCollectionOutcome collect(Channel channel) {
         String handle = channel.getExternalChannelId();
@@ -69,7 +71,7 @@ public class TelegramPostCollector {
     private TelegramCollectionOutcome collectInitial(String handle) {
         List<CollectedTelegramPost> collected = new ArrayList<>();
         TelegramChannelMeta channelMeta = null;
-        LocalDateTime retentionCutoff = LocalDateTime.now().minusDays(RETENTION_DAYS);
+        LocalDateTime retentionCutoff = LocalDateTime.now(clock).minusDays(RETENTION_DAYS);
         Long beforeId = null;
         for (int page = 0; page < MAX_PAGES_FIRST_RUN; page++) {
             TelegramPreviewPage previewPage = telegramWebPreviewClient.fetchPage(handle, null, beforeId);

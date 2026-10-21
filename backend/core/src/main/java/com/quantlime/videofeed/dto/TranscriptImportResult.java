@@ -1,9 +1,11 @@
 package com.quantlime.videofeed.dto;
 
+import org.springframework.lang.Nullable;
+
 public record TranscriptImportResult(
     String externalVideoId,
     Outcome outcome,
-    String detail
+    @Nullable String detail
 ) {
 
     public enum Outcome {

@@ -26,6 +26,7 @@ import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.Platform;
 import com.quantlime.videofeed.domain.TelegramFilterConfig;
 import com.quantlime.videofeed.implement.ChannelReader;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -78,7 +79,7 @@ class TelegramDigestGenerationFacadeTest {
     void setUpService() {
         telegramDigestGenerationFacade = new TelegramDigestGenerationFacade(
             redisLockService, channelReader, telegramPostReader,
-            new TelegramDigestGenerator(pythonEngineClient), telegramDigestAppender, eventPublisher);
+            new TelegramDigestGenerator(pythonEngineClient), telegramDigestAppender, eventPublisher, Clock.systemDefaultZone());
     }
 
     private Channel channelOf(Long id, String handle) {

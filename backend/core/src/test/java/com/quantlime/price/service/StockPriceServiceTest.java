@@ -17,6 +17,7 @@ import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.stock.StockFixture;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.StockMasterService;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -52,7 +53,7 @@ class StockPriceServiceTest {
     @BeforeEach
     void setUp() {
         stockPriceService = new StockPriceService(
-            stockMasterService, domesticDailyPriceService, dailyPriceReader, priceCacheStore);
+            stockMasterService, domesticDailyPriceService, dailyPriceReader, priceCacheStore, Clock.systemDefaultZone());
     }
 
     @Test

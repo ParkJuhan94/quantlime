@@ -17,6 +17,7 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -55,6 +56,8 @@ public class StockMasterInitializer implements ApplicationRunner {
         }
     }
 
+    // split(",")이 끝의 빈 컬럼을 버려 fields.length < 4 검사가 불완전한 행을 걸러내는 동작에 의존한다
+    @SuppressWarnings("StringSplitter")
     private List<Stock> parseCsv(InputStream inputStream) {
         List<Stock> stocks = new ArrayList<>();
 
@@ -95,6 +98,7 @@ public class StockMasterInitializer implements ApplicationRunner {
         return stocks;
     }
 
+    @Nullable
     private MarketType parseMarketType(String marketLabel) {
         try {
             return MarketType.of(marketLabel);

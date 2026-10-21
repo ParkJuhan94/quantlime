@@ -17,6 +17,7 @@ import com.quantlime.market.domain.BenchmarkIndex;
 import com.quantlime.price.domain.DomesticDailyPrice;
 import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.stock.domain.MarketType;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +35,7 @@ import org.springframework.stereotype.Component;
 public class BacktestEngineProcessor {
 
     private final PythonEngineClient pythonEngineClient;
+    private final Clock clock;
 
     /** 종목 단건 백테스트의 엔진 결과 - 저장은 호출부가 한다. */
     public record StockBacktestOutput(
@@ -67,7 +69,7 @@ public class BacktestEngineProcessor {
             nullTest, nullRepeats);
         CrossSectionalBacktestApiResponse response = pythonEngineClient.runCrossSectionalBacktest(request);
         return CrossSectionalBacktestMapper.toResult(
-            market, axis, BacktestSampleSplit.FULL, LocalDate.now(), response);
+            market, axis, BacktestSampleSplit.FULL, LocalDate.now(clock), response);
     }
 
     private StockBacktestOutput toOutput(BacktestApiResponse response, LocalDate end) {

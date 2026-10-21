@@ -14,6 +14,7 @@ import com.quantlime.telegramfeed.implement.TelegramPostReader;
 import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.Platform;
 import com.quantlime.videofeed.implement.ChannelReader;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
@@ -58,6 +59,7 @@ public class TelegramDigestGenerationFacade {
     private final TelegramDigestGenerator telegramDigestGenerator;
     private final TelegramDigestAppender telegramDigestAppender;
     private final ApplicationEventPublisher eventPublisher;
+    private final Clock clock;
 
     public Optional<Integer> runAllExclusively() {
         return redisLockService.runExclusively(LOCK_KEY, LOCK_TTL, this::publishAll);
@@ -67,7 +69,7 @@ public class TelegramDigestGenerationFacade {
     // 반드시 runAllExclusively()를 통해서만 호출할 것.
     public int publishAll() {
         List<Channel> channels = channelReader.findActive(Platform.TELEGRAM);
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(clock);
         channels.forEach(channel ->
             eventPublisher.publishEvent(new TelegramDigestGenerationRequestedEvent(channel.getId(), today)));
         log.info("텔레그램 다이제스트 생성 이벤트 발행: {}건", channels.size());

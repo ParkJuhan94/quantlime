@@ -18,6 +18,7 @@ import java.time.LocalDate;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 
 /**
@@ -77,7 +78,7 @@ public class BacktestDailyScore extends TimeBaseEntity {
     @Builder
     private BacktestDailyScore(String stockCode, String scoreVersion, LocalDate tradeDate,
                                Double closePrice, Double trendScore, Double meanReversionScore,
-                               Quadrant quadrant, Grade grade) {
+                               @Nullable Quadrant quadrant, @Nullable Grade grade) {
         Assert.hasText(stockCode, "종목 코드는 필수입니다.");
         Assert.hasText(scoreVersion, "스코어 버전은 필수입니다.");
         Assert.notNull(tradeDate, "거래일은 필수입니다.");
@@ -94,7 +95,7 @@ public class BacktestDailyScore extends TimeBaseEntity {
 
     public static BacktestDailyScore of(String stockCode, String scoreVersion, LocalDate tradeDate,
                                         Double closePrice, Double trendScore, Double meanReversionScore,
-                                        Quadrant quadrant, Grade grade) {
+                                        @Nullable Quadrant quadrant, @Nullable Grade grade) {
         return BacktestDailyScore.builder()
             .stockCode(stockCode)
             .scoreVersion(scoreVersion)

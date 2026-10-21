@@ -25,6 +25,7 @@ import com.quantlime.stock.dto.mapper.StockMapper;
 import com.quantlime.stock.service.StockMasterService;
 import com.quantlime.watchlist.domain.Watchlist;
 import com.quantlime.watchlist.implement.WatchlistReader;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -39,6 +40,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -80,6 +82,7 @@ public class ScoreService {
     private final WatchlistReader watchlistReader;
     private final StockMasterService stockMasterService;
     private final ScoreRankingCacheStore scoreRankingCacheStore;
+    private final Clock clock;
     // getAllStocksScoreRanking의 캐시 미스 시 scope별 단일 비행(single-flight)
     // 락 - 2026-09 성능 감사 중 k6 없이 curl 동시 호출로 재현: 배치가 캐시
     // 3개 키를 한꺼번에 비우는 순간 동시 접속자 수만큼 DB 쿼리가 같이
@@ -232,7 +235,7 @@ public class ScoreService {
 
         return latestScores.stream()
             .map(score -> {
-                Stock stock = stockByCode.get(score.getStockCode());
+                Stock stock = Objects.requireNonNull(stockByCode.get(score.getStockCode()));
                 return ScoreMapper.toScoreRankingResponse(
                     score, stock.getDisplayName(), stock.getSector(), StockMapper.toLogoUrl(stock),
                     !stock.getMarketType().isDomestic(),
@@ -431,6 +434,7 @@ public class ScoreService {
      * 동일한 값 집합을 쓴다(2026-07-30 추가 - 이 필터가 없으면 국내/해외
      * 스코어 분포 차이 때문에 상위 N개가 한쪽 시장으로만 쏠렸음).
      */
+    @Nullable
     private List<MarketType> scopeToMarketTypes(String scope) {
         if ("domestic".equals(scope)) {
             return MarketType.domesticValues();
@@ -465,7 +469,7 @@ public class ScoreService {
      * 실패해 같은 배치에 포함된 다른 모든 종목의 스코어까지 갱신되지 못한다.
      */
     private Map<String, List<DomesticDailyPrice>> fetchDomesticOhlcvHistories(List<String> stockCodes) {
-        LocalDate end = LocalDate.now();
+        LocalDate end = LocalDate.now(clock);
         LocalDate start = end.minusDays(OHLCV_LOOKBACK_DAYS);
         return domesticDailyPriceService.getDailyPrices(stockCodes, start, end).stream()
             .collect(Collectors.groupingBy(DomesticDailyPrice::getStockCode));
@@ -485,7 +489,7 @@ public class ScoreService {
     }
 
     private Map<String, List<OverseasDailyPrice>> fetchOverseasOhlcvHistories(List<String> stockCodes) {
-        LocalDate end = LocalDate.now();
+        LocalDate end = LocalDate.now(clock);
         LocalDate start = end.minusDays(OHLCV_LOOKBACK_DAYS);
         return dailyPriceReader
             .findOverseasByCodesBetweenDesc(stockCodes, start, end)

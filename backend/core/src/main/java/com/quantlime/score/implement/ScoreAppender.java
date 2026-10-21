@@ -10,6 +10,7 @@ import com.quantlime.score.dto.mapper.ScoreMapper;
 import com.quantlime.score.repository.ScoreRepository;
 import com.quantlime.stock.domain.MarketType;
 import jakarta.persistence.EntityManager;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
@@ -33,6 +34,7 @@ public class ScoreAppender {
 
     private final ScoreRepository scoreRepository;
     private final EntityManager entityManager;
+    private final Clock clock;
 
     /**
      * 종목 하나의 저장 실패(등급 코드 불일치, 동시 재계산과의 유니크 제약
@@ -77,7 +79,7 @@ public class ScoreAppender {
         if (dailyScores.isEmpty()) {
             return;
         }
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(clock);
         LocalDate latestDate = dailyScores.stream()
             .map(row -> LocalDate.parse(row.date()))
             .max(Comparator.naturalOrder())

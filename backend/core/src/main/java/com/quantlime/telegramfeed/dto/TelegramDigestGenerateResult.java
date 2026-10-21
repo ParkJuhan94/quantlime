@@ -1,10 +1,12 @@
 package com.quantlime.telegramfeed.dto;
 
+import org.springframework.lang.Nullable;
+
 public record TelegramDigestGenerateResult(
     String channelName,
     int sourcePostCount,
     boolean success,
-    String reason
+    @Nullable String reason
 ) {
 
     public static TelegramDigestGenerateResult success(String channelName, int sourcePostCount) {

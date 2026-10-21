@@ -17,6 +17,7 @@ import com.quantlime.price.implement.DailyPriceAppender;
 import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.price.implement.RegularCloseCollector;
 import com.quantlime.stock.StockFixture;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
@@ -54,7 +55,7 @@ class RegularCloseBackfillServiceTest {
     void setUp() {
         regularCloseBackfillService = new RegularCloseBackfillService(
             dailyPriceReader, domesticListedStockCache,
-            new RegularCloseCollector(dailyPriceAppender, tossApiClient));
+            new RegularCloseCollector(dailyPriceAppender, tossApiClient), Clock.systemDefaultZone());
     }
 
     @Test

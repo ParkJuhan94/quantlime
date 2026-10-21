@@ -3,6 +3,7 @@ package com.quantlime.payment.domain;
 import static jakarta.persistence.ConstraintMode.NO_CONSTRAINT;
 import static lombok.AccessLevel.PROTECTED;
 
+import com.quantlime.common.config.ClockConfig;
 import com.quantlime.common.domain.TimeBaseEntity;
 import com.quantlime.subscription.domain.Subscription;
 import com.quantlime.user.domain.User;
@@ -23,6 +24,7 @@ import java.time.LocalDateTime;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 
 // 청구 시도 이력. 최초 가입 결제가 실패한 경우(카드 등록은 됐지만 첫
@@ -104,12 +106,12 @@ public class Payment extends TimeBaseEntity {
             .status(PaymentStatus.DONE)
             .tossPaymentKey(tossPaymentKey)
             .renewal(renewal)
-            .approvedAt(LocalDateTime.now())
+            .approvedAt(LocalDateTime.now(ClockConfig.KST))
             .build();
     }
 
     public static Payment failure(User user, Subscription subscription, String orderId, int amount,
-                                   int installmentMonths, boolean renewal, String failReason) {
+                                   int installmentMonths, boolean renewal, @Nullable String failReason) {
         return Payment.builder()
             .user(user)
             .subscription(subscription)

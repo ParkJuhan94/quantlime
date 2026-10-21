@@ -1,10 +1,12 @@
 package com.quantlime.infra.oauth.dto;
 
+import org.springframework.lang.Nullable;
+
 public record OAuthProfile(
     String provider,
     String providerId,
-    String email,
+    @Nullable String email,
     String nickname,
-    String profileImageUrl
+    @Nullable String profileImageUrl
 ) {
 }

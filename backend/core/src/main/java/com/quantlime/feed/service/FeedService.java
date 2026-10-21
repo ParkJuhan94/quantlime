@@ -21,7 +21,6 @@ import com.quantlime.feed.implement.FeedPostLikeAppender;
 import com.quantlime.feed.implement.FeedPostLikeReader;
 import com.quantlime.feed.implement.FeedPostReader;
 import com.quantlime.feed.implement.FeedReportAppender;
-import com.quantlime.feed.implement.FeedReportReader;
 import com.quantlime.user.domain.User;
 import com.quantlime.user.exception.UserErrorCode;
 import com.quantlime.user.implement.UserReader;
@@ -46,7 +45,6 @@ public class FeedService {
     private final FeedPostLikeAppender feedPostLikeAppender;
     private final FeedCommentReader feedCommentReader;
     private final FeedCommentAppender feedCommentAppender;
-    private final FeedReportReader feedReportReader;
     private final FeedReportAppender feedReportAppender;
     private final UserReader userReader;
 

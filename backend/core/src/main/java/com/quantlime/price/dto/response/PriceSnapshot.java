@@ -1,5 +1,7 @@
 package com.quantlime.price.dto.response;
 
+import org.springframework.lang.Nullable;
+
 /**
  * 종목 현재가 스냅샷. {@code DomesticMarketPriceSweepScheduler}가 전종목 시세를
  * 이 타입으로 만들어 Redis 캐시(price:current:{stockCode})에 저장하는 게
@@ -22,7 +24,7 @@ package com.quantlime.price.dto.response;
 public record PriceSnapshot(
     String stockCode,
     Double currentPrice,
-    Double changeRate,
+    @Nullable Double changeRate,
     String timestamp
 ) {
 }

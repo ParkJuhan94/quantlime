@@ -7,6 +7,7 @@ import com.quantlime.price.domain.OverseasDailyPrice;
 import com.quantlime.price.dto.DailyCandleSaveResult;
 import com.quantlime.price.dto.mapper.TossPriceMapper;
 import com.quantlime.price.util.DailyPriceSettlementPolicy;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +38,7 @@ public class OverseasDailyPriceCollector {
     private final DailyPriceReader dailyPriceReader;
     private final DailyPriceAppender dailyPriceAppender;
     private final TossApiClient tossApiClient;
+    private final Clock clock;
 
     /**
      * lookbackDays는 호출측({@code PriceGapFillService})이 "마지막 저장일부터
@@ -145,7 +147,7 @@ public class OverseasDailyPriceCollector {
      */
     private DailyCandleSaveResult saveNewCandles(
             String stockCode, List<TossCandleResponse.TossCandle> candles, boolean overwriteAll) {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(clock);
         int saved = 0;
         boolean restatementDetected = false;
         for (TossCandleResponse.TossCandle candle : candles) {

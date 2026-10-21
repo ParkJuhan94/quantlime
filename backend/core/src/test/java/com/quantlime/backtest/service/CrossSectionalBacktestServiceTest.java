@@ -23,6 +23,7 @@ import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.StockMasterService;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,7 +61,7 @@ class CrossSectionalBacktestServiceTest {
     @BeforeEach
     void setUpService() {
         crossSectionalBacktestService = new CrossSectionalBacktestService(stockMasterService, backtestReader,
-            benchmarkIndexReader, new BacktestEngineProcessor(pythonEngineClient), backtestAppender);
+            benchmarkIndexReader, new BacktestEngineProcessor(pythonEngineClient, Clock.systemDefaultZone()), backtestAppender, Clock.systemDefaultZone());
     }
 
     @Test

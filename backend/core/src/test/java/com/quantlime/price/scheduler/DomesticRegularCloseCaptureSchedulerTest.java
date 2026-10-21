@@ -16,6 +16,7 @@ import com.quantlime.price.implement.DailyPriceAppender;
 import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.stock.StockFixture;
 import com.quantlime.stock.domain.Stock;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -27,6 +28,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @Tag("unit")
@@ -47,6 +49,9 @@ class DomesticRegularCloseCaptureSchedulerTest {
 
     @Mock
     private DailyPriceAppender dailyPriceAppender;
+
+    @Spy
+    private Clock clock = Clock.systemDefaultZone();
 
     @InjectMocks
     private DomesticRegularCloseCaptureScheduler scheduler;

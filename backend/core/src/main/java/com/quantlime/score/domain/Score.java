@@ -18,6 +18,7 @@ import java.time.LocalDate;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 
 @Entity
@@ -153,8 +154,8 @@ public class Score extends TimeBaseEntity {
     }
 
     public static Score of(String stockCode, LocalDate scoreDate, Double trendScore,
-                           Double meanReversionScore, Double compositeScore, Grade grade,
-                           Quadrant quadrant, Divergence divergence,
+                           Double meanReversionScore, Double compositeScore, @Nullable Grade grade,
+                           @Nullable Quadrant quadrant, @Nullable Divergence divergence,
                            boolean insufficientData) {
         return Score.builder()
             .stockCode(stockCode)
@@ -183,8 +184,8 @@ public class Score extends TimeBaseEntity {
      * 전용)이 별도로 관리한다.
      */
     public void updateFrom(Double trendScore, Double meanReversionScore,
-                           Double compositeScore, Grade grade, Quadrant quadrant,
-                           Divergence divergence, boolean insufficientData) {
+                           Double compositeScore, @Nullable Grade grade, @Nullable Quadrant quadrant,
+                           @Nullable Divergence divergence, boolean insufficientData) {
         this.trendScore = trendScore;
         this.meanReversionScore = meanReversionScore;
         this.compositeScore = compositeScore;

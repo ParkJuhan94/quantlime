@@ -8,6 +8,7 @@ import com.quantlime.infra.youtube.exception.YoutubeApiErrorCode;
 import io.github.resilience4j.retry.annotation.Retry;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
@@ -27,7 +28,7 @@ public class YoutubeApiClient {
     private final YoutubeApiProperties properties;
 
     @Retry(name = "youtube")
-    public YoutubePlaylistItemsResponse getPlaylistItems(String playlistId, String pageToken) {
+    public YoutubePlaylistItemsResponse getPlaylistItems(String playlistId, @Nullable String pageToken) {
         return ExternalApiInvoker.call(
             YoutubeApiErrorCode.PLAYLIST_ITEMS_INQUIRY_FAILED,
             () -> youtubeRestClient.get()
@@ -50,6 +51,8 @@ public class YoutubeApiClient {
     }
 
     /**
+     * 영상 ID 목록의 상세 정보(videos.list)를 조회한다.
+     *
      * @param videoIds 최대 50개(그 이상은 호출측에서 분할해야 함)
      */
     @Retry(name = "youtube")

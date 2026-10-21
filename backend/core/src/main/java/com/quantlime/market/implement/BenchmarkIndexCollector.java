@@ -119,7 +119,7 @@ public class BenchmarkIndexCollector {
      * 백필 루프 전체를 하나의 트랜잭션으로 묶지 않는다(DomesticDailyPriceService.
      * backfillHistoryIfNeeded와 동일한 이유 - 외부 API 왕복·딜레이가 여러
      * 번 있어 저장은 건별로 커밋된다). 같은 클래스 내 self-invocation이라
-     * @Transactional을 붙여도 프록시를 안 타 무의미하므로 애초에 두지 않는다.
+     * {@code @Transactional}을 붙여도 프록시를 안 타 무의미하므로 애초에 두지 않는다.
      */
     private int saveNewCandles(String indexCode, List<NaverIndexCandleResponse> candles) {
         int saved = 0;

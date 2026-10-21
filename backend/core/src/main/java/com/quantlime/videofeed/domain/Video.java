@@ -21,6 +21,7 @@ import java.time.LocalDateTime;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 
 @Entity
@@ -74,7 +75,7 @@ public class Video extends TimeBaseEntity {
 
     @Builder
     private Video(Channel channel, String externalVideoId, String title, LocalDateTime publishedAt,
-                  Integer durationSec, Long viewCount, LocalDateTime viewCountCheckedAt) {
+                  @Nullable Integer durationSec, @Nullable Long viewCount, @Nullable LocalDateTime viewCountCheckedAt) {
         validateVideo(channel, externalVideoId, title, publishedAt);
         this.channel = channel;
         this.externalVideoId = externalVideoId;
@@ -88,8 +89,8 @@ public class Video extends TimeBaseEntity {
     }
 
     public static Video of(Channel channel, String externalVideoId, String title,
-                            LocalDateTime publishedAt, Integer durationSec, Long viewCount,
-                            LocalDateTime viewCountCheckedAt) {
+                            LocalDateTime publishedAt, @Nullable Integer durationSec, @Nullable Long viewCount,
+                            @Nullable LocalDateTime viewCountCheckedAt) {
         return Video.builder()
             .channel(channel)
             .externalVideoId(externalVideoId)
@@ -126,7 +127,7 @@ public class Video extends TimeBaseEntity {
         this.status = VideoStatus.SUMMARIZED;
     }
 
-    public void markFailed(String failReason) {
+    public void markFailed(@Nullable String failReason) {
         this.status = VideoStatus.FAILED;
         this.failReason = failReason;
         this.retryCount++;

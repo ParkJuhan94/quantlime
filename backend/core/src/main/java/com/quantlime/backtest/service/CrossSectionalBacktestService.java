@@ -13,6 +13,7 @@ import com.quantlime.market.implement.BenchmarkIndexReader;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.StockMasterService;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -52,6 +53,7 @@ public class CrossSectionalBacktestService {
     private final BenchmarkIndexReader benchmarkIndexReader;
     private final BacktestEngineProcessor backtestEngineProcessor;
     private final BacktestAppender backtestAppender;
+    private final Clock clock;
 
     /**
      * 시장 하나에 대해 (축 2 x horizon 4=)8개 조합을 순차 호출한다. 조합
@@ -84,7 +86,7 @@ public class CrossSectionalBacktestService {
             return;
         }
 
-        LocalDate end = LocalDate.now();
+        LocalDate end = LocalDate.now(clock);
         LocalDate start = end.minusDays(LOOKBACK_CALENDAR_DAYS);
         List<BenchmarkIndex> benchmarkPrices = benchmarkIndexReader
             .findBetween(benchmarkIndexCode, start, end);

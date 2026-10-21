@@ -3,6 +3,7 @@ package com.quantlime.common.config;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.lang.Nullable;
 
 /**
  * 외부 RestClient 빈들이 공유하는 connect/read 타임아웃 팩토리.
@@ -25,6 +26,8 @@ public final class HttpClientFactorySupport {
     }
 
     /**
+     * 타임아웃과 HTTP 버전을 지정한 요청 팩토리를 만든다.
+     *
      * @param version JDK HttpClient는 평문(http://) 연결에서도 기본적으로 HTTP/2
      *                cleartext(h2c) 업그레이드를 시도한다. uvicorn(h11) 같은 h2c
      *                미지원 서버와 통신할 때는 {@link HttpClient.Version#HTTP_1_1}로
@@ -33,7 +36,7 @@ public final class HttpClientFactorySupport {
      *                필요 없으면 {@code null}.
      */
     public static JdkClientHttpRequestFactory create(
-        Duration connectTimeout, Duration readTimeout, HttpClient.Version version) {
+        Duration connectTimeout, Duration readTimeout, @Nullable HttpClient.Version version) {
         HttpClient.Builder builder = HttpClient.newBuilder().connectTimeout(connectTimeout);
         if (version != null) {
             builder.version(version);

@@ -15,6 +15,7 @@ import com.quantlime.videofeed.domain.Platform;
 import com.quantlime.videofeed.domain.TelegramFilterConfig;
 import com.quantlime.videofeed.implement.ChannelAppender;
 import com.quantlime.videofeed.implement.ChannelReader;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -47,6 +49,9 @@ class TelegramCollectionFacadeTest {
 
     @Mock
     private TelegramPostFilterService telegramPostFilterService;
+
+    @Spy
+    private Clock clock = Clock.systemDefaultZone();
 
     @InjectMocks
     private TelegramCollectionFacade telegramCollectionFacade;

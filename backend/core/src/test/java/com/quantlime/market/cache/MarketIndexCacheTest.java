@@ -29,6 +29,7 @@ import com.quantlime.market.implement.BenchmarkIndexReader;
 import com.quantlime.price.cache.DomesticMarketCalendarCache;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -70,6 +71,9 @@ class MarketIndexCacheTest {
     // 실제 SimpleMeterRegistry를 감싼다.
     @Spy
     private MeterRegistry meterRegistry = new SimpleMeterRegistry();
+
+    @Spy
+    private Clock clock = Clock.systemDefaultZone();
 
     @InjectMocks
     private MarketIndexCache marketIndexCache;
