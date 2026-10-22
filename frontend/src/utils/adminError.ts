@@ -19,6 +19,10 @@ export function describeAdminError(error: unknown): string {
   if (data && typeof data === 'object' && typeof data.message === 'string' && data.message) {
     return data.message
   }
+  // 배치 시작·재시작 거부(409)와 입력 오류(400)는 본문이 JSON이 아니라 안내 문자열 그대로 온다
+  if ((status === 400 || status === 409) && typeof data === 'string' && data) {
+    return data
+  }
   if (status === 403) return '관리자 권한이 필요해요.'
   if (status === 401) return '로그인이 만료됐어요. 다시 로그인해 주세요.'
   return '요청에 실패했어요. 잠시 후 다시 시도해 주세요.'

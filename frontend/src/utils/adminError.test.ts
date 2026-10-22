@@ -19,6 +19,17 @@ describe('describeAdminError', () => {
     )
   })
 
+  it('400·409에서 본문이 안내 문자열이면 그대로 보여준다(배치 시작 거부 등)', () => {
+    expect(describeAdminError({ response: { status: 409, data: '이미 실행 중인 배치가 있습니다: running=a' } })).toBe(
+      '이미 실행 중인 배치가 있습니다: running=a',
+    )
+    expect(describeAdminError({ response: { status: 400, data: '지원하지 않는 시장입니다: TOKYO' } })).toBe(
+      '지원하지 않는 시장입니다: TOKYO',
+    )
+    // 다른 상태 코드의 문자열 본문(예: nginx 오류 페이지)은 노출하지 않는다
+    expect(describeAdminError({ response: { status: 500, data: '<html>error</html>' } })).toContain('요청에 실패했어요')
+  })
+
   it('권한·인증 오류와 알 수 없는 오류를 구분한다', () => {
     expect(describeAdminError({ response: { status: 403 } })).toContain('관리자 권한')
     expect(describeAdminError({ response: { status: 401 } })).toContain('다시 로그인')
