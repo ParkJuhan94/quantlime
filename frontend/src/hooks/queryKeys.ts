@@ -16,6 +16,10 @@ export const queryKeys = {
   backtest: (stockCode: string) => ['backtest', stockCode] as const,
   stockFundamentals: (stockCode: string) => ['stocks', 'fundamentals', stockCode] as const,
   popularStocks: (limit: number) => ['stocks', 'popular', limit] as const,
+  // 관리자 배치 실행 이력 - 목록 접두 키로 limit과 무관하게 한 번에 무효화한다(이어서 실행 직후)
+  adminBatchExecutionsAll: ['admin', 'batch-executions'] as const,
+  adminBatchExecutions: (limit: number) => ['admin', 'batch-executions', limit] as const,
+  adminBatchExecution: (executionId: number) => ['admin', 'batch-execution', executionId] as const,
   // watchlistOnly/limit 조합별로 쿼리키가 갈라지는데(useDashboardScores),
   // 관심종목 등록/해제 후에는 조합과 무관하게 전부 무효화해야 해 접두
   // 키를 따로 둔다(React Query는 배열 접두사로 부분 일치 무효화 가능).

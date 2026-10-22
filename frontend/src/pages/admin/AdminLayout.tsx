@@ -16,6 +16,7 @@ const ADMIN_MENU_GROUPS = [
       { to: '/admin/video-feed', label: '영상 수집' },
       { to: '/admin/telegram-feed', label: '텔레그램 수집' },
       { to: '/admin/backtest', label: '백테스트' },
+      { to: '/admin/batch', label: '배치 실행' },
       { to: '/admin/data-ops', label: '데이터 복구' },
     ],
   },
