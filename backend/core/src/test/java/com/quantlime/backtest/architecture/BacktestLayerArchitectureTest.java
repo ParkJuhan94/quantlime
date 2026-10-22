@@ -17,7 +17,9 @@ import org.junit.jupiter.api.Test;
  * ({@code PriceLayerArchitectureTest}와 같은 패턴, 구현 레이어 분리 직후).
  *
  * <p>{@code scheduler}도 Repository 직접 참조를 막는다 - {@code BacktestWeeklyScheduler}의
- * 최신 scoreVersion 조회를 {@code BacktestReader}로 옮긴 뒤.
+ * 최신 scoreVersion 조회를 {@code BacktestReader}로 옮긴 뒤. 2026-10-22부로 그 스케줄러는 Spring Batch Job을 시작만
+ * 하도록 batch 모듈로 옮겨 core의 해당 패키지들에는 지금 클래스가 없다 - 규칙은 앞으로 생길 클래스를 위한 방어선이라
+ * 빈 매칭을 허용한다.
  *
  * <p>외부 연동 클라이언트(Python 퀀트 엔진) 참조도 막는다 - 패턴 {@code com.quantlime.infra.*}는 한
  * 단계 하위 패키지에 직접 속한 클래스(클라이언트·Config·Properties)만 매칭하고 응답
@@ -75,7 +77,8 @@ class BacktestLayerArchitectureTest {
         ArchRule rule = noClasses()
             .that().resideInAnyPackage(
                 "com.quantlime.backtest.cache..", "com.quantlime.backtest.scheduler..", "com.quantlime.backtest.config..")
-            .should().dependOnClassesThat().resideInAPackage("..repository..");
+            .should().dependOnClassesThat().resideInAPackage("..repository..")
+            .allowEmptyShould(true);
 
         rule.check(backtestClasses);
     }

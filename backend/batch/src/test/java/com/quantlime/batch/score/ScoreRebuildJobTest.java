@@ -2,7 +2,6 @@ package com.quantlime.batch.score;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.BDDMockito.given;
@@ -11,21 +10,14 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import com.quantlime.batch.BatchIntegrationTestSupport;
 import com.quantlime.batch.common.BatchExecutionView;
-import com.quantlime.batch.common.BatchJobLaunchService;
 import com.quantlime.batch.common.BatchLaunchRejectedException;
-import com.quantlime.score.implement.ScoreAppender;
-import com.quantlime.score.service.ScoreService;
 import com.quantlime.stock.domain.ListingStatus;
 import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
-import com.quantlime.stock.service.StockMasterService;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.time.Clock;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,67 +26,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.ComponentScan;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
- * 실제 MySQL(Testcontainers)에 Batch 메타 테이블을 만들어 Job의 삭제 1회 보장, 청크 분할, restart 이어하기, skip 격리,
- * 중복 실행 거부를 검증한다. ScoreService/ScoreAppender는 mock이라 quant-engine과 스코어 테이블은 쓰지 않는다.
+ * 삭제 1회 보장, 청크 분할, restart 이어하기, skip 격리, 중복 실행 거부를 검증한다. ScoreService/ScoreAppender는 mock이라
+ * quant-engine과 스코어 테이블은 쓰지 않는다.
  */
-@Testcontainers
-@SpringBootTest(classes = ScoreRebuildJobTest.TestApp.class)
-class ScoreRebuildJobTest {
+class ScoreRebuildJobTest extends BatchIntegrationTestSupport {
 
     private static final LocalDate FROM = LocalDate.of(2026, 10, 1);
-
-    @Container
-    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.36")
-        .withDatabaseName("quantlime_batch_test").withUsername("test").withPassword("test");
-
-    @DynamicPropertySource
-    static void properties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.batch.jdbc.initialize-schema", () -> "always");
-        registry.add("spring.batch.job.enabled", () -> "false");
-    }
-
-    @Configuration
-    @EnableAutoConfiguration
-    @ComponentScan("com.quantlime.batch")
-    static class TestApp {
-
-        @Bean
-        Clock clock() {
-            return Clock.systemDefaultZone();
-        }
-
-        @Bean
-        MeterRegistry meterRegistry() {
-            return new SimpleMeterRegistry();
-        }
-    }
-
-    @MockBean
-    private StockMasterService stockMasterService;
-    @MockBean
-    private ScoreService scoreService;
-    @MockBean
-    private ScoreAppender scoreAppender;
-
-    @Autowired
-    private BatchJobLaunchService launchService;
 
     @Test
     @DisplayName("[정상 실행: 삭제 1회, 국내 150종목은 2청크, 해외 3종목은 1청크로 재계산하고 COMPLETED]")
@@ -199,15 +138,5 @@ class ScoreRebuildJobTest {
         IntStream.range(0, overseasCount).forEach(i -> stocks.add(
             Stock.of("O%05d".formatted(i), "해외" + i, MarketType.NASDAQ, ListingStatus.LISTED, null)));
         given(stockMasterService.getAllListedStocks()).willReturn(stocks);
-    }
-
-    private BatchExecutionView runToEnd(long executionId) {
-        await().atMost(Duration.ofSeconds(60)).pollInterval(Duration.ofMillis(100)).untilAsserted(() -> {
-            // 상태만 보면 종료 시각이 저장되기 전에 다음 실행을 시작해 "이미 실행 중"으로 오인될 수 있다
-            BatchExecutionView view = launchService.getExecution(executionId);
-            assertThat(view.endTime()).isNotNull();
-            assertThat(view.status()).isIn("COMPLETED", "FAILED", "STOPPED");
-        });
-        return launchService.getExecution(executionId);
     }
 }

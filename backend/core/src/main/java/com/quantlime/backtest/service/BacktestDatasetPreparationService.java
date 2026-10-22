@@ -1,5 +1,6 @@
 package com.quantlime.backtest.service;
 
+import com.quantlime.backtest.dto.response.UniverseSelection;
 import com.quantlime.market.service.BenchmarkIndexBackfillService;
 import com.quantlime.market.service.DomesticUniverseSelectionService;
 import com.quantlime.market.service.OverseasUniverseSelectionService;
@@ -26,12 +27,13 @@ public class BacktestDatasetPreparationService {
     private final OverseasUniverseSelectionService overseasUniverseSelectionService;
     private final BenchmarkIndexBackfillService benchmarkIndexBackfillService;
 
-    public void prepareDataset() {
+    public UniverseSelection prepareDataset() {
         List<String> domesticUniverse = domesticUniverseSelectionService.selectAndBackfillUniverse();
         List<String> overseasUniverse = overseasUniverseSelectionService.selectAndBackfillUniverse();
         benchmarkIndexBackfillService.backfillAllIfNeeded();
 
         log.info("백테스트 데이터셋 준비 완료: 국내 유니버스={}종목, 해외 유니버스={}종목",
             domesticUniverse.size(), overseasUniverse.size());
+        return new UniverseSelection(domesticUniverse, overseasUniverse);
     }
 }

@@ -82,7 +82,8 @@ public class BacktestUniverseService {
             universe.size(), ranCount, skippedFreshCount, failedCount);
     }
 
-    private boolean isAlreadyBacktestedToday(String stockCode) {
+    /** 오늘 이미 백테스트가 돈 종목인지 - Spring Batch 유니버스 Step이 같은 스킵 규칙을 쓰도록 공개한다. */
+    public boolean isAlreadyBacktestedToday(String stockCode) {
         return backtestReader.findLatestResult(stockCode)
             .map(result -> !result.getBacktestDate().isBefore(LocalDate.now(clock)))
             .orElse(false);

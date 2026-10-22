@@ -425,6 +425,13 @@ python-engine:
   # 발생 시점을 관찰해 이 값을 확정 지을 것(후속 과제).
   summarize-daily-budget: ${GEMINI_SUMMARIZE_DAILY_BUDGET:18}
 
+
+# 백테스트 Spring Batch Job(batch 모듈) 설정. parallelism은 유니버스/횡단면 Step의 동시 실행 수이고 기본 1(순차)이다.
+# 실제 연산은 Python quant-engine이 하므로 올려도 엔진 워커(uvicorn WEB_CONCURRENCY)와 컨테이너 메모리가 따라 주지 않으면
+# 빨라지지 않는다. 운영(t3.medium, vCPU 2·4GB)에서는 실측 없이 올리지 말 것(docs/CHANGELOG.md 2026-10-22 "백테스트 Spring Batch").
+backtest-batch:
+  parallelism: ${BACKTEST_BATCH_PARALLELISM:1}
+
 realtime-price:
   poll-interval-ms: ${REALTIME_PRICE_POLL_INTERVAL_MS:3000}
 

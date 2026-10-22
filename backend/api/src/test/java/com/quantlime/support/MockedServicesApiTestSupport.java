@@ -5,6 +5,7 @@ import com.quantlime.backtest.service.BacktestDatasetPreparationService;
 import com.quantlime.backtest.service.BacktestService;
 import com.quantlime.backtest.service.BacktestUniverseService;
 import com.quantlime.backtest.service.CrossSectionalBacktestService;
+import com.quantlime.batch.backtest.BacktestBatchLauncher;
 import com.quantlime.infra.slack.SlackWebhookClient;
 import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.tosspayments.TossPaymentsApiClient;
@@ -41,6 +42,9 @@ public abstract class MockedServicesApiTestSupport extends ApiTestSupport {
 
     @MockBean
     protected CrossSectionalBacktestService crossSectionalBacktestService;
+
+    @MockBean
+    protected BacktestBatchLauncher backtestBatchLauncher;
 
     @MockBean
     protected StockFundamentalsService stockFundamentalsService;

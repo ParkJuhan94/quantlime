@@ -1,15 +1,16 @@
 package com.quantlime.backtest.controller;
 
-import com.quantlime.backtest.service.BacktestDatasetPreparationService;
 import com.quantlime.backtest.service.BacktestService;
-import com.quantlime.backtest.service.BacktestUniverseService;
-import com.quantlime.backtest.service.CrossSectionalBacktestService;
-import com.quantlime.stock.domain.MarketType;
+import com.quantlime.batch.backtest.BacktestBatchLauncher;
+import com.quantlime.batch.common.BatchLaunchRejectedException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.List;
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,10 +23,11 @@ import org.springframework.web.bind.annotation.RestController;
  * 백엔드에는 애초에 존재하지 않았다 - 이관 이후 backtest_result/
  * backtest_daily_score가 0건으로 비어있는 걸 발견해(2026-09-10), prod에서도
  * 수동 트리거 가능하도록 같은 서비스 빈들을 재사용해 별도 컨트롤러로
- * 노출한다(FeedCollectionAdminController와 동일 패턴). 정규 자동 트리거는
- * 여전히 없다 - run-universe/cross-sectional 둘 다 무거운 연산(각각 수십 분
- * 이상 걸릴 수 있음)이라 스케줄러에 얹지 않고 수동 실행으로 남겨둔
- * DevController 시절의 판단을 그대로 따른다.
+ * 노출한다(FeedCollectionAdminController와 동일 패턴). 2026-10-22부로
+ * prepare-dataset/run-universe/cross-sectional은 요청을 붙잡지 않고 Spring Batch
+ * Job(batch 모듈)을 시작해 executionId를 202로 돌려준다 - 주간 스케줄러
+ * (BacktestWeeklyScheduler)와 같은 Job이다. 상태 조회와 restart는
+ * DataOpsAdminController의 /api/admin/data/batch/executions/** 를 쓴다.
  */
 @Tag(name = "백테스트 관리자 API")
 @Slf4j
@@ -34,21 +36,18 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/admin/backtest")
 public class BacktestAdminController {
 
-    private final BacktestDatasetPreparationService backtestDatasetPreparationService;
     private final BacktestService backtestService;
-    private final BacktestUniverseService backtestUniverseService;
-    private final CrossSectionalBacktestService crossSectionalBacktestService;
+    private final BacktestBatchLauncher backtestBatchLauncher;
 
     @PostMapping("/prepare-dataset")
-    @Operation(summary = "[트리거2] 백테스트용 데이터 일괄 준비",
+    @Operation(summary = "[트리거2] 백테스트용 데이터 일괄 준비(비동기 배치)",
         description = "국내/해외 유니버스(거래대금 상위 500) 선정+백필과 벤치마크 지수"
-            + "(KOSPI/KOSDAQ/NASDAQ/SP500) 백필을 한 번에 실행한다.")
+            + "(KOSPI/KOSDAQ/NASDAQ/SP500) 백필을 Spring Batch Job으로 시작하고 executionId를 202로 바로 돌려준다. "
+            + "진행 상황은 GET /api/admin/data/batch/executions/{id}. 다른 백테스트 Job이 실행 중이면 409.")
     @ApiResponse(useReturnTypeSchema = true)
     public ResponseEntity<String> prepareDataset() {
-        log.info("[admin] 백테스트 데이터셋 준비 수동 트리거 시작");
-        backtestDatasetPreparationService.prepareDataset();
-        log.info("[admin] 백테스트 데이터셋 준비 수동 트리거 완료");
-        return ResponseEntity.ok("백테스트 데이터셋 준비 완료");
+        log.info("[admin] 백테스트 데이터셋 준비 수동 트리거 요청");
+        return launch("백테스트 데이터셋 준비", backtestBatchLauncher::launchDataset);
     }
 
     @PostMapping("/run")
@@ -61,42 +60,50 @@ public class BacktestAdminController {
     }
 
     @PostMapping("/run-universe")
-    @Operation(summary = "유니버스 전체 백테스트 수동 트리거",
-        description = "국내+해외 거래대금 상위 500씩 전체에 대해 백테스트를 순회 실행한다. "
-            + "오늘 이미 실행된 종목은 스킵(force=true면 스킵 없이 전부 재실행). 축×horizon마다 "
-            + "block bootstrap 500회라 무거운 연산 - 수십 분 이상 걸릴 수 있어 HTTP 응답을 "
-            + "기다리지 못할 수 있다(nginx/브라우저 타임아웃). 응답이 끊겨도 서버 쪽 처리는 "
-            + "계속 진행되니, 완료 여부는 /api/admin/backtest 로그나 backtest_daily_score "
-            + "건수로 확인할 것.")
+    @Operation(summary = "유니버스 전체 백테스트 수동 트리거(비동기 배치)",
+        description = "데이터셋 준비 후 국내+해외 거래대금 상위 500씩 전체에 대해 백테스트를 실행하는 Job을 시작하고 "
+            + "executionId를 202로 바로 돌려준다. 오늘 이미 실행된 종목은 스킵(force=true면 스킵 없이 전부 재실행). "
+            + "축×horizon마다 block bootstrap 500회라 무거운 연산이며 진행 상황은 "
+            + "GET /api/admin/data/batch/executions/{id}, 실패하면 POST .../restart로 끊긴 종목부터 이어 한다. "
+            + "다른 백테스트 Job이 실행 중이면 409.")
     public ResponseEntity<String> runUniverse(@RequestParam(defaultValue = "false") boolean force) {
-        log.info("[admin] 유니버스 백테스트 수동 트리거 시작(무거운 연산, 수십 분 이상 소요될 수 있음): force={}", force);
-        backtestUniverseService.runUniverse(force);
-        log.info("[admin] 유니버스 백테스트 수동 트리거 완료");
-        return ResponseEntity.ok("유니버스 백테스트 완료");
+        log.info("[admin] 유니버스 백테스트 수동 트리거 요청: force={}", force);
+        return launch("유니버스 백테스트", () -> backtestBatchLauncher.launchUniverse(force));
     }
 
     @PostMapping("/cross-sectional")
-    @Operation(summary = "횡단면(cross-sectional) Rank IC 백테스트 수동 트리거",
+    @Operation(summary = "횡단면(cross-sectional) Rank IC 백테스트 수동 트리거(비동기 배치)",
         description = "같은 날짜의 여러 종목을 줄세워 비교한다. 이미 저장된 backtest_daily_score를 "
             + "그대로 쓰므로 run-universe가 먼저 실행돼 있어야 한다. market 생략 시 4개 시장"
             + "(KOSPI/KOSDAQ/NASDAQ/NYSE) 전부, 지정 시 그 시장만. nullTest=true면 조합마다 "
             + "순환이동 널 분포까지 계산해 훨씬 오래 걸린다 - nullRepeats(기본 200)로 반복 "
-            + "횟수를 조절할 수 있다. 여러 시장을 동시에 여러 요청으로 병렬 호출하지 말 것"
-            + "(서킷브레이커를 공유해 한쪽이 느려지면 나머지가 전부 실패한다).")
+            + "횟수를 조절할 수 있다. Job을 시작하고 executionId를 202로 바로 돌려주며, 시장은 기본적으로 "
+            + "순차 실행된다(backtest-batch.parallelism=1). 병렬로 올리면 시장들이 서킷브레이커를 "
+            + "공유하니 엔진 워커와 메모리를 먼저 확인할 것. 다른 백테스트 Job이 실행 중이면 409.")
     public ResponseEntity<String> runCrossSectional(
             @RequestParam(required = false) String market,
             @RequestParam String scoreVersion,
             @RequestParam(defaultValue = "false") boolean nullTest,
             @RequestParam(defaultValue = "200") int nullRepeats) {
-        log.info("[admin] 횡단면 백테스트 수동 트리거 시작: market={}, scoreVersion={}, nullTest={}, nullRepeats={}",
+        log.info("[admin] 횡단면 백테스트 수동 트리거 요청: market={}, scoreVersion={}, nullTest={}, nullRepeats={}",
             market, scoreVersion, nullTest, nullRepeats);
-        if (market == null) {
-            crossSectionalBacktestService.runAllMarkets(scoreVersion, nullTest, nullRepeats);
-        } else {
-            crossSectionalBacktestService.runForMarket(
-                MarketType.valueOf(market), scoreVersion, nullTest, nullRepeats);
+        if (market != null && !market.isBlank() && !isSupportedMarket(market)) {
+            return ResponseEntity.badRequest().body("지원하지 않는 시장입니다: " + market);
         }
-        log.info("[admin] 횡단면 백테스트 수동 트리거 완료");
-        return ResponseEntity.ok("횡단면 백테스트 완료");
+        return launch("횡단면 백테스트",
+            () -> backtestBatchLauncher.launchCrossSectional(market, scoreVersion, nullTest, nullRepeats));
+    }
+
+    private static boolean isSupportedMarket(String market) {
+        return List.of("KOSPI", "KOSDAQ", "NASDAQ", "NYSE").contains(market);
+    }
+
+    private ResponseEntity<String> launch(String label, Supplier<Long> launcher) {
+        try {
+            long executionId = launcher.get();
+            return ResponseEntity.accepted().body("%s 시작: executionId=%d".formatted(label, executionId));
+        } catch (BatchLaunchRejectedException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
+        }
     }
 }
