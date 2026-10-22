@@ -5,6 +5,11 @@ on:
     tags: ['v*']
   workflow_dispatch: {}
 
+# CodeQL actions/missing-workflow-permissions - 기본은 읽기 전용, build-and-push만 잡 단위로 packages: write를 올린다
+# (deploy 잡은 SSH 시크릿만 쓰고 GITHUB_TOKEN 권한이 필요 없다)
+permissions:
+  contents: read
+
 env:
   REGISTRY: ghcr.io
   # GHCR 이미지 경로는 소문자여야 하므로 고정값으로 둔다
