@@ -5,7 +5,7 @@ pandas==2.2.3
 numpy==2.2.1
 anthropic==0.42.0
 google-genai==2.14.0
-python-dotenv==1.0.1
+python-dotenv==1.2.2
 prometheus-fastapi-instrumentator==7.0.0
 youtube-transcript-api==1.2.4
 # youtube-transcript-api의 전이 의존성으로 이미 설치돼 있었지만, transcript/fetcher.py가
@@ -13,5 +13,5 @@ youtube-transcript-api==1.2.4
 # 의존성으로 승격 - 전이 의존성 버전 변경에 조용히 깨지지 않도록 명시 고정
 requests==2.34.2
 
-pytest==8.3.4
+pytest==9.0.3
 httpx==0.28.1
