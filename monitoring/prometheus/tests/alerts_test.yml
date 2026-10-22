@@ -339,3 +339,31 @@ tests:
               summary: "컨테이너 메모리가 한도에 근접: quantlime-prod-backend"
               description: "quantlime-prod-backend의 메모리 사용률이 5분 넘게 90%를 넘었습니다(95%) - 한도(mem_limit)에 걸리면 OOM kill로 재시작됩니다. docker-compose.prod.yml의 한도 상향이나 메모리 누수 여부를 확인하세요."
 
+
+  # 배치 메타 테이블이 하나라도 없으면 5분 뒤 발화, 모두 있으면(0) 알림 없음.
+  - interval: 1m
+    input_series:
+      - series: 'quantlime_batch_metadata_missing_tables{instance="backend"}'
+        values: '2x10'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: BatchMetadataMissing
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: BatchMetadataMissing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: backend
+            exp_annotations:
+              summary: "Spring Batch 메타 테이블이 누락됨"
+              description: "BATCH_* 메타 테이블 2개가 없어 배치 Job(스코어 재구성 등)이 실행 거부됩니다. DB 계정의 CREATE 권한과 기동 로그의 'BatchMetadataChecker' ERROR를 확인하세요."
+
+  - interval: 1m
+    input_series:
+      - series: 'quantlime_batch_metadata_missing_tables{instance="backend"}'
+        values: '0x10'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: BatchMetadataMissing
+        exp_alerts: []
