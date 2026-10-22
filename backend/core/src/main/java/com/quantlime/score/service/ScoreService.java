@@ -450,7 +450,11 @@ public class ScoreService {
         return allowed == null || allowed.contains(marketType);
     }
 
-    private void recalculateDomesticScoresChunk(List<String> stockCodes) {
+    /**
+     * 종목 묶음 하나를 재계산한다. 예외를 삼키지 않고 호출자에게 던진다 - Spring Batch 스코어 재구성
+     * Job(batch 모듈)이 청크 실패를 retry/skip/restart 정책으로 직접 판단하기 위함이다.
+     */
+    public void recalculateDomesticScoresChunk(List<String> stockCodes) {
         Map<String, List<DomesticDailyPrice>> domesticDailyPricesByStockCode = fetchDomesticOhlcvHistories(stockCodes);
         if (domesticDailyPricesByStockCode.isEmpty()) {
             log.info("스코어 재계산 스킵: OHLCV 이력이 있는 종목 없음, stockCodes={}", stockCodes);
@@ -475,7 +479,8 @@ public class ScoreService {
             .collect(Collectors.groupingBy(DomesticDailyPrice::getStockCode));
     }
 
-    private void recalculateOverseasScoresChunk(List<String> stockCodes) {
+    /** {@link #recalculateDomesticScoresChunk} 해외 버전. */
+    public void recalculateOverseasScoresChunk(List<String> stockCodes) {
         Map<String, List<OverseasDailyPrice>> pricesByStockCode = fetchOverseasOhlcvHistories(stockCodes);
         if (pricesByStockCode.isEmpty()) {
             log.info("해외 스코어 재계산 스킵: OHLCV 이력이 있는 종목 없음, stockCodes={}", stockCodes);

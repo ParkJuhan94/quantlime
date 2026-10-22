@@ -25,6 +25,14 @@ spring:
     hibernate:
       ddl-auto: update
     database-platform: org.hibernate.dialect.MySQLDialect
+  # Spring Batch(스코어 재구성 Job, batch 모듈). job.enabled=false가 없으면 Boot가 기동할 때 등록된 Job을
+  # 자동 실행해 배포마다 스코어를 지운다 - 반드시 유지할 것. 메타 테이블은 Boot가 기동 시 만들고(스크립트 오류는
+  # continueOnError로 무시되므로 BatchMetadataChecker가 누락을 검사한다) ddl-auto와는 별개다.
+  batch:
+    job:
+      enabled: false
+    jdbc:
+      initialize-schema: always
   data:
     redis:
       host: ${REDIS_HOST:localhost}

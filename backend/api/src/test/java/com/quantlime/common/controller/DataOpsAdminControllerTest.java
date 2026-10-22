@@ -1,19 +1,22 @@
 package com.quantlime.common.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.quantlime.batch.common.BatchExecutionView;
+import com.quantlime.batch.common.BatchJobLaunchService;
+import com.quantlime.batch.common.BatchLaunchRejectedException;
 import com.quantlime.common.exception.GlobalExceptionHandler;
 import com.quantlime.market.service.MarketDataRefreshService;
 import com.quantlime.price.service.DailyPriceIntegrityService;
 import com.quantlime.price.service.DailyPriceResettlementService;
 import com.quantlime.price.service.RegularCloseBackfillService;
-import com.quantlime.score.service.ScoreService;
 import com.quantlime.stock.service.DomesticStockMasterSyncService;
 import com.quantlime.stock.service.OverseasStockMasterSyncService;
 import java.nio.charset.StandardCharsets;
@@ -60,7 +63,7 @@ class DataOpsAdminControllerTest {
     private RegularCloseBackfillService regularCloseBackfillService;
 
     @Mock
-    private ScoreService scoreService;
+    private BatchJobLaunchService batchJobLaunchService;
 
     @InjectMocks
     private DataOpsAdminController controller;
@@ -77,21 +80,55 @@ class DataOpsAdminControllerTest {
     }
 
     @Test
-    @DisplayName("[스코어 재구성은 confirm 없이 호출하면 400이고 아무것도 지우지 않는다]")
+    @DisplayName("[스코어 재구성은 confirm 없이 호출하면 400이고 배치를 시작하지 않는다]")
     void rebuildScores_withoutConfirm_isRejected() throws Exception {
         mockMvc.perform(post("/api/admin/data/scores/rebuild").param("from", "2026-10-01"))
             .andExpect(status().isBadRequest());
 
-        verify(scoreService, never()).rebuildScoresFrom(any());
+        verifyNoInteractions(batchJobLaunchService);
     }
 
     @Test
-    @DisplayName("[스코어 재구성은 confirm=true일 때만 from을 넘겨 실행한다]")
-    void rebuildScores_withConfirm_runs() throws Exception {
-        mockMvc.perform(post("/api/admin/data/scores/rebuild").param("from", "2026-10-01").param("confirm", "true"))
-            .andExpect(status().isOk());
+    @DisplayName("[스코어 재구성은 confirm=true일 때만 from을 넘겨 배치를 시작하고 202로 executionId를 돌려준다]")
+    void rebuildScores_withConfirm_launchesBatch() throws Exception {
+        given(batchJobLaunchService.launchScoreRebuild(LocalDate.of(2026, 10, 1))).willReturn(7L);
 
-        verify(scoreService).rebuildScoresFrom(LocalDate.of(2026, 10, 1));
+        mockMvc.perform(post("/api/admin/data/scores/rebuild").param("from", "2026-10-01").param("confirm", "true"))
+            .andExpect(status().isAccepted());
+
+        verify(batchJobLaunchService).launchScoreRebuild(LocalDate.of(2026, 10, 1));
+    }
+
+    @Test
+    @DisplayName("[스코어 재구성은 이미 실행 중이거나 메타 테이블이 없어 거부되면 409다]")
+    void rebuildScores_rejected_isConflict() throws Exception {
+        given(batchJobLaunchService.launchScoreRebuild(LocalDate.of(2026, 10, 1)))
+            .willThrow(new BatchLaunchRejectedException("이미 실행 중인 배치가 있습니다"));
+
+        mockMvc.perform(post("/api/admin/data/scores/rebuild").param("from", "2026-10-01").param("confirm", "true"))
+            .andExpect(status().isConflict());
+    }
+
+    @Test
+    @DisplayName("[배치 실행 상태 조회는 서비스가 만든 뷰를 그대로 돌려준다]")
+    void getBatchExecution_returnsView() throws Exception {
+        given(batchJobLaunchService.getExecution(7L)).willReturn(
+            new BatchExecutionView(7L, "scoreRebuildJob", "FAILED", "FAILED", "", null, null, List.of()));
+
+        mockMvc.perform(get("/api/admin/data/batch/executions/7"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.executionId").value(7))
+            .andExpect(jsonPath("$.status").value("FAILED"));
+    }
+
+    @Test
+    @DisplayName("[배치 재시작은 새 executionId로 202, 재시작할 수 없는 상태면 409다]")
+    void restartBatchExecution_acceptedOrConflict() throws Exception {
+        given(batchJobLaunchService.restart(7L)).willReturn(8L);
+        given(batchJobLaunchService.restart(9L)).willThrow(new BatchLaunchRejectedException("재시작할 수 없는 상태입니다"));
+
+        mockMvc.perform(post("/api/admin/data/batch/executions/7/restart")).andExpect(status().isAccepted());
+        mockMvc.perform(post("/api/admin/data/batch/executions/9/restart")).andExpect(status().isConflict());
     }
 
     @Test

@@ -202,6 +202,17 @@ groups:
           summary: "FCM 푸시 실패율 30% 초과"
           description: "최근 30분 푸시 발송의 30% 이상이 실패했습니다(만료 토큰 정리는 제외). 서비스 계정 키 권한/만료, FCM 장애, 네트워크를 확인하세요. 인앱 알림은 정상 저장됩니다."
 
+      # Spring Batch 메타 테이블 누락: Boot가 initialize-schema=always 스크립트 오류를 무시(continueOnError)하므로
+      # 앱은 정상 기동하고, 스코어 재구성 같은 Job을 시작할 때에야 거부된다(BatchMetadataChecker).
+      - alert: BatchMetadataMissing
+        expr: quantlime_batch_metadata_missing_tables > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Spring Batch 메타 테이블이 누락됨"
+          description: "BATCH_* 메타 테이블 {{ $value }}개가 없어 배치 Job(스코어 재구성 등)이 실행 거부됩니다. DB 계정의 CREATE 권한과 기동 로그의 'BatchMetadataChecker' ERROR를 확인하세요."
+
   # --- 백업(scripts/backup-mysql.sh·backup-uploads.sh가 node-exporter
   # textfile collector로 직접 기록하는 성공 시각) ---
   - name: quantlime-backup

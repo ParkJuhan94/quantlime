@@ -1,12 +1,14 @@
 package com.quantlime.common.controller;
 
+import com.quantlime.batch.common.BatchExecutionView;
+import com.quantlime.batch.common.BatchJobLaunchService;
+import com.quantlime.batch.common.BatchLaunchRejectedException;
 import com.quantlime.market.service.MarketDataRefreshService;
 import com.quantlime.price.dto.PriceJumpReport;
 import com.quantlime.price.dto.RegularCloseBackfillResult;
 import com.quantlime.price.service.DailyPriceIntegrityService;
 import com.quantlime.price.service.DailyPriceResettlementService;
 import com.quantlime.price.service.RegularCloseBackfillService;
-import com.quantlime.score.service.ScoreService;
 import com.quantlime.stock.dto.StockMasterSyncResult;
 import com.quantlime.stock.service.DomesticStockMasterSyncService;
 import com.quantlime.stock.service.OverseasStockMasterSyncService;
@@ -18,7 +20,10 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -43,7 +48,7 @@ public class DataOpsAdminController {
     private final DailyPriceResettlementService dailyPriceResettlementService;
     private final DailyPriceIntegrityService dailyPriceIntegrityService;
     private final RegularCloseBackfillService regularCloseBackfillService;
-    private final ScoreService scoreService;
+    private final BatchJobLaunchService batchJobLaunchService;
 
     @PostMapping("/stock-master/sync")
     @Operation(summary = "국내 종목마스터 동기화", description = "신규상장·상장폐지를 반영한다.")
@@ -142,9 +147,11 @@ public class DataOpsAdminController {
     }
 
     @PostMapping("/scores/rebuild")
-    @Operation(summary = "스코어 재구성(파괴적)",
-        description = "from 이후 스코어를 전부 지우고 전 상장종목을 다시 계산한다. 퀀트 엔진 호출만 발생하고 외부 시세 API는 부르지 않는다. "
-            + "지운 뒤 계산이 중간에 실패하면 그 구간 스코어가 비므로 confirm=true를 명시해야 실행된다. "
+    @Operation(summary = "스코어 재구성(파괴적, 비동기 배치)",
+        description = "from 이후 스코어를 전부 지우고 전 상장종목을 다시 계산하는 Spring Batch Job을 시작하고 executionId를 바로 돌려준다. "
+            + "진행 상황은 GET /batch/executions/{id}로 본다. 계산이 중간에 실패하면 FAILED로 남고 "
+            + "POST /batch/executions/{id}/restart로 삭제는 건너뛰고 끊긴 청크부터 이어서 계산한다. "
+            + "지우는 작업이므로 confirm=true를 명시해야 실행된다. 이미 실행 중이면 409. "
             + "정규화는 하지 않으니 끝난 뒤 /refresh가 필요하다.")
     @ApiResponse(useReturnTypeSchema = true)
     public ResponseEntity<String> rebuildScores(
@@ -154,9 +161,33 @@ public class DataOpsAdminController {
             return ResponseEntity.badRequest()
                 .body("from 이후 스코어를 전부 지우고 다시 계산합니다. 실행하려면 confirm=true를 지정하세요.");
         }
-        log.info("[admin] 스코어 재구성 수동 트리거 시작: from={}", from);
-        scoreService.rebuildScoresFrom(from);
-        log.info("[admin] 스코어 재구성 수동 트리거 완료: from={}", from);
-        return ResponseEntity.ok("스코어 재구성 완료: from=" + from);
+        log.info("[admin] 스코어 재구성 배치 시작 요청: from={}", from);
+        try {
+            long executionId = batchJobLaunchService.launchScoreRebuild(from);
+            return ResponseEntity.accepted().body("스코어 재구성 시작: from=%s, executionId=%d".formatted(from, executionId));
+        } catch (BatchLaunchRejectedException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
+        }
+    }
+
+    @GetMapping("/batch/executions/{executionId}")
+    @Operation(summary = "배치 실행 상태 조회", description = "Job 상태와 Step별 읽기/쓰기/skip 수를 돌려준다.")
+    @ApiResponse(useReturnTypeSchema = true)
+    public ResponseEntity<BatchExecutionView> getBatchExecution(@PathVariable long executionId) {
+        return ResponseEntity.ok(batchJobLaunchService.getExecution(executionId));
+    }
+
+    @PostMapping("/batch/executions/{executionId}/restart")
+    @Operation(summary = "실패한 배치 재시작",
+        description = "FAILED/STOPPED 실행을 같은 파라미터로 다시 시작한다. 완료된 Step(삭제 단계 포함)은 건너뛰고 끊긴 청크부터 이어 간다.")
+    @ApiResponse(useReturnTypeSchema = true)
+    public ResponseEntity<String> restartBatchExecution(@PathVariable long executionId) {
+        log.info("[admin] 배치 재시작 요청: executionId={}", executionId);
+        try {
+            long newExecutionId = batchJobLaunchService.restart(executionId);
+            return ResponseEntity.accepted().body("배치 재시작: executionId=" + newExecutionId);
+        } catch (BatchLaunchRejectedException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
+        }
     }
 }

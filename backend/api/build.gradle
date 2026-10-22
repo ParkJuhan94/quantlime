@@ -1,6 +1,7 @@
 dependencies {
     implementation project(':core')
     implementation project(':event')
+    implementation project(':batch')
     implementation project(':common')
     // GlobalExceptionHandler가 ExternalApiException을 직접 잡고,
     // SubscriptionControllerTest가 TossPaymentsApiClient를 직접 @MockBean
