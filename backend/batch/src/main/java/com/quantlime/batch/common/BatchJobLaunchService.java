@@ -4,6 +4,9 @@ import com.quantlime.batch.score.ScoreRebuildJobConfig;
 import com.quantlime.common.exception.NotFoundException;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.BatchStatus;
 import org.springframework.batch.core.Job;
@@ -29,15 +32,15 @@ import org.springframework.stereotype.Service;
 public class BatchJobLaunchService {
 
     private final JobExplorer jobExplorer;
-    private final Job scoreRebuildJob;
+    private final Map<String, Job> jobsByName = new HashMap<>();
     private final BatchMetadataChecker metadataChecker;
     private final Clock clock;
     private final TaskExecutorJobLauncher jobLauncher;
 
-    public BatchJobLaunchService(JobRepository jobRepository, JobExplorer jobExplorer, Job scoreRebuildJob,
+    public BatchJobLaunchService(JobRepository jobRepository, JobExplorer jobExplorer, List<Job> jobs,
                                  BatchMetadataChecker metadataChecker, Clock clock) {
         this.jobExplorer = jobExplorer;
-        this.scoreRebuildJob = scoreRebuildJob;
+        jobs.forEach(job -> jobsByName.put(job.getName(), job));
         this.metadataChecker = metadataChecker;
         this.clock = clock;
         this.jobLauncher = new TaskExecutorJobLauncher();
@@ -52,12 +55,23 @@ public class BatchJobLaunchService {
 
     /** from 이후 스코어를 지우고 전종목을 다시 계산하는 Job을 시작한다. 항상 새 JobInstance다. */
     public long launchScoreRebuild(LocalDate from) {
-        guardLaunchable(ScoreRebuildJobConfig.JOB_NAME);
-        JobParameters parameters = new JobParametersBuilder()
-            .addString(ScoreRebuildJobConfig.PARAM_FROM, from.toString())
-            .addLong("requestedAt", clock.millis())
-            .toJobParameters();
-        return run(scoreRebuildJob, parameters);
+        return launch(ScoreRebuildJobConfig.JOB_NAME,
+            newParameters().addString(ScoreRebuildJobConfig.PARAM_FROM, from.toString()).toJobParameters());
+    }
+
+    /**
+     * 요청 시각 파라미터가 들어간 빌더를 만든다. 이 값이 식별 파라미터라 호출마다 새 JobInstance가 되고, 이어서 실행하는 것은
+     * {@link #restart}만 한다.
+     */
+    public JobParametersBuilder newParameters() {
+        return new JobParametersBuilder().addLong("requestedAt", clock.millis());
+    }
+
+    /** 이름으로 Job을 찾아 시작한다. 같은 배제 그룹의 Job이 실행 중이거나 메타 테이블이 없으면 시작하지 않는다. */
+    public long launch(String jobName, JobParameters parameters) {
+        Job job = requireJob(jobName);
+        guardLaunchable(jobName);
+        return run(job, parameters);
     }
 
     /** 실패/중단된 실행을 같은 파라미터로 다시 시작한다 - 완료된 Step은 건너뛰고 끊긴 청크부터 이어 간다. */
@@ -69,11 +83,9 @@ public class BatchJobLaunchService {
                 .formatted(executionId, status));
         }
         String jobName = previous.getJobInstance().getJobName();
-        if (!ScoreRebuildJobConfig.JOB_NAME.equals(jobName)) {
-            throw new BatchLaunchRejectedException("지원하지 않는 Job입니다: " + jobName);
-        }
+        Job job = requireJob(jobName);
         guardLaunchable(jobName);
-        return run(scoreRebuildJob, previous.getJobParameters());
+        return run(job, previous.getJobParameters());
     }
 
     public BatchExecutionView getExecution(long executionId) {
@@ -88,10 +100,21 @@ public class BatchJobLaunchService {
         return execution;
     }
 
+    private Job requireJob(String jobName) {
+        Job job = jobsByName.get(jobName);
+        if (job == null) {
+            throw new BatchLaunchRejectedException("지원하지 않는 Job입니다: " + jobName);
+        }
+        return job;
+    }
+
     private void guardLaunchable(String jobName) {
         metadataChecker.requireComplete();
-        if (!jobExplorer.findRunningJobExecutions(jobName).isEmpty()) {
-            throw new BatchLaunchRejectedException("이미 실행 중인 배치가 있습니다: " + jobName);
+        for (String exclusive : BatchJobGroups.exclusiveWith(jobName)) {
+            if (!jobExplorer.findRunningJobExecutions(exclusive).isEmpty()) {
+                throw new BatchLaunchRejectedException(
+                    "이미 실행 중인 배치가 있습니다: running=%s, requested=%s".formatted(exclusive, jobName));
+            }
         }
     }
 

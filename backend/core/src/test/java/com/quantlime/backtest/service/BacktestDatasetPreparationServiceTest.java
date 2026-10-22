@@ -1,8 +1,10 @@
 package com.quantlime.backtest.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
+import com.quantlime.backtest.dto.response.UniverseSelection;
 import com.quantlime.market.service.BenchmarkIndexBackfillService;
 import com.quantlime.market.service.DomesticUniverseSelectionService;
 import com.quantlime.market.service.OverseasUniverseSelectionService;
@@ -41,11 +43,13 @@ class BacktestDatasetPreparationServiceTest {
             .willReturn(List.of("AAPL"));
 
         // when
-        backtestDatasetPreparationService.prepareDataset();
+        UniverseSelection selection = backtestDatasetPreparationService.prepareDataset();
 
         // then
         verify(domesticUniverseSelectionService).selectAndBackfillUniverse();
         verify(overseasUniverseSelectionService).selectAndBackfillUniverse();
         verify(benchmarkIndexBackfillService).backfillAllIfNeeded();
+        // 국내 먼저, 해외 나중 순서로 합쳐진다
+        assertThat(selection.all()).containsExactly("005930", "000660", "AAPL");
     }
 }
