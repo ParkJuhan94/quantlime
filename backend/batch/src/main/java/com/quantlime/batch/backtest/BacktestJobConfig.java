@@ -7,6 +7,7 @@ import com.quantlime.backtest.service.BacktestDatasetPreparationService;
 import com.quantlime.backtest.service.BacktestService;
 import com.quantlime.backtest.service.BacktestUniverseService;
 import com.quantlime.backtest.service.CrossSectionalBacktestService;
+import com.quantlime.batch.common.BatchFailureNotifier;
 import com.quantlime.stock.domain.MarketType;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import java.util.ArrayList;
@@ -82,29 +83,30 @@ public class BacktestJobConfig {
     private final BacktestUniverseService universeService;
     private final CrossSectionalBacktestService crossSectionalService;
     private final BacktestReader backtestReader;
+    private final BatchFailureNotifier failureNotifier;
 
     @Value("${backtest-batch.parallelism:1}")
     private int parallelism;
 
     @Bean
     public Job backtestWeeklyJob(Step backtestDatasetStep, Step backtestUniverseStep, Step crossSectionalStep) {
-        return new JobBuilder(WEEKLY_JOB, jobRepository)
+        return new JobBuilder(WEEKLY_JOB, jobRepository).listener(failureNotifier)
             .start(backtestDatasetStep).next(backtestUniverseStep).next(crossSectionalStep).build();
     }
 
     @Bean
     public Job backtestDatasetJob(Step backtestDatasetStep) {
-        return new JobBuilder(DATASET_JOB, jobRepository).start(backtestDatasetStep).build();
+        return new JobBuilder(DATASET_JOB, jobRepository).listener(failureNotifier).start(backtestDatasetStep).build();
     }
 
     @Bean
     public Job backtestUniverseJob(Step backtestDatasetStep, Step backtestUniverseStep) {
-        return new JobBuilder(UNIVERSE_JOB, jobRepository).start(backtestDatasetStep).next(backtestUniverseStep).build();
+        return new JobBuilder(UNIVERSE_JOB, jobRepository).listener(failureNotifier).start(backtestDatasetStep).next(backtestUniverseStep).build();
     }
 
     @Bean
     public Job crossSectionalBacktestJob(Step crossSectionalStep) {
-        return new JobBuilder(CROSS_SECTIONAL_JOB, jobRepository).start(crossSectionalStep).build();
+        return new JobBuilder(CROSS_SECTIONAL_JOB, jobRepository).listener(failureNotifier).start(crossSectionalStep).build();
     }
 
     // ---- 1) 데이터셋 준비: 유니버스를 JobExecutionContext에 남겨 restart 때 같은 유니버스를 쓴다 ----

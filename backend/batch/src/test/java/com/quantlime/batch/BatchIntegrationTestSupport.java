@@ -10,6 +10,7 @@ import com.quantlime.backtest.service.BacktestUniverseService;
 import com.quantlime.backtest.service.CrossSectionalBacktestService;
 import com.quantlime.batch.common.BatchExecutionView;
 import com.quantlime.batch.common.BatchJobLaunchService;
+import com.quantlime.infra.slack.SlackWebhookClient;
 import com.quantlime.score.implement.ScoreAppender;
 import com.quantlime.score.service.ScoreService;
 import com.quantlime.stock.service.StockMasterService;
@@ -87,6 +88,8 @@ public abstract class BatchIntegrationTestSupport {
     protected CrossSectionalBacktestService crossSectionalService;
     @MockBean
     protected BacktestReader backtestReader;
+    @MockBean
+    protected SlackWebhookClient slackWebhookClient;
 
     @Autowired
     protected BatchJobLaunchService launchService;

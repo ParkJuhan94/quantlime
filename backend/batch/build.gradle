@@ -4,6 +4,8 @@ dependencies {
     implementation project(':common')
     // ExternalApiException(재시도 대상 판단)은 client-support 모듈 - core가 implementation으로만 선언해 전이되지 않는다
     implementation project(':client-support')
+    // 배치 실패 알림(BatchFailureNotifier)이 SlackWebhookClient를 직접 쓴다 - core가 slack을 implementation으로만 선언해 전이되지 않는다
+    implementation project(':slack')
 
     implementation 'org.springframework.boot:spring-boot-starter-batch'
     // 메타 테이블 검사(JdbcTemplate)와 DataSource

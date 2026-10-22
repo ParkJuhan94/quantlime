@@ -33,6 +33,7 @@ public class BatchMetadataStartupChecker {
     private final JobExplorer jobExplorer;
     private final JobRepository jobRepository;
     private final Clock clock;
+    private final BatchFailureNotifier failureNotifier;
 
     @EventListener(ApplicationReadyEvent.class)
     public void onReady() {
@@ -64,5 +65,6 @@ public class BatchMetadataStartupChecker {
         jobRepository.update(execution);
         log.warn("서버 재기동으로 중단된 배치 실행을 FAILED로 정리: jobName={}, executionId={}",
             execution.getJobInstance().getJobName(), execution.getId());
+        failureNotifier.notifyInterrupted(execution);
     }
 }
