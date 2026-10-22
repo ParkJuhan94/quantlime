@@ -170,6 +170,16 @@ public class DataOpsAdminController {
         }
     }
 
+    @GetMapping("/batch/executions")
+    @Operation(summary = "최근 배치 실행 목록",
+        description = "모든 Job의 최근 실행을 만든 시각 내림차순으로 돌려준다(Step 없는 요약, limit 1~50, 기본 20). "
+            + "Step별 상세는 GET /batch/executions/{id}.")
+    @ApiResponse(useReturnTypeSchema = true)
+    public ResponseEntity<List<BatchExecutionView>> getRecentBatchExecutions(
+            @RequestParam(defaultValue = "20") int limit) {
+        return ResponseEntity.ok(batchJobLaunchService.recentExecutions(limit));
+    }
+
     @GetMapping("/batch/executions/{executionId}")
     @Operation(summary = "배치 실행 상태 조회", description = "Job 상태와 Step별 읽기/쓰기/skip 수를 돌려준다.")
     @ApiResponse(useReturnTypeSchema = true)

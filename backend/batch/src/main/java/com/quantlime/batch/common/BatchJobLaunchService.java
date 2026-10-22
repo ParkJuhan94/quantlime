@@ -4,6 +4,8 @@ import com.quantlime.batch.score.ScoreRebuildJobConfig;
 import com.quantlime.common.exception.NotFoundException;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -11,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.BatchStatus;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.JobExecution;
+import org.springframework.batch.core.JobInstance;
 import org.springframework.batch.core.JobParameters;
 import org.springframework.batch.core.JobParametersBuilder;
 import org.springframework.batch.core.explore.JobExplorer;
@@ -32,6 +35,8 @@ import org.springframework.stereotype.Service;
 public class BatchJobLaunchService {
 
     private final JobExplorer jobExplorer;
+    private static final int MAX_RECENT_EXECUTIONS = 50;
+
     private final Map<String, Job> jobsByName = new HashMap<>();
     private final BatchMetadataChecker metadataChecker;
     private final Clock clock;
@@ -90,6 +95,25 @@ public class BatchJobLaunchService {
 
     public BatchExecutionView getExecution(long executionId) {
         return BatchExecutionView.from(requireExecution(executionId));
+    }
+
+    /**
+     * 모든 Job의 최근 실행을 만든 시각 내림차순으로 돌려준다(Step 없는 요약). Job마다 최근 {@code limit}개 인스턴스만 읽어 합친 뒤
+     * 자르므로, 한 Job의 실행이 많아도 다른 Job의 최근 실행이 밀려나지 않는다.
+     */
+    public List<BatchExecutionView> recentExecutions(int limit) {
+        int size = Math.max(1, Math.min(limit, MAX_RECENT_EXECUTIONS));
+        List<JobExecution> executions = new ArrayList<>();
+        for (String jobName : jobsByName.keySet()) {
+            for (JobInstance instance : jobExplorer.getJobInstances(jobName, 0, size)) {
+                executions.addAll(jobExplorer.getJobExecutions(instance));
+            }
+        }
+        return executions.stream()
+            .sorted(Comparator.comparing(JobExecution::getCreateTime).reversed())
+            .limit(size)
+            .map(BatchExecutionView::summaryFrom)
+            .toList();
     }
 
     private JobExecution requireExecution(long executionId) {
