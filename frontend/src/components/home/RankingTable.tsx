@@ -192,7 +192,7 @@ function RankingRow({
                 통일한다 - percentile을 쓰면 등급 색/라벨과 숫자가
                 서로 다른 척도라 어긋나 보일 수 있다(2026-09-16 재검토). */}
             <span
-              className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold ${
+              className={`inline-flex w-24 items-center justify-center gap-1 rounded-lg py-1 text-xs font-semibold ${
                 row.grade ? (GRADE_STYLES[row.grade] ?? 'bg-gray-100 text-gray-800') : 'bg-gray-100 text-gray-500'
               }`}
             >

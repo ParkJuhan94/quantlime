@@ -5,7 +5,7 @@ import type { Theme } from '../../storage/themeStorage'
 // 카드(white)/gray 스케일에 맞춘 것이다.
 const PALETTE = {
   light: { text: '#374151', background: '#ffffff', grid: '#f3f4f6', border: '#e5e7eb' },
-  dark: { text: '#c3cbd9', background: '#121a2d', grid: '#1c2740', border: '#263350' },
+  dark: { text: '#c8c8cd', background: '#161618', grid: '#232326', border: '#2e2e32' },
 } as const
 
 export function chartPalette(theme: Theme) {

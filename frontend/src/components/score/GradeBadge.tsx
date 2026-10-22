@@ -4,11 +4,11 @@
 // 동일한 색을 쓰도록 export한다(2026-07-17 - 종목상세 ScoreSummaryRow와
 // 톤을 맞추기 위해 새로 필요해짐).
 export const GRADE_STYLES: Record<string, string> = {
-  강력매수: 'bg-red-600 text-white',
-  매수: 'bg-red-100 text-red-700',
-  중립: 'bg-gray-200 text-gray-700',
-  매도: 'bg-blue-100 text-blue-700',
-  강력매도: 'bg-blue-600 text-white',
+  강력매수: 'bg-grade-sbuy-bg text-grade-sbuy-fg',
+  매수: 'bg-grade-buy-bg text-grade-buy-fg',
+  중립: 'bg-grade-neutral-bg text-grade-neutral-fg',
+  매도: 'bg-grade-sell-bg text-grade-sell-fg',
+  강력매도: 'bg-grade-ssell-bg text-grade-ssell-fg',
 }
 
 // 라벨 글자수가 등급마다 다르다(강력매도/강력매수=4자, 매수/매도=2자,

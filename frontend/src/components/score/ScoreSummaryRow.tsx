@@ -7,11 +7,11 @@ import { formatScore, formatScoreDate } from '../../utils/scoreFormat'
 // 빨강, 매도 쪽은 파랑 계열로 채색한다. glowColor는 현재 등급 박스에
 // 적용하는 은은한 펄스 애니메이션(index.css .animate-glow-pulse) 색상.
 const GRADE_SCALE: { label: string; activeClass: string; glowColor: string }[] = [
-  { label: '강력매도', activeClass: 'bg-blue-600 text-white', glowColor: 'rgba(37, 99, 235, 0.55)' },
-  { label: '매도', activeClass: 'bg-blue-100 text-blue-700', glowColor: 'rgba(37, 99, 235, 0.35)' },
-  { label: '중립', activeClass: 'bg-gray-400 text-white', glowColor: 'rgba(107, 114, 128, 0.4)' },
-  { label: '매수', activeClass: 'bg-red-100 text-red-700', glowColor: 'rgba(220, 38, 38, 0.35)' },
-  { label: '강력매수', activeClass: 'bg-red-600 text-white', glowColor: 'rgba(220, 38, 38, 0.55)' },
+  { label: '강력매도', activeClass: 'bg-grade-ssell-bg text-grade-ssell-fg', glowColor: 'rgba(37, 99, 235, 0.55)' },
+  { label: '매도', activeClass: 'bg-grade-sell-bg text-grade-sell-fg', glowColor: 'rgba(37, 99, 235, 0.35)' },
+  { label: '중립', activeClass: 'bg-grade-neutral-bg text-grade-neutral-fg', glowColor: 'rgba(107, 114, 128, 0.4)' },
+  { label: '매수', activeClass: 'bg-grade-buy-bg text-grade-buy-fg', glowColor: 'rgba(220, 38, 38, 0.35)' },
+  { label: '강력매수', activeClass: 'bg-grade-sbuy-bg text-grade-sbuy-fg', glowColor: 'rgba(220, 38, 38, 0.55)' },
 ]
 
 type ScoreSummaryRowProps = { locked: true; score?: undefined } | { locked?: false; score: ScoreResponse }
