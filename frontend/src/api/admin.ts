@@ -1,6 +1,7 @@
 import { apiClient } from './client'
 import type {
   AdminChannel,
+  BatchExecution,
   AdminFeedComment,
   AdminFeedPost,
   CollectResult,
@@ -180,5 +181,23 @@ export async function rebuildScores(from: string): Promise<string> {
   const { data } = await apiClient.post<string>('/api/admin/data/scores/rebuild', null, {
     params: { from, confirm: true },
   })
+  return data
+}
+
+// ---- 배치 실행 이력 ----
+
+export async function fetchBatchExecutions(limit = 30): Promise<BatchExecution[]> {
+  const { data } = await apiClient.get<BatchExecution[]>('/api/admin/data/batch/executions', { params: { limit } })
+  return data
+}
+
+export async function fetchBatchExecution(executionId: number): Promise<BatchExecution> {
+  const { data } = await apiClient.get<BatchExecution>(`/api/admin/data/batch/executions/${executionId}`)
+  return data
+}
+
+// FAILED·STOPPED 실행을 같은 파라미터로 이어서 실행한다 - 응답은 새 executionId 안내 문자열
+export async function restartBatchExecution(executionId: number): Promise<string> {
+  const { data } = await apiClient.post<string>(`/api/admin/data/batch/executions/${executionId}/restart`)
   return data
 }

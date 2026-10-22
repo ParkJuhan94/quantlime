@@ -9,6 +9,7 @@ import {
   syncOverseasStockMaster,
 } from '../../api/admin'
 import { AdminActionCard } from '../../components/admin/AdminActionCard'
+import { BatchStartedResult } from '../../components/admin/BatchStartedResult'
 import type { PriceRepairMarket } from '../../types/admin'
 
 const INPUT_CLASS =
@@ -234,9 +235,10 @@ export function AdminDataOpsPage() {
         disabled={!rebuildFrom}
         confirm={{
           title: '스코어를 지우고 다시 계산할까요?',
-          description: `${rebuildFrom} 이후 스코어를 먼저 지워요. 계산이 중간에 실패하면 그 구간의 스코어가 비어 있게 돼요.`,
+          description: `${rebuildFrom} 이후 스코어를 먼저 지워요. 계산이 중간에 실패하면 그 구간의 스코어가 비어 있게 되지만, 배치 실행 화면에서 이어서 실행할 수 있어요.`,
         }}
         run={() => rebuildScores(rebuildFrom)}
+        renderResult={(text) => <BatchStartedResult text={text} />}
       >
         <label className="block text-sm font-semibold text-gray-700" htmlFor="data-rebuild-from">
           시작일
