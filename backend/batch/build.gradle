@@ -1,0 +1,22 @@
+dependencies {
+    implementation project(':core')
+    // ErrorCode 인터페이스 - core가 common을 implementation으로만 선언해 전이되지 않는다
+    implementation project(':common')
+    // ExternalApiException(재시도 대상 판단)은 client-support 모듈 - core가 implementation으로만 선언해 전이되지 않는다
+    implementation project(':client-support')
+
+    implementation 'org.springframework.boot:spring-boot-starter-batch'
+    // 메타 테이블 검사(JdbcTemplate)와 DataSource
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    // core 엔티티(Stock)의 JPA 애너테이션을 컴파일러가 읽기 위한 용도 - 런타임 JPA는 api가 제공한다
+    compileOnly 'org.springframework.boot:spring-boot-starter-data-jpa'
+    // 메타 테이블 누락 게이지
+    implementation 'io.micrometer:micrometer-core'
+    // quant-engine 서킷 OPEN(CallNotPermittedException)은 skip하지 않고 Step을 실패시켜 restart 대상으로 남긴다.
+    // 버전은 루트 build.gradle의 resilience4j-bom이 관리한다.
+    implementation 'io.github.resilience4j:resilience4j-circuitbreaker'
+
+    testImplementation 'org.springframework.batch:spring-batch-test'
+    testImplementation 'com.mysql:mysql-connector-j'
+    testImplementation 'org.awaitility:awaitility:4.2.2'
+}

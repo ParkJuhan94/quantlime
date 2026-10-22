@@ -15,6 +15,7 @@ COPY api/build.gradle api/build.gradle
 COPY core/build.gradle core/build.gradle
 COPY common/build.gradle common/build.gradle
 COPY event/build.gradle event/build.gradle
+COPY batch/build.gradle batch/build.gradle
 COPY client-support/build.gradle client-support/build.gradle
 COPY tosspayments/build.gradle tosspayments/build.gradle
 COPY dart/build.gradle dart/build.gradle
@@ -36,6 +37,7 @@ COPY api api
 COPY core core
 COPY common common
 COPY event event
+COPY batch batch
 COPY client-support client-support
 COPY tosspayments tosspayments
 COPY dart dart
