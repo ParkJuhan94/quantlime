@@ -15,6 +15,8 @@ interface BatchExecutionRowProps {
   open: boolean
   // 시작 응답 링크로 들어온 실행 - 처음 한 번 화면 가운데로 스크롤한다
   highlighted: boolean
+  // 같은 JobInstance에 더 새로운 실행이 없는 실패·중단만 true - 이미 이어서 실행한 실패에는 버튼을 보이지 않는다
+  restartable: boolean
   restarting: boolean
   onToggle: () => void
   onRestart: () => void
@@ -72,6 +74,7 @@ export function BatchExecutionRow({
   execution,
   open,
   highlighted,
+  restartable,
   restarting,
   onToggle,
   onRestart,
@@ -103,7 +106,7 @@ export function BatchExecutionRow({
             <span className="ml-2 text-gray-400">{formatDuration(current.startTime, current.endTime)}</span>
           </span>
         </button>
-        {canRestart(current.status) && (
+        {restartable && canRestart(current.status) && (
           <button
             type="button"
             disabled={restarting}

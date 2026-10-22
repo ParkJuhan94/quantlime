@@ -74,6 +74,8 @@ class ScoreRebuildJobTest extends BatchIntegrationTestSupport {
         BatchExecutionView restarted = runToEnd(launchService.restart(failed.executionId()));
 
         assertThat(restarted.status()).isEqualTo("COMPLETED");
+        // 이어서 실행한 실행은 같은 JobInstance다 - 화면이 이미 이어서 실행한 실패를 가려내는 기준
+        assertThat(restarted.jobInstanceId()).isEqualTo(failed.jobInstanceId());
         // 삭제는 처음 한 번뿐이다 - 이게 이번 전환의 핵심 보장
         verify(scoreAppender, times(1)).deleteFrom(FROM);
         // 첫 실행: 청크1 성공 + 청크2 실패, restart: 청크2만 다시 = 총 3회, 마지막 두 호출은 같은 두 번째 청크

@@ -113,7 +113,7 @@ class DataOpsAdminControllerTest {
     @DisplayName("[배치 실행 상태 조회는 서비스가 만든 뷰를 그대로 돌려준다]")
     void getBatchExecution_returnsView() throws Exception {
         given(batchJobLaunchService.getExecution(7L)).willReturn(
-            new BatchExecutionView(7L, "scoreRebuildJob", "FAILED", "FAILED", "", null, null, null, List.of()));
+            new BatchExecutionView(7L, 70L, "scoreRebuildJob", "FAILED", "FAILED", "", null, null, null, List.of()));
 
         mockMvc.perform(get("/api/admin/data/batch/executions/7"))
             .andExpect(status().isOk())
@@ -125,7 +125,7 @@ class DataOpsAdminControllerTest {
     @DisplayName("[최근 배치 실행 목록은 limit 기본값 20을 서비스에 넘기고, 지정하면 그대로 넘긴다]")
     void getRecentBatchExecutions_passesLimit() throws Exception {
         given(batchJobLaunchService.recentExecutions(20)).willReturn(List.of(
-            new BatchExecutionView(9L, "backtestWeeklyJob", "COMPLETED", "COMPLETED", "", null, null, null, List.of())));
+            new BatchExecutionView(9L, 90L, "backtestWeeklyJob", "COMPLETED", "COMPLETED", "", null, null, null, List.of())));
         given(batchJobLaunchService.recentExecutions(5)).willReturn(List.of());
 
         mockMvc.perform(get("/api/admin/data/batch/executions"))

@@ -81,6 +81,8 @@ export interface BatchStep {
 // 목록 응답은 steps가 비어 있고, 단건 조회에만 Step 상세가 들어 있다.
 export interface BatchExecution {
   executionId: number
+  // 이어서 실행한 실행들은 같은 jobInstanceId를 가진다
+  jobInstanceId: number
   jobName: string
   status: string
   exitCode: string

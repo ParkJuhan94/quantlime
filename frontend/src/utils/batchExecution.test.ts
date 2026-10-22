@@ -7,6 +7,7 @@ import {
   hasRunning,
   isRunning,
   jobLabel,
+  restartableExecutionIds,
   statusLabel,
 } from './batchExecution'
 
@@ -79,5 +80,32 @@ describe('formatDuration', () => {
   it('종료 전이거나 시각이 없으면 "-"다', () => {
     expect(formatDuration('2026-10-23T01:00:00', null)).toBe('-')
     expect(formatDuration(null, '2026-10-23T01:00:00')).toBe('-')
+  })
+})
+
+describe('restartableExecutionIds', () => {
+  it('실패·중단이면서 그 JobInstance의 가장 최근 실행일 때만 이어서 실행할 수 있다', () => {
+    const executions = [
+      { executionId: 5, jobInstanceId: 1, status: 'COMPLETED' }, // #3을 이어서 실행해 끝난 실행
+      { executionId: 4, jobInstanceId: 2, status: 'FAILED' }, // 아직 이어서 실행하지 않은 실패
+      { executionId: 3, jobInstanceId: 1, status: 'FAILED' }, // 이미 #5로 이어서 실행됨
+      { executionId: 2, jobInstanceId: 3, status: 'STOPPED' },
+      { executionId: 1, jobInstanceId: 4, status: 'COMPLETED' },
+    ]
+
+    expect(restartableExecutionIds(executions)).toEqual(new Set([4, 2]))
+  })
+
+  it('이어서 실행한 실행이 아직 진행 중이어도 이전 실패는 다시 이어서 실행할 수 없다', () => {
+    const executions = [
+      { executionId: 8, jobInstanceId: 7, status: 'STARTED' },
+      { executionId: 6, jobInstanceId: 7, status: 'FAILED' },
+    ]
+
+    expect(restartableExecutionIds(executions).size).toBe(0)
+  })
+
+  it('목록이 비어 있으면 빈 집합이다', () => {
+    expect(restartableExecutionIds([]).size).toBe(0)
   })
 })

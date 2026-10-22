@@ -8,7 +8,7 @@ import { useBatchExecutions } from '../../hooks/queries/useBatchExecutions'
 import { queryKeys } from '../../hooks/queryKeys'
 import type { BatchExecution } from '../../types/admin'
 import { describeAdminError } from '../../utils/adminError'
-import { hasRunning, jobLabel } from '../../utils/batchExecution'
+import { hasRunning, jobLabel, restartableExecutionIds } from '../../utils/batchExecution'
 
 type Notice = { kind: 'done' | 'error'; text: string }
 
@@ -33,6 +33,7 @@ export function AdminBatchPage() {
 
   const executions = data ?? []
   const running = hasRunning(executions)
+  const restartableIds = restartableExecutionIds(executions)
 
   function toggle(executionId: number) {
     setOpenIds((previous) => {
@@ -102,6 +103,7 @@ export function AdminBatchPage() {
             execution={execution}
             open={openIds.has(execution.executionId)}
             highlighted={execution.executionId === highlightedId}
+            restartable={restartableIds.has(execution.executionId)}
             restarting={restart.isPending && restart.variables === execution.executionId}
             onToggle={() => toggle(execution.executionId)}
             onRestart={() => setRestartTarget(execution)}

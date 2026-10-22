@@ -30,6 +30,28 @@ export function canRestart(status: string): boolean {
   return RESTARTABLE_STATUSES.includes(status)
 }
 
+// 이어서 실행할 수 있는 실행의 ID들. 실패·중단이어도 같은 JobInstance에 더 새로운 실행이 있으면(이미 이어서 실행했으면) 뺀다 -
+// 그 인스턴스는 이미 끝났거나 진행 중이라 다시 이어서 실행하려 하면 서버가 거부한다
+export function restartableExecutionIds(
+  executions: { executionId: number; jobInstanceId: number; status: string }[],
+): Set<number> {
+  const latestByInstance = new Map<number, number>()
+  for (const execution of executions) {
+    const latest = latestByInstance.get(execution.jobInstanceId)
+    if (latest === undefined || execution.executionId > latest) {
+      latestByInstance.set(execution.jobInstanceId, execution.executionId)
+    }
+  }
+  return new Set(
+    executions
+      .filter(
+        (execution) =>
+          canRestart(execution.status) && latestByInstance.get(execution.jobInstanceId) === execution.executionId,
+      )
+      .map((execution) => execution.executionId),
+  )
+}
+
 export function hasRunning(executions: { status: string }[]): boolean {
   return executions.some((execution) => isRunning(execution.status))
 }

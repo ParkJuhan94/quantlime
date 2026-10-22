@@ -11,6 +11,8 @@ import org.springframework.batch.core.StepExecution;
  */
 public record BatchExecutionView(
     long executionId,
+    // 같은 파라미터로 이어서 실행한 실행들은 같은 JobInstance다 - 화면이 "이미 이어서 실행된 실패"를 가려내는 데 쓴다
+    long jobInstanceId,
     String jobName,
     String status,
     String exitCode,
@@ -40,6 +42,7 @@ public record BatchExecutionView(
     private static BatchExecutionView of(JobExecution execution, List<StepView> steps) {
         return new BatchExecutionView(
             execution.getId(),
+            execution.getJobInstance().getInstanceId(),
             execution.getJobInstance().getJobName(),
             execution.getStatus().name(),
             execution.getExitStatus().getExitCode(),
