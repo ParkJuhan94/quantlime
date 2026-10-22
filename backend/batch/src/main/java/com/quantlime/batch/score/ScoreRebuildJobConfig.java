@@ -1,5 +1,6 @@
 package com.quantlime.batch.score;
 
+import com.quantlime.batch.common.BatchFailureNotifier;
 import com.quantlime.common.exception.ExternalApiException;
 import com.quantlime.score.implement.ScoreAppender;
 import com.quantlime.score.service.ScoreService;
@@ -60,11 +61,13 @@ public class ScoreRebuildJobConfig {
     private final StockMasterService stockMasterService;
     private final ScoreService scoreService;
     private final ScoreAppender scoreAppender;
+    private final BatchFailureNotifier failureNotifier;
 
     @Bean
     public Job scoreRebuildJob(Step scoreRebuildDeleteStep, Step domesticScoreRecalcStep,
                                Step overseasScoreRecalcStep) {
         return new JobBuilder(JOB_NAME, jobRepository)
+            .listener(failureNotifier)
             .start(scoreRebuildDeleteStep)
             .next(domesticScoreRecalcStep)
             .next(overseasScoreRecalcStep)
