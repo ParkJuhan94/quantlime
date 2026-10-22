@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { prepareBacktestDataset, runBacktest, runCrossSectionalBacktest, runUniverseBacktest } from '../../api/admin'
+import { Link } from 'react-router-dom'
 import { AdminActionCard } from '../../components/admin/AdminActionCard'
+import { BatchStartedResult } from '../../components/admin/BatchStartedResult'
 import type { BacktestMarket } from '../../types/admin'
 
 const MARKETS: BacktestMarket[] = ['KOSPI', 'KOSDAQ', 'NASDAQ', 'NYSE']
@@ -39,8 +41,11 @@ export function AdminBacktestPage() {
       <div>
         <h2 className="text-base font-bold text-gray-900">백테스트</h2>
         <p className="text-sm text-gray-500">
-          무거운 연산이라 응답이 길어지면 연결이 끊길 수 있어요. 끊겨도 서버에서는 계속 진행되니, 완료 여부는 서버
-          로그나 저장된 결과 건수로 확인하세요.
+          무거운 연산이라 시작하면 바로 응답하고 서버에서 계속 진행해요. 진행 상황과 실패했을 때 이어서 실행은{' '}
+          <Link to="/admin/batch" className="font-semibold text-gray-700 hover:underline">
+            배치 실행
+          </Link>{' '}
+          화면에서 확인하세요. 2번(종목 백테스트)만 끝날 때까지 기다려요.
         </p>
       </div>
 
@@ -53,6 +58,7 @@ export function AdminBacktestPage() {
           description: '유니버스 선정과 백필을 한 번에 돌려서 오래 걸리고 외부 시세 호출을 많이 써요.',
         }}
         run={prepareBacktestDataset}
+        renderResult={(text) => <BatchStartedResult text={text} />}
       />
 
       <AdminActionCard
@@ -85,13 +91,14 @@ export function AdminBacktestPage() {
             : '수십 분 이상 걸릴 수 있고, 오늘 이미 실행한 종목은 건너뛰어요.',
         }}
         run={() => runUniverseBacktest(force)}
+        renderResult={(text) => <BatchStartedResult text={text} />}
       >
         <Checkbox id="backtest-force" checked={force} onChange={setForce} label="오늘 실행한 종목도 다시 실행" />
       </AdminActionCard>
 
       <AdminActionCard
         title="4. 횡단면 Rank IC 백테스트"
-        description="같은 날짜의 여러 종목을 줄 세워 비교합니다. 3번(유니버스 전체)이 먼저 끝나 있어야 해요. 여러 시장을 동시에 여러 요청으로 나눠 실행하지 마세요. 한쪽이 느려지면 나머지가 전부 실패해요."
+        description="같은 날짜의 여러 종목을 줄 세워 비교합니다. 3번(유니버스 전체)이 먼저 끝나 있어야 해요. 다른 백테스트가 실행 중이면 시작되지 않아요."
         buttonLabel="횡단면 실행"
         disabled={!scoreVersion.trim() || nullRepeats < 1}
         confirm={{
@@ -108,6 +115,7 @@ export function AdminBacktestPage() {
             nullRepeats,
           })
         }
+        renderResult={(text) => <BatchStartedResult text={text} />}
       >
         <label className="block text-sm font-semibold text-gray-700" htmlFor="backtest-market">
           시장
