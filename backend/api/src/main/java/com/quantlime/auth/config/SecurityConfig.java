@@ -52,7 +52,6 @@ public class SecurityConfig {
         "/dev/**",
         "/swagger-ui/**",
         "/swagger-ui.html",
-        "/swagger-dark.css",
         "/v3/api-docs/**",
         "/ws/**",
         // Prometheus 스크랩 대상(/actuator/prometheus) + health. nginx가
