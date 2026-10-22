@@ -1,0 +1,230 @@
+/* Swagger UI 다크 테마 - 색 반전 방식은 배경/글자가 따로 뒤집혀 어색해서, 주요 요소의 색을 직접 지정한다.
+   메서드별 색(GET/POST/...)은 Swagger 기본의 반투명 틴트를 그대로 써서 어두운 배경 위에서도 구분된다. */
+:root {
+  color-scheme: dark;
+  --sd-bg: #161e2d;
+  --sd-surface: #1e283b;
+  --sd-surface-2: #28344b;
+  --sd-border: #364560;
+  --sd-text: #e4e4e7;
+  --sd-muted: #a1a1aa;
+}
+
+html,
+body {
+  background: var(--sd-bg) !important;
+}
+
+.swagger-ui,
+.swagger-ui .info .title,
+.swagger-ui .info p,
+.swagger-ui .info li,
+.swagger-ui .info table,
+.swagger-ui .info a,
+.swagger-ui .opblock-tag,
+.swagger-ui .opblock-tag small,
+.swagger-ui .opblock .opblock-summary-path,
+.swagger-ui .opblock .opblock-summary-path__deprecated,
+.swagger-ui .opblock .opblock-summary-description,
+.swagger-ui .opblock .opblock-section-header h4,
+.swagger-ui .opblock .opblock-section-header label,
+.swagger-ui .opblock-description-wrapper p,
+.swagger-ui .opblock-external-docs-wrapper p,
+.swagger-ui .opblock-title_normal p,
+.swagger-ui .tab li,
+.swagger-ui label,
+.swagger-ui table thead tr td,
+.swagger-ui table thead tr th,
+.swagger-ui table tbody tr td,
+.swagger-ui .parameter__name,
+.swagger-ui .parameter__type,
+.swagger-ui .parameter__in,
+.swagger-ui .response-col_status,
+.swagger-ui .response-col_description,
+.swagger-ui .responses-inner h4,
+.swagger-ui .responses-inner h5,
+.swagger-ui .model,
+.swagger-ui .model-title,
+.swagger-ui .prop-type,
+.swagger-ui section.models h4,
+.swagger-ui .markdown p,
+.swagger-ui .markdown pre,
+.swagger-ui .renderedMarkdown p,
+.swagger-ui .scheme-container .schemes > label,
+.swagger-ui .servers > label,
+.swagger-ui .dialog-ux .modal-ux-header h3,
+.swagger-ui .dialog-ux .modal-ux-content h4,
+.swagger-ui .dialog-ux .modal-ux-content p {
+  color: var(--sd-text);
+}
+
+.swagger-ui .info .base-url,
+.swagger-ui .parameter__extension,
+.swagger-ui .parameter__in,
+.swagger-ui .response-col_links {
+  color: var(--sd-muted);
+}
+
+.swagger-ui .scheme-container {
+  background: var(--sd-surface);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.6);
+}
+
+.swagger-ui .opblock-tag {
+  border-bottom-color: var(--sd-border);
+}
+
+.swagger-ui .opblock .opblock-section-header,
+.swagger-ui .opblock-body .opblock-description-wrapper,
+.swagger-ui table.headers td {
+  background: rgba(0, 0, 0, 0.25);
+  box-shadow: none;
+}
+
+.swagger-ui .opblock-body pre.microlight,
+.swagger-ui .highlight-code > .microlight {
+  background: #0f1623 !important;
+}
+
+.swagger-ui .table-container,
+.swagger-ui table tbody tr td {
+  border-color: var(--sd-border);
+}
+
+.swagger-ui input[type="text"],
+.swagger-ui input[type="password"],
+.swagger-ui input[type="search"],
+.swagger-ui input[type="email"],
+.swagger-ui input[type="file"],
+.swagger-ui textarea,
+.swagger-ui select {
+  background-color: var(--sd-surface-2);
+  color: var(--sd-text);
+  border-color: var(--sd-border);
+}
+
+.swagger-ui .btn {
+  color: var(--sd-text);
+  border-color: var(--sd-muted);
+  background: transparent;
+}
+
+.swagger-ui .btn.authorize {
+  color: #49cc90;
+  border-color: #49cc90;
+}
+
+.swagger-ui .btn.authorize svg {
+  fill: #49cc90;
+}
+
+/* 펼침 화살표, 자물쇠 등 단색 아이콘 */
+.swagger-ui svg.arrow,
+.swagger-ui .opblock-control-arrow svg,
+.swagger-ui .opblock-summary svg,
+.swagger-ui .expand-methods svg,
+.swagger-ui .expand-operation svg,
+.swagger-ui .opblock-summary-control svg,
+.swagger-ui .authorization__btn svg,
+.swagger-ui .model-toggle:after,
+.swagger-ui section.models .model-container .model-box svg {
+  fill: var(--sd-text);
+}
+
+.swagger-ui section.models {
+  border-color: var(--sd-border);
+}
+
+.swagger-ui section.models .model-container,
+.swagger-ui .model-box {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* 인증 모달 */
+.swagger-ui .dialog-ux .modal-ux {
+  background: var(--sd-surface);
+  border-color: var(--sd-border);
+}
+
+.swagger-ui .dialog-ux .modal-ux-header {
+  border-bottom-color: var(--sd-border);
+}
+
+/* API 박스 내부 배경 - Swagger 기본 틴트(0.1)는 어두운 배경에서 탁해 보여 채도를 올린다 */
+.swagger-ui .opblock.opblock-get { background: rgba(97, 175, 254, 0.2); }
+.swagger-ui .opblock.opblock-post { background: rgba(73, 204, 144, 0.2); }
+.swagger-ui .opblock.opblock-put { background: rgba(252, 161, 48, 0.2); }
+.swagger-ui .opblock.opblock-delete { background: rgba(249, 62, 62, 0.2); }
+.swagger-ui .opblock.opblock-patch { background: rgba(80, 227, 194, 0.2); }
+.swagger-ui .opblock.opblock-head { background: rgba(144, 18, 254, 0.2); }
+.swagger-ui .opblock.opblock-options { background: rgba(13, 90, 167, 0.2); }
+
+/* 드롭다운(select) 화살표 - 기본 화살표가 검은색이라 어두운 배경에서 안 보여 밝은 색으로 교체 */
+.swagger-ui select {
+  background-image: url("data:image/svg+xml;charset=utf-8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'><path fill='%23f4f4f5' d='M13.418 7.859a.695.695 0 0 1 .978 0 .68.68 0 0 1 0 .969l-3.908 3.83a.697.697 0 0 1-.979 0l-3.908-3.83a.68.68 0 0 1 0-.969.695.695 0 0 1 .978 0L10 11z'/></svg>");
+}
+
+/* Select a definition 테두리 - 기본 초록(#62a03f)을 무채색으로 */
+.swagger-ui .topbar .download-url-wrapper .select-label select {
+  border-color: #71717a;
+}
+
+/* 기본 스타일이 밝은 배경 전제라 어두운 배경에서 대비가 낮은 요소들 */
+.swagger-ui .model .property.primitive,
+.swagger-ui .prop-format {
+  color: var(--sd-muted);
+}
+
+.swagger-ui .markdown code,
+.swagger-ui .renderedMarkdown code {
+  color: #c4b5fd;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.swagger-ui .errors-wrapper hgroup h4,
+.swagger-ui .errors-wrapper .errors small {
+  color: var(--sd-text);
+}
+
+/* 상단 바도 순검정(#1b1b1b) 대신 배경과 같은 네이비 계열로 맞춘다 */
+.swagger-ui .topbar {
+  background-color: #0f1623;
+}
+
+/* required 표시 - 기본 빨강(rgba(255,0,0,.6))이 어두운 배경에서 대비가 낮아 밝은 코랄로 올린다 */
+.swagger-ui .parameter__name.required span {
+  color: #ff4d4d;
+}
+
+/* required 라벨을 박스로 - 원래 absolute 배치라 박스 크기에 맞게 패딩/여백을 조정했다 */
+.swagger-ui .parameter__name.required:after {
+  color: #ff4d4d;
+  border: 1px solid #ff4d4d;
+  border-radius: 4px;
+  background: rgba(255, 77, 77, 0.12);
+  padding: 0 6px;
+  margin: 2px 0 0 6px;
+  line-height: 16px;
+}
+
+/* (path)/(query) 같은 위치 표기, integer($int64) 포맷, 입력창 placeholder도 한 단계 밝게 */
+.swagger-ui .parameter__in,
+.swagger-ui .prop-format {
+  color: #c4c4cc;
+}
+
+.swagger-ui input::placeholder,
+.swagger-ui textarea::placeholder {
+  color: #9ca3af;
+}
+
+/* 표 헤더 아래 구분선 - 기본값(rgba(59,65,81,.2))이 어두운 배경에선 안 보여 밝은 네이비 회색으로 */
+.swagger-ui table thead tr td,
+.swagger-ui table thead tr th {
+  border-bottom-color: #54658a;
+}
+
+.swagger-ui section.models,
+.swagger-ui section.models.is-open h4 {
+  border-color: #54658a;
+}
