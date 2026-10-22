@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # EC2에서 최초 1회(또는 스크립트 경로가 바뀔 때) 실행 - MySQL/업로드 백업을
-# crontab에 등록한다. 의도한 실행 시각은 KST 기준 새벽 3시/3시 15분(16시
-# 배치와 장중을 피한 시간대)이지만, EC2 호스트 자체가 UTC(Etc/UTC)로
+# crontab에 등록한다. 의도한 실행 시각은 KST 기준 21시 50분/22시 5분(장중과
+# 서버 중지 구간 00:00~07:40을 피한 시간대, 2026-10-22 새벽 3시에서 이동)이지만, EC2 호스트 자체가 UTC(Etc/UTC)로
 # 떠 있어 시각은 UTC로 환산해 적는다 - crontab 시각은 항상 호스트
 # 로컬시간 기준이기 때문(cron(8)). KST가 UTC+9라 "매일 03:00/03:15 KST"는
 # "전날 18:00/18:15 UTC"와 같다 - 매일 도는 배치라 날짜가 하루 당겨지는 것
@@ -41,9 +41,11 @@ UPLOADS_MARKER="# quantlime-backup-uploads"
 BOOT_MARKER="# quantlime-boot-up"
 METRICS_MARKER="# quantlime-container-metrics"
 
-# 18:00/18:15 UTC = 03:00/03:15 KST(다음날)
-BACKUP_LINE="0 18 * * * $QUANTLIME_DIR/scripts/backup-mysql.sh >> $LOG_DIR/backup-mysql.log 2>&1 $BACKUP_MARKER"
-UPLOADS_LINE="15 18 * * * $QUANTLIME_DIR/scripts/backup-uploads.sh >> $LOG_DIR/backup-uploads.log 2>&1 $UPLOADS_MARKER"
+# 12:50/13:05 UTC = 21:50/22:05 KST(같은 날) - 운영 EC2가 00:00~07:40 KST 중지되므로
+# 새벽 시각은 영영 못 돈다(크론은 놓친 실행을 따라잡지 않는다). 당일 일배치(15:36)와
+# 21:00 구독 갱신·정리가 끝난 뒤라 그날 데이터가 백업에 담긴다.
+BACKUP_LINE="50 12 * * * $QUANTLIME_DIR/scripts/backup-mysql.sh >> $LOG_DIR/backup-mysql.log 2>&1 $BACKUP_MARKER"
+UPLOADS_LINE="5 13 * * * $QUANTLIME_DIR/scripts/backup-uploads.sh >> $LOG_DIR/backup-uploads.log 2>&1 $UPLOADS_MARKER"
 # 1분마다(UTC/KST 무관) - docker stats 결과를 textfile collector로 내보낸다.
 METRICS_LINE="* * * * * $QUANTLIME_DIR/scripts/report-container-metrics.sh >> $LOG_DIR/report-container-metrics.log 2>&1 $METRICS_MARKER"
 
@@ -65,8 +67,8 @@ $METRICS_LINE"
 # 앞뒤 빈 줄 정리 후 반영
 echo "$new_crontab" | sed '/^$/d' | crontab -
 
-echo "[install-cron] MySQL 백업(매일 03:00 KST = 18:00 UTC) 등록/갱신"
-echo "[install-cron] 업로드 이미지 백업(매일 03:15 KST = 18:15 UTC) 등록/갱신"
+echo "[install-cron] MySQL 백업(매일 21:50 KST = 12:50 UTC) 등록/갱신"
+echo "[install-cron] 업로드 이미지 백업(매일 22:05 KST = 13:05 UTC) 등록/갱신"
 echo "[install-cron] 부팅 시 스택 자동 기동(@reboot) 등록/갱신"
 echo "[install-cron] 컨테이너 메트릭(docker stats -> textfile collector, 1분마다) 등록/갱신"
 echo "[install-cron] 완료. 현재 crontab:"
