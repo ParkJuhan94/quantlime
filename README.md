@@ -102,9 +102,6 @@ docker-compose up -d
 # 백엔드 (backend/.env.example을 복사해 .env 작성)
 cd backend && ./gradlew :api:bootRun
 
-# (선택) 퀀트 엔진을 Docker 없이 직접 실행하려면 compose의 quant-engine을 끄고
-# cd quant-engine && uvicorn main:app --reload --port 8000
-
 # 프론트엔드
 cd frontend && npm run dev
 ```
