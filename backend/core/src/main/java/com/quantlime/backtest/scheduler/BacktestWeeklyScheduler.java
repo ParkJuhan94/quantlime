@@ -20,8 +20,9 @@ import org.springframework.stereotype.Component;
  * 재계산해도 의미 있는 변화가 크지 않은 반면(사용자와 협의해 결정),
  * run-universe가 종목당 축×horizon마다 block bootstrap 500회를 도는
  * 무거운 연산이라 daily로 얹으면 리소스 부담이 누적된다 - 그래서
- * 가격/스코어(트리거1)처럼 매일이 아니라 주 1회(금요일 정규장+NXT 마감,
- * 20:10 스코어 확정 배치 이후)로 고정한다.
+ * 가격/스코어(트리거1)처럼 매일이 아니라 주 1회(금요일 16:30 - 15:36
+ * 국내 배치 직후, 락 TTL 3시간이라 최악에도 19:30에 끝나 20:20 알림과
+ * 21:00 구독 갱신 앞이며 운영 EC2 00:00 중지 전에 마무리된다)로 고정한다.
  *
  * <p>세 단계 모두 같은 Redis 락(runExclusively) 아래서 순차 실행해, 이
  * 스케줄과 관리자 수동 트리거(BacktestAdminController)가 겹쳐 돌지 않게
@@ -41,7 +42,7 @@ public class BacktestWeeklyScheduler {
     private final CrossSectionalBacktestService crossSectionalBacktestService;
     private final BacktestReader backtestReader;
 
-    @Scheduled(cron = "0 0 21 * * FRI", zone = "Asia/Seoul")
+    @Scheduled(cron = "0 30 16 * * FRI", zone = "Asia/Seoul")
     public void runWeeklyBacktest() {
         try {
             redisLockService.runExclusively(LOCK_KEY, LOCK_TTL, () -> {

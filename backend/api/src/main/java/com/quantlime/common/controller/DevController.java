@@ -281,7 +281,7 @@ public class DevController {
 
     @PostMapping("/subscriptions/expire-lapsed")
     @Operation(summary = "[개발용] 해지 후 기간이 끝난 구독 만료 처리 수동 실행 - 정규 실행은 "
-        + "매일 04:00 SubscriptionRenewalScheduler. 만료된 구독마다 SUBSCRIPTION_EXPIRED 알림 발송")
+        + "매일 21:00 SubscriptionRenewalScheduler. 만료된 구독마다 SUBSCRIPTION_EXPIRED 알림 발송")
     public ResponseEntity<String> triggerExpireLapsedSubscriptions() {
         log.info("[dev] 구독 만료 처리 수동 트리거 시작");
         subscriptionService.expireLapsedSubscriptions();

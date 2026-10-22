@@ -13,7 +13,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * 구독 자동 갱신을 매일 04:00에 실행한다. 다른 배치(MarketDataRefreshService,
+ * 구독 자동 갱신을 매일 21:00에 실행한다(운영 EC2가 00:00~07:40 중지돼 새벽 시각은 영영 못 돈다). 다른 배치(MarketDataRefreshService,
  * FeedCollectionFacade 등)는 전부 RedisLockService.runExclusively로 분산락을
  * 쓰는데 이 스케줄러만 락이 없었다 - 인스턴스가 2대 이상이 되면 같은 구독이
  * 동시에 이중 결제될 수 있는 구조였다(docs/00-sre/SRE.md §5-1 참고, 2026-09-24
@@ -32,7 +32,7 @@ public class SubscriptionRenewalScheduler {
     private final SubscriptionService subscriptionService;
     private final ApplicationEventPublisher eventPublisher;
 
-    @Scheduled(cron = "0 0 4 * * *", zone = "Asia/Seoul")
+    @Scheduled(cron = "0 0 21 * * *", zone = "Asia/Seoul")
     public void renewDueSubscriptions() {
         try {
             redisLockService.runExclusively(LOCK_KEY, LOCK_TTL, () -> {
@@ -54,7 +54,7 @@ public class SubscriptionRenewalScheduler {
         // (2026-09-24, 카프카 다도메인 확장 Phase 2). 발행은 비동기 fire-and-forget이라
         // 이 루프는 브로커 실패로 중단되지 않는다 - 발행 실패는 KafkaEventSender가
         // ERROR 로그와 kafka.publish.failures 카운터로 남기고(2026-10-01), 그 구독은
-        // 갱신 상태가 그대로라 다음날 04:00 배치가 다시 집어든다. 개별 결제
+        // 갱신 상태가 그대로라 다음날 21:00 배치가 다시 집어든다. 개별 결제
         // 실패/재시도는 PaymentService.chargeRenewal과 DLT 핸들러가 처리한다.
         dueSubscriptionIds.forEach(subscriptionId ->
             eventPublisher.publishEvent(new SubscriptionRenewalDueEvent(subscriptionId)));
