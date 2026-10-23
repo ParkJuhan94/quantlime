@@ -1,14 +1,15 @@
 package com.quantlime.market.service;
 
-import com.quantlime.price.dto.OverseasStockTradingValue;
 import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.price.service.OverseasDailyPriceBackfillService;
+import com.quantlime.stock.domain.MarketType;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.StockMasterService;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,6 +23,11 @@ import org.springframework.stereotype.Service;
  * REIT를 걸러내는 것과 달리, 여기서는 KIS 마스터파일 업종코드(Stock.sector에
  * 저장됨, KisOverseasStockMasterEntry.INDUSTRY_CODE_REAL_ESTATE 참고)로
  * "630"(부동산 섹터, REIT+CBRE 등 부동산 서비스업 포함)을 걸러낸다.
+ *
+ * <p>벤치마크 지수가 있는 시장(NASDAQ, NYSE)의 종목만 유니버스에 넣는다(2026-10-23) - 백테스트는 종목 수익률에서 시장 지수
+ * 수익률을 뺀 초과수익률로 측정해서, 벤치마크가 없는 AMEX 종목은 {@code BacktestService}가 계산 전에 "지원하지 않는 시장"으로
+ * 거절한다. 운영에서 해외 유니버스 398종목 중 AMEX가 242종목(61%)이라 주간 백테스트가 skip 상한을 넘어 실패했고, 그 종목들의
+ * 백필 시간(해외 데이터셋 준비 약 6분 20초 중 절반 이상)도 헛돌았다.
  */
 @Slf4j
 @Service
@@ -39,6 +45,10 @@ public class OverseasUniverseSelectionService {
     // (백테스트 워밍업 제외 후에도 horizon=60 표본 확보).
     private static final int UNIVERSE_TARGET_DAYS = 520;
     private static final int UNIVERSE_SIZE = 500;
+    // BacktestService.BENCHMARK_INDEX_CODE에서 해외에 해당하는 시장(NASDAQ→NASDAQ, NYSE→SP500)과 같은 집합이다. market 패키지가
+    // backtest 패키지를 참조하면 의존이 거꾸로(backtest → market이 정방향) 걸려서 여기에 복제한다 - 벤치마크 지수를 추가할 때
+    // 세 곳(BacktestService, CrossSectionalBacktestService, 이 상수)을 같이 고칠 것.
+    private static final Set<MarketType> BENCHMARK_MARKETS = Set.of(MarketType.NASDAQ, MarketType.NYSE);
     // 종목 간 호출 딜레이. 해외도 이제 국내와 같은 Toss 캔들 API를 쓰지만
     // (2026-07-29, KIS에서 이관), 최초 백필처럼 대부분 종목이 API를 실제로
     // 호출하는 상황에서는 여전히 레이트리밋 여유를 두는 게 안전하다.
@@ -50,18 +60,26 @@ public class OverseasUniverseSelectionService {
     private final Clock clock;
 
     public List<String> selectAndBackfillUniverse() {
-        List<Stock> candidates = stockMasterService.getAllListedStocks().stream()
-            .filter(stock -> !stock.getMarketType().isDomestic())
+        List<Stock> benchmarkMarketStocks = stockMasterService.getAllListedStocks().stream()
+            .filter(stock -> BENCHMARK_MARKETS.contains(stock.getMarketType()))
+            .toList();
+        List<Stock> candidates = benchmarkMarketStocks.stream()
             .filter(stock -> !isRealEstateSector(stock))
             .toList();
-        log.info("해외 유니버스 후보 종목(부동산 섹터 제외): {}건", candidates.size());
+        log.info("해외 유니버스 후보 종목(벤치마크 시장만, 부동산 섹터 제외): {}건", candidates.size());
 
         backfillEach(candidates, SCAN_TARGET_DAYS);
 
         LocalDate since = LocalDate.now(clock).minusMonths(3);
-        List<OverseasStockTradingValue> ranked =
-            dailyPriceReader.findTopOverseasByTradingValue(since, UNIVERSE_SIZE);
-        List<String> selectedCodes = ranked.stream().map(OverseasStockTradingValue::stockCode).toList();
+        // 거래대금 순위는 시장 구분이 없어서, 전체 순위에서 벤치마크 시장 종목만 남긴 뒤 상위 UNIVERSE_SIZE개를 자른다 -
+        // 먼저 자르면 AMEX 같은 제외 대상이 슬롯을 차지해 유니버스가 줄어든다
+        Set<String> benchmarkMarketCodes = benchmarkMarketStocks.stream()
+            .map(Stock::getStockCode)
+            .collect(Collectors.toSet());
+        List<String> selectedCodes = dailyPriceReader.findOverseasCodesByTradingValueDesc(since).stream()
+            .filter(benchmarkMarketCodes::contains)
+            .limit(UNIVERSE_SIZE)
+            .toList();
         log.info("해외 거래대금 상위 {}종목 선정 완료(기준일 {} 이후)", selectedCodes.size(), since);
 
         Set<String> selectedCodeSet = Set.copyOf(selectedCodes);
