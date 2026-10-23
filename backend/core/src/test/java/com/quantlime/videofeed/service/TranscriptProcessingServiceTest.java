@@ -50,7 +50,7 @@ class TranscriptProcessingServiceTest {
     @BeforeEach
     void setUpService() {
         transcriptProcessingService = new TranscriptProcessingService(
-            videoReader, new TranscriptFetcher(pythonEngineClient), transcriptAppender);
+            videoReader, new TranscriptFetcher(pythonEngineClient), transcriptAppender, true);
     }
 
     private Video videoOf(Long id, String externalVideoId) {
@@ -105,6 +105,22 @@ class TranscriptProcessingServiceTest {
         transcriptProcessingService.processVideo(1L);
 
         // then
+        verifyNoInteractions(pythonEngineClient);
+        verifyNoInteractions(transcriptAppender);
+    }
+
+    @Test
+    @DisplayName("[자체 수집이 꺼져 있으면 영상을 조회하지도 않고 상태·예외 없이 돌아온다(재시도·DLT가 생기지 않는다)]")
+    void processVideo_fetchDisabled_isNoOpWithoutTouchingVideo() {
+        // given
+        TranscriptProcessingService disabled = new TranscriptProcessingService(
+            videoReader, new TranscriptFetcher(pythonEngineClient), transcriptAppender, false);
+
+        // when
+        disabled.processVideo(1L);
+
+        // then
+        verifyNoInteractions(videoReader);
         verifyNoInteractions(pythonEngineClient);
         verifyNoInteractions(transcriptAppender);
     }
