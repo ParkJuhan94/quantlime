@@ -7,7 +7,6 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import com.quantlime.price.dto.OverseasStockTradingValue;
 import com.quantlime.price.implement.DailyPriceReader;
 import com.quantlime.price.service.OverseasDailyPriceBackfillService;
 import com.quantlime.stock.domain.ListingStatus;
@@ -52,8 +51,7 @@ class OverseasUniverseSelectionServiceTest {
         Stock nasdaq = stock("AAPL", "APPLE INC", MarketType.NASDAQ);
         Stock nyse = stock("AA", "ALCOA CORPORATION", MarketType.NYSE);
         given(stockMasterService.getAllListedStocks()).willReturn(List.of(domestic, nasdaq, nyse));
-        given(dailyPriceReader.findTopOverseasByTradingValue(any(), eq(500)))
-            .willReturn(List.of(new OverseasStockTradingValue("AAPL", 1_000_000.0)));
+        given(dailyPriceReader.findOverseasCodesByTradingValueDesc(any())).willReturn(List.of("AAPL"));
 
         // when
         List<String> selected = overseasUniverseSelectionService.selectAndBackfillUniverse();
@@ -69,14 +67,48 @@ class OverseasUniverseSelectionServiceTest {
     }
 
     @Test
+    @DisplayName("[벤치마크 지수가 없는 AMEX 종목은 거래대금 순위가 높아도 후보·백필·유니버스에서 모두 제외한다]")
+    void selectAndBackfillUniverse_excludesMarketsWithoutBenchmark() {
+        // given: 거래대금 순위에서 AMEX 종목이 NASDAQ 종목보다 앞선다
+        given(stockMasterService.getAllListedStocks()).willReturn(List.of(
+            stock("AMXA", "AMEX LISTED CO", MarketType.AMEX),
+            stock("AAPL", "APPLE INC", MarketType.NASDAQ)
+        ));
+        given(dailyPriceReader.findOverseasCodesByTradingValueDesc(any())).willReturn(List.of("AMXA", "AAPL"));
+
+        // when
+        List<String> selected = overseasUniverseSelectionService.selectAndBackfillUniverse();
+
+        // then: AMEX는 1차 스캔과 2차 백필 어디에도 호출되지 않고, 반환되는 유니버스에도 없다
+        assertThat(selected).containsExactly("AAPL");
+        verify(overseasDailyPriceBackfillService, times(0))
+            .backfillHistoryIfNeeded(eq("AMXA"), org.mockito.ArgumentMatchers.anyInt());
+        verify(overseasDailyPriceBackfillService, times(1)).backfillHistoryIfNeeded("AAPL", 60);
+        verify(overseasDailyPriceBackfillService, times(1)).backfillHistoryIfNeeded("AAPL", 520);
+    }
+
+    @Test
+    @DisplayName("[상장폐지돼 종목마스터에 없는 코드는 거래대금 순위에 남아 있어도 유니버스에서 제외한다]")
+    void selectAndBackfillUniverse_excludesCodesNotListed() {
+        // given
+        given(stockMasterService.getAllListedStocks()).willReturn(List.of(stock("AAPL", "APPLE INC", MarketType.NASDAQ)));
+        given(dailyPriceReader.findOverseasCodesByTradingValueDesc(any())).willReturn(List.of("DELISTED", "AAPL"));
+
+        // when
+        List<String> selected = overseasUniverseSelectionService.selectAndBackfillUniverse();
+
+        // then
+        assertThat(selected).containsExactly("AAPL");
+    }
+
+    @Test
     @DisplayName("[업종코드가 630(부동산/REIT)인 종목은 후보에서 제외한다]")
     void selectAndBackfillUniverse_excludesRealEstateSector() {
         // given
         Stock reit = stock("O", "REALTY INCOME CORP", MarketType.NYSE, "630");
         Stock normalStock = stock("AAPL", "APPLE INC", MarketType.NASDAQ, "720");
         given(stockMasterService.getAllListedStocks()).willReturn(List.of(reit, normalStock));
-        given(dailyPriceReader.findTopOverseasByTradingValue(any(), eq(500)))
-            .willReturn(List.of(new OverseasStockTradingValue("AAPL", 1_000_000.0)));
+        given(dailyPriceReader.findOverseasCodesByTradingValueDesc(any())).willReturn(List.of("AAPL"));
 
         // when
         List<String> selected = overseasUniverseSelectionService.selectAndBackfillUniverse();
@@ -97,8 +129,7 @@ class OverseasUniverseSelectionServiceTest {
             stock("AAPL", "APPLE INC", MarketType.NASDAQ),
             stock("MSFT", "MICROSOFT CORP", MarketType.NASDAQ)
         ));
-        given(dailyPriceReader.findTopOverseasByTradingValue(any(), eq(500)))
-            .willReturn(List.of(new OverseasStockTradingValue("AAPL", 1_000_000.0)));
+        given(dailyPriceReader.findOverseasCodesByTradingValueDesc(any())).willReturn(List.of("AAPL"));
 
         // when
         overseasUniverseSelectionService.selectAndBackfillUniverse();
