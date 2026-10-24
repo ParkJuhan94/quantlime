@@ -27,6 +27,14 @@ kafka:
   dlt:
     slack-suppressed-domains: videofeed-transcript
 
+# 위 이유로 운영의 자체 자막 수집은 한 번도 성공하지 못해(2026-10-23 최근 15시간 /transcribe 11건 전부 500) 영상마다
+# 4번 재시도 후 DLT로 가고 엔진 스레드·서킷브레이커만 소모한다. 자막은 로컬 동기화(TranscriptImportService)로만 채우므로
+# 운영에서는 자체 수집을 끈다 - 영상은 SELECTED/FAILED 상태로 동기화를 기다린다. 프록시 등으로 운영 IP 차단이 풀리면
+# true로 되돌린다(.env.prod가 아니라 이 파일에 고정한 이유: 환경변수가 비면 기본값(true)으로 조용히 돌아가 버려서).
+videofeed:
+  transcript:
+    fetch-enabled: false
+
 logging:
   level:
     root: info
