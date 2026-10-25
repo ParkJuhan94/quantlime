@@ -1,6 +1,7 @@
 package com.quantlime.infra.upbit;
 
 import com.quantlime.common.util.ExternalApiInvoker;
+import com.quantlime.infra.upbit.dto.UpbitCandle;
 import com.quantlime.infra.upbit.dto.UpbitMinuteCandle;
 import com.quantlime.infra.upbit.dto.UpbitTicker;
 import com.quantlime.infra.upbit.exception.UpbitApiErrorCode;
@@ -10,6 +11,7 @@ import io.github.resilience4j.retry.annotation.Retry;
 import java.util.Arrays;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -59,6 +61,34 @@ public class UpbitApiClient {
                         .build(unitMinutes))
                     .retrieve()
                     .body(UpbitMinuteCandle[].class);
+                return candles == null ? null : Arrays.asList(candles);
+            });
+    }
+
+    /**
+     * 비트코인 상세 차트용 OHLCV 캔들 - {@code candlePath}는 {@code minutes/5}, {@code days}, {@code weeks},
+     * {@code months} 중 하나(호출측이 고정 목록에서 고른다). 최신순(내림차순)으로 최대 200개가 내려오고,
+     * {@code to}(UTC {@code Z} 표기)를 주면 그 시각 직전부터 과거 방향으로 조회한다.
+     */
+    @Retry(name = "upbit")
+    @CircuitBreaker(name = "upbit")
+    @Bulkhead(name = "upbit")
+    public List<UpbitCandle> getCandles(String market, String candlePath, int count, @Nullable String to) {
+        return ExternalApiInvoker.call(
+            UpbitApiErrorCode.CANDLE_INQUIRY_FAILED,
+            () -> {
+                UpbitCandle[] candles = upbitRestClient.get()
+                    .uri(uriBuilder -> {
+                        uriBuilder.path("/v1/candles/" + candlePath)
+                            .queryParam("market", market)
+                            .queryParam("count", count);
+                        if (to != null) {
+                            uriBuilder.queryParam("to", to);
+                        }
+                        return uriBuilder.build();
+                    })
+                    .retrieve()
+                    .body(UpbitCandle[].class);
                 return candles == null ? null : Arrays.asList(candles);
             });
     }

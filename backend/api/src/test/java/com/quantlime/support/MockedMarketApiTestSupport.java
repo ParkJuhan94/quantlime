@@ -1,6 +1,7 @@
 package com.quantlime.support;
 
 import com.quantlime.infra.toss.TossApiClient;
+import com.quantlime.infra.upbit.UpbitApiClient;
 import com.quantlime.market.cache.BitcoinChartCache;
 import com.quantlime.market.cache.DomesticIndexMinuteChartCache;
 import com.quantlime.market.cache.ExchangeRateChartCache;
@@ -41,6 +42,9 @@ public abstract class MockedMarketApiTestSupport extends ApiTestSupport {
 
     @MockBean
     protected ExchangeRateChartCache exchangeRateChartCache;
+
+    @MockBean
+    protected UpbitApiClient upbitApiClient;
 
     @MockBean
     protected WatchlistService watchlistService;
