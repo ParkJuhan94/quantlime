@@ -11,6 +11,7 @@ import com.quantlime.price.scheduler.DomesticRegularCloseCaptureScheduler;
 import com.quantlime.telegramfeed.service.TelegramCollectionFacade;
 import com.quantlime.telegramfeed.service.TelegramDigestGenerationFacade;
 import com.quantlime.telegramfeed.service.TelegramPostRetentionService;
+import com.quantlime.tradingflow.service.StockInvestorTradingRefreshService;
 import com.quantlime.videofeed.service.FeedCollectionFacade;
 import com.quantlime.videofeed.service.SummaryCollectionFacade;
 import com.quantlime.videofeed.service.TranscriptCollectionFacade;
@@ -30,6 +31,9 @@ class StartupCatchUpRunnerTest {
 
     @Mock
     private MarketDataRefreshService marketDataRefreshService;
+
+    @Mock
+    private StockInvestorTradingRefreshService stockInvestorTradingRefreshService;
 
     @Mock
     private DomesticRegularCloseCaptureScheduler domesticRegularCloseCaptureScheduler;
@@ -73,7 +77,8 @@ class StartupCatchUpRunnerTest {
     @BeforeEach
     void setUp() {
         startupCatchUpRunner = new StartupCatchUpRunner(
-            marketDataRefreshService, domesticRegularCloseCaptureScheduler, feedCollectionFacade,
+            marketDataRefreshService, stockInvestorTradingRefreshService, domesticRegularCloseCaptureScheduler,
+            feedCollectionFacade,
             transcriptCollectionFacade, summaryCollectionFacade, videoRetentionService,
             telegramCollectionFacade, telegramDigestGenerationFacade, telegramPostRetentionService,
             marketDataCatchUpTaskExecutor, videoFeedCatchUpTaskExecutor, telegramFeedCatchUpTaskExecutor);
@@ -104,6 +109,7 @@ class StartupCatchUpRunnerTest {
 
         // then
         verify(marketDataRefreshService).refreshAllExclusively();
+        verify(stockInvestorTradingRefreshService).refreshIfMissed();
         verify(domesticRegularCloseCaptureScheduler).captureIfWithinStartupSafeWindow();
         verify(feedCollectionFacade).runAllExclusively();
         verify(transcriptCollectionFacade).publishBacklog();
@@ -136,6 +142,25 @@ class StartupCatchUpRunnerTest {
     }
 
     @Test
+    @DisplayName("[종목별 투자자 매매동향 캐치업은 가격/스코어 갭필 뒤에 실행한다]")
+    void run_catchesUpStockInvestorTradingAfterMarketDataGapFill() {
+        // given: 갭필이 거래대금 순위(갱신 순서 기준)를 최신으로 만든 뒤에 돌아야 한다
+        willAnswer(invocation -> {
+            Runnable task = invocation.getArgument(0);
+            task.run();
+            return null;
+        }).given(marketDataCatchUpTaskExecutor).execute(any());
+
+        // when
+        startupCatchUpRunner.run(null);
+
+        // then
+        var order = inOrder(marketDataRefreshService, stockInvestorTradingRefreshService);
+        order.verify(marketDataRefreshService).refreshAllExclusively();
+        order.verify(stockInvestorTradingRefreshService).refreshIfMissed();
+    }
+
+    @Test
     @DisplayName("[실행기 제출만 하고 실제로 실행시키지 않으면 캐치업 로직이 호출되지 않는다]")
     void run_withoutExecutorRunningTask_doesNotInvokeCatchUpLogic() {
         // when
@@ -145,7 +170,8 @@ class StartupCatchUpRunnerTest {
         verify(marketDataCatchUpTaskExecutor).execute(any());
         verify(videoFeedCatchUpTaskExecutor).execute(any());
         verify(telegramFeedCatchUpTaskExecutor).execute(any());
-        verifyNoInteractions(marketDataRefreshService, domesticRegularCloseCaptureScheduler,
+        verifyNoInteractions(marketDataRefreshService, stockInvestorTradingRefreshService,
+            domesticRegularCloseCaptureScheduler,
             feedCollectionFacade, transcriptCollectionFacade, summaryCollectionFacade, videoRetentionService,
             telegramCollectionFacade, telegramDigestGenerationFacade, telegramPostRetentionService);
     }

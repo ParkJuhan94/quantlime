@@ -6,6 +6,7 @@ import com.quantlime.price.scheduler.DomesticRegularCloseCaptureScheduler;
 import com.quantlime.telegramfeed.service.TelegramCollectionFacade;
 import com.quantlime.telegramfeed.service.TelegramDigestGenerationFacade;
 import com.quantlime.telegramfeed.service.TelegramPostRetentionService;
+import com.quantlime.tradingflow.service.StockInvestorTradingRefreshService;
 import com.quantlime.videofeed.service.FeedCollectionFacade;
 import com.quantlime.videofeed.service.SummaryCollectionFacade;
 import com.quantlime.videofeed.service.TranscriptCollectionFacade;
@@ -83,6 +84,7 @@ import org.springframework.stereotype.Component;
 public class StartupCatchUpRunner implements ApplicationRunner {
 
     private final MarketDataRefreshService marketDataRefreshService;
+    private final StockInvestorTradingRefreshService stockInvestorTradingRefreshService;
     private final DomesticRegularCloseCaptureScheduler domesticRegularCloseCaptureScheduler;
     private final FeedCollectionFacade feedCollectionFacade;
     private final TranscriptCollectionFacade transcriptCollectionFacade;
@@ -110,6 +112,10 @@ public class StartupCatchUpRunner implements ApplicationRunner {
                 domesticRegularCloseCaptureScheduler::captureIfWithinStartupSafeWindow);
             SafeExecutor.runSafely("기동 시 가격/스코어 갭필",
                 () -> marketDataRefreshService.refreshAllExclusively());
+            // 가격 갭필 뒤에 둔다 - 둘 다 토스를 부르지만 레이트 리밋 그룹이 달라 서로 막지 않고, 갭필(대량 백필)이 먼저
+            // 끝나야 거래대금 순위가 최신이다.
+            SafeExecutor.runSafely("기동 시 종목별 투자자 매매동향 캐치업",
+                () -> stockInvestorTradingRefreshService.refreshIfMissed());
         });
         videoFeedCatchUpTaskExecutor.execute(() ->
             SafeExecutor.runSafely("기동 시 영상 피드 캐치업", this::catchUpVideoFeed));

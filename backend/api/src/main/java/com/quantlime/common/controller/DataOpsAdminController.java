@@ -12,6 +12,7 @@ import com.quantlime.price.service.RegularCloseBackfillService;
 import com.quantlime.stock.dto.StockMasterSyncResult;
 import com.quantlime.stock.service.DomesticStockMasterSyncService;
 import com.quantlime.stock.service.OverseasStockMasterSyncService;
+import com.quantlime.tradingflow.service.StockInvestorTradingRefreshService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -49,6 +50,7 @@ public class DataOpsAdminController {
     private final DailyPriceIntegrityService dailyPriceIntegrityService;
     private final RegularCloseBackfillService regularCloseBackfillService;
     private final BatchJobLaunchService batchJobLaunchService;
+    private final StockInvestorTradingRefreshService stockInvestorTradingRefreshService;
 
     @PostMapping("/stock-master/sync")
     @Operation(summary = "국내 종목마스터 동기화", description = "신규상장·상장폐지를 반영한다.")
@@ -144,6 +146,36 @@ public class DataOpsAdminController {
         RegularCloseBackfillResult result = regularCloseBackfillService.backfill(stockCodes, days);
         log.info("[admin] 정규장 종가 백필 수동 트리거 완료: {}", result);
         return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/stock-investor-trading/refresh")
+    @Operation(summary = "종목별 투자자 매매동향 최근 구간 갱신(비동기)",
+        description = "국내 전 종목의 최근 20거래일을 토스에서 다시 받아 신규는 저장하고 바뀐 행(잠정→확정)은 덮어쓴다. "
+            + "약 7분 걸리는 작업이라 시작만 하고 202를 바로 돌려주며 진행은 서버 로그로 본다. 이미 실행 중이면 409.")
+    @ApiResponse(useReturnTypeSchema = true)
+    public ResponseEntity<String> refreshStockInvestorTrading() {
+        log.info("[admin] 종목별 투자자 매매동향 갱신 시작 요청");
+        if (!stockInvestorTradingRefreshService.startRefreshAsync()) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body("이미 종목별 투자자 매매동향 작업이 실행 중입니다.");
+        }
+        return ResponseEntity.accepted().body("종목별 투자자 매매동향 갱신을 시작했습니다. 진행은 서버 로그로 확인하세요.");
+    }
+
+    @PostMapping("/stock-investor-trading/backfill")
+    @Operation(summary = "종목별 투자자 매매동향 과거 이력 백필(비동기)",
+        description = "국내 전 종목의 과거 이력을 days건(거래일 기록 수, 기본 400, 1~1000)까지 100건씩 받아 저장한다. "
+            + "400건이면 종목당 4회 호출로 전종목 약 26분이 걸려 시작만 하고 202를 바로 돌려준다. "
+            + "이미 저장된 행은 updatedAt이 같으면 건너뛰어 멱등이라 중간에 끊겨도 다시 호출하면 된다. 이미 실행 중이면 409.")
+    @ApiResponse(useReturnTypeSchema = true)
+    public ResponseEntity<String> backfillStockInvestorTrading(@RequestParam(defaultValue = "400") int days) {
+        if (days < 1 || days > 1000) {
+            return ResponseEntity.badRequest().body("days는 1~1000이어야 합니다.");
+        }
+        log.info("[admin] 종목별 투자자 매매동향 백필 시작 요청: days={}", days);
+        if (!stockInvestorTradingRefreshService.startBackfillAsync(days)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body("이미 종목별 투자자 매매동향 작업이 실행 중입니다.");
+        }
+        return ResponseEntity.accepted().body("종목별 투자자 매매동향 백필을 시작했습니다: days=" + days + ". 진행은 서버 로그로 확인하세요.");
     }
 
     @PostMapping("/scores/rebuild")

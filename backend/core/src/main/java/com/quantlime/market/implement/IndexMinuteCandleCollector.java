@@ -34,6 +34,8 @@ public class IndexMinuteCandleCollector {
     private final TossApiClient tossApiClient;
 
     /**
+     * 지수 1분봉 한 페이지를 조회한다.
+     *
      * @param before null이면 가장 최근부터. 값이 있으면 UTC {@code Z} 표기 시각 직전부터 과거 방향
      */
     public MinuteChartResponse fetch(String indexCode, @Nullable String before) {
