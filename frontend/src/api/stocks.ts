@@ -30,9 +30,10 @@ export async function getCurrentPrice(stockCode: string): Promise<CurrentPriceRe
   return data
 }
 
-export async function getChart(stockCode: string, days = 90): Promise<DailyChartResponse[]> {
+// to('YYYY-MM-DD')를 주면 그 날짜(포함)까지의 days일 구간 - 가장 오래된 날짜의 전날을 넘겨 과거를 이어 받는다.
+export async function getChart(stockCode: string, days = 90, to?: string): Promise<DailyChartResponse[]> {
   const { data } = await apiClient.get<DailyChartResponse[]>(`/api/stocks/${stockCode}/chart`, {
-    params: { period: 'daily', days },
+    params: { period: 'daily', days, to },
   })
   return data
 }

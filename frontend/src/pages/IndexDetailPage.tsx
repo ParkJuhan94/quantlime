@@ -1,28 +1,42 @@
-import { lazy, Suspense, useMemo, useState } from 'react'
+import { lazy, Suspense, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import {
-  useBitcoinChartQuery,
+  useBitcoinCandlesQuery,
   useExchangeRateChartQuery,
   useIndexChartQuery,
+  useIndexMinuteCandlesQuery,
   useMarketIndicesQuery,
 } from '../hooks/queries/useMarketIndices'
 import { formatRate } from '../components/home/MarketIndexRow'
-import { SimpleLineChart } from '../components/chart/SimpleLineChart'
+import { MinuteCandleChart } from '../components/chart/MinuteCandleChart'
+import { IndicatorControls } from '../components/chart/IndicatorControls'
+import { OverlayIndicatorLegend, SubPanelIndicatorLegend } from '../components/chart/IndicatorLegend'
+import type { CandleChartHandle } from '../components/chart/CandleChart'
 import { LoadingSpinner } from '../components/common/LoadingSpinner'
 import { ErrorState } from '../components/common/ErrorState'
 import { EmptyState } from '../components/common/EmptyState'
-import { ChartIntervalSelector } from '../components/chart/ChartIntervalSelector'
+import { ChartIntervalSelector, type ChartIntervalOrMinute } from '../components/chart/ChartIntervalSelector'
 import { InvestorTradingSummary } from '../components/market/InvestorTradingSummary'
 import { changeRateColorClass, formatChangeRate, formatPrice } from '../utils/priceFormat'
-import { DEFAULT_INDICATOR_SETTINGS } from '../utils/indicators'
-import { aggregateCandles, type ChartInterval } from '../utils/candleAggregation'
-import type { DailyChartResponse } from '../types/stock'
+import type { IndicatorSettings } from '../utils/indicators'
+import {
+  aggregateCandles,
+  aggregateMinuteCandles,
+  isMinuteInterval,
+  mergeDailyPages,
+  minuteUnitOf,
+  normalizeMinuteCandles,
+  type ChartInterval,
+} from '../utils/candleAggregation'
+import { kstDateString } from '../utils/chartFormat'
+import { useFillPages } from '../hooks/useFillPages'
+import { indicatorSettingsStorage } from '../storage/indicatorSettingsStorage'
+import type { DailyChartResponse, MinuteCandle } from '../types/stock'
 import type { ChartIndexCode } from '../types/market'
 
 // CandleChart는 종목 상세 페이지에서만 쓰이는데도 초기 번들에 실리면
 // 500KB+ 청크 경고를 유발했던 전례가 있어(StockDetailPage 참고) 여기서도
-// 지연 로딩한다. 거래량/보조지표 없이 캔들만 그리는 용도로 재사용한다 -
-// 지수는 거래량이 없어 volume:0으로 채우고 모든 지표를 끈다.
+// 지연 로딩한다. 지수는 거래량이 없어 volume:0으로 채우고 거래량 패널은 끈다(비트코인은 있음).
 const CandleChart = lazy(() =>
   import('../components/chart/CandleChart').then((module) => ({ default: module.CandleChart })),
 )
@@ -42,13 +56,25 @@ const INDEX_LABELS: Record<string, string> = {
 // 국채금리/비트코인은 정규장 개념 자체가 없는 별도 필드다.
 const INDEX_QUOTE_CODES = new Set(['KOSPI', 'KOSDAQ', 'NASDAQ', 'SP500', 'SOXX'])
 
-const NO_INDICATORS = {
-  ...DEFAULT_INDICATOR_SETTINGS,
-  volume: false,
-  ma: false,
-  bollingerBands: false,
-  ichimoku: false,
-  macd: false,
+// 주식 상세와 같은 방식으로 처음 화면에 보여줄 최소 봉 수와 초기 표시 봉 수.
+const MIN_BARS = { daily: 100, weekly: 80, monthly: 36, minute: 60 } as const
+const DISPLAY_BARS = { daily: 250, weekly: 104, monthly: 36 } as const
+const MAX_AUTO_PAGES = 6
+const MAX_AUTO_MINUTE_PAGES = 8
+
+// 비트코인(업비트)은 분봉 단위와 일/주/월봉을 서버가 직접 내려준다 - 선택 상태를 업비트 interval로 바꾼다.
+const BITCOIN_PERIOD_INTERVALS: Record<ChartInterval, string> = { daily: '1d', weekly: '1w', monthly: '1M' }
+
+// 업비트 일/주/월봉(epoch 초, 00:00 UTC = 09:00 KST)을 일봉 차트가 쓰는 영업일 문자열 봉으로 바꾼다.
+function toDailyBar(candle: MinuteCandle): DailyChartResponse {
+  return {
+    tradeDate: kstDateString(candle.time),
+    open: candle.open,
+    high: candle.high,
+    low: candle.low,
+    close: candle.close,
+    volume: candle.volume,
+  }
 }
 
 // 종목 상세 페이지(StockDetailPage)와 최대한 같은 레이아웃을 쓴다(헤더 -
@@ -65,7 +91,9 @@ export function IndexDetailPage() {
   const upperCode = code.toUpperCase()
   const isValidCode = upperCode in INDEX_LABELS
   const label = INDEX_LABELS[upperCode] ?? code
-  const [chartInterval, setChartInterval] = useState<ChartInterval>('daily')
+  const [chartInterval, setChartInterval] = useState<ChartIntervalOrMinute>('daily')
+  const [indicators, setIndicators] = useState<IndicatorSettings>(() => indicatorSettingsStorage.read())
+  const candleChartRef = useRef<CandleChartHandle>(null)
 
   const isIndexQuoteCode = INDEX_QUOTE_CODES.has(upperCode)
   const isUsd = upperCode === 'USDKRW'
@@ -78,31 +106,79 @@ export function IndexDetailPage() {
   // React Hook은 조건부로 호출할 수 없어 쿼리를 전부 선언하고 enabled로만
   // 활성화 여부를 가른다(FeedComposeModal의 생성/수정 뮤테이션 분기와
   // 동일한 패턴).
+  const minuteUnit = minuteUnitOf(chartInterval)
+  const isMinuteMode = minuteUnit != null
+  // 분봉 모드일 땐 일봉 쿼리/집계를 쓰지 않으므로 일봉으로 고정해 둔다(타입 좁히기 겸용).
+  const dailyInterval: ChartInterval = isMinuteInterval(chartInterval) ? 'daily' : chartInterval
+  const supportsMinute = isDomesticIndexCode || isBitcoin
+  const bitcoinInterval = minuteUnit != null ? `${minuteUnit}m` : BITCOIN_PERIOD_INTERVALS[dailyInterval]
+
   const indexChartQuery = useIndexChartQuery(upperCode as ChartIndexCode, isIndexQuoteCode)
   const usdChartQuery = useExchangeRateChartQuery(isUsd)
-  const bitcoinChartQuery = useBitcoinChartQuery(isBitcoin)
+  const indexMinuteQuery = useIndexMinuteCandlesQuery(
+    upperCode as 'KOSPI' | 'KOSDAQ',
+    isDomesticIndexCode && isMinuteMode,
+  )
+  const bitcoinQuery = useBitcoinCandlesQuery(bitcoinInterval, isBitcoin)
 
   const dailyChartQuery = isUsd ? usdChartQuery : indexChartQuery
-  const chartData = useMemo(
-    () =>
-      aggregateCandles(
-        (dailyChartQuery.data ?? []).map<DailyChartResponse>((point) => ({
-          tradeDate: point.tradeDate,
-          open: point.open,
-          high: point.high,
-          low: point.low,
-          close: point.close,
-          volume: 0,
-        })),
-        chartInterval,
-      ),
-    [dailyChartQuery.data, chartInterval],
-  )
-  // 비트코인은 24시간 30분봉(시간별 시계열)이라 일봉 기반 CandleChart에
-  // 넣을 수 없다(lightweight-charts가 날짜 하나당 한 점만 허용) - 같은
-  // 날짜가 여러 번 나오는 촘촘한 데이터라 별도의 단순 라인차트로 그린다
-  // (SimpleLineChart 참고, 홈 카드 미니차트를 상세 페이지 크기로 키운 것).
-  const bitcoinPrices = (bitcoinChartQuery.data ?? []).map((point) => point.price)
+  const chartData = useMemo(() => {
+    if (isBitcoin) {
+      const candles = normalizeMinuteCandles((bitcoinQuery.data?.pages ?? []).flatMap((page) => page.candles))
+      return mergeDailyPages([candles.map(toDailyBar)])
+    }
+    return aggregateCandles(
+      (dailyChartQuery.data ?? []).map<DailyChartResponse>((point) => ({
+        tradeDate: point.tradeDate,
+        open: point.open,
+        high: point.high,
+        low: point.low,
+        close: point.close,
+        volume: 0,
+      })),
+      dailyInterval,
+    )
+  }, [isBitcoin, bitcoinQuery.data, dailyChartQuery.data, dailyInterval])
+  // 분봉: 코스피/코스닥은 1분봉을 프론트에서 묶고, 비트코인은 업비트가 단위별로 내려주므로 그대로 쓴다.
+  const minuteCandles = useMemo(() => {
+    if (!isMinuteMode) return []
+    if (isBitcoin) {
+      return normalizeMinuteCandles((bitcoinQuery.data?.pages ?? []).flatMap((page) => page.candles))
+    }
+    return aggregateMinuteCandles(
+      normalizeMinuteCandles((indexMinuteQuery.data?.pages ?? []).flatMap((page) => page.candles)),
+      minuteUnit,
+    )
+  }, [isMinuteMode, isBitcoin, bitcoinQuery.data, indexMinuteQuery.data, minuteUnit])
+
+  // 분봉 조회는 비트코인(업비트)과 코스피/코스닥(토스)이 서로 다른 쿼리라 현재 화면의 쿼리를 골라 쓴다.
+  const pagedQuery = isBitcoin ? bitcoinQuery : indexMinuteQuery
+  const isFillingMinute = useFillPages(pagedQuery, minuteCandles.length, {
+    minBars: MIN_BARS.minute,
+    maxPages: MAX_AUTO_MINUTE_PAGES,
+    enabled: isMinuteMode && !isUsd,
+  })
+  // 일/주/월봉은 비트코인만 페이지를 이어 받는다(지수는 서버가 한 번에 내려주는 구간이 전부).
+  const isFillingBitcoinPeriod = useFillPages(bitcoinQuery, chartData.length, {
+    minBars: MIN_BARS[dailyInterval],
+    maxPages: MAX_AUTO_PAGES,
+    enabled: isBitcoin && !isMinuteMode,
+  })
+  function loadOlderMinute() {
+    if (pagedQuery.hasNextPage && !pagedQuery.isFetchingNextPage) void pagedQuery.fetchNextPage()
+  }
+  function loadOlderBitcoinPeriod() {
+    if (bitcoinQuery.hasNextPage && !bitcoinQuery.isFetchingNextPage) void bitcoinQuery.fetchNextPage()
+  }
+
+  function handleIndicatorsChange(next: IndicatorSettings) {
+    setIndicators(next)
+    indicatorSettingsStorage.write(next)
+  }
+  // 지수는 거래량 데이터가 없어 거래량 패널은 항상 끈다(비트코인은 있음). 환율은 종가 라인만 그려서 지표를 쓰지 않는다.
+  const chartIndicators = isBitcoin ? indicators : { ...indicators, volume: false }
+  const showIndicators = !isUsd && !isMinuteMode
+  const pricePrecision = isBitcoin ? 0 : 2
 
   if (!isValidCode) {
     return <ErrorState message="지원하지 않는 지수입니다." />
@@ -136,7 +212,6 @@ export function IndexDetailPage() {
   // 카드와 동일하게 항상 "장마감" 텍스트로 통일하고, 비트코인은 24시간
   // 거래라 항상 "장중"으로 표시한다(2026-07-18 피드백).
   const statusText = isBitcoin ? '장중' : marketOpen == null ? '장마감' : marketOpen ? '장중' : '장마감'
-  const isUp = changeRate == null ? null : changeRate > 0 ? true : changeRate < 0 ? false : null
   const valueText = isBitcoin
     ? formatPrice(value ?? null)
     : isTreasury && value != null
@@ -168,37 +243,74 @@ export function IndexDetailPage() {
           <EmptyState message="아직 이 지표는 과거 시세 차트를 지원하지 않아요." />
         ) : (
           <>
-            {!isBitcoin && (
-              <div
-                className={`mb-3 flex flex-wrap items-center gap-2 ${
-                  isDomesticIndexCode ? 'justify-between' : 'justify-end'
-                }`}
-              >
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              {isMinuteMode ? (
+                <span className="text-xs text-gray-500">
+                  {minuteUnit === 60 ? '1시간봉' : `${minuteUnit}분봉`} · 최근 거래분
+                </span>
+              ) : showIndicators ? (
+                <OverlayIndicatorLegend
+                  indicators={chartIndicators}
+                  onItemClick={(key) => candleChartRef.current?.highlightSeries(key)}
+                />
+              ) : (
+                <span />
+              )}
+              <div className="flex flex-wrap items-center gap-2">
                 {isDomesticIndexCode && <InvestorTradingSummary code={upperCode as 'KOSPI' | 'KOSDAQ'} />}
-                <ChartIntervalSelector value={chartInterval} onChange={setChartInterval} />
+                {showIndicators && <IndicatorControls value={indicators} onChange={handleIndicatorsChange} />}
+                <ChartIntervalSelector value={chartInterval} onChange={setChartInterval} allowMinute={supportsMinute} />
               </div>
-            )}
-            {isBitcoin ? (
+            </div>
+            {isMinuteMode ? (
               <>
-                {bitcoinChartQuery.isLoading && <LoadingSpinner />}
-                {bitcoinChartQuery.isError && <ErrorState message="차트를 불러오지 못했습니다." />}
-                {bitcoinPrices.length === 0 && !bitcoinChartQuery.isLoading && !bitcoinChartQuery.isError && (
+                {(pagedQuery.isLoading || isFillingMinute) && <LoadingSpinner />}
+                {pagedQuery.isError && <ErrorState message="차트를 불러오지 못했습니다." />}
+                {minuteCandles.length === 0 && !pagedQuery.isLoading && !pagedQuery.isError && (
                   <EmptyState message="차트 데이터가 없습니다." />
                 )}
-                {bitcoinPrices.length > 0 && <SimpleLineChart prices={bitcoinPrices} isUp={isUp} />}
+                {minuteCandles.length > 0 && !isFillingMinute && (
+                  <MinuteCandleChart
+                    candles={minuteCandles}
+                    pricePrecision={pricePrecision}
+                    viewKey={`${upperCode}:${chartInterval}`}
+                    onReachStart={loadOlderMinute}
+                  />
+                )}
+                {pagedQuery.isFetchingNextPage && !isFillingMinute && (
+                  <p className="mt-2 text-center text-xs text-gray-400">이전 분봉을 불러오는 중...</p>
+                )}
               </>
             ) : (
               <>
-                {dailyChartQuery.isLoading && <LoadingSpinner />}
-                {dailyChartQuery.isError && <ErrorState message="차트를 불러오지 못했습니다." />}
-                {chartData.length === 0 && !dailyChartQuery.isLoading && !dailyChartQuery.isError && (
-                  <EmptyState message="차트 데이터가 없습니다." />
+                {(isBitcoin ? bitcoinQuery.isLoading : dailyChartQuery.isLoading) && <LoadingSpinner />}
+                {isFillingBitcoinPeriod && <LoadingSpinner />}
+                {(isBitcoin ? bitcoinQuery.isError : dailyChartQuery.isError) && (
+                  <ErrorState message="차트를 불러오지 못했습니다." />
                 )}
-                {chartData.length > 0 && (
+                {chartData.length === 0 &&
+                  !(isBitcoin ? bitcoinQuery.isLoading : dailyChartQuery.isLoading) &&
+                  !(isBitcoin ? bitcoinQuery.isError : dailyChartQuery.isError) && (
+                    <EmptyState message="차트 데이터가 없습니다." />
+                  )}
+                {chartData.length > 0 && !isFillingBitcoinPeriod && (
                   <Suspense fallback={<LoadingSpinner />}>
-                    <CandleChart data={chartData} displayDays={chartData.length} indicators={NO_INDICATORS} />
+                    <CandleChart
+                      ref={candleChartRef}
+                      data={chartData}
+                      displayDays={Math.min(chartData.length, DISPLAY_BARS[dailyInterval])}
+                      indicators={chartIndicators}
+                      pricePrecision={pricePrecision}
+                      variant={isUsd ? 'line' : 'candle'}
+                      viewKey={`${upperCode}:${chartInterval}`}
+                      onReachStart={isBitcoin ? loadOlderBitcoinPeriod : undefined}
+                    />
                   </Suspense>
                 )}
+                {isBitcoin && bitcoinQuery.isFetchingNextPage && !isFillingBitcoinPeriod && (
+                  <p className="mt-2 text-center text-xs text-gray-400">이전 구간을 불러오는 중...</p>
+                )}
+                {showIndicators && <SubPanelIndicatorLegend indicators={chartIndicators} />}
               </>
             )}
           </>

@@ -30,7 +30,17 @@ import { useIsPremium } from '../hooks/queries/useSubscription'
 import { getErrorMessage, isNotFoundStatus } from '../api/errors'
 import { changeRateColorClass, currencyForMarketType, formatChangeRate, formatPrice } from '../utils/priceFormat'
 import type { IndicatorSettings } from '../utils/indicators'
-import { aggregateCandles } from '../utils/candleAggregation'
+import {
+  aggregateCandles,
+  aggregateMinuteCandles,
+  isMinuteInterval,
+  mergeDailyPages,
+  minuteUnitOf,
+  normalizeMinuteCandles,
+  type ChartInterval,
+} from '../utils/candleAggregation'
+import { pricePrecisionFor } from '../utils/chartFormat'
+import { useFillPages } from '../hooks/useFillPages'
 import { recentlyViewedStorage } from '../storage/recentlyViewedStorage'
 import { indicatorSettingsStorage } from '../storage/indicatorSettingsStorage'
 
@@ -42,8 +52,18 @@ const CandleChart = lazy(() =>
 )
 
 // 백엔드 PriceController의 @Max(365) 제약과 일치시킨다. 30일/90일 같은
-// 기간 선택 대신 항상 최대치를 받아와 일봉/주봉/월봉으로만 나눠 보여준다.
+// 기간 선택 대신 항상 한 페이지 최대치를 받아와 일봉/주봉/월봉으로만 나눠 보여주고,
+// 더 과거는 차트를 왼쪽으로 밀 때 `to` 커서로 이어 받는다.
 const MAX_CHART_DAYS = 365
+
+// 주기별로 화면에 보여줄 최소 봉 수 - 첫 페이지만으로 모자라면(월봉은 12개 안팎) 이만큼 찰 때까지 자동으로
+// 더 받는다. maxPages는 토스 호출 폭주를 막는 상한이고 그 이후는 사용자가 밀 때만 이어 받는다.
+const MIN_BARS = { daily: 100, weekly: 80, monthly: 36, minute: 60 } as const
+const MAX_AUTO_PAGES = 6
+// 처음 화면에 보여줄 봉 수 - 불러온 이력이 더 길어도(예전엔 전부를 한 화면에 눌러 담았다) 최근 구간만 보이고,
+// 나머지는 왼쪽으로 밀면 나온다. 일목균형표 선행스팬이나 MA120 워밍업에는 전체 이력이 계속 쓰인다.
+const DISPLAY_BARS = { daily: 250, weekly: 104, monthly: 36 } as const
+const MAX_AUTO_MINUTE_PAGES = 8
 
 export function StockDetailPage() {
   const { stockCode = '' } = useParams<{ stockCode: string }>()
@@ -60,16 +80,39 @@ export function StockDetailPage() {
   const detailQuery = useStockDetailQuery(stockCode)
   const priceQuery = useStockPriceQuery(stockCode)
   const chartQuery = useStockChartQuery(stockCode, MAX_CHART_DAYS)
-  const isMinuteMode = chartInterval === 'minute'
+  const minuteUnit = minuteUnitOf(chartInterval)
+  // 분봉 모드일 땐 일봉 쿼리/집계를 쓰지 않으므로 일봉으로 고정해 둔다(타입 좁히기 겸용).
+  const dailyInterval: ChartInterval = isMinuteInterval(chartInterval) ? 'daily' : chartInterval
+  const isMinuteMode = minuteUnit != null
   const minuteQuery = useStockMinuteChartQuery(stockCode, isMinuteMode)
   const minuteCandles = useMemo(
-    () => (minuteQuery.data?.pages ?? []).flatMap((page) => page.candles),
-    [minuteQuery.data],
+    () =>
+      aggregateMinuteCandles(
+        normalizeMinuteCandles((minuteQuery.data?.pages ?? []).flatMap((page) => page.candles)),
+        minuteUnit ?? 1,
+      ),
+    [minuteQuery.data, minuteUnit],
   )
-  const chartData = useMemo(
-    () => aggregateCandles(chartQuery.data ?? [], isMinuteMode ? 'daily' : chartInterval),
-    [chartQuery.data, chartInterval, isMinuteMode],
-  )
+  const dailyBars = useMemo(() => mergeDailyPages(chartQuery.data?.pages ?? []), [chartQuery.data])
+  const chartData = useMemo(() => aggregateCandles(dailyBars, dailyInterval), [dailyBars, dailyInterval])
+  // 첫 페이지만으로 봉이 모자라면(60분봉, 월봉 등) 화면에 보이기 전에 필요한 만큼 자동으로 더 받는다.
+  const isFillingMinute = useFillPages(minuteQuery, minuteCandles.length, {
+    minBars: MIN_BARS.minute,
+    maxPages: MAX_AUTO_MINUTE_PAGES,
+    enabled: isMinuteMode,
+  })
+  const isFillingDaily = useFillPages(chartQuery, chartData.length, {
+    minBars: MIN_BARS[dailyInterval],
+    maxPages: MAX_AUTO_PAGES,
+    enabled: !isMinuteMode,
+  })
+
+  function loadOlderMinute() {
+    if (minuteQuery.hasNextPage && !minuteQuery.isFetchingNextPage) void minuteQuery.fetchNextPage()
+  }
+  function loadOlderDaily() {
+    if (chartQuery.hasNextPage && !chartQuery.isFetchingNextPage) void chartQuery.fetchNextPage()
+  }
   const { isPremium, isResolving } = useIsPremium()
   const scoreQuery = useStockScoreQuery(stockCode, isPremium)
   const fundamentalsQuery = useStockFundamentalsQuery(stockCode)
@@ -124,6 +167,7 @@ export function StockDetailPage() {
   // (PriceSnapshot 참고) REST 기준값(priceQuery)의 currency를 그대로
   // 쓴다 - 종목의 통화는 실시간/REST 어느 소스든 항상 같다.
   const currency = priceQuery.data?.currency === 'USD' ? 'USD' : 'KRW'
+  const pricePrecision = pricePrecisionFor(currency)
 
   return (
     <div className="space-y-6">
@@ -206,7 +250,9 @@ export function StockDetailPage() {
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           {/* 분봉은 지표 없이 캔들+거래량만 보여준다(MinuteCandleChart 주석 참고) - 지표 UI는 숨긴다. */}
           {isMinuteMode ? (
-            <span className="text-xs text-gray-500">1분봉 · 최근 거래분</span>
+            <span className="text-xs text-gray-500">
+              {minuteUnit === 60 ? '1시간봉' : `${minuteUnit}분봉`} · 최근 거래분
+            </span>
           ) : (
             <OverlayIndicatorLegend
               indicators={indicators}
@@ -220,46 +266,50 @@ export function StockDetailPage() {
         </div>
         {isMinuteMode ? (
           <>
-            {minuteQuery.isLoading && <LoadingSpinner />}
+            {(minuteQuery.isLoading || isFillingMinute) && <LoadingSpinner />}
             {minuteQuery.isError && (
               <ErrorState message={getErrorMessage(minuteQuery.error, '분봉 차트를 불러오지 못했습니다.')} />
             )}
             {!minuteQuery.isLoading && !minuteQuery.isError && minuteCandles.length === 0 && (
               <EmptyState message="분봉 데이터가 없습니다." />
             )}
-            {minuteCandles.length > 0 && <MinuteCandleChart candles={minuteCandles} currency={currency} />}
-            {minuteQuery.hasNextPage && (
-              <div className="mt-3 flex justify-center">
-                <button
-                  type="button"
-                  disabled={minuteQuery.isFetchingNextPage}
-                  onClick={() => void minuteQuery.fetchNextPage()}
-                  className="rounded-lg border border-gray-200 px-4 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
-                >
-                  {minuteQuery.isFetchingNextPage ? '불러오는 중...' : '이전 분봉 더 보기'}
-                </button>
-              </div>
+            {minuteCandles.length > 0 && !isFillingMinute && (
+              <MinuteCandleChart
+                candles={minuteCandles}
+                pricePrecision={pricePrecision}
+                viewKey={`${stockCode}:${chartInterval}`}
+                onReachStart={loadOlderMinute}
+              />
+            )}
+            {minuteQuery.isFetchingNextPage && !isFillingMinute && (
+              <p className="mt-2 text-center text-xs text-gray-400">이전 분봉을 불러오는 중...</p>
             )}
           </>
         ) : (
           <>
-            {chartQuery.isLoading && <LoadingSpinner />}
+            {(chartQuery.isLoading || isFillingDaily) && <LoadingSpinner />}
             {chartQuery.isError && (
               <ErrorState message={getErrorMessage(chartQuery.error, '차트를 불러오지 못했습니다.')} />
             )}
             {chartData.length === 0 && !chartQuery.isLoading && !chartQuery.isError && (
               <EmptyState message="차트 데이터가 없습니다." />
             )}
-            {chartData.length > 0 && (
+            {chartData.length > 0 && !isFillingDaily && (
               <Suspense fallback={<LoadingSpinner />}>
                 <CandleChart
                   ref={candleChartRef}
                   data={chartData}
-                  displayDays={chartData.length}
+                  displayDays={Math.min(chartData.length, DISPLAY_BARS[dailyInterval])}
                   indicators={indicators}
                   livePrice={chartInterval === 'daily' ? livePrice : undefined}
+                  pricePrecision={pricePrecision}
+                  viewKey={`${stockCode}:${chartInterval}`}
+                  onReachStart={loadOlderDaily}
                 />
               </Suspense>
+            )}
+            {chartQuery.isFetchingNextPage && !isFillingDaily && (
+              <p className="mt-2 text-center text-xs text-gray-400">이전 구간을 불러오는 중...</p>
             )}
             <SubPanelIndicatorLegend indicators={indicators} />
           </>

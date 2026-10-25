@@ -9,6 +9,7 @@ import type {
   HotSectorResponse,
   MarketRankingResponse,
 } from '../types/market'
+import type { MinuteChartResponse } from '../types/stock'
 
 export async function getMarketIndices(): Promise<MarketIndexResponse> {
   const { data } = await apiClient.get<MarketIndexResponse>('/api/market/indices')
@@ -22,6 +23,22 @@ export async function getIndexChart(code: ChartIndexCode): Promise<IndexChartPoi
 
 export async function getIndexMinuteChart(code: 'KOSPI' | 'KOSDAQ'): Promise<IndexMinuteChartPoint[]> {
   const { data } = await apiClient.get<IndexMinuteChartPoint[]>(`/api/market/indices/${code}/minute-chart`)
+  return data
+}
+
+// 비트코인 OHLCV 캔들(업비트) - interval은 1m·3m·5m·15m·30m·60m·1d·1w·1M. before(UTC Z)를 주면 그 직전부터 과거 방향.
+export async function getBitcoinCandles(interval: string, before?: string): Promise<MinuteChartResponse> {
+  const { data } = await apiClient.get<MinuteChartResponse>('/api/market/indices/bitcoin/candles', {
+    params: { interval, before },
+  })
+  return data
+}
+
+// 코스피/코스닥 1분봉 OHLCV - 종목 분봉과 같은 응답 모양이라 같은 차트 컴포넌트를 쓴다.
+export async function getIndexMinuteCandles(code: 'KOSPI' | 'KOSDAQ', before?: string): Promise<MinuteChartResponse> {
+  const { data } = await apiClient.get<MinuteChartResponse>(`/api/market/indices/${code}/minute-candles`, {
+    params: { before },
+  })
   return data
 }
 

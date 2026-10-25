@@ -12,6 +12,7 @@ import {
   getTrades,
 } from '../../api/stocks'
 import { queryKeys } from '../queryKeys'
+import { nextDailyPageEnd } from '../../utils/candleAggregation'
 
 export function useStockDetailQuery(stockCode: string) {
   return useQuery({
@@ -28,10 +29,14 @@ export function useStockPriceQuery(stockCode: string) {
   })
 }
 
+// 일봉은 오늘 기준 최근 days일을 먼저 받고, 차트를 왼쪽으로 밀면 가장 오래된 날짜의 전날(to)을 커서로 더 과거 구간을
+// 이어 받는다 - 예전엔 최근 365일만 받아 월봉이 12개 안팎이고 장기 이동평균 구간이 짧았다.
 export function useStockChartQuery(stockCode: string, days: number) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: queryKeys.stockChart(stockCode, days),
-    queryFn: () => getChart(stockCode, days),
+    queryFn: ({ pageParam }) => getChart(stockCode, days, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => nextDailyPageEnd(lastPage),
     staleTime: 5 * 60 * 1000,
   })
 }
