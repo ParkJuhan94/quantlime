@@ -12,6 +12,7 @@ export const queryKeys = {
   stockWarnings: (stockCode: string) => ['stocks', 'warnings', stockCode] as const,
   stockMinuteChart: (stockCode: string) => ['stocks', 'minute-chart', stockCode] as const,
   stockChart: (stockCode: string, days: number) => ['stocks', 'chart-history', stockCode, days] as const,
+  stockInvestorTrading: (stockCode: string, count: number) => ['stocks', 'investor-trading', stockCode, count] as const,
   stockScore: (stockCode: string) => ['stocks', 'score', stockCode] as const,
   backtest: (stockCode: string) => ['backtest', stockCode] as const,
   stockFundamentals: (stockCode: string) => ['stocks', 'fundamentals', stockCode] as const,
