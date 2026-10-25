@@ -21,9 +21,14 @@ describe('pricePrecisionFor', () => {
 })
 
 describe('priceFormatOptions', () => {
-  it('자리수에 맞는 최소 호가 단위를 만든다', () => {
-    expect(priceFormatOptions(0)).toEqual({ type: 'price', precision: 0, minMove: 1 })
-    expect(priceFormatOptions(2)).toEqual({ type: 'price', precision: 2, minMove: 0.01 })
+  it('자리수에 맞는 최소 호가 단위와 천 단위 구분 포매터를 만든다', () => {
+    const krw = priceFormatOptions(0)
+    const usd = priceFormatOptions(2)
+
+    expect(krw.minMove).toBe(1)
+    expect(krw.formatter(130000000)).toBe('130,000,000')
+    expect(usd.minMove).toBe(0.01)
+    expect(usd.formatter(2534.5)).toBe('2,534.50')
   })
 })
 

@@ -175,8 +175,12 @@ export function IndexDetailPage() {
     setIndicators(next)
     indicatorSettingsStorage.write(next)
   }
-  // 지수는 거래량 데이터가 없어 거래량 패널은 항상 끈다(비트코인은 있음). 환율은 종가 라인만 그려서 지표를 쓰지 않는다.
-  const chartIndicators = isBitcoin ? indicators : { ...indicators, volume: false }
+  // 지수는 거래량 데이터가 없어 거래량 패널은 항상 끈다(비트코인은 있음). 환율은 종가 라인만 그려서 지표를 모두 끈다.
+  const chartIndicators: IndicatorSettings = isUsd
+    ? { ...indicators, volume: false, ma: false, bollingerBands: false, ichimoku: false, macd: false }
+    : isBitcoin
+      ? indicators
+      : { ...indicators, volume: false }
   const showIndicators = !isUsd && !isMinuteMode
   const pricePrecision = isBitcoin ? 0 : 2
 

@@ -4,8 +4,18 @@ export function pricePrecisionFor(currency: 'KRW' | 'USD'): number {
   return currency === 'USD' ? 2 : 0
 }
 
-export function priceFormatOptions(precision: number): { type: 'price'; precision: number; minMove: number } {
-  return { type: 'price', precision, minMove: 1 / 10 ** precision }
+// 축/크로스헤어/마지막 가격 라벨에 천 단위 구분과 고정 소수 자리를 적용하는 시리즈 priceFormat - 기본 'price' 형식은
+// 구분 기호가 없어 비트코인 같은 큰 값이 "130000000"으로 읽기 어려웠다.
+export function priceFormatOptions(precision: number): {
+  type: 'custom'
+  minMove: number
+  formatter: (price: number) => string
+} {
+  return {
+    type: 'custom',
+    minMove: 1 / 10 ** precision,
+    formatter: (price: number) => formatChartPrice(price, precision),
+  }
 }
 
 export function formatChartPrice(value: number, precision: number): string {
