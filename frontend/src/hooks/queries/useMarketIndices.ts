@@ -1,8 +1,10 @@
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import {
+  getBitcoinCandles,
   getBitcoinChart,
   getExchangeRateChart,
   getIndexChart,
+  getIndexMinuteCandles,
   getIndexMinuteChart,
   getMarketIndices,
 } from '../../api/market'
@@ -67,5 +69,34 @@ export function useExchangeRateChartQuery(enabled = true) {
     staleTime: 90_000,
     refetchInterval: 90_000,
     enabled,
+  })
+}
+
+// 비트코인 상세의 OHLCV 캔들(분·일·주·월봉) - 한 페이지 최대 200개이고 nextBefore로 과거 방향을 이어 받는다.
+// 서버가 최신 페이지를 15초 캐싱하므로 30초마다 다시 받아 진행 중인 봉을 갱신한다.
+export function useBitcoinCandlesQuery(interval: string, enabled = true) {
+  return useInfiniteQuery({
+    queryKey: queryKeys.bitcoinCandles(interval),
+    queryFn: ({ pageParam }) => getBitcoinCandles(interval, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextBefore ?? undefined,
+    enabled,
+    refetchInterval: enabled ? 30_000 : false,
+    staleTime: 15_000,
+    retry: 1,
+  })
+}
+
+// 코스피/코스닥 1분봉(OHLCV) - 종목 분봉과 같은 방식으로 이전 거래일까지 이어 받는다.
+export function useIndexMinuteCandlesQuery(code: 'KOSPI' | 'KOSDAQ', enabled = true) {
+  return useInfiniteQuery({
+    queryKey: queryKeys.indexMinuteCandles(code),
+    queryFn: ({ pageParam }) => getIndexMinuteCandles(code, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextBefore ?? undefined,
+    enabled,
+    refetchInterval: enabled ? 60_000 : false,
+    staleTime: 15_000,
+    retry: 1,
   })
 }

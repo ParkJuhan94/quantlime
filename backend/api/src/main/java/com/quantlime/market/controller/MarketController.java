@@ -8,10 +8,13 @@ import com.quantlime.market.dto.response.IndexMinuteChartResponse;
 import com.quantlime.market.dto.response.InvestorTradingResponse;
 import com.quantlime.market.dto.response.MarketIndexResponse;
 import com.quantlime.market.dto.response.MarketRankingResponse;
+import com.quantlime.market.service.BitcoinCandleService;
 import com.quantlime.market.service.HotSectorService;
+import com.quantlime.market.service.IndexMinuteCandleService;
 import com.quantlime.market.service.InvestorTradingService;
 import com.quantlime.market.service.MarketIndexService;
 import com.quantlime.market.service.MarketRankingService;
+import com.quantlime.price.dto.response.MinuteChartResponse;
 import com.quantlime.watchlist.service.WatchlistService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -38,6 +41,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class MarketController {
 
     private final MarketIndexService marketIndexService;
+    private final BitcoinCandleService bitcoinCandleService;
+    private final IndexMinuteCandleService indexMinuteCandleService;
     private final MarketRankingService marketRankingService;
     private final InvestorTradingService investorTradingService;
     private final HotSectorService hotSectorService;
@@ -78,6 +83,23 @@ public class MarketController {
         return ResponseEntity.ok(marketIndexService.getIndexMinuteChart(code));
     }
 
+    @GetMapping("/indices/{code}/minute-candles")
+    @Operation(
+        summary = "지수 1분봉 캔들 조회(이력 이어받기)",
+        description = "코스피/코스닥 1분봉 OHLCV를 시간 오름차순으로 최대 200개 조회한다. before(UTC Z 표기)를 주면 "
+            + "그 시각 직전부터 과거 방향으로 조회하며, 응답의 nextBefore를 다음 요청의 before로 넘겨 더 과거로 "
+            + "이어간다(null이면 끝). 해외지수는 분봉을 제공하지 않는다"
+    )
+    @ApiResponse(useReturnTypeSchema = true)
+    public ResponseEntity<MinuteChartResponse> getIndexMinuteCandles(
+        @PathVariable
+        @Pattern(regexp = "KOSPI|KOSDAQ", message = "code는 KOSPI 또는 KOSDAQ여야 합니다.") String code,
+        @RequestParam(required = false)
+        @Pattern(regexp = "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z",
+            message = "before는 UTC Z 표기(예: 2026-09-01T06:30:00Z)여야 합니다.") String before) {
+        return ResponseEntity.ok(indexMinuteCandleService.getCandles(code, before));
+    }
+
     @GetMapping("/indices/bitcoin/minute-chart")
     @Operation(
         summary = "비트코인 최근 24시간 차트 조회",
@@ -86,6 +108,24 @@ public class MarketController {
     @ApiResponse(useReturnTypeSchema = true)
     public ResponseEntity<List<IndexMinuteChartResponse>> getBitcoinChart() {
         return ResponseEntity.ok(marketIndexService.getBitcoinChart());
+    }
+
+    @GetMapping("/indices/bitcoin/candles")
+    @Operation(
+        summary = "비트코인 캔들 차트 조회",
+        description = "Upbit KRW-BTC 캔들(OHLCV)을 시간 오름차순으로 조회한다. interval은 1m·3m·5m·15m·30m·60m·1d·1w·1M. "
+            + "before(UTC Z 표기)를 주면 그 시각 직전부터 과거 방향으로 조회하며, 응답의 nextBefore를 다음 요청의 "
+            + "before로 넘겨 더 과거로 이어간다(null이면 끝)"
+    )
+    @ApiResponse(useReturnTypeSchema = true)
+    public ResponseEntity<MinuteChartResponse> getBitcoinCandles(
+        @RequestParam(defaultValue = "30m")
+        @Pattern(regexp = "1m|3m|5m|15m|30m|60m|1d|1w|1M",
+            message = "interval은 1m·3m·5m·15m·30m·60m·1d·1w·1M 중 하나여야 합니다.") String interval,
+        @RequestParam(required = false)
+        @Pattern(regexp = "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z",
+            message = "before는 UTC Z 표기(예: 2026-09-01T06:30:00Z)여야 합니다.") String before) {
+        return ResponseEntity.ok(bitcoinCandleService.getCandles(interval, before));
     }
 
     @GetMapping("/indices/usdkrw/chart")

@@ -173,6 +173,25 @@ class StockPriceServiceTest {
     }
 
     @Test
+    @DisplayName("[to를 주면 오늘이 아니라 그 날짜까지의 N일 구간을 조회한다 - 과거 이력 이어받기]")
+    void getChart_withTo_queriesRangeEndingAtTo() {
+        // given
+        String stockCode = stock.getStockCode();
+        LocalDate to = LocalDate.of(2025, 3, 31);
+        given(stockMasterService.getStockByCode(stockCode)).willReturn(stock);
+        DomesticDailyPrice older = DomesticDailyPriceFixture.createDailyPrice(stockCode, to);
+        given(domesticDailyPriceService.getDailyPrices(stockCode, to.minusDays(365), to))
+            .willReturn(List.of(older));
+
+        // when
+        List<DailyChartResponse> result = stockPriceService.getChart(stockCode, 365, to);
+
+        // then
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).tradeDate()).isEqualTo(to);
+    }
+
+    @Test
     @DisplayName("[해외 종목 차트 조회 시 해외 일별 시세 리포지토리를 조회한다]")
     void getChart_overseasStock_queriesOverseasRepositoryInsteadOfDomestic() {
         // given: 시장 구분 없이 항상 국내 테이블만 조회하던 버그(해외 종목은

@@ -16,6 +16,8 @@ dependencies {
     testImplementation project(':slack')
     // PriceControllerTest·WatchlistControllerTest가 TossApiClient/TossCandleResponse를 쓴다
     testImplementation project(':toss')
+    // MarketControllerTest가 UpbitApiClient/UpbitCandle을 쓴다(비트코인 캔들 엔드포인트)
+    testImplementation project(':upbit')
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'

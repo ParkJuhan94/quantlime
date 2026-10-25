@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import {
   CandlestickSeries,
   ColorType,
@@ -25,6 +25,9 @@ import {
 } from '../../utils/indicators'
 import { BandFillPrimitive, type BandFillPoint } from './BandFillPrimitive'
 import { chartPalette } from './chartTheme'
+import { subscribeReachStart } from './chartInteraction'
+import { ChartOhlcLegend, type OhlcInfo } from './ChartOhlcLegend'
+import { formatTradeDate, priceFormatOptions } from '../../utils/chartFormat'
 import { useTheme } from '../../hooks/useTheme'
 
 // lightweight-charts의 LineWidth는 1~4 정수만 허용한다 - 설정값은
@@ -58,6 +61,15 @@ interface CandleChartProps {
   displayDays: number
   indicators: IndicatorSettings
   livePrice?: PriceBroadcastMessage
+  /** 가격 소수 자리 - 국내 주식은 0(기본), 해외 주식·지수·환율은 2. */
+  pricePrecision?: number
+  /** 'line'이면 캔들 대신 종가 라인으로 그린다(시가=고가=저가=종가라 캔들이 의미 없는 환율용). */
+  variant?: 'candle' | 'line'
+  /** 이 값이 바뀔 때(종목·주기 전환)만 기본 시야로 되돌린다. 같은 키에서 데이터만 바뀌면(과거 구간 이어받기,
+   * 지표 토글) 사용자가 보던 시간 범위를 그대로 복원하므로, 종목 코드까지 포함해 넘겨야 한다. */
+  viewKey: string
+  /** 왼쪽 끝까지 스크롤했을 때 더 과거 구간을 불러오는 콜백. */
+  onReachStart?: () => void
 }
 
 // 지표 라벨(IndicatorLegend)을 클릭했을 때 "이게 이 라인이에요"라고
@@ -112,12 +124,26 @@ function toShiftedLinePoints(values: Array<number | null>, dates: string[], offs
 
 const UP_COLOR = 'rgba(220, 38, 38, 0.5)'
 const DOWN_COLOR = 'rgba(37, 99, 235, 0.5)'
+const LINE_COLOR = '#6b7280'
+
+// 사용자가 보던 시간 범위 - 차트를 다시 만들 때(과거 데이터 이어받기, 지표 토글, 테마 전환) 복원한다.
+// atEnd는 오른쪽 끝(최신 봉)을 보고 있었다는 뜻이라, 새 봉이 생겨도 최신이 화면 밖으로 밀리지 않게 한다.
+interface SavedView {
+  key: string
+  from: Time
+  to: Time
+  atEnd: boolean
+}
 
 export const CandleChart = forwardRef<CandleChartHandle, CandleChartProps>(function CandleChart(
-  { data, displayDays, indicators, livePrice },
+  { data, displayDays, indicators, livePrice, pricePrecision = 0, variant = 'candle', viewKey, onReachStart },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const savedViewRef = useRef<SavedView | null>(null)
+  const onReachStartRef = useRef(onReachStart)
+  const [hoverDate, setHoverDate] = useState<string | null>(null)
+  const [liveBar, setLiveBar] = useState<LiveBar | null>(null)
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
   // 실시간 틱마다 오늘자 봉의 고가/저가/종가를 계산할 기준값. setData 이후
   // 틱으로 갱신되므로 매 렌더마다 새로 만들지 않고 ref로 들고 있는다.
@@ -153,6 +179,13 @@ export const CandleChart = forwardRef<CandleChartHandle, CandleChartProps>(funct
   const { theme } = useTheme()
 
   useEffect(() => {
+    onReachStartRef.current = onReachStart
+  })
+
+  // 백엔드는 최신순(내림차순)으로 내려주므로 차트가 요구하는 오름차순으로 정렬한다.
+  const sortedData = useMemo(() => data.slice().sort((a, b) => a.tradeDate.localeCompare(b.tradeDate)), [data])
+
+  useEffect(() => {
     const container = containerRef.current
     if (!container) return
 
@@ -176,10 +209,11 @@ export const CandleChart = forwardRef<CandleChartHandle, CandleChartProps>(funct
       autoSize: true,
       height: 360 + subPaneCount * 130,
       timeScale: { borderColor: palette.border },
+      // 축/크로스헤어 날짜를 한글 로케일로 - 기본값은 영문 월 약어("Oct '26")로 찍혔다.
+      localization: { locale: 'ko-KR', dateFormat: 'yyyy.MM.dd' },
     })
 
-    // 백엔드는 최신순(내림차순)으로 내려주므로 차트가 요구하는 오름차순으로 정렬한다.
-    const sorted = data.slice().sort((a, b) => a.tradeDate.localeCompare(b.tradeDate))
+    const sorted = sortedData
     const dates = sorted.map((item) => item.tradeDate)
     const closes = sorted.map((item) => item.close)
     const opens = sorted.map((item) => item.open)
@@ -188,26 +222,37 @@ export const CandleChart = forwardRef<CandleChartHandle, CandleChartProps>(funct
     const sourceByType: Record<string, number[]> = { close: closes, open: opens, high: highs, low: lows }
 
     // 국내 주식 관례: 상승은 빨강, 하락은 파랑(미국식과 반대).
-    const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: '#dc2626',
-      downColor: '#2563eb',
-      borderVisible: false,
-      wickUpColor: '#dc2626',
-      wickDownColor: '#2563eb',
-      // 국내 주식은 원 단위 정수 가격이라 라이브러리 기본값(소수 2자리)을
-      // 끄고 정수로 표시한다(크로스헤어/축 라벨 전부 적용됨).
-      priceFormat: { type: 'price', precision: 0, minMove: 1 },
-    })
-    candleSeries.setData(
-      sorted.map((item) => ({
-        time: item.tradeDate,
-        open: item.open,
-        high: item.high,
-        low: item.low,
-        close: item.close,
-      })),
-    )
-    candleSeriesRef.current = candleSeries
+    // 가격 자릿수는 호출측이 정한다 - 국내 주식은 원 단위 정수, 해외 주식·지수·환율은 소수 2자리
+    // (예전엔 정수로 고정해 해외 종목 소수점이 크로스헤어/축에서 잘렸다).
+    const priceFormat = priceFormatOptions(pricePrecision)
+    if (variant === 'line') {
+      const lineSeries = chart.addSeries(LineSeries, {
+        color: LINE_COLOR,
+        lineWidth: 2,
+        priceFormat,
+        priceLineVisible: false,
+      })
+      lineSeries.setData(sorted.map((item) => ({ time: item.tradeDate, value: item.close })))
+    } else {
+      const candleSeries = chart.addSeries(CandlestickSeries, {
+        upColor: '#dc2626',
+        downColor: '#2563eb',
+        borderVisible: false,
+        wickUpColor: '#dc2626',
+        wickDownColor: '#2563eb',
+        priceFormat,
+      })
+      candleSeries.setData(
+        sorted.map((item) => ({
+          time: item.tradeDate,
+          open: item.open,
+          high: item.high,
+          low: item.low,
+          close: item.close,
+        })),
+      )
+      candleSeriesRef.current = candleSeries
+    }
     const last = sorted[sorted.length - 1]
     lastBarRef.current = last ? { ...last } : null
 
@@ -460,18 +505,35 @@ export const CandleChart = forwardRef<CandleChartHandle, CandleChartProps>(funct
     const visibleFrom = dates[displayFromIndex]
     const lastDate = dates[dates.length - 1]
     const visibleTo = indicators.ichimoku && lastDate ? shiftBusinessDays(lastDate, ichimokuDisplacement) : lastDate
-    if (visibleFrom && visibleTo) {
-      chart.timeScale().setVisibleRange({ from: visibleFrom as Time, to: visibleTo as Time })
+    // 같은 viewKey로 다시 만드는 경우(과거 구간 이어받기, 지표 토글)엔 사용자가 보던 시간 범위를 복원한다.
+    const saved = savedViewRef.current
+    const restore = saved != null && saved.key === viewKey
+    const rangeFrom = restore ? saved.from : visibleFrom
+    const rangeTo = restore && !saved.atEnd ? saved.to : visibleTo
+    if (rangeFrom && rangeTo) {
+      chart.timeScale().setVisibleRange({ from: rangeFrom as Time, to: rangeTo as Time })
     } else {
       chart.timeScale().fitContent()
     }
+
+    chart.timeScale().subscribeVisibleTimeRangeChange((range) => {
+      if (!range) return
+      savedViewRef.current = {
+        key: viewKey,
+        from: range.from,
+        to: range.to,
+        atEnd: String(range.to) >= (lastDate ?? ''),
+      }
+    })
+    chart.subscribeCrosshairMove((param) => setHoverDate(typeof param.time === 'string' ? param.time : null))
+    subscribeReachStart(chart, onReachStartRef)
 
     return () => {
       candleSeriesRef.current = null
       lineRegistryRef.current = {}
       chart.remove()
     }
-  }, [data, displayDays, indicators, theme])
+  }, [sortedData, displayDays, indicators, theme, pricePrecision, variant, viewKey])
 
   // 일별 배치가 아직 안 돈 시간대(장중)에도 오늘자 캔들이 실시간 가격을
   // 따라 움직이도록, 틱마다 마지막 봉(또는 아직 없으면 오늘자 신규 봉)을
@@ -492,7 +554,34 @@ export const CandleChart = forwardRef<CandleChartHandle, CandleChartProps>(funct
 
     series.update({ time: bar.tradeDate, open: bar.open, high: bar.high, low: bar.low, close: bar.close })
     lastBarRef.current = bar
+    setLiveBar(bar)
   }, [livePrice])
 
-  return <div ref={containerRef} className="w-full" />
+  const indexByDate = useMemo(() => new Map(sortedData.map((bar, i) => [bar.tradeDate, i])), [sortedData])
+  const legendInfo = useMemo<OhlcInfo | null>(() => {
+    if (sortedData.length === 0) return null
+    const lastIndex = sortedData.length - 1
+    const index = hoverDate == null ? lastIndex : (indexByDate.get(hoverDate) ?? lastIndex)
+    // 마우스를 올리지 않았을 땐 실시간 틱이 반영된 오늘 봉을 보여준다(헤더의 현재가와 어긋나지 않게).
+    const live = index === lastIndex && liveBar != null && liveBar.tradeDate >= sortedData[lastIndex].tradeDate
+    const bar = live ? { ...sortedData[lastIndex], ...liveBar } : sortedData[index]
+    const prevBar =
+      live && liveBar.tradeDate > sortedData[lastIndex].tradeDate ? sortedData[lastIndex] : sortedData[index - 1]
+    return {
+      label: formatTradeDate(bar.tradeDate),
+      open: bar.open,
+      high: bar.high,
+      low: bar.low,
+      close: bar.close,
+      volume: bar.volume,
+      prevClose: prevBar?.close ?? null,
+    }
+  }, [sortedData, hoverDate, indexByDate, liveBar])
+
+  return (
+    <div className="relative">
+      <div ref={containerRef} className="w-full" />
+      <ChartOhlcLegend info={legendInfo} precision={pricePrecision} closeOnly={variant === 'line'} />
+    </div>
+  )
 })

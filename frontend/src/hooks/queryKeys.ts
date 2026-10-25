@@ -11,7 +11,7 @@ export const queryKeys = {
   stockPriceLimit: (stockCode: string) => ['stocks', 'price-limit', stockCode] as const,
   stockWarnings: (stockCode: string) => ['stocks', 'warnings', stockCode] as const,
   stockMinuteChart: (stockCode: string) => ['stocks', 'minute-chart', stockCode] as const,
-  stockChart: (stockCode: string, days: number) => ['stocks', 'chart', stockCode, days] as const,
+  stockChart: (stockCode: string, days: number) => ['stocks', 'chart-history', stockCode, days] as const,
   stockScore: (stockCode: string) => ['stocks', 'score', stockCode] as const,
   backtest: (stockCode: string) => ['backtest', stockCode] as const,
   stockFundamentals: (stockCode: string) => ['stocks', 'fundamentals', stockCode] as const,
@@ -33,6 +33,8 @@ export const queryKeys = {
   indexChart: (code: string) => ['market', 'indices', code, 'chart'] as const,
   indexMinuteChart: (code: string) => ['market', 'indices', code, 'minute-chart'] as const,
   bitcoinChart: ['market', 'indices', 'bitcoin', 'minute-chart'] as const,
+  bitcoinCandles: (interval: string) => ['market', 'indices', 'bitcoin', 'candles', interval] as const,
+  indexMinuteCandles: (code: string) => ['market', 'indices', code, 'minute-candles'] as const,
   exchangeRateChart: ['market', 'indices', 'usdkrw', 'chart'] as const,
   investorTrading: (code: string, interval: string) =>
     ['market', 'indices', code, 'investor-trading', interval] as const,

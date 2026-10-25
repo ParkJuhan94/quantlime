@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
@@ -33,7 +34,7 @@ public class MinuteChartCacheStore {
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
 
-    public Optional<MinuteChartResponse> find(String stockCode, String before) {
+    public Optional<MinuteChartResponse> find(String stockCode, @Nullable String before) {
         try {
             String json = redisTemplate.opsForValue().get(key(stockCode, before));
             if (json == null) {
@@ -49,7 +50,7 @@ public class MinuteChartCacheStore {
         }
     }
 
-    public void save(String stockCode, String before, MinuteChartResponse response) {
+    public void save(String stockCode, @Nullable String before, MinuteChartResponse response) {
         try {
             String json = objectMapper.writeValueAsString(response);
             redisTemplate.opsForValue().set(key(stockCode, before), json, before == null ? LATEST_TTL : HISTORY_TTL);
@@ -60,7 +61,7 @@ public class MinuteChartCacheStore {
         }
     }
 
-    private String key(String stockCode, String before) {
+    private String key(String stockCode, @Nullable String before) {
         return KEY_PREFIX + stockCode + ":" + (before == null ? "latest" : before);
     }
 }

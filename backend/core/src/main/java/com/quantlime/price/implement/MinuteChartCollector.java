@@ -24,6 +24,10 @@ import org.springframework.stereotype.Component;
 public class MinuteChartCollector {
 
     public static final int PAGE_SIZE = 200;
+    // 토스 1분봉의 timestamp는 봉 "종료" 시각이다 - 실데이터에서 NXT 프리마켓 첫 봉이 08:01, 애프터마켓 마지막 봉이
+    // 20:00으로 내려오는 걸 확인했다(2026-10-25). 차트 라이브러리는 time을 봉 시작으로 그리므로 1분을 빼서 맞춘다.
+    // 커서(nextBefore)는 토스가 준 값 그대로 다음 요청에 쓰이니 건드리지 않는다.
+    private static final long BAR_DURATION_SECONDS = 60;
 
     private final TossApiClient tossApiClient;
 
@@ -45,7 +49,7 @@ public class MinuteChartCollector {
         }
         List<MinuteChartResponse.Candle> candles = response.result().candles().stream()
             .map(candle -> new MinuteChartResponse.Candle(
-                OffsetDateTime.parse(candle.timestamp()).toEpochSecond(),
+                OffsetDateTime.parse(candle.timestamp()).toEpochSecond() - BAR_DURATION_SECONDS,
                 Double.parseDouble(candle.openPrice()),
                 Double.parseDouble(candle.highPrice()),
                 Double.parseDouble(candle.lowPrice()),

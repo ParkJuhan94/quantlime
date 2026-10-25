@@ -15,19 +15,26 @@ import com.quantlime.market.implement.BenchmarkIndexReader;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class MarketIndexService {
 
     private static final Set<String> DOMESTIC_CODES = Set.of("KOSPI", "KOSDAQ");
-    // 종목 상세 차트(PriceController @Max(365))와 비슷한 기간을 보여준다 -
-    // benchmark_index가 실제로 그만큼 쌓여 있다(백테스트 벤치마크 백필,
-    // BenchmarkIndexBackfillService 참고).
-    private static final int CHART_LOOKBACK_DAYS = 365;
+    // benchmark_index에 영속 저장되는 해외지수(BenchmarkIndexBackfillService의 OVERSEAS_INDEX_CODES와 같은 집합).
+    // SOXX는 ETF라 벤치마크가 아니어서 저장되지 않는다.
+    private static final Set<OverseasIndexCode> PERSISTED_OVERSEAS_CODES =
+        Set.of(OverseasIndexCode.NASDAQ, OverseasIndexCode.SP500);
+    // 지수 상세 차트가 보여줄 일봉 기간 - 월봉 집계와 이동평균에 쓸 이력이 충분하도록 benchmark_index가
+    // 쌓아둔 만큼(백필 목표 약 2년, BenchmarkIndexBackfillService 참고) 내려준다.
+    private static final int CHART_LOOKBACK_DAYS = 730;
 
     private final MarketIndexCache marketIndexCache;
     private final DomesticIndexChartCache domesticIndexChartCache;
@@ -60,7 +67,29 @@ public class MarketIndexService {
                 .toList();
         }
         OverseasIndexCode overseasIndexCode = OverseasIndexCode.from(code);
-        return overseasIndexChartCache.get(overseasIndexCode.getReutersCode(), overseasIndexCode.isEtf());
+        if (!PERSISTED_OVERSEAS_CODES.contains(overseasIndexCode)) {
+            return overseasIndexChartCache.get(overseasIndexCode.getReutersCode(), overseasIndexCode.isEtf());
+        }
+        return mergePersistedWithRecent(code, overseasIndexCode);
+    }
+
+    // 나스닥·S&P500은 benchmark_index의 긴 이력(약 2년)에 네이버 최근 60일을 덮어 합친다 - 이력은 일 1회 갱신이라
+    // 오늘 봉이 없거나 낡을 수 있어 같은 날짜는 네이버 값을 우선한다. 네이버가 실패해도 이력만으로 차트는 보여준다.
+    private List<IndexChartResponse> mergePersistedWithRecent(String code, OverseasIndexCode overseasIndexCode) {
+        Map<LocalDate, IndexChartResponse> byDate = new TreeMap<>();
+        LocalDate today = LocalDate.now(clock);
+        benchmarkIndexReader.findBetween(code, today.minusDays(CHART_LOOKBACK_DAYS), today)
+            .forEach(benchmarkIndex -> byDate.put(benchmarkIndex.getTradeDate(), toChartResponse(benchmarkIndex)));
+        try {
+            overseasIndexChartCache.get(overseasIndexCode.getReutersCode(), overseasIndexCode.isEtf())
+                .forEach(candle -> byDate.put(candle.tradeDate(), candle));
+        } catch (RuntimeException e) {
+            if (byDate.isEmpty()) {
+                throw e;
+            }
+            log.warn("해외지수 최근 시세 조회 실패, 저장된 이력만으로 응답: code={}, error={}", code, e.getMessage());
+        }
+        return List.copyOf(byDate.values());
     }
 
     private IndexChartResponse toChartResponse(BenchmarkIndex benchmarkIndex) {

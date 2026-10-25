@@ -6,6 +6,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.quantlime.auth.jwt.JwtTokenProvider;
+import com.quantlime.infra.toss.dto.TossMarketIndicatorCandleResponse;
+import com.quantlime.infra.upbit.dto.UpbitCandle;
 import com.quantlime.market.domain.BenchmarkIndex;
 import com.quantlime.market.domain.RankingPeriod;
 import com.quantlime.market.dto.response.IndexChartResponse;
@@ -201,6 +203,58 @@ class MarketControllerTest extends MockedMarketApiTestSupport {
         mockMvc.perform(get("/api/market/indices/bitcoin/minute-chart"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$[0].price").value(95959000.0));
+    }
+
+    @Test
+    @DisplayName("[지수 분봉 캔들 조회 성공 시 OHLCV와 UTC Z 커서를 200으로 반환한다]")
+    void getIndexMinuteCandles_kospi_returns200() throws Exception {
+        // given
+        given(tossApiClient.getMarketIndicatorCandles("KOSPI", "1m", 200, null)).willReturn(
+            new TossMarketIndicatorCandleResponse(new TossMarketIndicatorCandleResponse.MarketIndicatorCandlePageResult(
+                List.of(
+                    new TossMarketIndicatorCandleResponse.MarketIndicatorCandle(
+                        "2026-10-23T15:30:00+09:00", "7280.1", "7285.0", "7279.5", "7284.4", "1200"),
+                    new TossMarketIndicatorCandleResponse.MarketIndicatorCandle(
+                        "2026-10-23T15:29:00+09:00", "7279.0", "7281.0", "7278.0", "7280.1", "1100")),
+                "2026-10-23T15:29:00+09:00")));
+
+        // when & then
+        mockMvc.perform(get("/api/market/indices/KOSPI/minute-candles"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.candles[0].close").value(7280.1))
+            .andExpect(jsonPath("$.candles[1].volume").value(1200.0))
+            .andExpect(jsonPath("$.nextBefore").value("2026-10-23T06:29:00Z"));
+    }
+
+    @Test
+    @DisplayName("[해외지수는 분봉 캔들을 제공하지 않아 400을 반환한다]")
+    void getIndexMinuteCandles_overseasIndex_returns400() throws Exception {
+        mockMvc.perform(get("/api/market/indices/NASDAQ/minute-candles"))
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("[비트코인 캔들 조회 성공 시 OHLCV를 시간 오름차순으로 200 반환한다]")
+    void getBitcoinCandles_success_returns200() throws Exception {
+        // given: 업비트는 최신순으로 내려준다
+        given(upbitApiClient.getCandles("KRW-BTC", "minutes/5", 200, null)).willReturn(List.of(
+            new UpbitCandle("2026-10-25T05:05:00", 96100000.0, 96300000.0, 96000000.0, 96200000.0, 1.5),
+            new UpbitCandle("2026-10-25T05:00:00", 96000000.0, 96150000.0, 95900000.0, 96100000.0, 2.5)));
+
+        // when & then
+        mockMvc.perform(get("/api/market/indices/bitcoin/candles").param("interval", "5m"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.candles[0].open").value(96000000.0))
+            .andExpect(jsonPath("$.candles[0].volume").value(2.5))
+            .andExpect(jsonPath("$.candles[1].close").value(96200000.0))
+            .andExpect(jsonPath("$.nextBefore").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("[비트코인 캔들 interval이 지원 목록 밖이면 400을 반환한다]")
+    void getBitcoinCandles_invalidInterval_returns400() throws Exception {
+        mockMvc.perform(get("/api/market/indices/bitcoin/candles").param("interval", "7m"))
+            .andExpect(status().isBadRequest());
     }
 
     @Test
