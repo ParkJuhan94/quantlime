@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { StockInvestorTradingResponse } from '../types/stock'
-import { formatHoldingRate, formatShares, sumNetBuyVolume } from './investorTrading'
+import { availableSummaryDays, formatHoldingRate, formatShares, sumNetBuyVolume } from './investorTrading'
 
 function row(
   tradeDate: string,
@@ -68,5 +68,24 @@ describe('formatHoldingRate', () => {
   it('소수 비율을 퍼센트로 바꾼다', () => {
     expect(formatHoldingRate(0.5089)).toBe('50.89%')
     expect(formatHoldingRate(null)).toBe('-')
+  })
+})
+
+describe('availableSummaryDays', () => {
+  const confirmedRows = (n: number) =>
+    Array.from({ length: n }, (_, i) => row(`2026-01-${String(i + 1).padStart(2, '0')}`, 1, 1, 1))
+
+  it('확정된 거래일 수 이하의 구간만 고른다', () => {
+    expect(availableSummaryDays(confirmedRows(120))).toEqual([5, 20, 60, 120])
+    expect(availableSummaryDays(confirmedRows(30))).toEqual([5, 20])
+  })
+
+  it('잠정 기록은 세지 않는다', () => {
+    expect(availableSummaryDays([...confirmedRows(5), row('2026-02-01', null, 1, 1, false)])).toEqual([5])
+  })
+
+  it('데이터가 아주 적어도 첫 구간은 남긴다', () => {
+    expect(availableSummaryDays(confirmedRows(2))).toEqual([5])
+    expect(availableSummaryDays([])).toEqual([5])
   })
 })

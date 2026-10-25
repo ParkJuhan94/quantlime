@@ -1,5 +1,12 @@
+import { useState } from 'react'
 import { useStockInvestorTradingQuery } from '../../hooks/queries/useStockDetail'
-import { formatHoldingRate, formatShares, sumNetBuyVolume, type InvestorGroupKey } from '../../utils/investorTrading'
+import {
+  availableSummaryDays,
+  formatHoldingRate,
+  formatShares,
+  sumNetBuyVolume,
+  type InvestorGroupKey,
+} from '../../utils/investorTrading'
 import { changeRateColorClass } from '../../utils/priceFormat'
 
 const GROUPS: { key: InvestorGroupKey; label: string }[] = [
@@ -9,16 +16,21 @@ const GROUPS: { key: InvestorGroupKey; label: string }[] = [
   { key: 'otherCorporationNetBuyVolume', label: '기타법인' },
 ]
 
-const SUMMARY_DAYS = [5, 20] as const
+const DEFAULT_SUMMARY_DAYS = 20
 
-// 종목 상세의 투자자별 매매동향 - 국내 종목의 최근 20거래일 순매수 거래량(주, KRX·NXT 통합)을 일별 표와 5일/20일 누적 칩으로
-// 보여준다. 코스피/코스닥 지수 상세의 매매동향(InvestorTradingSummary)은 거래대금(원)이라 단위가 다르다.
+// 종목 상세의 투자자별 매매동향 - 국내 종목의 최근 120거래일 순매수 거래량(주, KRX·NXT 통합)을 일별 표(스크롤)와
+// 5/20/60/120일 중 고른 기간의 누적 칩으로 보여준다. 코스피/코스닥 지수 상세의 매매동향(InvestorTradingSummary)은 거래대금(원)이라 단위가 다르다.
 // 오늘 기록은 장중 잠정치라 개인·기타법인이 '-'이고 저녁에 확정된다. 해외 종목(서버가 빈 배열), 로딩/에러에서는 부가 정보라
 // 영역 자체를 그리지 않는다.
 export function StockInvestorTradingSection({ stockCode }: { stockCode: string }) {
   const { data } = useStockInvestorTradingQuery(stockCode)
+  const [selectedDays, setSelectedDays] = useState(DEFAULT_SUMMARY_DAYS)
 
   if (!data || data.length === 0) return null
+
+  // 선택한 기간이 이 종목의 확정 거래일 수보다 길면(신규 상장 등) 가장 긴 가능한 구간으로 내린다.
+  const dayOptions = availableSummaryDays(data)
+  const summaryDays = dayOptions.includes(selectedDays) ? selectedDays : dayOptions[dayOptions.length - 1]
 
   const rows = [...data].reverse() // 최신 날짜가 위로 오게(HTS 관례)
   const latestHoldingRate = rows.find((row) => row.foreignerHoldingRate != null)?.foreignerHoldingRate
@@ -33,21 +45,31 @@ export function StockInvestorTradingSection({ stockCode }: { stockCode: string }
         </span>
       </div>
 
-      <div className="space-y-1.5">
-        {SUMMARY_DAYS.map((days) => (
-          <div key={days} className="flex flex-wrap items-center gap-1.5 text-xs">
-            <span className="w-14 text-gray-400">{days}일 누적</span>
-            {GROUPS.map((group) => {
-              const sum = sumNetBuyVolume(data, group.key, days)
-              return (
-                <div key={group.key} className="rounded-lg border border-gray-200 bg-gray-50 px-2 py-1">
-                  <span className="text-gray-400">{group.label}</span>{' '}
-                  <span className={`font-semibold ${changeRateColorClass(sum)}`}>{formatShares(sum)}</span>
-                </div>
-              )
-            })}
-          </div>
-        ))}
+      <div className="flex flex-wrap items-center gap-1.5 text-xs">
+        <div className="flex gap-0.5" role="group" aria-label="누적 기간">
+          {dayOptions.map((days) => (
+            <button
+              key={days}
+              type="button"
+              onClick={() => setSelectedDays(days)}
+              className={`rounded-md px-2 py-0.5 text-[11px] font-medium transition ${
+                summaryDays === days ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {days}일
+            </button>
+          ))}
+        </div>
+        <span className="text-gray-400">누적</span>
+        {GROUPS.map((group) => {
+          const sum = sumNetBuyVolume(data, group.key, summaryDays)
+          return (
+            <div key={group.key} className="rounded-lg border border-gray-200 bg-gray-50 px-2 py-1">
+              <span className="text-gray-400">{group.label}</span>{' '}
+              <span className={`font-semibold ${changeRateColorClass(sum)}`}>{formatShares(sum)}</span>
+            </div>
+          )
+        })}
       </div>
 
       <div className="mt-3 max-h-64 overflow-auto rounded-lg border border-gray-200">

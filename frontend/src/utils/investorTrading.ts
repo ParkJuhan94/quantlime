@@ -3,6 +3,16 @@ import type { StockInvestorTradingResponse } from '../types/stock'
 export type InvestorGroupKey =
   'individualNetBuyVolume' | 'foreignerNetBuyVolume' | 'institutionNetBuyVolume' | 'otherCorporationNetBuyVolume'
 
+// 누적 구간 선택지. 데이터가 모자란 신규 상장 종목에서 "120일 누적"이 실제로는 30일치인 걸 120일처럼 보이지 않게,
+// 확정된 거래일 수 이하인 구간만 보여준다(최소 첫 구간은 항상 둔다).
+export const SUMMARY_DAY_OPTIONS = [5, 20, 60, 120] as const
+
+export function availableSummaryDays(rows: StockInvestorTradingResponse[]): number[] {
+  const confirmedCount = rows.filter((row) => row.confirmed).length
+  const options = SUMMARY_DAY_OPTIONS.filter((days) => days <= confirmedCount)
+  return options.length > 0 ? options : [SUMMARY_DAY_OPTIONS[0]]
+}
+
 // 최근 days거래일(확정된 날만)의 순매수 합계. 잠정 기록은 개인·기타법인이 null이라 섞으면 그 분류만 며칠이 빠진
 // 합계가 나와 분류끼리 기간이 어긋난다 - 모든 분류를 같은 확정 거래일 구간으로 맞춘다. 확정 기록이 없으면 null.
 export function sumNetBuyVolume(
