@@ -243,6 +243,31 @@ class StockInvestorTradingCollectorTest {
     }
 
     @Test
+    @DisplayName("[백필은 이미 충분히 쌓이고 세부가 빠진 확정 행이 없는 종목은 토스를 부르지 않고 건너뛴다 - 이어받기]")
+    void backfill_alreadyComplete_skipsWithoutCallingToss() {
+        given(reader.countByStockCode(STOCK)).willReturn(400L);
+        given(reader.countConfirmedWithoutBreakdown(STOCK)).willReturn(0L);
+
+        UpsertSummary summary = collector.backfill(STOCK, 400);
+
+        assertThat(summary).isEqualTo(new UpsertSummary(0, 0, 0));
+        verify(tossApiClient, never()).getStockInvestorTrading(eq(STOCK), anyInt(), any());
+    }
+
+    @Test
+    @DisplayName("[세부가 비어 있는 확정 행이 남아 있으면 개수가 충분해도 백필을 다시 받는다]")
+    void backfill_enoughRowsButMissingBreakdown_stillBackfills() {
+        given(reader.countByStockCode(STOCK)).willReturn(400L);
+        given(reader.countConfirmedWithoutBreakdown(STOCK)).willReturn(12L);
+        given(tossApiClient.getStockInvestorTrading(STOCK, 100, null))
+            .willReturn(response(null, confirmed("2026-10-23", "2026-10-23T18:05:00+09:00")));
+
+        collector.backfill(STOCK, 100);
+
+        verify(tossApiClient).getStockInvestorTrading(STOCK, 100, null);
+    }
+
+    @Test
     @DisplayName("[백필은 남은 건수가 100보다 작으면 그만큼만 요청한다]")
     void backfill_requestsOnlyRemaining() {
         given(tossApiClient.getStockInvestorTrading(STOCK, 30, null)).willReturn(response("2026-09-01",

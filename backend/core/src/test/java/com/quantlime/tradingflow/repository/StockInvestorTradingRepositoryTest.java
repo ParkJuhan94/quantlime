@@ -105,6 +105,20 @@ class StockInvestorTradingRepositoryTest extends DataJpaTestSupport {
     }
 
     @Test
+    @DisplayName("[세부가 비어 있는 확정 행만 센다 - 잠정 행(개인 null)과 세부가 있는 행은 제외]")
+    void countConfirmedWithoutBreakdown_countsOnlyConfirmedRowsMissingBreakdown() {
+        repository.save(confirmed(LocalDate.of(2026, 10, 21))); // 확정 + 세부 있음
+        repository.save(provisional(LocalDate.of(2026, 10, 22))); // 잠정(개인 null) - 세부가 없어도 대상 아님
+        repository.saveAndFlush(StockInvestorTrading.of(STOCK, LocalDate.of(2026, 10, 20),
+            LocalDateTime.of(2026, 10, 20, 18, 5), InvestorVolume.of(100, 300, -200),
+            InvestorVolume.of(500, 400, 100), InvestorVolume.of(300, 200, 100), null,
+            InvestorVolume.of(10, 10, 0), null, null)); // 확정인데 세부 없음 = 세부 저장 이전 행
+
+        assertThat(repository.countConfirmedWithoutBreakdown(STOCK)).isEqualTo(1);
+        assertThat(repository.countConfirmedWithoutBreakdown("000660")).isZero();
+    }
+
+    @Test
     @DisplayName("[같은 종목·거래일 행은 유니크 제약으로 중복 저장되지 않는다]")
     void save_sameStockAndDate_violatesUniqueConstraint() {
         repository.saveAndFlush(confirmed(LocalDate.of(2026, 10, 23)));
