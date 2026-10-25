@@ -40,10 +40,15 @@ import org.springframework.web.client.RestClient;
  * (2026-08-19 확인 - Gemini 무료 티어 쿼터가 유튜브와 21/20으로 근접해 있어
  * 실제로 걸릴 수 있는 경로).
  *
- * <p>{@link #calculateScoreSeries}/{@link #runBacktest}/{@link #runCrossSectionalBacktest}/
- * {@link #normalizeCrossSection}/{@link #summarize} 5개는 {@code "quant-engine"}
- * 인스턴스를 공유하지만, {@link #fetchTranscript}만 {@code "quant-engine-transcript"}로
- * 분리돼 있다(application.yml 설정 참고, 2026-09-14). 자막 조회는 quant-engine
+ * <p>서킷 인스턴스는 네 개로 나뉜다: 스코어({@link #calculateScoreSeries}/
+ * {@link #normalizeCrossSection}, {@code "quant-engine-score"}), 백테스트
+ * ({@link #runBacktest}/{@link #runCrossSectionalBacktest}, {@code "quant-engine"}),
+ * 자막({@code "quant-engine-transcript"}), 요약({@code "quant-engine-summarize"}).
+ * 스코어를 백테스트와 나눈 이유(2026-10-26): 무거운 백테스트가 60초 read timeout을
+ * 넘기면 공유 서킷이 열려 스코어 호출까지 실패했다(CHANGELOG 실측 기록). 서킷 분리는
+ * 실패 집계만 나눌 뿐 quant-engine 프로세스 자원(스레드풀)은 여전히 공유한다.
+ *
+ * <p>자막을 분리한 이유(2026-09-14): 자막 조회는 quant-engine
  * 프로세스가 아니라 유튜브 자막 스크래핑(IP 차단 등)에 실패 원인이 있는
  * 경우가 대부분이라, 같은 인스턴스를 쓰면 그 장애가 무관한 스코어/백테스트
  * 호출까지 fail-fast로 막아버린다(2026-09-13 실제 발생 - 자막 500 5연속으로
@@ -63,6 +68,13 @@ public class PythonEngineClient {
     private static final String METRIC_DURATION = "python-engine.duration";
     private static final String OUTCOME_SUCCESS = "success";
     private static final String OUTCOME_FAILURE = "failure";
+    // 호출 종류별 소요시간을 나눠 보기 위한 태그(2026-10-26 전엔 outcome만 있어 스코어 타임아웃 근거를 운영 지표로 못 냈다)
+    private static final String ENDPOINT_SCORE = "score";
+    private static final String ENDPOINT_BACKTEST = "backtest";
+    private static final String ENDPOINT_CROSS_SECTIONAL_BACKTEST = "cross-sectional-backtest";
+    private static final String ENDPOINT_NORMALIZE = "normalize";
+    private static final String ENDPOINT_TRANSCRIBE = "transcribe";
+    private static final String ENDPOINT_SUMMARIZE = "summarize";
 
     // Gemini 무료 티어(gemini-3.5-flash-lite)의 분당 요청 한도(RPM=15)에 걸리면
     // Gemini가 응답에 담아주는 재시도 대기시간이 대략 50~60초였다(2026-08-09,
@@ -72,26 +84,29 @@ public class PythonEngineClient {
     // 3회 재시도)에서 자연히 다시 시도된다.
     private static final long SUMMARY_RATE_LIMIT_BACKOFF_MS = 60_000;
 
+    // 필드명이 PythonEngineConfig의 @Bean 메서드명과 같아야 같은 타입(RestClient)의 두 빈 중
+    // 맞는 쪽이 주입된다(MarketRankingService와 동일한 By-Name 관례).
     private final RestClient pythonEngineRestClient;
+    private final RestClient pythonEngineScoreRestClient;
     private final MeterRegistry meterRegistry;
     private final GeminiDailyQuotaGate geminiDailyQuotaGate;
 
-    @CircuitBreaker(name = "quant-engine")
-    @Bulkhead(name = "quant-engine")
+    @CircuitBreaker(name = "quant-engine-score")
+    @Bulkhead(name = "quant-engine-score")
     public ScoreSeriesBatchApiResponse calculateScoreSeries(ScoreBatchApiRequest request) {
         Timer.Sample sample = Timer.start(meterRegistry);
         try {
             ScoreSeriesBatchApiResponse response = ExternalApiInvoker.call(
                 PythonEngineErrorCode.SCORE_CALCULATION_FAILED, () ->
-                    pythonEngineRestClient.post()
+                    pythonEngineScoreRestClient.post()
                         .uri("/calculate/score/series")
                         .body(request)
                         .retrieve()
                         .body(ScoreSeriesBatchApiResponse.class));
-            recordOutcome(OUTCOME_SUCCESS, sample);
+            recordOutcome(ENDPOINT_SCORE, OUTCOME_SUCCESS, sample);
             return response;
         } catch (ExternalApiException e) {
-            recordOutcome(OUTCOME_FAILURE, sample);
+            recordOutcome(ENDPOINT_SCORE, OUTCOME_FAILURE, sample);
             throw e;
         }
     }
@@ -108,10 +123,10 @@ public class PythonEngineClient {
                         .body(request)
                         .retrieve()
                         .body(BacktestApiResponse.class));
-            recordOutcome(OUTCOME_SUCCESS, sample);
+            recordOutcome(ENDPOINT_BACKTEST, OUTCOME_SUCCESS, sample);
             return response;
         } catch (ExternalApiException e) {
-            recordOutcome(OUTCOME_FAILURE, sample);
+            recordOutcome(ENDPOINT_BACKTEST, OUTCOME_FAILURE, sample);
             throw e;
         }
     }
@@ -134,16 +149,17 @@ public class PythonEngineClient {
                         .body(request)
                         .retrieve()
                         .body(CrossSectionalBacktestApiResponse.class));
-            recordOutcome(OUTCOME_SUCCESS, sample);
+            recordOutcome(ENDPOINT_CROSS_SECTIONAL_BACKTEST, OUTCOME_SUCCESS, sample);
             return response;
         } catch (ExternalApiException e) {
-            recordOutcome(OUTCOME_FAILURE, sample);
+            recordOutcome(ENDPOINT_CROSS_SECTIONAL_BACKTEST, OUTCOME_FAILURE, sample);
             throw e;
         }
     }
 
-    @CircuitBreaker(name = "quant-engine")
-    @Bulkhead(name = "quant-engine")
+    // 스코어와 같은 서킷을 쓰되 타임아웃은 60초 클라이언트 그대로 - 배치당 1~2회뿐이고 전종목(수천 개)을 한 번에 보낸다.
+    @CircuitBreaker(name = "quant-engine-score")
+    @Bulkhead(name = "quant-engine-score")
     public CrossSectionNormalizeApiResponse normalizeCrossSection(CrossSectionNormalizeApiRequest request) {
         Timer.Sample sample = Timer.start(meterRegistry);
         try {
@@ -154,10 +170,10 @@ public class PythonEngineClient {
                         .body(request)
                         .retrieve()
                         .body(CrossSectionNormalizeApiResponse.class));
-            recordOutcome(OUTCOME_SUCCESS, sample);
+            recordOutcome(ENDPOINT_NORMALIZE, OUTCOME_SUCCESS, sample);
             return response;
         } catch (ExternalApiException e) {
-            recordOutcome(OUTCOME_FAILURE, sample);
+            recordOutcome(ENDPOINT_NORMALIZE, OUTCOME_FAILURE, sample);
             throw e;
         }
     }
@@ -174,10 +190,10 @@ public class PythonEngineClient {
                         .body(request)
                         .retrieve()
                         .body(TranscribeApiResponse.class));
-            recordOutcome(OUTCOME_SUCCESS, sample);
+            recordOutcome(ENDPOINT_TRANSCRIBE, OUTCOME_SUCCESS, sample);
             return response;
         } catch (ExternalApiException e) {
-            recordOutcome(OUTCOME_FAILURE, sample);
+            recordOutcome(ENDPOINT_TRANSCRIBE, OUTCOME_FAILURE, sample);
             throw e;
         }
     }
@@ -201,10 +217,10 @@ public class PythonEngineClient {
                 throw new ExternalApiException(PythonEngineErrorCode.SUMMARY_DAILY_QUOTA_EXCEEDED);
             }
             SummarizeApiResponse response = summarizeWithRateLimitRetry(request);
-            recordOutcome(OUTCOME_SUCCESS, sample);
+            recordOutcome(ENDPOINT_SUMMARIZE, OUTCOME_SUCCESS, sample);
             return response;
         } catch (ExternalApiException e) {
-            recordOutcome(OUTCOME_FAILURE, sample);
+            recordOutcome(ENDPOINT_SUMMARIZE, OUTCOME_FAILURE, sample);
             throw e;
         }
     }
@@ -240,8 +256,8 @@ public class PythonEngineClient {
             PythonEngineErrorCode.SUMMARY_RATE_LIMIT_EXCEEDED);
     }
 
-    private void recordOutcome(String outcome, Timer.Sample sample) {
-        meterRegistry.counter(METRIC_CALLS, "outcome", outcome).increment();
-        sample.stop(meterRegistry.timer(METRIC_DURATION, "outcome", outcome));
+    private void recordOutcome(String endpoint, String outcome, Timer.Sample sample) {
+        meterRegistry.counter(METRIC_CALLS, "endpoint", endpoint, "outcome", outcome).increment();
+        sample.stop(meterRegistry.timer(METRIC_DURATION, "endpoint", endpoint, "outcome", outcome));
     }
 }

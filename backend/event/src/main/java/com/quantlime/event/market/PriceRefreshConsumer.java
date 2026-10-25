@@ -5,7 +5,6 @@ import com.quantlime.event.retry.RetryBackoff;
 import com.quantlime.market.service.MarketDataRefreshService;
 import com.quantlime.market.service.PriceRefreshBatchGate;
 import com.quantlime.score.domain.PeerGroup;
-import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.DltHandler;
@@ -46,20 +45,13 @@ import org.springframework.stereotype.Component;
  * 재전달이 일어난다. 20건 × 0.5초 = 10초로 줄이고, quant-engine이 느려지는 경우
  * (read timeout 60초)에도 여유가 있게 한도를 10분으로 둔다.
  *
- * <p><b>{@code exclude = CallNotPermittedException.class}인 이유</b>(2026-09-30,
- * 9/24~25 국내 배치 0%-정체 조사 후속): quant-engine 서킷("quant-engine"
- * 인스턴스)이 이미 OPEN이면 {@code calculateScoreSeries} 호출이 즉시
- * {@link CallNotPermittedException}으로 실패한다 - 재시도해도 서킷이 다시
- * 닫히기 전까지는 100% 같은 결과다. 이 경우까지 일반 재시도 사이클(4회,
- * 30s→90s→270s, 최악 약 6분/종목)을 그대로 타면, concurrency=1인 이 리스너가
- * 전 종목(국내 약 2,500개)을 순차 처리하는 구조상 quant-engine이 전면
- * 장애일 때 배치 하나가 55분 타임아웃 내내 거의 진행되지 못하는 위험이
- * 있었다(실측은 아니고 코드 추론 - 재현 시도 시점엔 quant-engine이 정상이라
- * 재현 실패, `docs/CHANGELOG.md` 2026-09-29/30 항목 참고). 이 예외만 재시도
- * 사이클을 건너뛰고 곧장 DLT로 보내 - 개별 종목의 일시적 실패는 기존과
- * 동일하게 4회 재시도+DLT 알림을 그대로 받고, 서킷이 열릴 정도의 전면
- * 장애일 때만 종목당 대기시간이 즉시 DLT 전환 수준으로 줄어 배치 전체
- * 정체를 막는다.
+ * <p><b>서킷 OPEN({@code CallNotPermittedException})도 일반 재시도로 둔다</b>(2026-10-26):
+ * 한때 이 예외를 재시도 없이 곧장 DLT로 보냈다(PR #63). 그런데 서킷은 60초만 열렸다
+ * 닫히고, 열리는 원인이 quant-engine 장애가 아닐 수도 있다 - 그 60초 동안 들어온 종목
+ * 100~200개가 DLT로 가 다음 날까지 스코어가 안 바뀌고 건마다 Slack이 갔다. 재시도
+ * 간격(30s→90s→270s)이 OPEN 시간보다 길어 대부분 자연 회복된다. hang 비용은 이
+ * 컨슈머가 아니라 스코어 전용 서킷·짧은 read timeout으로 줄인다
+ * ({@code PythonEngineConfig.pythonEngineScoreRestClient}, {@code quant-engine-score}).
  */
 @Slf4j
 @Component
@@ -71,8 +63,7 @@ public class PriceRefreshConsumer {
     private final KafkaDltNotifier dltNotifier;
 
     @RetryableTopic(attempts = "4", backoff = @Backoff(delayExpression = RetryBackoff.DELAY_MS, multiplierExpression = RetryBackoff.MULTIPLIER,
-        maxDelayExpression = RetryBackoff.MAX_DELAY_MS),
-        exclude = CallNotPermittedException.class)
+        maxDelayExpression = RetryBackoff.MAX_DELAY_MS))
     @KafkaListener(topics = MarketTopics.PRICE_REFRESH_REQUESTED, groupId = "price-refresh-collector",
         concurrency = "1", properties = {"max.poll.records=20", "max.poll.interval.ms=600000"})
     public void onPriceRefreshRequested(PriceRefreshRequestedMessage message) {
