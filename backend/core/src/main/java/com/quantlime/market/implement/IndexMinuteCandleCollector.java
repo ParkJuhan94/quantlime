@@ -17,8 +17,7 @@ import org.springframework.stereotype.Component;
  * 코스피/코스닥 1분봉을 토스 시장지표 캔들 API에서 받아 종목 분봉과 같은 응답 모양
  * ({@link MinuteChartResponse})으로 변환하는 구현 레이어 - 종목 분봉 차트 컴포넌트를 그대로 재사용하고,
  * {@code before} 커서로 이전 거래일까지 이어 받을 수 있게 한다(기존 {@code DomesticIndexMinuteChartCache}는
- * 최신 200분 한 페이지 + 종가만이라 홈 카드 용도). 시장지표 캔들의 timestamp는 봉 시작 시각이다
- * (종목 1분봉과 달리 보정이 필요 없다).
+ * 최신 200분 한 페이지 + 종가만이라 홈 카드 용도).
  */
 @Slf4j
 @Component
@@ -27,6 +26,10 @@ public class IndexMinuteCandleCollector {
 
     public static final int PAGE_SIZE = 200;
     private static final String INTERVAL_MINUTE = "1m";
+    // 시장지표 1분봉도 종목처럼 timestamp가 봉 "종료" 시각이다 - 코스피 실데이터에서 첫 봉이 09:01, 마지막 봉이 15:30
+    // (정규장 390분)으로 내려오는 걸 확인했다(2026-10-25). 명세 설명("봉 시작 시각")과 달라서 실데이터를 따랐다.
+    // 차트 라이브러리는 time을 봉 시작으로 그리므로 1분을 뺀다. 커서(nextBefore)는 그대로 둔다.
+    private static final long BAR_DURATION_SECONDS = 60;
 
     private final TossApiClient tossApiClient;
 
@@ -41,7 +44,7 @@ public class IndexMinuteCandleCollector {
         }
         List<MinuteChartResponse.Candle> candles = response.result().candles().stream()
             .map(candle -> new MinuteChartResponse.Candle(
-                OffsetDateTime.parse(candle.timestamp()).toEpochSecond(),
+                OffsetDateTime.parse(candle.timestamp()).toEpochSecond() - BAR_DURATION_SECONDS,
                 Double.parseDouble(candle.openPrice()),
                 Double.parseDouble(candle.highPrice()),
                 Double.parseDouble(candle.lowPrice()),
