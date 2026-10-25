@@ -16,6 +16,8 @@ export function sumNetBuyVolume(
 }
 
 const MAN = 10_000 // 만
+// 10만 주 미만은 만 단위로 반올림하면 "+1만주"처럼 값이 뭉개져서(실제 11,630주) 원래 숫자를 그대로 보여준다.
+const COMPACT_FROM = 100_000
 const EOK = 100_000_000 // 억
 
 // 주식 수를 만/억 단위로 압축하고 순매수(+)/순매도(-) 부호를 붙인다. null은 '-'.
@@ -24,7 +26,7 @@ export function formatShares(shares: number | null | undefined): string {
   const sign = shares > 0 ? '+' : shares < 0 ? '-' : ''
   const abs = Math.abs(shares)
   if (abs >= EOK) return `${sign}${(abs / EOK).toFixed(1)}억주`
-  if (abs >= MAN) return `${sign}${Math.round(abs / MAN).toLocaleString('ko-KR')}만주`
+  if (abs >= COMPACT_FROM) return `${sign}${Math.round(abs / MAN).toLocaleString('ko-KR')}만주`
   return `${sign}${Math.round(abs).toLocaleString('ko-KR')}주`
 }
 

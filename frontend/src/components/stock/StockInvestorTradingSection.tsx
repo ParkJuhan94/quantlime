@@ -51,7 +51,7 @@ export function StockInvestorTradingSection({ stockCode }: { stockCode: string }
       </div>
 
       <div className="mt-3 max-h-64 overflow-auto rounded-lg border border-gray-200">
-        <table className="min-w-max text-xs">
+        <table className="w-full min-w-max text-xs">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
               <th className="sticky left-0 z-10 bg-gray-50 px-2 py-1.5 text-left font-medium text-gray-500">일자</th>

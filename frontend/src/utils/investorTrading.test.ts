@@ -54,6 +54,8 @@ describe('formatShares', () => {
     expect(formatShares(123_456_789)).toBe('+1.2억주')
     expect(formatShares(-2_345_000)).toBe('-235만주')
     expect(formatShares(9_500)).toBe('+9,500주')
+    expect(formatShares(11_630)).toBe('+11,630주') // 10만 미만은 만 단위로 뭉개지 않는다
+    expect(formatShares(100_000)).toBe('+10만주')
     expect(formatShares(0)).toBe('0주')
   })
 
