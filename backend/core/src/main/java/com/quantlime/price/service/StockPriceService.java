@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -124,9 +125,18 @@ public class StockPriceService {
     // 해외 종목은 이 테이블에 행이 없어 차트가 항상 빈 배열로 응답됐다.
     @Transactional(readOnly = true)
     public List<DailyChartResponse> getChart(String stockCode, int days) {
+        return getChart(stockCode, days, null);
+    }
+
+    /**
+     * 일봉 차트를 {@code to}(포함) 이전 {@code days}일 구간으로 조회한다 - 차트가 왼쪽으로 스크롤될 때
+     * 더 과거 구간을 이어 받는 커서다. {@code to}가 null이면 오늘까지(기존 동작).
+     */
+    @Transactional(readOnly = true)
+    public List<DailyChartResponse> getChart(String stockCode, int days, @Nullable LocalDate to) {
         Stock stock = stockMasterService.getStockByCode(stockCode);
 
-        LocalDate end = LocalDate.now(clock);
+        LocalDate end = to != null ? to : LocalDate.now(clock);
         LocalDate start = end.minusDays(days);
 
         if (!stock.getMarketType().isDomestic()) {

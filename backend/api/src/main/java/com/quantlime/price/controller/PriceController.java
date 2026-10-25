@@ -11,8 +11,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
+import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -45,7 +47,8 @@ public class PriceController {
     @GetMapping("/{stockCode}/chart")
     @Operation(
         summary = "일봉 차트 조회",
-        description = "종목의 최근 N일 일봉 OHLCV를 조회한다"
+        description = "종목의 최근 N일 일봉 OHLCV를 조회한다. to(YYYY-MM-DD)를 주면 그 날짜(포함)까지의 N일 구간을 "
+            + "조회하므로, 응답의 가장 오래된 날짜 전날을 to로 넘겨 더 과거로 이어갈 수 있다"
     )
     @ApiResponse(useReturnTypeSchema = true)
     public ResponseEntity<List<DailyChartResponse>> getChart(
@@ -54,8 +57,9 @@ public class PriceController {
         @Pattern(regexp = "daily", message = "period는 daily만 지원합니다.") String period,
         @RequestParam(defaultValue = "90")
         @Min(value = 1, message = "days는 1 이상이어야 합니다.")
-        @Max(value = 365, message = "days는 365 이하여야 합니다.") int days) {
-        return ResponseEntity.ok(stockPriceService.getChart(stockCode, days));
+        @Max(value = 365, message = "days는 365 이하여야 합니다.") int days,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return ResponseEntity.ok(stockPriceService.getChart(stockCode, days, to));
     }
 
     @GetMapping("/{stockCode}/minute-chart")
