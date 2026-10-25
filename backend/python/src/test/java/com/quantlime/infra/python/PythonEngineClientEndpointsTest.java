@@ -19,6 +19,8 @@ import com.quantlime.infra.python.dto.ScoreBatchApiRequest;
 import com.quantlime.infra.python.dto.ScoreSeriesBatchApiResponse;
 import com.quantlime.infra.python.dto.TranscribeApiRequest;
 import com.quantlime.infra.python.dto.TranscribeApiResponse;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.function.Consumer;
@@ -46,7 +48,11 @@ class PythonEngineClientEndpointsTest {
 
     private static final String BASE_URL = "https://python-engine.test";
 
+    private static final String SCORE_URI = "/calculate/score/series";
+
     private MockRestServiceServer mockServer;
+    // 스코어는 짧은 read timeout의 전용 RestClient로 나간다 - 서버를 따로 묶어 라우팅을 검증한다.
+    private MockRestServiceServer scoreMockServer;
     private SimpleMeterRegistry meterRegistry;
     private PythonEngineClient client;
 
@@ -54,19 +60,26 @@ class PythonEngineClientEndpointsTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder().baseUrl(BASE_URL);
         mockServer = MockRestServiceServer.bindTo(builder).build();
+        RestClient.Builder scoreBuilder = RestClient.builder().baseUrl(BASE_URL);
+        scoreMockServer = MockRestServiceServer.bindTo(scoreBuilder).build();
         meterRegistry = new SimpleMeterRegistry();
-        client = new PythonEngineClient(builder.build(), meterRegistry,
+        client = new PythonEngineClient(builder.build(), scoreBuilder.build(), meterRegistry,
             Mockito.mock(GeminiDailyQuotaGate.class));
     }
 
     private double calls(String outcome) {
-        return meterRegistry.counter("python-engine.calls", "outcome", outcome).count();
+        return meterRegistry.find("python-engine.calls").tag("outcome", outcome).counters().stream()
+            .mapToDouble(Counter::count).sum();
+    }
+
+    private MockRestServiceServer serverFor(String uri) {
+        return SCORE_URI.equals(uri) ? scoreMockServer : mockServer;
     }
 
     @Test
-    @DisplayName("[스코어 시계열은 /calculate/score/series로 snake_case 본문을 보내고 응답을 매핑한다]")
+    @DisplayName("[스코어 시계열은 전용 클라이언트로 /calculate/score/series에 snake_case 본문을 보내고 응답을 매핑한다]")
     void calculateScoreSeries_postsAndMaps() {
-        mockServer.expect(requestTo(BASE_URL + "/calculate/score/series"))
+        scoreMockServer.expect(requestTo(BASE_URL + SCORE_URI))
             .andExpect(method(HttpMethod.POST))
             .andExpect(jsonPath("$.stocks[0].stock_code").value("005930"))
             .andExpect(jsonPath("$.stocks[0].ohlcv[0].close").value(105.0))
@@ -86,6 +99,9 @@ class PythonEngineClientEndpointsTest {
         assertThat(response.scores().get(0).dailyScores().get(0).grade()).isEqualTo("BUY");
         assertThat(calls("success")).isEqualTo(1.0);
         assertThat(calls("failure")).isZero();
+        assertThat(meterRegistry.get("python-engine.calls").tag("endpoint", "score").tag("outcome", "success")
+            .counter().count()).isEqualTo(1.0);
+        scoreMockServer.verify();
         mockServer.verify();
     }
 
@@ -174,7 +190,7 @@ class PythonEngineClientEndpointsTest {
     static Stream<Arguments> failingCalls() {
         BacktestApiRequest.OhlcvApiItem bar = new BacktestApiRequest.OhlcvApiItem("2026-09-30", 1, 2, 0.5, 1.5, 10);
         return Stream.of(
-            Arguments.of("스코어 시계열", "/calculate/score/series", "PYE_000",
+            Arguments.of("스코어 시계열", SCORE_URI, "PYE_000",
                 (Consumer<PythonEngineClient>) c -> c.calculateScoreSeries(new ScoreBatchApiRequest(List.of()))),
             Arguments.of("백테스트", "/backtest/score", "PYE_001",
                 (Consumer<PythonEngineClient>) c -> c.runBacktest(new BacktestApiRequest("A", List.of(bar), List.of(bar)))),
@@ -192,13 +208,14 @@ class PythonEngineClientEndpointsTest {
     @MethodSource("failingCalls")
     void engineServerError_wrapsWithDomainCode_andCountsFailure(
         String name, String uri, String expectedCode, Consumer<PythonEngineClient> call) {
-        mockServer.expect(requestTo(BASE_URL + uri)).andRespond(withServerError());
+        serverFor(uri).expect(requestTo(BASE_URL + uri)).andRespond(withServerError());
 
         assertThatThrownBy(() -> call.accept(client))
             .isInstanceOfSatisfying(ExternalApiException.class, e -> assertThat(e.getCode()).isEqualTo(expectedCode));
         assertThat(calls("failure")).isEqualTo(1.0);
         assertThat(calls("success")).isZero();
-        assertThat(meterRegistry.timer("python-engine.duration", "outcome", "failure").count()).isEqualTo(1L);
+        assertThat(meterRegistry.find("python-engine.duration").tag("outcome", "failure").timers().stream()
+            .mapToLong(Timer::count).sum()).isEqualTo(1L);
     }
 
     @Test

@@ -44,7 +44,9 @@ class PythonEngineClientTest {
         mockServer = MockRestServiceServer.bindTo(builder).build();
         geminiDailyQuotaGate = Mockito.mock(GeminiDailyQuotaGate.class);
         Mockito.when(geminiDailyQuotaGate.isExceeded()).thenReturn(false);
-        pythonEngineClient = new PythonEngineClient(builder.build(), new SimpleMeterRegistry(), geminiDailyQuotaGate);
+        RestClient unusedScoreClient = RestClient.builder().baseUrl(BASE_URL).build();
+        pythonEngineClient = new PythonEngineClient(builder.build(), unusedScoreClient, new SimpleMeterRegistry(),
+            geminiDailyQuotaGate);
     }
 
     @Test

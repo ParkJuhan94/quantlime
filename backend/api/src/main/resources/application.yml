@@ -154,15 +154,28 @@ resilience4j:
         # 429(레이트리밋)는 서버가 살아있다는 신호라 서킷 집계에서 제외한다 -
         # RateLimitAwareFailurePredicate 클래스 주석 참고.
         record-failure-predicate: com.quantlime.common.resilience.RateLimitAwareFailurePredicate
+      # 2026-10-26부터 백테스트(runBacktest/runCrossSectionalBacktest) 전용 - 스코어는
+      # 아래 quant-engine-score로 분리했다(무거운 백테스트가 60초 read timeout을 넘기면
+      # 이 서킷이 열려 스코어까지 실패하던 문제, CHANGELOG 실측 기록). 이름은 대시보드·
+      # 알림 이력을 위해 그대로 둔다.
       quant-engine:
         base-config: default
-        # 스코어 배치 청크 하나가 최대 60초 걸릴 수 있어(PythonEngineConfig
-        # read timeout) 슬라이딩 윈도우를 작게, half-open 대기를 길게 둔다.
+        # 호출 하나가 최대 60초 걸릴 수 있어(PythonEngineConfig read timeout)
+        # 슬라이딩 윈도우를 작게, half-open 대기를 길게 둔다.
         sliding-window-size: 10
         minimum-number-of-calls: 5
         wait-duration-in-open-state: 60s
         # Gemini 분당/일일 한도 자체 게이트(PythonEngineFailurePredicate 주석 참고) -
         # 이게 없으면 요약 쿼터 소진이 무관한 스코어/백테스트 호출까지 막아버린다.
+        record-failure-predicate: com.quantlime.common.resilience.PythonEngineFailurePredicate
+      # 스코어 계산·횡단면 정규화 전용(2026-10-26). 값은 quant-engine과 같다 - 다른 건
+      # read timeout(스코어 15초, PythonEngineConfig)이라 hang 때 예열(5콜)과 half-open
+      # probe(3콜) 비용이 60초 기준의 1/4로 줄어든다.
+      quant-engine-score:
+        base-config: default
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        wait-duration-in-open-state: 60s
         record-failure-predicate: com.quantlime.common.resilience.PythonEngineFailurePredicate
       # 자막 조회(fetchTranscript)만 별도 인스턴스로 분리(2026-09-14) - 유튜브
       # 자막 스크래핑(IP 차단 등)이 실패 원인일 때 quant-engine 인스턴스를 같이
@@ -229,6 +242,10 @@ resilience4j:
         # 가격·스코어 fan-out(2026-09-24)의 PriceRefreshConsumer 리스너
         # 동시성을 1로 고정해뒀으므로(클래스 주석 참고) 실제 동시 호출은
         # 많지 않다.
+        max-concurrent-calls: 6
+      # 서킷과 같은 이유로 스코어를 분리(2026-10-26) - 값은 quant-engine과 같게 둔다.
+      quant-engine-score:
+        base-config: default
         max-concurrent-calls: 6
       # circuitbreaker와 동일한 이유로 분리(위 참고). 2026-09-14 이벤트화 이후
       # 자막 조회는 Kafka 컨슈머(transcript-collector, 파티션 1개)가 순차
