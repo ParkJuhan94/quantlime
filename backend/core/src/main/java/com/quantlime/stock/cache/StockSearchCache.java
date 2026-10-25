@@ -24,9 +24,10 @@ import org.springframework.stereotype.Component;
  * 마스터는 하루 1회({@code MarketDataRefreshService.refreshAll()})만
  * 갱신되므로 TTL을 길게 잡아도 정확도 손실이 없다.
  *
- * <p>검색 시맨틱은 기존 리포지토리 메서드와 동일하게 유지한다 - 종목명/
- * 한글명은 대소문자 무시, 종목코드는 대소문자 구분(원 메서드명에
- * {@code StockCodeContaining}만 있고 {@code IgnoreCase}가 없었음). 상장폐지
+ * <p>종목명/한글명/종목코드 모두 대소문자를 무시한다. 종목코드는 원래 대소문자를
+ * 구분했는데(원 리포지토리 메서드에 {@code StockCodeContaining}만 있고
+ * {@code IgnoreCase}가 없었음), 해외 티커를 소문자로 입력하면({@code aapl}) 아무것도
+ * 찾지 못해 이름과 같은 규칙으로 맞췄다. 국내 코드는 숫자라 영향이 없다. 상장폐지
  * 종목도 검색 대상에 포함한다(원 쿼리가 listingStatus로 좁히지 않았음).
  *
  * <p>이 프로젝트의 다른 캐시 10개는 전부 {@code synchronized refresh()}가
@@ -62,20 +63,19 @@ public class StockSearchCache {
             triggerBackgroundRefresh();
         }
 
-        String rawKeyword = keyword.trim();
-        String normalizedKeyword = rawKeyword.toLowerCase(Locale.ROOT);
+        String normalizedKeyword = keyword.trim().toLowerCase(Locale.ROOT);
         List<Stock> matched = snapshot.stream()
-            .filter(stock -> matches(stock, rawKeyword, normalizedKeyword))
+            .filter(stock -> matches(stock, normalizedKeyword))
             .toList();
 
         return toSlice(matched, pageable);
     }
 
-    private boolean matches(Stock stock, String rawKeyword, String normalizedKeyword) {
+    private boolean matches(Stock stock, String normalizedKeyword) {
         if (stock.getStockName().toLowerCase(Locale.ROOT).contains(normalizedKeyword)) {
             return true;
         }
-        if (stock.getStockCode().contains(rawKeyword)) {
+        if (stock.getStockCode().toLowerCase(Locale.ROOT).contains(normalizedKeyword)) {
             return true;
         }
         String koreanName = stock.getKoreanName();

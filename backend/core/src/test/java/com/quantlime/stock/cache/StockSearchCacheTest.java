@@ -68,15 +68,15 @@ class StockSearchCacheTest {
     }
 
     @Test
-    @DisplayName("[종목코드는 대소문자를 구분한다 - 기존 리포지토리 메서드와 동일한 시맨틱]")
-    void search_byStockCode_isCaseSensitive() {
+    @DisplayName("[종목코드도 대소문자를 구분하지 않는다 - 소문자 티커로 해외 종목을 찾을 수 있다]")
+    void search_byStockCode_isCaseInsensitive() {
         seed(StockFixture.createOverseasStock("AAPL", "APPLE INC"));
 
         Slice<Stock> exactCase = stockSearchCache.search("AAPL", PageRequest.of(0, 10));
         Slice<Stock> lowerCase = stockSearchCache.search("aapl", PageRequest.of(0, 10));
 
         assertThat(exactCase.getContent()).extracting(Stock::getStockCode).containsExactly("AAPL");
-        assertThat(lowerCase.getContent()).isEmpty();
+        assertThat(lowerCase.getContent()).extracting(Stock::getStockCode).containsExactly("AAPL");
     }
 
     @Test
