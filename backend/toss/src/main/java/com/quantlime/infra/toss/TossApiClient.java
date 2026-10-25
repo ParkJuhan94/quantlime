@@ -14,6 +14,7 @@ import com.quantlime.infra.toss.dto.TossPriceLimitResponse;
 import com.quantlime.infra.toss.dto.TossPriceResponse;
 import com.quantlime.infra.toss.dto.TossRankingResponse;
 import com.quantlime.infra.toss.dto.TossStockInfoResponse;
+import com.quantlime.infra.toss.dto.TossStockInvestorTradingResponse;
 import com.quantlime.infra.toss.dto.TossStockWarningResponse;
 import com.quantlime.infra.toss.dto.TossTradeResponse;
 import com.quantlime.infra.toss.dto.TossUsMarketCalendarResponse;
@@ -106,6 +107,13 @@ public class TossApiClient {
 
     private final Object candleRateLimitLock = new Object();
     private volatile long lastCandleCallAtMillis = 0;
+
+    // 종목별 투자자 매매동향은 STOCK_TRADING_TREND 그룹이라 캔들(MARKET_DATA_CHART)과 예산이 따로다 - 캔들 페이서를
+    // 같이 쓰면 두 호출이 서로를 불필요하게 늦추므로 별도 페이서를 둔다. 실제 한도는 스펙에 숫자가 없어 캔들과 같은
+    // 150ms로 시작하고, 첫 실호출의 X-RateLimit-Limit 로그를 보고 조정한다.
+    private static final long MIN_STOCK_TRADING_TREND_CALL_INTERVAL_MS = 150;
+    private final Object stockTradingTrendRateLimitLock = new Object();
+    private volatile long lastStockTradingTrendCallAtMillis = 0;
 
     @Retry(name = "toss")
     @CircuitBreaker(name = "toss")
@@ -575,6 +583,54 @@ public class TossApiClient {
                 .body(TossInvestorTradingResponse.class),
             HttpClientErrorException.TooManyRequests.class,
             TossApiErrorCode.RATE_LIMIT_EXCEEDED)));
+    }
+
+    /**
+     * 종목별 투자자 매매동향 조회 - 국내(KR) 종목만 지원(그 외는 400 unsupported-market). {@code until}은 inclusive
+     * 조회 기준일이고 다음 페이지는 이전 응답의 {@code nextUntil}을 그대로 넘긴다(최초 호출 시 null, 호출당 최대
+     * 100건). Rate Limits Group은 STOCK_TRADING_TREND.
+     */
+    @Retry(name = "toss")
+    @CircuitBreaker(name = "toss")
+    @Bulkhead(name = "toss")
+    public TossStockInvestorTradingResponse getStockInvestorTrading(
+        String symbol, int count, @Nullable String until) {
+        return withRateLimitRetry("stock-investor-trading", () -> {
+            awaitStockTradingTrendRateLimit();
+            return withTokenRetry("stock-investor-trading", token -> ExternalApiInvoker.call(
+                TossApiErrorCode.STOCK_INVESTOR_TRADING_INQUIRY_FAILED,
+                () -> tossRestClient.get()
+                    .uri(uriBuilder -> {
+                        var builder = uriBuilder
+                            .path("/api/v1/stocks/{symbol}/investor-trading")
+                            .queryParam("count", count);
+                        if (until != null) {
+                            builder.queryParam("until", until);
+                        }
+                        return builder.build(symbol);
+                    })
+                    .header("authorization", "Bearer " + token)
+                    .retrieve()
+                    .body(TossStockInvestorTradingResponse.class),
+                HttpClientErrorException.TooManyRequests.class,
+                TossApiErrorCode.RATE_LIMIT_EXCEEDED));
+        });
+    }
+
+    // awaitCandleRateLimit과 같은 방식(락을 쥔 채 sleep)으로 호출 간 최소 간격을 강제한다.
+    private void awaitStockTradingTrendRateLimit() {
+        synchronized (stockTradingTrendRateLimitLock) {
+            long waitMs = lastStockTradingTrendCallAtMillis + MIN_STOCK_TRADING_TREND_CALL_INTERVAL_MS
+                - System.currentTimeMillis();
+            if (waitMs > 0) {
+                try {
+                    Thread.sleep(waitMs);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            lastStockTradingTrendCallAtMillis = System.currentTimeMillis();
+        }
     }
 
     /**

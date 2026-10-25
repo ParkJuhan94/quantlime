@@ -19,6 +19,7 @@ import com.quantlime.price.service.DailyPriceResettlementService;
 import com.quantlime.price.service.RegularCloseBackfillService;
 import com.quantlime.stock.service.DomesticStockMasterSyncService;
 import com.quantlime.stock.service.OverseasStockMasterSyncService;
+import com.quantlime.tradingflow.service.StockInvestorTradingRefreshService;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
@@ -65,6 +66,9 @@ class DataOpsAdminControllerTest {
     @Mock
     private BatchJobLaunchService batchJobLaunchService;
 
+    @Mock
+    private StockInvestorTradingRefreshService stockInvestorTradingRefreshService;
+
     @InjectMocks
     private DataOpsAdminController controller;
 
@@ -77,6 +81,46 @@ class DataOpsAdminControllerTest {
             .setMessageConverters(new StringHttpMessageConverter(StandardCharsets.UTF_8),
                 new MappingJackson2HttpMessageConverter())
             .build();
+    }
+
+    @Test
+    @DisplayName("[종목별 매매동향 백필은 기본 400건으로 시작하고 202를 돌려준다]")
+    void backfillStockInvestorTrading_defaultDays_starts() throws Exception {
+        given(stockInvestorTradingRefreshService.startBackfillAsync(400)).willReturn(true);
+
+        mockMvc.perform(post("/api/admin/data/stock-investor-trading/backfill"))
+            .andExpect(status().isAccepted());
+
+        verify(stockInvestorTradingRefreshService).startBackfillAsync(400);
+    }
+
+    @Test
+    @DisplayName("[종목별 매매동향 백필은 이미 실행 중이면 409다]")
+    void backfillStockInvestorTrading_alreadyRunning_returns409() throws Exception {
+        given(stockInvestorTradingRefreshService.startBackfillAsync(100)).willReturn(false);
+
+        mockMvc.perform(post("/api/admin/data/stock-investor-trading/backfill").param("days", "100"))
+            .andExpect(status().isConflict());
+    }
+
+    @Test
+    @DisplayName("[종목별 매매동향 백필은 days가 범위를 벗어나면 400이고 시작하지 않는다]")
+    void backfillStockInvestorTrading_invalidDays_returns400() throws Exception {
+        mockMvc.perform(post("/api/admin/data/stock-investor-trading/backfill").param("days", "0"))
+            .andExpect(status().isBadRequest());
+        mockMvc.perform(post("/api/admin/data/stock-investor-trading/backfill").param("days", "1001"))
+            .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(stockInvestorTradingRefreshService);
+    }
+
+    @Test
+    @DisplayName("[종목별 매매동향 최근 구간 갱신은 시작되면 202, 이미 실행 중이면 409다]")
+    void refreshStockInvestorTrading_startsOrConflicts() throws Exception {
+        given(stockInvestorTradingRefreshService.startRefreshAsync()).willReturn(true, false);
+
+        mockMvc.perform(post("/api/admin/data/stock-investor-trading/refresh")).andExpect(status().isAccepted());
+        mockMvc.perform(post("/api/admin/data/stock-investor-trading/refresh")).andExpect(status().isConflict());
     }
 
     @Test

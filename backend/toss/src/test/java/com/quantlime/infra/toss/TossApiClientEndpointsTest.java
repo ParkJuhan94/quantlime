@@ -102,6 +102,43 @@ class TossApiClientEndpointsTest {
     }
 
     @Test
+    @DisplayName("[종목별 투자자 매매동향은 until 커서가 선택이고 장중 잠정 기록의 null 필드를 그대로 받는다]")
+    void stockInvestorTrading_cursorIsOptional_andParsesProvisionalNulls() {
+        String provisional = """
+            {"result":{"nextUntil":"2026-10-22","records":[{
+              "date":"2026-10-23","updatedAt":"2026-10-23T14:35:08+09:00","individual":null,
+              "foreigner":{"buyVolume":"2105300","sellVolume":"1985400","netBuyVolume":"119900"},
+              "institution":{"buyVolume":"910200","sellVolume":"1023400","netBuyVolume":"-113200","breakdown":null},
+              "otherCorporation":null,"foreignerHolding":null,"cfd":null}]}}
+            """;
+        expectGet("/api/v1/stocks/005930/investor-trading?count=20", provisional);
+        expectGet("/api/v1/stocks/005930/investor-trading?count=100&until=2026-10-22", "{}");
+
+        var first = client.getStockInvestorTrading("005930", 20, null);
+        var record = first.result().records().get(0);
+
+        assertThat(record.individual()).isNull();
+        assertThat(record.otherCorporation()).isNull();
+        assertThat(record.foreignerHolding()).isNull();
+        assertThat(record.foreigner().netBuyVolume()).isEqualTo("119900");
+        assertThat(record.institution().netBuyVolume()).isEqualTo("-113200");
+        assertThat(first.result().nextUntil()).isEqualTo("2026-10-22");
+        assertThat(client.getStockInvestorTrading("005930", 100, "2026-10-22")).isNotNull();
+
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("[종목별 투자자 매매동향의 서버 오류는 전용 에러코드로 바꾼다]")
+    void stockInvestorTrading_serverError_mapsToDedicatedErrorCode() {
+        expectStatus("/api/v1/stocks/005930/investor-trading?count=1", HttpStatus.INTERNAL_SERVER_ERROR);
+
+        assertFails(() -> client.getStockInvestorTrading("005930", 1, null),
+            TossApiErrorCode.STOCK_INVESTOR_TRADING_INQUIRY_FAILED);
+        assertThat(calls("stock-investor-trading", "error")).isEqualTo(1.0);
+    }
+
+    @Test
     @DisplayName("[서버 오류는 엔드포인트별 에러코드의 ExternalApiException으로 바꾸고 error 메트릭을 남긴다]")
     void serverError_mapsToEndpointSpecificErrorCode() {
         expectStatus("/api/v1/stocks?symbols=005930", HttpStatus.INTERNAL_SERVER_ERROR);

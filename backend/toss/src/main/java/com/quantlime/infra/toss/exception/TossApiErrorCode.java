@@ -24,7 +24,8 @@ public enum TossApiErrorCode implements ErrorCode {
     ORDERBOOK_INQUIRY_FAILED("토스증권 API 호가 조회에 실패했습니다.", "TOSS_013"),
     TRADE_INQUIRY_FAILED("토스증권 API 체결 내역 조회에 실패했습니다.", "TOSS_014"),
     PRICE_LIMIT_INQUIRY_FAILED("토스증권 API 상/하한가 조회에 실패했습니다.", "TOSS_015"),
-    STOCK_WARNING_INQUIRY_FAILED("토스증권 API 매수 유의사항 조회에 실패했습니다.", "TOSS_016");
+    STOCK_WARNING_INQUIRY_FAILED("토스증권 API 매수 유의사항 조회에 실패했습니다.", "TOSS_016"),
+    STOCK_INVESTOR_TRADING_INQUIRY_FAILED("토스증권 API 종목별 투자자 매매동향 조회에 실패했습니다.", "TOSS_017");
 
     private final String message;
     private final String code;

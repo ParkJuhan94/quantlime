@@ -18,6 +18,7 @@ import { EmptyState } from '../components/common/EmptyState'
 import { ChartIntervalSelector, type ChartIntervalOrMinute } from '../components/chart/ChartIntervalSelector'
 import { MinuteCandleChart } from '../components/chart/MinuteCandleChart'
 import { IndicatorControls } from '../components/chart/IndicatorControls'
+import { StockInvestorTradingSection } from '../components/stock/StockInvestorTradingSection'
 import { StockMarketDepth } from '../components/stock/StockMarketDepth'
 import { OverlayIndicatorLegend, SubPanelIndicatorLegend } from '../components/chart/IndicatorLegend'
 import type { CandleChartHandle } from '../components/chart/CandleChart'
@@ -315,6 +316,8 @@ export function StockDetailPage() {
           </>
         )}
       </section>
+
+      <StockInvestorTradingSection stockCode={stockCode} />
 
       <StockMarketDepth stockCode={stockCode} />
 

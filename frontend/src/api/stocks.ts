@@ -4,6 +4,7 @@ import type {
   DailyChartResponse,
   OrderbookResponse,
   MinuteChartResponse,
+  StockInvestorTradingResponse,
   PageResponse,
   PriceLimitResponse,
   StockDetailResponse,
@@ -79,6 +80,14 @@ export async function getStockWarnings(stockCode: string): Promise<StockWarningR
 export async function getMinuteChart(stockCode: string, before?: string): Promise<MinuteChartResponse> {
   const { data } = await apiClient.get<MinuteChartResponse>(`/api/stocks/${stockCode}/minute-chart`, {
     params: before ? { before } : undefined,
+  })
+  return data
+}
+
+// 국내 종목의 최근 count거래일 투자자 순매수 거래량(오름차순). 해외 종목은 빈 배열.
+export async function getInvestorTrading(stockCode: string, count = 20): Promise<StockInvestorTradingResponse[]> {
+  const { data } = await apiClient.get<StockInvestorTradingResponse[]>(`/api/stocks/${stockCode}/investor-trading`, {
+    params: { count },
   })
   return data
 }

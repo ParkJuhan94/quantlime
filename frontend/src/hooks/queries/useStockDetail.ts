@@ -3,6 +3,7 @@ import {
   getChart,
   getCurrentPrice,
   getFundamentals,
+  getInvestorTrading,
   getMinuteChart,
   getOrderbook,
   getPriceLimit,
@@ -113,6 +114,17 @@ export function useStockMinuteChartQuery(stockCode: string, enabled: boolean) {
     enabled,
     refetchInterval: enabled ? 60_000 : false,
     staleTime: 15_000,
+    retry: 1,
+  })
+}
+
+// 일별 투자자 매매동향은 저녁에 확정되는 값이라 자주 갱신할 필요가 없다 - 5분 캐시. 해외 종목은 서버가 빈 배열을 주고
+// 화면이 영역 자체를 숨긴다. 실패해도 부가 정보라 재시도 1회만 하고 화면에는 에러를 띄우지 않는다.
+export function useStockInvestorTradingQuery(stockCode: string, count = 20) {
+  return useQuery({
+    queryKey: queryKeys.stockInvestorTrading(stockCode, count),
+    queryFn: () => getInvestorTrading(stockCode, count),
+    staleTime: 5 * 60 * 1000,
     retry: 1,
   })
 }

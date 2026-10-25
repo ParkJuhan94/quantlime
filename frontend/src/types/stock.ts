@@ -91,3 +91,15 @@ export interface MinuteChartResponse {
   candles: MinuteCandle[]
   nextBefore: string | null
 }
+
+// 국내 종목 일별 투자자 순매수 거래량(주). 개인·기타법인은 당일 장중 잠정 기록에서 null이고 저녁에 확정된다(confirmed).
+// 외국인 보유율은 소수 비율(0.5089 = 50.89%). 해외 종목은 서버가 빈 배열을 돌려준다.
+export interface StockInvestorTradingResponse {
+  tradeDate: string
+  individualNetBuyVolume: number | null
+  foreignerNetBuyVolume: number
+  institutionNetBuyVolume: number
+  otherCorporationNetBuyVolume: number | null
+  foreignerHoldingRate: number | null
+  confirmed: boolean
+}
