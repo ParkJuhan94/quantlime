@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.quantlime.market.cache.BitcoinChartCache;
 import com.quantlime.market.cache.DomesticIndexChartCache;
@@ -75,6 +76,57 @@ class MarketIndexServiceTest {
         assertThat(result).hasSize(1);
         assertThat(result.get(0).close()).isEqualTo(7284.41);
         assertThat(result.get(0).tradeDate()).isEqualTo(LocalDate.of(2026, 7, 15));
+    }
+
+    @Test
+    @DisplayName("[나스닥은 저장된 이력에 네이버 최근 시세를 합치고 같은 날짜는 네이버 값을 우선한다]")
+    void getIndexChart_nasdaq_mergesPersistedHistoryWithRecentQuotes() {
+        // given
+        given(benchmarkIndexReader.findBetween(eq("NASDAQ"), any(), any())).willReturn(List.of(
+            BenchmarkIndex.of("NASDAQ", LocalDate.of(2026, 10, 19), 100.0, 110.0, 90.0, 105.0),
+            BenchmarkIndex.of("NASDAQ", LocalDate.of(2026, 10, 20), 105.0, 111.0, 95.0, 106.0)));
+        given(overseasIndexChartCache.get(".IXIC", false)).willReturn(List.of(
+            new IndexChartResponse(LocalDate.of(2026, 10, 20), 105.0, 112.0, 95.0, 108.0),
+            new IndexChartResponse(LocalDate.of(2026, 10, 21), 108.0, 113.0, 100.0, 110.0)));
+
+        // when
+        List<IndexChartResponse> result = marketIndexService.getIndexChart("NASDAQ");
+
+        // then
+        assertThat(result).extracting(IndexChartResponse::tradeDate).containsExactly(
+            LocalDate.of(2026, 10, 19), LocalDate.of(2026, 10, 20), LocalDate.of(2026, 10, 21));
+        assertThat(result.get(1).close()).isEqualTo(108.0);
+    }
+
+    @Test
+    @DisplayName("[네이버 최근 시세가 실패해도 저장된 이력이 있으면 이력만으로 응답한다]")
+    void getIndexChart_nasdaq_recentQuotesFail_fallsBackToPersistedHistory() {
+        // given
+        given(benchmarkIndexReader.findBetween(eq("NASDAQ"), any(), any())).willReturn(List.of(
+            BenchmarkIndex.of("NASDAQ", LocalDate.of(2026, 10, 19), 100.0, 110.0, 90.0, 105.0)));
+        given(overseasIndexChartCache.get(".IXIC", false)).willThrow(new IllegalStateException("naver down"));
+
+        // when
+        List<IndexChartResponse> result = marketIndexService.getIndexChart("NASDAQ");
+
+        // then
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).close()).isEqualTo(105.0);
+    }
+
+    @Test
+    @DisplayName("[SOXX는 저장 이력이 없어 네이버 시세만 반환한다]")
+    void getIndexChart_soxx_usesRecentQuotesOnly() {
+        // given
+        given(overseasIndexChartCache.get("SOXX.O", true)).willReturn(List.of(
+            new IndexChartResponse(LocalDate.of(2026, 10, 21), 200.0, 210.0, 190.0, 205.0)));
+
+        // when
+        List<IndexChartResponse> result = marketIndexService.getIndexChart("SOXX");
+
+        // then
+        assertThat(result).hasSize(1);
+        verifyNoInteractions(benchmarkIndexReader);
     }
 
     @Test
