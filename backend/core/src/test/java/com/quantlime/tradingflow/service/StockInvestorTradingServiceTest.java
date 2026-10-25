@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import com.quantlime.stock.StockFixture;
 import com.quantlime.stock.domain.Stock;
 import com.quantlime.stock.service.StockMasterService;
+import com.quantlime.tradingflow.domain.InstitutionBreakdown;
 import com.quantlime.tradingflow.domain.InvestorVolume;
 import com.quantlime.tradingflow.domain.StockInvestorTrading;
 import com.quantlime.tradingflow.dto.response.StockInvestorTradingResponse;
@@ -37,8 +38,13 @@ class StockInvestorTradingServiceTest {
 
     private StockInvestorTrading row(String code, LocalDate date, boolean confirmed) {
         InvestorVolume individual = confirmed ? InvestorVolume.of(10, 30, -20) : null;
+        InstitutionBreakdown breakdown = confirmed
+            ? InstitutionBreakdown.builder().financialInvestmentNetBuyVolume(1L).insuranceNetBuyVolume(2L)
+                .trustNetBuyVolume(3L).privateEquityFundNetBuyVolume(4L).bankNetBuyVolume(5L)
+                .otherFinancialInstitutionNetBuyVolume(6L).pensionFundNetBuyVolume(7L).build()
+            : null;
         return StockInvestorTrading.of(code, date, LocalDateTime.of(2026, 10, 23, 18, 0), individual,
-            InvestorVolume.of(50, 40, 10), InvestorVolume.of(30, 20, 10), null, null, 0.5089);
+            InvestorVolume.of(50, 40, 10), InvestorVolume.of(30, 20, 10), breakdown, null, null, 0.5089);
     }
 
     @Test
@@ -56,6 +62,9 @@ class StockInvestorTradingServiceTest {
             .containsExactly(LocalDate.of(2026, 10, 22), LocalDate.of(2026, 10, 23));
         assertThat(result.get(0).individualNetBuyVolume()).isEqualTo(-20L);
         assertThat(result.get(0).confirmed()).isTrue();
+        assertThat(result.get(0).institutionBreakdown().pensionFundNetBuyVolume()).isEqualTo(7L);
+        assertThat(result.get(0).institutionBreakdown().financialInvestmentNetBuyVolume()).isEqualTo(1L);
+        assertThat(result.get(1).institutionBreakdown()).isNull();
         assertThat(result.get(1).individualNetBuyVolume()).isNull();
         assertThat(result.get(1).confirmed()).isFalse();
         assertThat(result.get(1).foreignerNetBuyVolume()).isEqualTo(10L);

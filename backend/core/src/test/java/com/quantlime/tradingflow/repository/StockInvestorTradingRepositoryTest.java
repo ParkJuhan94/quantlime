@@ -3,6 +3,7 @@ package com.quantlime.tradingflow.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.quantlime.support.DataJpaTestSupport;
+import com.quantlime.tradingflow.domain.InstitutionBreakdown;
 import com.quantlime.tradingflow.domain.InvestorVolume;
 import com.quantlime.tradingflow.domain.StockInvestorTrading;
 import java.time.LocalDate;
@@ -29,15 +30,22 @@ class StockInvestorTradingRepositoryTest extends DataJpaTestSupport {
     @Autowired
     private StockInvestorTradingRepository repository;
 
+    private InstitutionBreakdown breakdown() {
+        return InstitutionBreakdown.builder()
+            .financialInvestmentNetBuyVolume(10L).insuranceNetBuyVolume(-20L).trustNetBuyVolume(30L)
+            .privateEquityFundNetBuyVolume(-40L).bankNetBuyVolume(5L).otherFinancialInstitutionNetBuyVolume(-6L)
+            .pensionFundNetBuyVolume(121L).build();
+    }
+
     private StockInvestorTrading confirmed(LocalDate date) {
         return StockInvestorTrading.of(STOCK, date, date.atTime(18, 5), InvestorVolume.of(100, 300, -200),
-            InvestorVolume.of(500, 400, 100), InvestorVolume.of(300, 200, 100), InvestorVolume.of(10, 10, 0),
-            1_000_000L, 0.5089);
+            InvestorVolume.of(500, 400, 100), InvestorVolume.of(300, 200, 100), breakdown(),
+            InvestorVolume.of(10, 10, 0), 1_000_000L, 0.5089);
     }
 
     private StockInvestorTrading provisional(LocalDate date) {
         return StockInvestorTrading.of(STOCK, date, date.atTime(14, 35), null, InvestorVolume.of(500, 400, 100),
-            InvestorVolume.of(300, 200, 100), null, null, null);
+            InvestorVolume.of(300, 200, 100), null, null, null, null);
     }
 
     @Test
@@ -54,6 +62,10 @@ class StockInvestorTradingRepositoryTest extends DataJpaTestSupport {
         assertThat(found.getForeigner().getBuyVolume()).isEqualTo(500L);
         assertThat(found.getInstitution().getSellVolume()).isEqualTo(200L);
         assertThat(found.getOtherCorporation().getBuyVolume()).isEqualTo(10L);
+        assertThat(found.getInstitutionBreakdown().getPensionFundNetBuyVolume()).isEqualTo(121L);
+        assertThat(found.getInstitutionBreakdown().getPrivateEquityFundNetBuyVolume()).isEqualTo(-40L);
+        assertThat(found.getInstitutionBreakdown().getFinancialInvestmentNetBuyVolume()).isEqualTo(10L);
+        assertThat(found.lacksInstitutionBreakdown()).isFalse();
         assertThat(found.getForeignerHoldingQuantity()).isEqualTo(1_000_000L);
         assertThat(found.getForeignerHoldingRate()).isEqualTo(0.5089);
         assertThat(found.isConfirmed()).isTrue();
@@ -68,6 +80,8 @@ class StockInvestorTradingRepositoryTest extends DataJpaTestSupport {
 
         assertThat(found.getIndividual()).isNull();
         assertThat(found.getOtherCorporation()).isNull();
+        assertThat(found.getInstitutionBreakdown()).isNull();
+        assertThat(found.lacksInstitutionBreakdown()).isTrue();
         assertThat(found.getForeignerHoldingRate()).isNull();
         assertThat(found.getForeigner().getNetBuyVolume()).isEqualTo(100L);
         assertThat(found.isConfirmed()).isFalse();
@@ -79,13 +93,14 @@ class StockInvestorTradingRepositoryTest extends DataJpaTestSupport {
         StockInvestorTrading saved = repository.saveAndFlush(provisional(LocalDate.of(2026, 10, 23)));
 
         saved.updateFrom(LocalDateTime.of(2026, 10, 23, 18, 5), InvestorVolume.of(100, 300, -200),
-            InvestorVolume.of(500, 400, 100), InvestorVolume.of(300, 200, 100), InvestorVolume.of(10, 10, 0),
-            1_000_000L, 0.5089);
+            InvestorVolume.of(500, 400, 100), InvestorVolume.of(300, 200, 100), breakdown(),
+            InvestorVolume.of(10, 10, 0), 1_000_000L, 0.5089);
         repository.saveAndFlush(saved);
 
         assertThat(repository.countByStockCode(STOCK)).isEqualTo(1);
         StockInvestorTrading found = repository.findById(saved.getId()).orElseThrow();
         assertThat(found.isConfirmed()).isTrue();
+        assertThat(found.getInstitutionBreakdown().getBankNetBuyVolume()).isEqualTo(5L);
         assertThat(found.getSourceUpdatedAt()).isEqualTo(LocalDateTime.of(2026, 10, 23, 18, 5));
     }
 
@@ -106,7 +121,7 @@ class StockInvestorTradingRepositoryTest extends DataJpaTestSupport {
         repository.save(confirmed(LocalDate.of(2026, 10, 22)));
         StockInvestorTrading other = StockInvestorTrading.of("000660", LocalDate.of(2026, 10, 23),
             LocalDateTime.of(2026, 10, 23, 18, 5), null, InvestorVolume.of(1, 1, 0), InvestorVolume.of(1, 1, 0),
-            null, null, null);
+            null, null, null, null);
         repository.saveAndFlush(other);
 
         List<StockInvestorTrading> latest = repository.findByStockCodeOrderByTradeDateDesc(STOCK, PageRequest.of(0, 2));

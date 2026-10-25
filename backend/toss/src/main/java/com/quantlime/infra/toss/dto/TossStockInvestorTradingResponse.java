@@ -31,9 +31,31 @@ public record TossStockInvestorTradingResponse(
         String updatedAt,
         InvestorTradingVolume individual,
         InvestorTradingVolume foreigner,
-        InvestorTradingVolume institution,
+        InstitutionTradingVolume institution,
         InvestorTradingVolume otherCorporation,
         ForeignerHolding foreignerHolding
+    ) {
+    }
+
+    // 기관 합계 + 세부 7개 분류. breakdown은 당일 잠정 기록에서 null이다.
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record InstitutionTradingVolume(
+        String buyVolume,
+        String sellVolume,
+        String netBuyVolume,
+        InstitutionBreakdown breakdown
+    ) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record InstitutionBreakdown(
+        InvestorTradingVolume financialInvestment,
+        InvestorTradingVolume insurance,
+        InvestorTradingVolume trust,
+        InvestorTradingVolume privateEquityFund,
+        InvestorTradingVolume bank,
+        InvestorTradingVolume otherFinancialInstitution,
+        InvestorTradingVolume pensionFund
     ) {
     }
 
