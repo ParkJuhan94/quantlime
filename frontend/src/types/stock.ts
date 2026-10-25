@@ -94,12 +94,24 @@ export interface MinuteChartResponse {
 
 // 국내 종목 일별 투자자 순매수 거래량(주). 개인·기타법인은 당일 장중 잠정 기록에서 null이고 저녁에 확정된다(confirmed).
 // 외국인 보유율은 소수 비율(0.5089 = 50.89%). 해외 종목은 서버가 빈 배열을 돌려준다.
+export interface InstitutionBreakdown {
+  financialInvestmentNetBuyVolume: number
+  insuranceNetBuyVolume: number
+  trustNetBuyVolume: number
+  privateEquityFundNetBuyVolume: number
+  bankNetBuyVolume: number
+  otherFinancialInstitutionNetBuyVolume: number
+  pensionFundNetBuyVolume: number
+}
+
 export interface StockInvestorTradingResponse {
   tradeDate: string
   individualNetBuyVolume: number | null
   foreignerNetBuyVolume: number
   institutionNetBuyVolume: number
   otherCorporationNetBuyVolume: number | null
+  // 기관 세부 7개 분류 - 당일 잠정 기록(그리고 세부 저장 이전에 쌓인 행)에는 null.
+  institutionBreakdown: InstitutionBreakdown | null
   foreignerHoldingRate: number | null
   confirmed: boolean
 }

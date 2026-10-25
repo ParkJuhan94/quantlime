@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { StockInvestorTradingResponse } from '../types/stock'
-import { availableSummaryDays, formatHoldingRate, formatShares, sumNetBuyVolume } from './investorTrading'
+import {
+  INSTITUTION_DETAIL_COLUMNS,
+  MAIN_COLUMNS,
+  availableSummaryDays,
+  formatHoldingRate,
+  formatShares,
+  sumNetBuyVolume,
+} from './investorTrading'
 
 function row(
   tradeDate: string,
@@ -15,6 +22,7 @@ function row(
     foreignerNetBuyVolume: foreigner,
     institutionNetBuyVolume: institution,
     otherCorporationNetBuyVolume: individual == null ? null : 0,
+    institutionBreakdown: null,
     foreignerHoldingRate: null,
     confirmed,
   }
@@ -29,23 +37,45 @@ const ROWS = [
   row('2026-10-26', null, 5, 7, false),
 ]
 
+const [individual, foreigner, institution] = MAIN_COLUMNS.map((column) => column.pick)
+const pension = INSTITUTION_DETAIL_COLUMNS.find((column) => column.id === 'pensionFund')!
+
 describe('sumNetBuyVolume', () => {
   it('최근 확정 거래일 N일의 순매수를 합친다', () => {
-    expect(sumNetBuyVolume(ROWS, 'foreignerNetBuyVolume', 2)).toBe(10) // -30 + 40
-    expect(sumNetBuyVolume(ROWS, 'individualNetBuyVolume', 3)).toBe(-450) // -200 -300 +50
+    expect(sumNetBuyVolume(ROWS, foreigner, 2)).toBe(10) // -30 + 40
+    expect(sumNetBuyVolume(ROWS, individual, 3)).toBe(-450) // -200 -300 +50
   })
 
   it('잠정 기록(오늘)은 합계에서 제외해 분류끼리 같은 기간으로 맞춘다', () => {
-    expect(sumNetBuyVolume(ROWS, 'foreignerNetBuyVolume', 1)).toBe(40) // 잠정 10-26의 5는 제외
+    expect(sumNetBuyVolume(ROWS, foreigner, 1)).toBe(40) // 잠정 10-26의 5는 제외
   })
 
   it('데이터보다 큰 N은 있는 만큼만 합친다', () => {
-    expect(sumNetBuyVolume(ROWS, 'institutionNetBuyVolume', 20)).toBe(510)
+    expect(sumNetBuyVolume(ROWS, institution, 20)).toBe(510)
+  })
+
+  it('구간 안에 값이 없는 행이 하나라도 있으면 일부만 더하지 않고 null이다(세부 저장 이전 행)', () => {
+    const withBreakdown = (date: string, pensionNet: number): StockInvestorTradingResponse => ({
+      ...row(date, 1, 1, 1),
+      institutionBreakdown: {
+        financialInvestmentNetBuyVolume: 0,
+        insuranceNetBuyVolume: 0,
+        trustNetBuyVolume: 0,
+        privateEquityFundNetBuyVolume: 0,
+        bankNetBuyVolume: 0,
+        otherFinancialInstitutionNetBuyVolume: 0,
+        pensionFundNetBuyVolume: pensionNet,
+      },
+    })
+    const mixed = [row('2026-10-01', 1, 1, 1), withBreakdown('2026-10-02', 5), withBreakdown('2026-10-05', 7)]
+
+    expect(sumNetBuyVolume(mixed, pension.pick, 2)).toBe(12) // 세부가 있는 최근 2일은 합산
+    expect(sumNetBuyVolume(mixed, pension.pick, 3)).toBeNull() // 3일째는 세부가 없어 알 수 없음
   })
 
   it('확정 기록이 하나도 없으면 null이다', () => {
-    expect(sumNetBuyVolume([row('2026-10-26', null, 5, 7, false)], 'foreignerNetBuyVolume', 5)).toBeNull()
-    expect(sumNetBuyVolume([], 'foreignerNetBuyVolume', 5)).toBeNull()
+    expect(sumNetBuyVolume([row('2026-10-26', null, 5, 7, false)], foreigner, 5)).toBeNull()
+    expect(sumNetBuyVolume([], foreigner, 5)).toBeNull()
   })
 })
 
