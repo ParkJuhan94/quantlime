@@ -28,6 +28,10 @@ public class StockInvestorTradingReader {
         return stockInvestorTradingRepository.countByStockCode(stockCode);
     }
 
+    public long countConfirmedWithoutBreakdown(String stockCode) {
+        return stockInvestorTradingRepository.countConfirmedWithoutBreakdown(stockCode);
+    }
+
     /** 전 종목을 통틀어 저장된 가장 최근 거래일 - 서버가 꺼져 있던 동안 놓친 갱신이 있는지 판단하는 데 쓴다. */
     public Optional<LocalDate> findLatestTradeDate() {
         return stockInvestorTradingRepository.findLatestTradeDate();

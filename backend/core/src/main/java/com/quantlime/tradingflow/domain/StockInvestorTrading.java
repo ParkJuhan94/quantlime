@@ -80,6 +80,11 @@ public class StockInvestorTrading extends TimeBaseEntity {
     })
     private InvestorVolume institution;
 
+    // 기관 세부 7개 분류의 순매수 - 잠정 기록에는 없어 null이다(InstitutionBreakdown 참고).
+    @Nullable
+    @Embedded
+    private InstitutionBreakdown institutionBreakdown;
+
     @Nullable
     @Embedded
     @AttributeOverrides({
@@ -101,7 +106,8 @@ public class StockInvestorTrading extends TimeBaseEntity {
     @Builder
     private StockInvestorTrading(String stockCode, LocalDate tradeDate, LocalDateTime sourceUpdatedAt,
                                  @Nullable InvestorVolume individual, InvestorVolume foreigner,
-                                 InvestorVolume institution, @Nullable InvestorVolume otherCorporation,
+                                 InvestorVolume institution, @Nullable InstitutionBreakdown institutionBreakdown,
+                                 @Nullable InvestorVolume otherCorporation,
                                  @Nullable Long foreignerHoldingQuantity, @Nullable Double foreignerHoldingRate) {
         validate(stockCode, tradeDate, sourceUpdatedAt, foreigner, institution);
         this.stockCode = stockCode;
@@ -110,6 +116,7 @@ public class StockInvestorTrading extends TimeBaseEntity {
         this.individual = individual;
         this.foreigner = foreigner;
         this.institution = institution;
+        this.institutionBreakdown = institutionBreakdown;
         this.otherCorporation = otherCorporation;
         this.foreignerHoldingQuantity = foreignerHoldingQuantity;
         this.foreignerHoldingRate = foreignerHoldingRate;
@@ -117,7 +124,9 @@ public class StockInvestorTrading extends TimeBaseEntity {
 
     public static StockInvestorTrading of(String stockCode, LocalDate tradeDate, LocalDateTime sourceUpdatedAt,
                                           @Nullable InvestorVolume individual, InvestorVolume foreigner,
-                                          InvestorVolume institution, @Nullable InvestorVolume otherCorporation,
+                                          InvestorVolume institution,
+                                          @Nullable InstitutionBreakdown institutionBreakdown,
+                                          @Nullable InvestorVolume otherCorporation,
                                           @Nullable Long foreignerHoldingQuantity,
                                           @Nullable Double foreignerHoldingRate) {
         return StockInvestorTrading.builder()
@@ -127,6 +136,7 @@ public class StockInvestorTrading extends TimeBaseEntity {
             .individual(individual)
             .foreigner(foreigner)
             .institution(institution)
+            .institutionBreakdown(institutionBreakdown)
             .otherCorporation(otherCorporation)
             .foreignerHoldingQuantity(foreignerHoldingQuantity)
             .foreignerHoldingRate(foreignerHoldingRate)
@@ -139,6 +149,7 @@ public class StockInvestorTrading extends TimeBaseEntity {
      */
     public void updateFrom(LocalDateTime sourceUpdatedAt, @Nullable InvestorVolume individual,
                            InvestorVolume foreigner, InvestorVolume institution,
+                           @Nullable InstitutionBreakdown institutionBreakdown,
                            @Nullable InvestorVolume otherCorporation, @Nullable Long foreignerHoldingQuantity,
                            @Nullable Double foreignerHoldingRate) {
         Assert.notNull(sourceUpdatedAt, "원본 갱신시각은 필수입니다.");
@@ -148,9 +159,18 @@ public class StockInvestorTrading extends TimeBaseEntity {
         this.individual = individual;
         this.foreigner = foreigner;
         this.institution = institution;
+        this.institutionBreakdown = institutionBreakdown;
         this.otherCorporation = otherCorporation;
         this.foreignerHoldingQuantity = foreignerHoldingQuantity;
         this.foreignerHoldingRate = foreignerHoldingRate;
+    }
+
+    /**
+     * 기관 세부 컬럼이 추가되기 전에 저장된 행처럼 세부가 비어 있는지 - 토스 응답에 세부가 있으면 {@code
+     * sourceUpdatedAt}이 같아도 덮어써서 채워야 한다(이력 재백필).
+     */
+    public boolean lacksInstitutionBreakdown() {
+        return institutionBreakdown == null;
     }
 
     /** 개인 매매동향이 채워졌으면 확정치다(당일 잠정 기록에는 개인이 null). */

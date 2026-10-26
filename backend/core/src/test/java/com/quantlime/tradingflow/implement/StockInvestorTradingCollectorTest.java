@@ -12,6 +12,8 @@ import static org.mockito.Mockito.verify;
 import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.toss.dto.TossStockInvestorTradingResponse;
 import com.quantlime.infra.toss.dto.TossStockInvestorTradingResponse.ForeignerHolding;
+import com.quantlime.infra.toss.dto.TossStockInvestorTradingResponse.InstitutionBreakdown;
+import com.quantlime.infra.toss.dto.TossStockInvestorTradingResponse.InstitutionTradingVolume;
 import com.quantlime.infra.toss.dto.TossStockInvestorTradingResponse.InvestorTradingVolume;
 import com.quantlime.infra.toss.dto.TossStockInvestorTradingResponse.StockInvestorTradingRecord;
 import com.quantlime.infra.toss.dto.TossStockInvestorTradingResponse.StockInvestorTradingResult;
@@ -52,17 +54,29 @@ class StockInvestorTradingCollectorTest {
         return new InvestorTradingVolume(buy, sell, net);
     }
 
-    /** 확정 기록: 개인·기타법인·외국인 보유가 모두 채워진다. */
-    private StockInvestorTradingRecord confirmed(String date, String updatedAt) {
-        return new StockInvestorTradingRecord(date, updatedAt, volume("100", "300", "-200"),
-            volume("500", "400", "100"), volume("300", "200", "100"), volume("10", "10", "0"),
-            new ForeignerHolding("1000000", "5000000", "0.5089"));
+    /** 기관 세부 7개 - 순매수가 1~7이 되게 해서 필드 매핑이 뒤바뀌지 않는지 검증한다. */
+    private InstitutionBreakdown breakdown() {
+        return new InstitutionBreakdown(volume("1", "0", "1"), volume("2", "0", "2"), volume("3", "0", "3"),
+            volume("4", "0", "4"), volume("5", "0", "5"), volume("6", "0", "6"), volume("7", "0", "7"));
     }
 
-    /** 장중 잠정 기록: 개인·기타법인·외국인 보유가 null이다. */
+    /** 확정 기록: 개인·기타법인·기관 세부·외국인 보유가 모두 채워진다. */
+    private StockInvestorTradingRecord confirmed(String date, String updatedAt) {
+        return new StockInvestorTradingRecord(date, updatedAt, volume("100", "300", "-200"),
+            volume("500", "400", "100"), new InstitutionTradingVolume("300", "200", "100", breakdown()),
+            volume("10", "10", "0"), new ForeignerHolding("1000000", "5000000", "0.5089"));
+    }
+
+    /** 장중 잠정 기록: 개인·기타법인·기관 세부·외국인 보유가 null이다. */
     private StockInvestorTradingRecord provisional(String date, String updatedAt) {
         return new StockInvestorTradingRecord(date, updatedAt, null,
-            volume("500", "400", "100"), volume("300", "200", "100"), null, null);
+            volume("500", "400", "100"), new InstitutionTradingVolume("300", "200", "100", null), null, null);
+    }
+
+    private com.quantlime.tradingflow.domain.InstitutionBreakdown existingBreakdown() {
+        return com.quantlime.tradingflow.domain.InstitutionBreakdown.builder().financialInvestmentNetBuyVolume(1L)
+            .insuranceNetBuyVolume(2L).trustNetBuyVolume(3L).privateEquityFundNetBuyVolume(4L).bankNetBuyVolume(5L)
+            .otherFinancialInstitutionNetBuyVolume(6L).pensionFundNetBuyVolume(7L).build();
     }
 
     private TossStockInvestorTradingResponse response(String nextUntil, StockInvestorTradingRecord... records) {
@@ -112,10 +126,10 @@ class StockInvestorTradingCollectorTest {
     void refreshRecent_existingRow_skipsSameAndOverwritesChanged() {
         StockInvestorTrading sameStamp = StockInvestorTrading.of(STOCK, LocalDate.of(2026, 10, 22),
             LocalDateTime.of(2026, 10, 22, 18, 0), InvestorVolume.of(1, 1, 0), InvestorVolume.of(1, 1, 0),
-            InvestorVolume.of(1, 1, 0), null, null, null);
+            InvestorVolume.of(1, 1, 0), existingBreakdown(), null, null, null);
         StockInvestorTrading provisionalRow = StockInvestorTrading.of(STOCK, LocalDate.of(2026, 10, 23),
             LocalDateTime.of(2026, 10, 23, 14, 35), null, InvestorVolume.of(500, 400, 100),
-            InvestorVolume.of(300, 200, 100), null, null, null);
+            InvestorVolume.of(300, 200, 100), null, null, null, null);
         given(reader.findBetween(eq(STOCK), any(), any())).willReturn(List.of(sameStamp, provisionalRow));
         given(tossApiClient.getStockInvestorTrading(STOCK, 20, null)).willReturn(response(null,
             confirmed("2026-10-23", "2026-10-23T18:05:00+09:00"),
@@ -128,6 +142,74 @@ class StockInvestorTradingCollectorTest {
         assertThat(provisionalRow.getIndividual().getNetBuyVolume()).isEqualTo(-200L);
         verify(appender, times(1)).save(provisionalRow);
         verify(appender, never()).save(sameStamp);
+    }
+
+    @Test
+    @DisplayName("[기관 세부 7개 분류의 순매수를 각자 맞는 컬럼으로 저장한다]")
+    void refreshRecent_confirmedRecord_mapsInstitutionBreakdownByName() {
+        given(tossApiClient.getStockInvestorTrading(STOCK, 20, null))
+            .willReturn(response(null, confirmed("2026-10-23", "2026-10-23T18:05:00+09:00")));
+
+        collector.refreshRecent(STOCK, 20);
+
+        ArgumentCaptor<StockInvestorTrading> saved = ArgumentCaptor.forClass(StockInvestorTrading.class);
+        verify(appender).save(saved.capture());
+        var breakdown = saved.getValue().getInstitutionBreakdown();
+        assertThat(breakdown.getFinancialInvestmentNetBuyVolume()).isEqualTo(1L);
+        assertThat(breakdown.getInsuranceNetBuyVolume()).isEqualTo(2L);
+        assertThat(breakdown.getTrustNetBuyVolume()).isEqualTo(3L);
+        assertThat(breakdown.getPrivateEquityFundNetBuyVolume()).isEqualTo(4L);
+        assertThat(breakdown.getBankNetBuyVolume()).isEqualTo(5L);
+        assertThat(breakdown.getOtherFinancialInstitutionNetBuyVolume()).isEqualTo(6L);
+        assertThat(breakdown.getPensionFundNetBuyVolume()).isEqualTo(7L);
+    }
+
+    @Test
+    @DisplayName("[잠정 기록의 기관 세부는 null로 저장한다]")
+    void refreshRecent_provisionalRecord_leavesInstitutionBreakdownNull() {
+        given(tossApiClient.getStockInvestorTrading(STOCK, 20, null))
+            .willReturn(response(null, provisional("2026-10-23", "2026-10-23T14:35:00+09:00")));
+
+        collector.refreshRecent(STOCK, 20);
+
+        ArgumentCaptor<StockInvestorTrading> saved = ArgumentCaptor.forClass(StockInvestorTrading.class);
+        verify(appender).save(saved.capture());
+        assertThat(saved.getValue().getInstitutionBreakdown()).isNull();
+    }
+
+    @Test
+    @DisplayName("[세부 컬럼 추가 전에 저장된 행은 updatedAt이 같아도 세부를 채워 덮어쓴다 - 이력 재백필]")
+    void refreshRecent_existingRowWithoutBreakdown_isFilledEvenWithSameStamp() {
+        StockInvestorTrading oldRow = StockInvestorTrading.of(STOCK, LocalDate.of(2026, 10, 22),
+            LocalDateTime.of(2026, 10, 22, 18, 0), InvestorVolume.of(100, 300, -200),
+            InvestorVolume.of(500, 400, 100), InvestorVolume.of(300, 200, 100), null,
+            InvestorVolume.of(10, 10, 0), 1_000_000L, 0.5089);
+        given(reader.findBetween(eq(STOCK), any(), any())).willReturn(List.of(oldRow));
+        given(tossApiClient.getStockInvestorTrading(STOCK, 20, null))
+            .willReturn(response(null, confirmed("2026-10-22", "2026-10-22T18:00:00+09:00")));
+
+        UpsertSummary summary = collector.refreshRecent(STOCK, 20);
+
+        assertThat(summary).isEqualTo(new UpsertSummary(0, 1, 0));
+        assertThat(oldRow.lacksInstitutionBreakdown()).isFalse();
+        assertThat(oldRow.getInstitutionBreakdown().getPensionFundNetBuyVolume()).isEqualTo(7L);
+        verify(appender).save(oldRow);
+    }
+
+    @Test
+    @DisplayName("[세부가 없는 옛 행이라도 응답에도 세부가 없으면(잠정) 같은 updatedAt에서 건너뛴다]")
+    void refreshRecent_existingRowWithoutBreakdown_skippedWhenResponseHasNone() {
+        StockInvestorTrading provisionalRow = StockInvestorTrading.of(STOCK, LocalDate.of(2026, 10, 23),
+            LocalDateTime.of(2026, 10, 23, 14, 35), null, InvestorVolume.of(500, 400, 100),
+            InvestorVolume.of(300, 200, 100), null, null, null, null);
+        given(reader.findBetween(eq(STOCK), any(), any())).willReturn(List.of(provisionalRow));
+        given(tossApiClient.getStockInvestorTrading(STOCK, 20, null))
+            .willReturn(response(null, provisional("2026-10-23", "2026-10-23T14:35:00+09:00")));
+
+        UpsertSummary summary = collector.refreshRecent(STOCK, 20);
+
+        assertThat(summary).isEqualTo(new UpsertSummary(0, 0, 1));
+        verify(appender, never()).save(provisionalRow);
     }
 
     @Test
@@ -158,6 +240,31 @@ class StockInvestorTradingCollectorTest {
         // 한 페이지에 1건씩만 내려와도 days(300) 전에 끝(nextUntil null)을 만나면 멈춘다
         assertThat(summary.saved()).isEqualTo(3);
         verify(tossApiClient, times(3)).getStockInvestorTrading(eq(STOCK), anyInt(), any());
+    }
+
+    @Test
+    @DisplayName("[백필은 이미 충분히 쌓이고 세부가 빠진 확정 행이 없는 종목은 토스를 부르지 않고 건너뛴다 - 이어받기]")
+    void backfill_alreadyComplete_skipsWithoutCallingToss() {
+        given(reader.countByStockCode(STOCK)).willReturn(400L);
+        given(reader.countConfirmedWithoutBreakdown(STOCK)).willReturn(0L);
+
+        UpsertSummary summary = collector.backfill(STOCK, 400);
+
+        assertThat(summary).isEqualTo(new UpsertSummary(0, 0, 0));
+        verify(tossApiClient, never()).getStockInvestorTrading(eq(STOCK), anyInt(), any());
+    }
+
+    @Test
+    @DisplayName("[세부가 비어 있는 확정 행이 남아 있으면 개수가 충분해도 백필을 다시 받는다]")
+    void backfill_enoughRowsButMissingBreakdown_stillBackfills() {
+        given(reader.countByStockCode(STOCK)).willReturn(400L);
+        given(reader.countConfirmedWithoutBreakdown(STOCK)).willReturn(12L);
+        given(tossApiClient.getStockInvestorTrading(STOCK, 100, null))
+            .willReturn(response(null, confirmed("2026-10-23", "2026-10-23T18:05:00+09:00")));
+
+        collector.backfill(STOCK, 100);
+
+        verify(tossApiClient).getStockInvestorTrading(STOCK, 100, null);
     }
 
     @Test

@@ -129,6 +129,31 @@ class TossApiClientEndpointsTest {
     }
 
     @Test
+    @DisplayName("[확정 기록의 기관 세부 7개 분류를 이름대로 파싱한다]")
+    void stockInvestorTrading_confirmedRecord_parsesInstitutionBreakdown() {
+        String vol = "{\"buyVolume\":\"10\",\"sellVolume\":\"4\",\"netBuyVolume\":\"6\"}";
+        String confirmed = """
+            {"result":{"nextUntil":null,"records":[{
+              "date":"2026-10-22","updatedAt":"2026-10-23T06:50:04+09:00",
+              "individual":VOL,"foreigner":VOL,
+              "institution":{"buyVolume":"70","sellVolume":"28","netBuyVolume":"42","breakdown":{
+                "financialInvestment":VOL,"insurance":VOL,"trust":VOL,"privateEquityFund":VOL,
+                "bank":VOL,"otherFinancialInstitution":VOL,"pensionFund":
+                {"buyVolume":"1","sellVolume":"9","netBuyVolume":"-8"}}},
+              "otherCorporation":VOL,"foreignerHolding":{"holdingQuantity":"100","limitQuantity":"500","holdingRate":"0.2"},
+              "cfd":null}]}}
+            """.replace("VOL", vol);
+        expectGet("/api/v1/stocks/005930/investor-trading?count=1", confirmed);
+
+        var institution = client.getStockInvestorTrading("005930", 1, null).result().records().get(0).institution();
+
+        assertThat(institution.netBuyVolume()).isEqualTo("42");
+        assertThat(institution.breakdown().financialInvestment().netBuyVolume()).isEqualTo("6");
+        assertThat(institution.breakdown().pensionFund().netBuyVolume()).isEqualTo("-8");
+        mockServer.verify();
+    }
+
+    @Test
     @DisplayName("[종목별 투자자 매매동향의 서버 오류는 전용 에러코드로 바꾼다]")
     void stockInvestorTrading_serverError_mapsToDedicatedErrorCode() {
         expectStatus("/api/v1/stocks/005930/investor-trading?count=1", HttpStatus.INTERNAL_SERVER_ERROR);

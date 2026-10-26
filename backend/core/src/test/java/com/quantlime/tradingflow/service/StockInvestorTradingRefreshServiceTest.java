@@ -114,11 +114,58 @@ class StockInvestorTradingRefreshServiceTest {
 
         Optional<RefreshResult> result = service.refreshAllExclusively();
 
-        assertThat(result).contains(new RefreshResult(2, 1, 2, 1));
+        assertThat(result).contains(new RefreshResult(2, 1, 2, 1, false));
         var order = org.mockito.Mockito.inOrder(collector);
         order.verify(collector).refreshRecent("005930", 20);
         order.verify(collector).refreshRecent("000660", 20);
         verify(collector, never()).refreshRecent(eq("AAPL"), anyInt());
+    }
+
+    @Test
+    @DisplayName("[연속으로 실패가 이어지면 남은 종목을 돌지 않고 중단해 aborted로 알린다]")
+    void refreshAll_consecutiveFailures_abortsEarly() {
+        lockAlwaysAcquired();
+        int total = StockInvestorTradingRefreshService.MAX_CONSECUTIVE_FAILURES + 20;
+        List<com.quantlime.stock.domain.Stock> stocks = new java.util.ArrayList<>();
+        for (int i = 0; i < total; i++) {
+            stocks.add(StockFixture.createStock(String.format("%06d", i), "종목" + i));
+        }
+        given(stockMasterService.getAllListedStocks()).willReturn(stocks);
+        given(dailyPriceReader.findDomesticCodesByTradingValueDesc(any())).willReturn(List.of());
+        given(collector.refreshRecent(any(), anyInt())).willThrow(new IllegalStateException("circuit open"));
+
+        Optional<RefreshResult> result = service.refreshAllExclusively();
+
+        assertThat(result).isPresent();
+        assertThat(result.get().aborted()).isTrue();
+        assertThat(result.get().failedCount()).isEqualTo(StockInvestorTradingRefreshService.MAX_CONSECUTIVE_FAILURES);
+        verify(collector, org.mockito.Mockito.times(StockInvestorTradingRefreshService.MAX_CONSECUTIVE_FAILURES))
+            .refreshRecent(any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("[성공이 끼면 연속 실패 카운트가 초기화돼 중단하지 않는다]")
+    void refreshAll_successResetsConsecutiveFailureCount() {
+        lockAlwaysAcquired();
+        int failuresBeforeSuccess = StockInvestorTradingRefreshService.MAX_CONSECUTIVE_FAILURES - 1;
+        List<com.quantlime.stock.domain.Stock> stocks = new java.util.ArrayList<>();
+        for (int i = 0; i < failuresBeforeSuccess * 2 + 1; i++) {
+            stocks.add(StockFixture.createStock(String.format("%06d", i), "종목" + i));
+        }
+        given(stockMasterService.getAllListedStocks()).willReturn(stocks);
+        given(dailyPriceReader.findDomesticCodesByTradingValueDesc(any())).willReturn(List.of());
+        given(collector.refreshRecent(any(), anyInt())).willAnswer(invocation -> {
+            int code = Integer.parseInt(invocation.getArgument(0));
+            if (code == failuresBeforeSuccess) {
+                return new UpsertSummary(1, 0, 0);
+            }
+            throw new IllegalStateException("fail");
+        });
+
+        Optional<RefreshResult> result = service.refreshAllExclusively();
+
+        assertThat(result.get().aborted()).isFalse();
+        assertThat(result.get().failedCount()).isEqualTo(failuresBeforeSuccess * 2);
     }
 
     @Test
@@ -132,7 +179,7 @@ class StockInvestorTradingRefreshServiceTest {
 
         Optional<RefreshResult> result = service.backfillAllExclusively(400);
 
-        assertThat(result).contains(new RefreshResult(1, 0, 400, 0));
+        assertThat(result).contains(new RefreshResult(1, 0, 400, 0, false));
     }
 
     @Test
@@ -161,7 +208,7 @@ class StockInvestorTradingRefreshServiceTest {
         given(stockMasterService.getAllListedStocks()).willReturn(List.of());
         given(dailyPriceReader.findDomesticCodesByTradingValueDesc(any())).willReturn(List.of());
 
-        assertThat(service.refreshIfMissed()).contains(new RefreshResult(0, 0, 0, 0));
+        assertThat(service.refreshIfMissed()).contains(new RefreshResult(0, 0, 0, 0, false));
     }
 
     @Test

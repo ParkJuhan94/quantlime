@@ -51,6 +51,10 @@ public class StockInvestorTradingRefreshService {
     static final int RECENT_COUNT = 20;
     private static final long TRADING_VALUE_LOOKBACK_MONTHS = 3;
     private static final int PROGRESS_LOG_INTERVAL = 200;
+    // 연속으로 이만큼 실패하면 토스 쪽 장애/서킷 오픈/네트워크 단절로 보고 남은 종목을 헛돌리지 않고 중단한다 - 로컬에서
+    // 절전 복귀 직후 서킷이 열려 남은 약 1,900종목이 20초 만에 전부 실패 처리된 적이 있다. 이미 쌓은 행은 그대로 남고
+    // 백필은 이어받기(이미 충분한 종목은 건너뜀)로 다시 호출하면 된다.
+    static final int MAX_CONSECUTIVE_FAILURES = 30;
 
     private final StockMasterService stockMasterService;
     private final DailyPriceReader dailyPriceReader;
@@ -138,22 +142,33 @@ public class StockInvestorTradingRefreshService {
         UpsertSummary total = new UpsertSummary(0, 0, 0);
         int failed = 0;
         int processed = 0;
+        int consecutiveFailures = 0;
+        boolean aborted = false;
         for (String stockCode : stockCodes) {
             try {
                 total = total.plus(perStock.apply(stockCode));
+                consecutiveFailures = 0;
             } catch (Exception e) {
                 failed++;
+                consecutiveFailures++;
                 log.warn("종목별 투자자 매매동향 {} 실패(해당 종목만 스킵): stockCode={}, error={}",
                     label, stockCode, e.getMessage());
             }
             processed++;
+            if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+                log.error("종목별 투자자 매매동향 {} 중단: 연속 {}종목 실패(토스 장애·서킷 오픈·네트워크 단절 의심), 처리={}/{}",
+                    label, consecutiveFailures, processed, stockCodes.size());
+                aborted = true;
+                break;
+            }
             if (processed % PROGRESS_LOG_INTERVAL == 0) {
                 log.info("종목별 투자자 매매동향 {} 진행: {}/{}", label, processed, stockCodes.size());
             }
         }
-        RefreshResult result = new RefreshResult(stockCodes.size(), failed, total.saved(), total.updated());
-        log.info("종목별 투자자 매매동향 {} 완료: 대상={}, 실패={}, 신규저장={}건, 갱신={}건",
-            label, result.targetCount(), result.failedCount(), result.savedRows(), result.updatedRows());
+        RefreshResult result = new RefreshResult(stockCodes.size(), failed, total.saved(), total.updated(), aborted);
+        log.info("종목별 투자자 매매동향 {} {}: 대상={}, 처리={}, 실패={}, 신규저장={}건, 갱신={}건",
+            label, aborted ? "중단" : "완료", result.targetCount(), processed, result.failedCount(),
+            result.savedRows(), result.updatedRows());
         return result;
     }
 
@@ -173,7 +188,7 @@ public class StockInvestorTradingRefreshService {
         return codes;
     }
 
-    /** 전 종목 순회 한 번의 결과. */
-    public record RefreshResult(int targetCount, int failedCount, int savedRows, int updatedRows) {
+    /** 전 종목 순회 한 번의 결과. {@code aborted}는 연속 실패로 중간에 멈췄다는 뜻이다. */
+    public record RefreshResult(int targetCount, int failedCount, int savedRows, int updatedRows, boolean aborted) {
     }
 }

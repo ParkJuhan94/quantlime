@@ -48,7 +48,7 @@ class StockInvestorTradingControllerTest {
     @DisplayName("[count를 생략하면 20일치를 조회하고 순매수·확정 여부를 200으로 돌려준다]")
     void getInvestorTrading_defaultCount_returns200() throws Exception {
         given(stockInvestorTradingService.getRecent("005930", 20)).willReturn(List.of(
-            new StockInvestorTradingResponse(LocalDate.of(2026, 10, 23), -200L, 100L, 100L, null, 0.5089, false)));
+            new StockInvestorTradingResponse(LocalDate.of(2026, 10, 23), -200L, 100L, 100L, null, null, 0.5089, false)));
 
         mockMvc.perform(get("/api/stocks/005930/investor-trading"))
             .andExpect(status().isOk())
@@ -56,7 +56,23 @@ class StockInvestorTradingControllerTest {
             .andExpect(jsonPath("$[0].individualNetBuyVolume").value(-200))
             .andExpect(jsonPath("$[0].foreignerNetBuyVolume").value(100))
             .andExpect(jsonPath("$[0].otherCorporationNetBuyVolume").doesNotExist())
+            .andExpect(jsonPath("$[0].institutionBreakdown").doesNotExist())
             .andExpect(jsonPath("$[0].confirmed").value(false));
+    }
+
+    @Test
+    @DisplayName("[확정 기록은 기관 세부 7개 분류 순매수를 이름으로 내려준다]")
+    void getInvestorTrading_confirmed_includesInstitutionBreakdown() throws Exception {
+        given(stockInvestorTradingService.getRecent("005930", 20)).willReturn(List.of(
+            new StockInvestorTradingResponse(LocalDate.of(2026, 10, 22), -200L, 100L, 100L, 5L,
+                new StockInvestorTradingResponse.InstitutionBreakdownResponse(1L, 2L, 3L, 4L, 5L, 6L, 7L),
+                0.5089, true)));
+
+        mockMvc.perform(get("/api/stocks/005930/investor-trading"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].institutionBreakdown.financialInvestmentNetBuyVolume").value(1))
+            .andExpect(jsonPath("$[0].institutionBreakdown.pensionFundNetBuyVolume").value(7))
+            .andExpect(jsonPath("$[0].confirmed").value(true));
     }
 
     @Test

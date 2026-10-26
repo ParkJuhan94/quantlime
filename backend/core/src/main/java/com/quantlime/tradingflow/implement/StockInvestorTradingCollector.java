@@ -3,8 +3,10 @@ package com.quantlime.tradingflow.implement;
 import com.quantlime.infra.toss.TossApiClient;
 import com.quantlime.infra.toss.dto.TossStockInvestorTradingResponse;
 import com.quantlime.infra.toss.dto.TossStockInvestorTradingResponse.ForeignerHolding;
+import com.quantlime.infra.toss.dto.TossStockInvestorTradingResponse.InstitutionTradingVolume;
 import com.quantlime.infra.toss.dto.TossStockInvestorTradingResponse.InvestorTradingVolume;
 import com.quantlime.infra.toss.dto.TossStockInvestorTradingResponse.StockInvestorTradingRecord;
+import com.quantlime.tradingflow.domain.InstitutionBreakdown;
 import com.quantlime.tradingflow.domain.InvestorVolume;
 import com.quantlime.tradingflow.domain.StockInvestorTrading;
 import java.time.LocalDate;
@@ -31,6 +33,8 @@ public class StockInvestorTradingCollector {
 
     // 토스 investor-trading count 파라미터 상한.
     static final int PAGE_SIZE = 100;
+    // 요청한 days의 이 비율 이상이 이미 저장돼 있고 세부가 빠진 확정 행이 없으면 백필을 건너뛴다(이어받기).
+    private static final double BACKFILL_COMPLETE_RATIO = 0.95;
 
     private final StockInvestorTradingReader stockInvestorTradingReader;
     private final StockInvestorTradingAppender stockInvestorTradingAppender;
@@ -47,6 +51,11 @@ public class StockInvestorTradingCollector {
      * 일수가 아니라 거래일 기록 수다(400이면 약 19개월).
      */
     public UpsertSummary backfill(String stockCode, int days) {
+        // 전종목 백필은 1시간 이상 걸려 중간에 끊기기 쉽다(절전·네트워크 단절·서버 재기동) - 이미 충분히 쌓인 종목은 토스를
+        // 다시 부르지 않고 건너뛰어 재호출이 끊긴 지점부터 이어지게 한다. 일 갱신이 쌓은 최근 행이 있어도 판단은 같다.
+        if (isBackfillComplete(stockCode, days)) {
+            return UpsertSummary.EMPTY;
+        }
         UpsertSummary total = UpsertSummary.EMPTY;
         int remaining = days;
         String until = null;
@@ -65,6 +74,11 @@ public class StockInvestorTradingCollector {
             }
         }
         return total;
+    }
+
+    private boolean isBackfillComplete(String stockCode, int days) {
+        return stockInvestorTradingReader.countByStockCode(stockCode) >= days * BACKFILL_COMPLETE_RATIO
+            && stockInvestorTradingReader.countConfirmedWithoutBreakdown(stockCode) == 0;
     }
 
     private List<StockInvestorTradingRecord> recordsOf(@Nullable TossStockInvestorTradingResponse response) {
@@ -102,7 +116,8 @@ public class StockInvestorTradingCollector {
         LocalDateTime sourceUpdatedAt = OffsetDateTime.parse(record.updatedAt()).toLocalDateTime();
         InvestorVolume individual = toNullableVolume(record.individual());
         InvestorVolume foreigner = toVolume(record.foreigner());
-        InvestorVolume institution = toVolume(record.institution());
+        InvestorVolume institution = toInstitutionVolume(record.institution());
+        InstitutionBreakdown breakdown = toBreakdown(record.institution().breakdown());
         InvestorVolume otherCorporation = toNullableVolume(record.otherCorporation());
         ForeignerHolding holding = record.foreignerHolding();
         Long holdingQuantity = holding == null ? null : Long.parseLong(holding.holdingQuantity());
@@ -110,13 +125,17 @@ public class StockInvestorTradingCollector {
 
         if (existing == null) {
             stockInvestorTradingAppender.save(StockInvestorTrading.of(stockCode, LocalDate.parse(record.date()),
-                sourceUpdatedAt, individual, foreigner, institution, otherCorporation, holdingQuantity, holdingRate));
+                sourceUpdatedAt, individual, foreigner, institution, breakdown, otherCorporation, holdingQuantity,
+                holdingRate));
             return UpsertSummary.SAVED;
         }
-        if (existing.getSourceUpdatedAt().isEqual(sourceUpdatedAt)) {
+        // 같은 updatedAt이어도 기관 세부 컬럼이 비어 있는 옛 행(세부 저장 이전 백필분)은 응답에 세부가 있으면 채운다.
+        boolean sameStamp = existing.getSourceUpdatedAt().isEqual(sourceUpdatedAt);
+        boolean breakdownMissing = existing.lacksInstitutionBreakdown() && breakdown != null;
+        if (sameStamp && !breakdownMissing) {
             return UpsertSummary.SKIPPED;
         }
-        existing.updateFrom(sourceUpdatedAt, individual, foreigner, institution, otherCorporation,
+        existing.updateFrom(sourceUpdatedAt, individual, foreigner, institution, breakdown, otherCorporation,
             holdingQuantity, holdingRate);
         stockInvestorTradingAppender.save(existing);
         return UpsertSummary.UPDATED;
@@ -126,6 +145,35 @@ public class StockInvestorTradingCollector {
     @Nullable
     private InvestorVolume toNullableVolume(@Nullable InvestorTradingVolume volume) {
         return volume == null ? null : toVolume(volume);
+    }
+
+    private InvestorVolume toInstitutionVolume(InstitutionTradingVolume institution) {
+        return InvestorVolume.of(
+            Long.parseLong(institution.buyVolume()),
+            Long.parseLong(institution.sellVolume()),
+            Long.parseLong(institution.netBuyVolume()));
+    }
+
+    // 세부는 잠정 기록에서 null이고, 있으면 7개가 모두 온다(스펙 required).
+    @Nullable
+    private InstitutionBreakdown toBreakdown(
+        @Nullable TossStockInvestorTradingResponse.InstitutionBreakdown breakdown) {
+        if (breakdown == null) {
+            return null;
+        }
+        return InstitutionBreakdown.builder()
+            .financialInvestmentNetBuyVolume(netOf(breakdown.financialInvestment()))
+            .insuranceNetBuyVolume(netOf(breakdown.insurance()))
+            .trustNetBuyVolume(netOf(breakdown.trust()))
+            .privateEquityFundNetBuyVolume(netOf(breakdown.privateEquityFund()))
+            .bankNetBuyVolume(netOf(breakdown.bank()))
+            .otherFinancialInstitutionNetBuyVolume(netOf(breakdown.otherFinancialInstitution()))
+            .pensionFundNetBuyVolume(netOf(breakdown.pensionFund()))
+            .build();
+    }
+
+    private Long netOf(InvestorTradingVolume volume) {
+        return Long.parseLong(volume.netBuyVolume());
     }
 
     private InvestorVolume toVolume(InvestorTradingVolume volume) {
