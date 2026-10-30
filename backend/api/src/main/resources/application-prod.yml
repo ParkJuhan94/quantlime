@@ -23,9 +23,12 @@ toss-payments:
 # 전부 실패)해 영상마다 DLT가 쌓인다. 자막은 로컬에서 가져와 운영에 동기화(scripts/
 # sync-transcripts-to-prod.sh)하는 방식으로 운영하므로 이 도메인의 개별 Slack 알림만 끈다
 # (Prometheus 카운터는 그대로 증가 - Alertmanager가 집계 알림을 판단).
+# market-price-refresh도 같은 이유로 억제한다 - 전종목 fan-out(국내 약 2,500건)이라 quant-engine hang이
+# 길어지면 종목마다 DLT가 쌓여 Slack이 건마다 쏟아진다. 종목별 상세는 DLT 핸들러의 ERROR 로그(stockCode)로,
+# 발생 여부는 집계 알림 KafkaDltMessageArrived(domain 라벨)로 본다.
 kafka:
   dlt:
-    slack-suppressed-domains: videofeed-transcript
+    slack-suppressed-domains: videofeed-transcript,market-price-refresh
 
 # 위 이유로 운영의 자체 자막 수집은 한 번도 성공하지 못해(2026-10-23 최근 15시간 /transcribe 11건 전부 500) 영상마다
 # 4번 재시도 후 DLT로 가고 엔진 스레드·서킷브레이커만 소모한다. 자막은 로컬 동기화(TranscriptImportService)로만 채우므로

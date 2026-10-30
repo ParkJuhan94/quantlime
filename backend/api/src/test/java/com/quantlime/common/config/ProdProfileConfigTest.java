@@ -30,4 +30,11 @@ class ProdProfileConfigTest {
     void prod_disablesTranscriptFetch() throws IOException {
         assertThat(prodProperty("videofeed.transcript.fetch-enabled")).isEqualTo(false);
     }
+
+    @Test
+    @DisplayName("[운영은 전종목 fan-out인 가격 갱신 DLT의 건별 Slack 알림을 끈다 - 집계 알림만 남긴다]")
+    void prod_suppressesPriceRefreshDltSlack() throws IOException {
+        assertThat(String.valueOf(prodProperty("kafka.dlt.slack-suppressed-domains")).split("\\s*,\\s*"))
+            .contains("videofeed-transcript", "market-price-refresh");
+    }
 }
