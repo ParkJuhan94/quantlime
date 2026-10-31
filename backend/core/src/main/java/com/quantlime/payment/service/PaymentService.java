@@ -162,7 +162,23 @@ public class PaymentService {
     // handleRenewalRetriesExhausted()로 같은 DB 컬럼 경로에 합류시킨다.
     @Transactional
     public void chargeRenewal(Long subscriptionId) {
+        chargeRenewal(subscriptionId, null);
+    }
+
+    /**
+     * {@code billingDate}는 요청이 가리키는 결제 예정일이다(2026-10-31, 아웃박스 도입). 지연·중복 전달된 요청이
+     * 이미 넘어간 주기를 다시 결제하지 않도록 {@link Subscription#isRenewalDue}로 먼저 거른다.
+     */
+    @Transactional
+    public void chargeRenewal(Long subscriptionId, @Nullable LocalDate billingDate) {
         Subscription subscription = subscriptionReader.getById(subscriptionId);
+        if (!subscription.isRenewalDue(billingDate)) {
+            log.info("갱신 대상이 아닌 구독 요청, 스킵(지연·중복 전달): subscriptionId={}, billingDate={}, "
+                    + "nextBillingAt={}, status={}, autoRenew={}",
+                subscriptionId, billingDate, subscription.getNextBillingAt(), subscription.getStatus(),
+                subscription.isAutoRenew());
+            return;
+        }
         User user = subscription.getUser();
         SubscriptionPlan plan = subscription.getPlan();
         String customerKey = toCustomerKey(user.getId());

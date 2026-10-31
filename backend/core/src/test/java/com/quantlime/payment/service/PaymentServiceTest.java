@@ -312,6 +312,61 @@ class PaymentServiceTest {
     }
 
     @Test
+    @DisplayName("[요청의 결제 예정일이 지금 구독의 결제 예정일과 같으면 결제한다]")
+    void chargeRenewal_billingDateMatches_charges() {
+        // given
+        Subscription subscription = SubscriptionFixture.createSubscription(user, plan);
+        Long subscriptionId = 100L;
+        given(subscriptionReader.getById(subscriptionId)).willReturn(subscription);
+        given(billingProcessor.charge(anyString(), anyString(), anyString(), anyString(), anyInt(), anyInt()))
+            .willReturn(new TossPaymentApprovalResponse("pk-3", "order-3", "구독", "DONE", plan.getPriceWon(), "카드", "now"));
+
+        // when
+        paymentService.chargeRenewal(subscriptionId, subscription.getNextBillingAt());
+
+        // then
+        verify(billingProcessor).charge(anyString(), anyString(), anyString(), anyString(), anyInt(), anyInt());
+    }
+
+    @Test
+    @DisplayName("[갱신이 이미 성공해 결제 예정일이 넘어간 뒤 같은 요청이 다시 오면(아웃박스 지연·중복 전달) 다음 주기를 미리 결제하지 않는다]")
+    void chargeRenewal_staleBillingDate_skipsWithoutCharging() {
+        // given
+        Subscription subscription = SubscriptionFixture.createSubscription(user, plan);
+        LocalDate requestedBillingDate = subscription.getNextBillingAt();
+        subscription.renew();
+        Long subscriptionId = 100L;
+        given(subscriptionReader.getById(subscriptionId)).willReturn(subscription);
+
+        // when
+        paymentService.chargeRenewal(subscriptionId, requestedBillingDate);
+
+        // then
+        verify(billingProcessor, never()).charge(
+            anyString(), anyString(), anyString(), anyString(), anyInt(), anyInt());
+        verify(paymentAppender, never()).appendSuccess(
+            any(), any(), anyString(), anyInt(), anyInt(), anyString(), anyBoolean());
+    }
+
+    @Test
+    @DisplayName("[요청이 늦게 도착하는 사이 자동갱신을 해지했다면 결제하지 않는다]")
+    void chargeRenewal_autoRenewCancelledMeanwhile_skips() {
+        // given
+        Subscription subscription = SubscriptionFixture.createSubscription(user, plan);
+        LocalDate requestedBillingDate = subscription.getNextBillingAt();
+        subscription.cancelAutoRenew();
+        Long subscriptionId = 100L;
+        given(subscriptionReader.getById(subscriptionId)).willReturn(subscription);
+
+        // when
+        paymentService.chargeRenewal(subscriptionId, requestedBillingDate);
+
+        // then
+        verify(billingProcessor, never()).charge(
+            anyString(), anyString(), anyString(), anyString(), anyInt(), anyInt());
+    }
+
+    @Test
     @DisplayName("[이미 성공 처리된 갱신 결제(같은 과금주기)는 토스를 다시 호출하지 않고 멱등하게 스킵한다]")
     void chargeRenewal_alreadyProcessed_skipsTossCall() {
         // given

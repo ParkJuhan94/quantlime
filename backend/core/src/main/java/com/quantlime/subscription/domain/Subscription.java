@@ -24,6 +24,7 @@ import java.time.LocalDate;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 
 // 사용자 1명당 구독 1건(row)만 유지한다 - 갱신/해지/재구독은 새 row를
@@ -139,6 +140,19 @@ public class Subscription extends TimeBaseEntity {
         this.nextBillingAt = newEnd;
         this.status = SubscriptionStatus.ACTIVE;
         this.renewalFailureCount = 0;
+    }
+
+    /**
+     * 이 갱신 요청을 지금 처리해도 되는지(2026-10-31, 아웃박스 도입). 아웃박스는 브로커 장애가 길면 요청을 몇 시간~
+     * 며칠 늦게 보낼 수 있고 발행은 at-least-once다. 결제 orderId 멱등은 현재 기간 종료일 기준이라, 갱신이 성공해
+     * 기간이 넘어간 뒤 같은 요청이 다시 오면 다음 주기를 미리 결제하게 된다 - 요청이 가리키는 결제 예정일이 그대로인지,
+     * 그 사이 해지·만료되지 않았는지를 본다. {@code requestedBillingDate}가 없는 예전 메시지는 상태만 확인한다.
+     */
+    public boolean isRenewalDue(@Nullable LocalDate requestedBillingDate) {
+        if (status != SubscriptionStatus.ACTIVE || !autoRenew || nextBillingAt == null) {
+            return false;
+        }
+        return requestedBillingDate == null || nextBillingAt.equals(requestedBillingDate);
     }
 
     public void recordRenewalFailure() {

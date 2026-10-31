@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 
 import com.quantlime.event.observability.KafkaDltNotifier;
 import com.quantlime.payment.service.PaymentService;
+import java.time.LocalDate;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -38,6 +39,19 @@ class SubscriptionRenewalConsumerTest {
 
     @InjectMocks
     private SubscriptionRenewalConsumer subscriptionRenewalConsumer;
+
+    @Test
+    @DisplayName("[갱신 메시지의 결제 예정일을 그대로 넘겨, 지연·중복 전달을 결제 서비스가 거르게 한다]")
+    void onRenewalDue_passesBillingDate() {
+        // given
+        LocalDate billingDate = LocalDate.of(2026, 10, 31);
+
+        // when
+        subscriptionRenewalConsumer.onRenewalDue(SubscriptionRenewalDueMessage.of(1L, billingDate));
+
+        // then
+        verify(paymentService).chargeRenewal(1L, billingDate);
+    }
 
     @Test
     @DisplayName("[onDlt는 exceptionMessage 헤더가 있으면 그 사유로 재시도 소진 처리를 위임한다]")

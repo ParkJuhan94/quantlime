@@ -2,13 +2,11 @@ package com.quantlime.subscription.scheduler;
 
 import com.quantlime.common.lock.RedisLockService;
 import com.quantlime.common.util.SafeExecutor;
-import com.quantlime.subscription.event.SubscriptionRenewalDueEvent;
 import com.quantlime.subscription.service.SubscriptionService;
 import java.time.Duration;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -30,7 +28,6 @@ public class SubscriptionRenewalScheduler {
 
     private final RedisLockService redisLockService;
     private final SubscriptionService subscriptionService;
-    private final ApplicationEventPublisher eventPublisher;
 
     @Scheduled(cron = "0 0 21 * * *", zone = "Asia/Seoul")
     public void renewDueSubscriptions() {
@@ -49,15 +46,14 @@ public class SubscriptionRenewalScheduler {
     private void runRenewalBatch() {
         List<Long> dueSubscriptionIds = subscriptionService.findSubscriptionIdsDueForRenewal();
         log.info("구독 자동 갱신 이벤트 발행: count={}", dueSubscriptionIds.size());
-        // 실제 결제는 이제 이 스레드가 아니라 Kafka 컨슈머
-        // (SubscriptionRenewalConsumer, event 모듈)가 건별로 처리한다
-        // (2026-09-24, 카프카 다도메인 확장 Phase 2). 발행은 비동기 fire-and-forget이라
-        // 이 루프는 브로커 실패로 중단되지 않는다 - 발행 실패는 KafkaEventSender가
-        // ERROR 로그와 kafka.publish.failures 카운터로 남기고(2026-10-01), 그 구독은
-        // 갱신 상태가 그대로라 다음날 21:00 배치가 다시 집어든다. 개별 결제
-        // 실패/재시도는 PaymentService.chargeRenewal과 DLT 핸들러가 처리한다.
-        dueSubscriptionIds.forEach(subscriptionId ->
-            eventPublisher.publishEvent(new SubscriptionRenewalDueEvent(subscriptionId)));
+        // 실제 결제는 이 스레드가 아니라 Kafka 컨슈머(SubscriptionRenewalConsumer, event 모듈)가 건별로
+        // 처리한다(2026-09-24). 2026-10-31부터는 이벤트를 바로 발행하지 않고 아웃박스에 적재한다 - 예전엔
+        // "발행이 실패해도 다음날 배치가 다시 집어든다"고 봤지만, 대상 조회가 결제 예정일 = 오늘(등호)이라
+        // 다음날엔 대상에서 빠져 결제 없이 ACTIVE가 계속 유지됐다(docs/00-sre/SRE.md §7-1). 지금은 브로커가
+        // 멈춰 있어도 행이 남아 복구 뒤 릴레이가 보낸다. 한 건의 적재 실패가 나머지를 막지 않게 건별로 격리한다.
+        dueSubscriptionIds.forEach(subscriptionId -> SafeExecutor.runSafely(
+            "구독 갱신 요청 적재(subscriptionId=" + subscriptionId + ")",
+            () -> subscriptionService.requestRenewal(subscriptionId)));
         SafeExecutor.runSafely("해지된 구독 만료 처리", subscriptionService::expireLapsedSubscriptions);
         log.info("구독 자동 갱신 이벤트 발행 종료: 대상={}건", dueSubscriptionIds.size());
     }

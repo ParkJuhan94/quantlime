@@ -12,8 +12,6 @@ import com.quantlime.event.market.MarketEventPublisher;
 import com.quantlime.event.market.PriceRefreshRequestedMessage;
 import com.quantlime.event.payment.PaymentEventPublisher;
 import com.quantlime.event.payment.PaymentWebhookReceivedMessage;
-import com.quantlime.event.subscription.SubscriptionEventPublisher;
-import com.quantlime.event.subscription.SubscriptionRenewalDueMessage;
 import com.quantlime.event.telegramfeed.TelegramDigestGenerationRequestedMessage;
 import com.quantlime.event.telegramfeed.TelegramFeedEventPublisher;
 import com.quantlime.event.videofeed.VideoFeedEventPublisher;
@@ -22,7 +20,6 @@ import com.quantlime.event.videofeed.VideoTranscribedMessage;
 import com.quantlime.market.event.PriceRefreshRequestedEvent;
 import com.quantlime.payment.event.PaymentWebhookReceivedEvent;
 import com.quantlime.score.domain.PeerGroup;
-import com.quantlime.subscription.event.SubscriptionRenewalDueEvent;
 import com.quantlime.telegramfeed.event.TelegramDigestGenerationRequestedEvent;
 import com.quantlime.videofeed.event.VideoSelectedEvent;
 import com.quantlime.videofeed.event.VideoTranscribedEvent;
@@ -82,21 +79,6 @@ class EventPublishersTest {
         assertThat(message.runId()).isEqualTo("run-1");
         assertThat(message.peerGroup()).isEqualTo("domestic");
         assertThat(message.latestScoreDate()).isEqualTo(scoreDate);
-    }
-
-    @Test
-    @DisplayName("[구독 갱신 이벤트는 subscriptionId를 키로 발행된다]")
-    void subscriptionPublisher_mapsTopicAndKey() {
-        // given
-        SubscriptionEventPublisher publisher = new SubscriptionEventPublisher(sender);
-
-        // when
-        publisher.onRenewalDue(new SubscriptionRenewalDueEvent(42L));
-
-        // then
-        ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
-        verify(sender).send(eq("subscription.renewal.due"), eq("42"), payload.capture());
-        assertThat(((SubscriptionRenewalDueMessage) payload.getValue()).subscriptionId()).isEqualTo(42L);
     }
 
     @Test
