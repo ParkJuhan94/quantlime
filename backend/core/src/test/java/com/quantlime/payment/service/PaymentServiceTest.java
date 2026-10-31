@@ -454,6 +454,8 @@ class PaymentServiceTest {
         // when & then (예외 없이 통과 - 실제 처리는 로깅뿐)
         paymentService.processWebhookEvent("hash", "payload");
         verify(paymentWebhookDedupStore).markProcessedIfAbsent("hash");
+        // 처리에 성공하면 선점을 유지해야 재전송이 멱등 스킵된다
+        verify(paymentWebhookDedupStore, never()).unmark(anyString());
     }
 
     @Test

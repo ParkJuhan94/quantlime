@@ -36,6 +36,20 @@ class PaymentWebhookDedupStoreTest extends DataJpaTestSupport {
     }
 
     @Test
+    @DisplayName("[처리 실패로 선점을 해제하면 같은 해시를 다시 선점할 수 있다(재시도가 처리하게)]")
+    void unmark_allowsSameHashAgain() {
+        // given
+        String hash = "unmark-" + System.nanoTime();
+        dedupStore.markProcessedIfAbsent(hash);
+
+        // when
+        dedupStore.unmark(hash);
+
+        // then
+        assertThat(dedupStore.markProcessedIfAbsent(hash)).isTrue();
+    }
+
+    @Test
     @DisplayName("[서로 다른 payloadHash는 독립적으로 처리된다]")
     void markProcessedIfAbsent_differentHashes_areIndependent() {
         // given

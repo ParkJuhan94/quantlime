@@ -39,4 +39,9 @@ public class PaymentWebhookDedupStore {
             .setIfAbsent(KEY_PREFIX + payloadHash, "1", TTL);
         return Boolean.TRUE.equals(firstSeen);
     }
+
+    /** 처리가 실패했을 때 선점을 되돌려 재시도가 다시 처리하게 한다(PaymentService.processWebhookEvent). */
+    public void unmark(String payloadHash) {
+        redisTemplate.delete(KEY_PREFIX + payloadHash);
+    }
 }
