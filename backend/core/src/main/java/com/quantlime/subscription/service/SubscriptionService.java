@@ -4,9 +4,12 @@ import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.common.exception.ValidationException;
 import com.quantlime.notification.domain.NotificationType;
 import com.quantlime.notification.service.FcmPushService;
+import com.quantlime.outbox.domain.OutboxEventType;
+import com.quantlime.outbox.implement.OutboxEventAppender;
 import com.quantlime.subscription.domain.Subscription;
 import com.quantlime.subscription.domain.SubscriptionPlan;
 import com.quantlime.subscription.domain.SubscriptionStatus;
+import com.quantlime.subscription.event.SubscriptionRenewalDueEvent;
 import com.quantlime.subscription.exception.SubscriptionErrorCode;
 import com.quantlime.subscription.implement.SubscriptionAppender;
 import com.quantlime.subscription.implement.SubscriptionReader;
@@ -15,6 +18,7 @@ import com.quantlime.user.service.UserService;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +34,7 @@ public class SubscriptionService {
     private final SubscriptionAppender subscriptionAppender;
     private final UserService userService;
     private final FcmPushService fcmPushService;
+    private final OutboxEventAppender outboxEventAppender;
     private final Clock clock;
 
     @Transactional(readOnly = true)
@@ -93,6 +98,21 @@ public class SubscriptionService {
             .stream()
             .map(Subscription::getId)
             .toList();
+    }
+
+    /**
+     * 구독 한 건의 갱신 결제 요청을 아웃박스에 적재한다(2026-10-31). 커밋 직후 릴레이가 바로 발행하고, 브로커가
+     * 멈춰 있으면 행이 남아 복구 뒤 폴링이 보낸다. 중복 방지 키가 "구독 + 결제 예정일"이라 스케줄러가 같은 날 다시
+     * 돌아도 한 번만 적재된다.
+     */
+    @Transactional
+    public void requestRenewal(Long subscriptionId) {
+        Subscription subscription = subscriptionReader.getById(subscriptionId);
+        LocalDate billingDate = Objects.requireNonNull(subscription.getNextBillingAt(),
+            "갱신 대상 구독은 결제 예정일이 있어야 합니다");
+        outboxEventAppender.append(OutboxEventType.SUBSCRIPTION_RENEWAL_DUE, String.valueOf(subscriptionId),
+            OutboxEventType.SUBSCRIPTION_RENEWAL_DUE.name() + ":" + subscriptionId + ":" + billingDate,
+            new SubscriptionRenewalDueEvent(subscriptionId, billingDate));
     }
 
     // 해지(autoRenew=false)했지만 아직 기간이 안 끝나 ACTIVE로 남아있던

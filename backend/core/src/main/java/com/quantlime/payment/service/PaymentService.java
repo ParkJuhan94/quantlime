@@ -162,7 +162,23 @@ public class PaymentService {
     // handleRenewalRetriesExhausted()로 같은 DB 컬럼 경로에 합류시킨다.
     @Transactional
     public void chargeRenewal(Long subscriptionId) {
+        chargeRenewal(subscriptionId, null);
+    }
+
+    /**
+     * {@code billingDate}는 요청이 가리키는 결제 예정일이다(2026-10-31, 아웃박스 도입). 지연·중복 전달된 요청이
+     * 이미 넘어간 주기를 다시 결제하지 않도록 {@link Subscription#isRenewalDue}로 먼저 거른다.
+     */
+    @Transactional
+    public void chargeRenewal(Long subscriptionId, @Nullable LocalDate billingDate) {
         Subscription subscription = subscriptionReader.getById(subscriptionId);
+        if (!subscription.isRenewalDue(billingDate)) {
+            log.info("갱신 대상이 아닌 구독 요청, 스킵(지연·중복 전달): subscriptionId={}, billingDate={}, "
+                    + "nextBillingAt={}, status={}, autoRenew={}",
+                subscriptionId, billingDate, subscription.getNextBillingAt(), subscription.getStatus(),
+                subscription.isAutoRenew());
+            return;
+        }
         User user = subscription.getUser();
         SubscriptionPlan plan = subscription.getPlan();
         String customerKey = toCustomerKey(user.getId());
@@ -261,10 +277,22 @@ public class PaymentService {
      * 페이로드를 받아보며 확장한다.
      */
     public void processWebhookEvent(String payloadHash, String payload) {
+        // 선점 → 처리 → 실패 시 선점 해제(2026-10-31). 예전엔 "마킹 후 처리"라 처리가 실패하면 Kafka 재시도가 와도
+        // 이미 마킹돼 멱등 스킵에 막혔다. SETNX 선점은 그대로 둬 동시에 들어온 중복 전달은 여기서 걸러진다.
         if (!paymentWebhookDedupStore.markProcessedIfAbsent(payloadHash)) {
             log.info("이미 처리된 토스페이먼츠 웹훅, 스킵(멱등): payloadHash={}", payloadHash);
             return;
         }
+        try {
+            applyWebhook(payloadHash, payload);
+        } catch (RuntimeException e) {
+            paymentWebhookDedupStore.unmark(payloadHash);
+            throw e;
+        }
+    }
+
+    // 이벤트 타입별 상태 전이가 생기면 여기에 넣는다 - 실패하면 예외를 던져 위의 선점 해제 + Kafka 재시도를 탄다.
+    private void applyWebhook(String payloadHash, String payload) {
         log.info("토스페이먼츠 웹훅 처리: payloadHash={}, payload={}", payloadHash, payload);
     }
 

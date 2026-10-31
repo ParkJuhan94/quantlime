@@ -12,6 +12,7 @@ import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.common.exception.ValidationException;
 import com.quantlime.notification.domain.NotificationType;
 import com.quantlime.notification.service.FcmPushService;
+import com.quantlime.outbox.implement.OutboxEventAppender;
 import com.quantlime.subscription.SubscriptionFixture;
 import com.quantlime.subscription.SubscriptionPlanFixture;
 import com.quantlime.subscription.domain.Subscription;
@@ -48,13 +49,16 @@ class SubscriptionServiceTest {
     @Mock
     private FcmPushService fcmPushService;
 
+    @Mock
+    private OutboxEventAppender outboxEventAppender;
+
     private SubscriptionService subscriptionService;
 
     @BeforeEach
     void setUp() {
         subscriptionService = new SubscriptionService(
             new SubscriptionReader(subscriptionRepository), new SubscriptionAppender(subscriptionRepository),
-            userService, fcmPushService, Clock.systemDefaultZone());
+            userService, fcmPushService, outboxEventAppender, Clock.systemDefaultZone());
     }
 
     private final User user = UserFixture.createUser();
