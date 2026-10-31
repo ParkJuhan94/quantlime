@@ -2,6 +2,7 @@ package com.quantlime.telegramfeed.implement;
 
 import com.quantlime.telegramfeed.domain.TelegramDigest;
 import com.quantlime.telegramfeed.repository.TelegramDigestRepository;
+import com.quantlime.videofeed.domain.Channel;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -23,6 +24,10 @@ public class TelegramDigestReader {
 
     public Slice<TelegramDigest> findDigests(String tickerCode, Long channelId, LocalDate date, Pageable pageable) {
         return telegramDigestRepository.findDigests(tickerCode, channelId, date, pageable);
+    }
+
+    public Optional<TelegramDigest> findByChannelAndDigestDate(Channel channel, LocalDate digestDate) {
+        return telegramDigestRepository.findByChannelAndDigestDate(channel, digestDate);
     }
 
     public Optional<TelegramDigest> findByIdWithChannel(Long telegramDigestId) {
