@@ -98,6 +98,7 @@ class TossRealtimeClientTest {
     void startServer() throws Exception {
         RECEIVED.clear();
         AUTH_HEADERS.clear();
+        serverSession = null;
         tomcat = new Tomcat();
         tomcat.setBaseDir(Files.createTempDirectory("toss-ws").toString());
         tomcat.setPort(0);
@@ -136,6 +137,14 @@ class TossRealtimeClientTest {
         return new TossRealtimeClient("ws://localhost:" + port + path, new ObjectMapper());
     }
 
+    // 클라이언트는 101 응답으로 연결을 끝내지만 서버의 onOpen은 그 뒤에 돌 수 있다. 기다리지 않으면
+    // 아직 없는 세션이나 이전 테스트의 세션을 쓰게 된다(CI에서 실제 발생).
+    private TossRealtimeSession connect() {
+        TossRealtimeSession session = client("/ws/v1").connect("token-1", listener);
+        await().atMost(Duration.ofSeconds(5)).until(() -> serverSession != null);
+        return session;
+    }
+
     private static void serverSends(String text) throws IOException {
         serverSession.getBasicRemote().sendText(text);
     }
@@ -144,7 +153,7 @@ class TossRealtimeClientTest {
     @DisplayName("[Bearer 토큰으로 접속하고 체결·ack·pong 프레임을 리스너로 전달한다]")
     void connectsAndDispatchesFrames() throws IOException {
         // given
-        TossRealtimeSession session = client("/ws/v1").connect("token-1", listener);
+        TossRealtimeSession session = connect();
 
         // when
         serverSends("{\"type\":\"subscriptions\",\"id\":\"r\",\"subscribed\":[\"trade:us:AAPL\"],"
@@ -168,7 +177,7 @@ class TossRealtimeClientTest {
     @DisplayName("[구독 선언은 빈 시장을 뺀 JSON 배열 하나로, PING은 대문자 텍스트로 보낸다]")
     void sendsDeclarationAndPing() {
         // given
-        TossRealtimeSession session = client("/ws/v1").connect("token-1", listener);
+        TossRealtimeSession session = connect();
 
         // when
         session.declareTrades(Map.of(TossRealtimeMarket.KR, List.of("005930"), TossRealtimeMarket.US, List.of()));
@@ -185,7 +194,7 @@ class TossRealtimeClientTest {
     @DisplayName("[여러 조각으로 온 프레임을 합쳐서 처리하고 깨진 프레임은 연결을 유지한 채 버린다]")
     void reassemblesPartialFrames() throws IOException {
         // given
-        TossRealtimeSession session = client("/ws/v1").connect("token-1", listener);
+        TossRealtimeSession session = connect();
 
         // when
         serverSession.getBasicRemote().sendText("{\"type\":", false);
@@ -204,7 +213,7 @@ class TossRealtimeClientTest {
     @DisplayName("[서버가 연결을 닫으면 리스너에 알리고 세션은 닫힌 상태가 된다]")
     void notifiesOnServerClose() throws IOException {
         // given
-        TossRealtimeSession session = client("/ws/v1").connect("token-1", listener);
+        TossRealtimeSession session = connect();
 
         // when
         serverSession.close(new CloseReason(CloseReason.CloseCodes.GOING_AWAY, "deploy"));
