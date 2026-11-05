@@ -1,10 +1,14 @@
 package com.quantlime.infra.toss;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.quantlime.common.config.HttpClientFactorySupport;
+import com.quantlime.infra.toss.realtime.TossRealtimeClient;
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -52,5 +56,12 @@ public class TossApiConfig {
             .defaultHeader("accept", "application/json")
             .requestFactory(HttpClientFactorySupport.create(CONNECT_TIMEOUT, READ_TIMEOUT))
             .build();
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "toss-realtime.enabled", havingValue = "true")
+    public TossRealtimeClient tossRealtimeClient(
+        @Value("${toss-realtime.url}") String url, ObjectMapper objectMapper) {
+        return new TossRealtimeClient(url, objectMapper);
     }
 }

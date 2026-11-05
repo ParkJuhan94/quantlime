@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { StockLogo } from '../common/StockLogo'
 import { GRADE_STYLES } from '../score/GradeBadge'
 import { changeRateColorClass, formatChangeRate, formatPrice, formatTradingAmount } from '../../utils/priceFormat'
+import { isLivePriceFresh } from '../../utils/livePrice'
 import { formatScore } from '../../utils/scoreFormat'
 import { buildStockLogoUrl } from '../../utils/stockLogo'
 import type { RankingPeriodCode } from '../../api/market'
@@ -53,6 +54,9 @@ const PERIOD_CODES: Record<Period, RankingPeriodCode> = {
   '6개월': '6mo',
   '1년': '1y',
 }
+
+// 서버 RankingRealtimeTargetResolver.TOP_ROWS_PER_TAB과 같은 값이어야 한다.
+const LIVE_TOP_ROWS = 10
 
 const PERIOD_OPTIONS: Period[] = ['실시간', '1일', '1주일', '1개월', '3개월', '6개월', '1년']
 
@@ -356,6 +360,13 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
   // 푸시가 오면 그걸 우선시하는 이중 소스 패턴을 여기도 동일하게 적용.
   const scoreSocketPrices = useStockPriceSocket(scoreStockCodes)
   const scoreRestPrices = useStockPricesQuery(scoreStockCodes)
+  // 급상승/급하락/거래대금 탭은 상위 행만 토스 체결 웹소켓으로 현재가·등락률을 덮어쓴다(서버의
+  // TossRealtimeTradeRelay가 탭별 같은 행 수를 구독한다). 순위와 거래대금은 REST 폴링 그대로라,
+  // 다음 폴링 전까지 등락률과 순서가 잠깐 어긋날 수 있다. 1주일 이상 기간의 등락률은 기간 시작
+  // 대비라 오늘 기준 푸시로 덮으면 안 된다.
+  const liveRankingCodes =
+    isRealMode && !isLongPeriod ? (rankingQuery.data ?? []).slice(0, LIVE_TOP_ROWS).map((row) => row.stockCode) : []
+  const rankingSocketPrices = useStockPriceSocket(liveRankingCodes)
 
   const displayRows: DisplayRow[] = isScoreMode
     ? // 기간 정렬(1주 이상)은 서버가 이미 변화량 순으로 정렬해 내려주므로 다시 정렬하지 않는다.
@@ -365,7 +376,8 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
             (a, b) => (b.compositePercentile ?? -Infinity) - (a.compositePercentile ?? -Infinity),
           )
       ).map((item) => {
-        const livePrice = scoreSocketPrices[item.stockCode] ?? scoreRestPrices[item.stockCode]
+        const socketPrice = scoreSocketPrices[item.stockCode]
+        const livePrice = isLivePriceFresh(socketPrice) ? socketPrice : (scoreRestPrices[item.stockCode] ?? socketPrice)
         return {
           stockCode: item.stockCode,
           stockName: item.stockName,
@@ -384,24 +396,28 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
         }
       })
     : isRealMode
-      ? (rankingQuery.data ?? []).map((row) => ({
-          stockCode: row.stockCode,
-          stockName: row.stockName,
-          sector: row.sector,
-          logoUrl: row.logoUrl ?? buildStockLogoUrl(row.stockCode),
-          overseas: row.currency === 'USD',
-          currency: row.currency,
-          tradingAmount: row.tradingAmount,
-          price: row.currentPrice,
-          changeRate: row.changeRate,
-          detailAvailable: row.detailAvailable,
-          // 2026-09-24 - 급상승/급하락/거래대금 탭도 백엔드가 스코어를
-          // 조인해 내려주므로 스코어 탭과 동일하게 그대로 표시한다(값이
-          // 없으면 null - RankingRow가 이미 "-"로 처리).
-          compositeScore: row.compositeScore,
-          compositePercentile: row.compositePercentile,
-          grade: row.grade,
-        }))
+      ? (rankingQuery.data ?? []).map((row) => {
+          const livePrice = !isLongPeriod ? rankingSocketPrices[row.stockCode] : undefined
+          const isLive = isLivePriceFresh(livePrice)
+          return {
+            stockCode: row.stockCode,
+            stockName: row.stockName,
+            sector: row.sector,
+            logoUrl: row.logoUrl ?? buildStockLogoUrl(row.stockCode),
+            overseas: row.currency === 'USD',
+            currency: row.currency,
+            tradingAmount: row.tradingAmount,
+            price: isLive ? (livePrice?.currentPrice ?? row.currentPrice) : row.currentPrice,
+            changeRate: isLive ? (livePrice?.changeRate ?? row.changeRate) : row.changeRate,
+            detailAvailable: row.detailAvailable,
+            // 2026-09-24 - 급상승/급하락/거래대금 탭도 백엔드가 스코어를
+            // 조인해 내려주므로 스코어 탭과 동일하게 그대로 표시한다(값이
+            // 없으면 null - RankingRow가 이미 "-"로 처리).
+            compositeScore: row.compositeScore,
+            compositePercentile: row.compositePercentile,
+            grade: row.grade,
+          }
+        })
       : []
 
   const isLoading =
