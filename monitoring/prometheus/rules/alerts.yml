@@ -324,6 +324,41 @@ groups:
           summary: "아웃박스 미발행 이벤트 적체"
           description: "가장 오래된 미발행 아웃박스 이벤트(구독 자동 갱신 결제 요청)가 10분 넘게 브로커로 나가지 못했습니다 - 릴레이가 1분마다 재시도하니 브로커 상태(RedpandaDown, KafkaPublishFailed)부터 확인하세요. 남은 행은 outbox_event 테이블에서 status='PENDING'으로 조회합니다."
 
+      # 컨슈머 lag 관측(2026-11-05) - KafkaConsumerLagMonitor가 브로커의 커밋 오프셋 기준으로 30초마다 갱신한다.
+      # 카프카 클라이언트 기본 lag 지표는 쓰지 않는다: 이미 받아 둔 메시지를 처리하다 멈춘 컨슈머도 0으로 보인다.
+      # "lag가 N분 넘게 0보다 큼"으로 알리지 않는다 - 가격 팬아웃은 정상일 때도 수십 분 backlog가 남아 매 배치가 오탐이 된다.
+      # 대신 "lag가 있는데 커밋 오프셋이 안 움직인 시간"(stalled)을 본다. 컨슈머가 한 번 폴링하는 간격의 상한이
+      # max.poll.interval.ms(가격 컨슈머 10분)라 정상 컨슈머의 커밋 간격도 그 안이다 - 15분 + for 2분.
+      # 건수 상한(2만)은 정지가 아니라 "발행이 처리를 압도"하는 폭주를 잡는 안전망이다.
+      # 두 임계값은 시작값이다 - 운영 배치 실측 뒤 조정한다(SRE.md §7-1).
+      - alert: KafkaConsumerStalled
+        expr: max by (group) (kafka_consumer_group_stalled_seconds) > 900
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka 컨슈머 처리 정지: {{ $labels.group }}"
+          description: "{{ $labels.group }} 그룹에 처리 못한 메시지가 있는데 커밋 오프셋이 15분 넘게 움직이지 않았습니다 - 컨슈머 핸들러가 멈췄거나(외부 API 응답 대기 등) 리스너가 내려가 있을 가능성이 큽니다. 정상 배치는 오래 걸려도 커밋이 계속 움직여 이 알림이 나지 않습니다. 해당 그룹의 컨슈머 로그와 BackendDown, RedpandaDown, KafkaDltMessageArrived부터 확인하세요."
+
+      - alert: KafkaConsumerLagHigh
+        expr: sum by (group) (kafka_consumer_group_lag) > 20000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka 컨슈머 backlog 과다: {{ $labels.group }}"
+          description: "{{ $labels.group }} 그룹에 처리 대기 메시지가 2만 건 넘게 쌓인 채 10분 넘게 이어졌습니다 - 정상 배치 1회(전종목 약 8,100건)의 2배를 넘는 값이라 컨슈머가 발행 속도를 못 따라가고 있습니다. 처리 속도는 rate(kafka_consumer_group_committed_offsets_total[5m])로 확인하세요."
+
+      # 수집 자체가 죽으면 위 두 알림이 조용히 낡은 값을 본다 - 그 사각지대를 이 알림이 맡는다.
+      - alert: KafkaLagCollectStalled
+        expr: max(kafka_consumer_group_lag_collect_age_seconds) > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka 컨슈머 lag 수집 중단"
+          description: "컨슈머 그룹 오프셋 조회가 5분 넘게 실패하고 있습니다 - 그동안 위 두 알림(KafkaConsumerStalled, KafkaConsumerLagHigh)은 낡은 값을 보고 있어 신뢰할 수 없습니다. 브로커 상태(RedpandaDown)와 백엔드 로그의 '컨슈머 그룹 lag 수집 실패'를 확인하세요."
+
   # --- 리소스: JVM 힙 + 호스트 메모리/디스크 ---
   # 호스트 메모리/디스크 알림은 원래 CloudWatch 커스텀 메트릭+SNS로 별도
   # 구성했었는데, Slack 단일 창으로 통합하기 위해 이 PLG 스택으로
