@@ -58,6 +58,7 @@ class KafkaMessageContractTest extends ApiTestSupport {
             new PriceRefreshRequestedMessage(UUID.randomUUID(), Instant.now(), 1,
                 "run-1", "AAPL", "overseas", null),
             SubscriptionRenewalDueMessage.of(3L),
+            SubscriptionRenewalDueMessage.of(3L, LocalDate.of(2026, 10, 31)),
             PaymentWebhookReceivedMessage.of("hash-1", "{\"eventType\":\"X\"}"),
             TelegramDigestGenerationRequestedMessage.of(4L, LocalDate.of(2026, 9, 30)),
             QuadrantAlertRequestedMessage.of(5L));

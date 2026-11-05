@@ -8,10 +8,8 @@ import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.quantlime.common.lock.RedisLockService;
-import com.quantlime.subscription.event.SubscriptionRenewalDueEvent;
 import com.quantlime.subscription.service.SubscriptionService;
 import java.time.Duration;
 import java.util.List;
@@ -25,7 +23,6 @@ import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
@@ -37,9 +34,6 @@ class SubscriptionRenewalSchedulerTest {
     @Mock
     private SubscriptionService subscriptionService;
 
-    @Mock
-    private ApplicationEventPublisher eventPublisher;
-
     @InjectMocks
     private SubscriptionRenewalScheduler scheduler;
 
@@ -50,8 +44,8 @@ class SubscriptionRenewalSchedulerTest {
     }
 
     @Test
-    @DisplayName("[락을 잡으면 갱신 대상 구독마다 SubscriptionRenewalDueEvent를 발행하고, 그 뒤에 만료 처리를 수행한다]")
-    void renewDueSubscriptions_publishesEventPerSubscription_thenExpiresLapsed() {
+    @DisplayName("[락을 잡으면 갱신 대상 구독마다 아웃박스 갱신 요청을 적재하고, 그 뒤에 만료 처리를 수행한다]")
+    void renewDueSubscriptions_requestsRenewalPerSubscription_thenExpiresLapsed() {
         // given
         lockAcquired();
         given(subscriptionService.findSubscriptionIdsDueForRenewal()).willReturn(List.of(1L, 2L, 3L));
@@ -60,11 +54,27 @@ class SubscriptionRenewalSchedulerTest {
         scheduler.renewDueSubscriptions();
 
         // then
-        InOrder order = inOrder(eventPublisher, subscriptionService);
-        order.verify(eventPublisher).publishEvent(new SubscriptionRenewalDueEvent(1L));
-        order.verify(eventPublisher).publishEvent(new SubscriptionRenewalDueEvent(2L));
-        order.verify(eventPublisher).publishEvent(new SubscriptionRenewalDueEvent(3L));
+        InOrder order = inOrder(subscriptionService);
+        order.verify(subscriptionService).requestRenewal(1L);
+        order.verify(subscriptionService).requestRenewal(2L);
+        order.verify(subscriptionService).requestRenewal(3L);
         order.verify(subscriptionService).expireLapsedSubscriptions();
+    }
+
+    @Test
+    @DisplayName("[한 구독의 갱신 요청 적재가 실패해도 나머지 구독은 계속 적재한다]")
+    void renewDueSubscriptions_oneRequestFails_continuesWithOthers() {
+        // given
+        lockAcquired();
+        given(subscriptionService.findSubscriptionIdsDueForRenewal()).willReturn(List.of(1L, 2L));
+        willThrow(new RuntimeException("db down")).given(subscriptionService).requestRenewal(1L);
+
+        // when
+        scheduler.renewDueSubscriptions();
+
+        // then
+        verify(subscriptionService).requestRenewal(2L);
+        verify(subscriptionService).expireLapsedSubscriptions();
     }
 
     @Test
@@ -78,7 +88,7 @@ class SubscriptionRenewalSchedulerTest {
         scheduler.renewDueSubscriptions();
 
         // then
-        verifyNoInteractions(eventPublisher);
+        verify(subscriptionService, never()).requestRenewal(any());
         verify(subscriptionService).expireLapsedSubscriptions();
     }
 
@@ -96,7 +106,7 @@ class SubscriptionRenewalSchedulerTest {
         // then
         verify(subscriptionService, never()).findSubscriptionIdsDueForRenewal();
         verify(subscriptionService, never()).expireLapsedSubscriptions();
-        verifyNoInteractions(eventPublisher);
+        verify(subscriptionService, never()).requestRenewal(any());
     }
 
     @Test
@@ -108,7 +118,7 @@ class SubscriptionRenewalSchedulerTest {
 
         // when & then
         assertThatCode(() -> scheduler.renewDueSubscriptions()).doesNotThrowAnyException();
-        verifyNoInteractions(eventPublisher);
+        verify(subscriptionService, never()).requestRenewal(any());
     }
 
     @Test
@@ -121,6 +131,6 @@ class SubscriptionRenewalSchedulerTest {
 
         // when & then
         assertThatCode(() -> scheduler.renewDueSubscriptions()).doesNotThrowAnyException();
-        verify(eventPublisher).publishEvent(new SubscriptionRenewalDueEvent(7L));
+        verify(subscriptionService).requestRenewal(7L);
     }
 }

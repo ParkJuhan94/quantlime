@@ -29,6 +29,19 @@ public interface TelegramPostRepository extends JpaRepository<TelegramPost, Long
     List<TelegramPost> findByChannelAndStatusAndPublishedAtBetween(
         Channel channel, TelegramPostStatus status, LocalDateTime start, LocalDateTime end);
 
+    // 전날 마지막 다이제스트 회차 누락 감지용(TelegramDigestGenerationFacade.missedLastRun) - 발행일이 그날이고,
+    // 수집 시각(createdAt)이 다이제스트 갱신 이후~마지막 회차 이전인 SELECTED 글이 있는지.
+    @Query("select count(p) > 0 from TelegramPost p where p.channel = :channel and p.status = :status "
+        + "and p.publishedAt >= :publishedFrom and p.publishedAt < :publishedTo "
+        + "and p.createdAt > :collectedAfter and p.createdAt <= :collectedUntil")
+    boolean existsCollectedBetween(
+        @Param("channel") Channel channel,
+        @Param("status") TelegramPostStatus status,
+        @Param("publishedFrom") LocalDateTime publishedFrom,
+        @Param("publishedTo") LocalDateTime publishedTo,
+        @Param("collectedAfter") LocalDateTime collectedAfter,
+        @Param("collectedUntil") LocalDateTime collectedUntil);
+
     // TelegramFeedService.getDigests의 소스 글 개수 집계 전용 - 다이제스트는
     // TelegramPost와 FK로 연결돼 있지 않고 (channel, 발행일)로만 대응되므로,
     // 페이지의 여러 다이제스트를 위 findByChannelAndStatusAndPublishedAtBetween로

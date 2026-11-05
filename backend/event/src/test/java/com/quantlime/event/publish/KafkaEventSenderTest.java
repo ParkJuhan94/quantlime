@@ -12,6 +12,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -82,6 +83,48 @@ class KafkaEventSenderTest {
 
         // when & then
         assertThatCode(() -> sender().send(TOPIC, "k", "payload")).doesNotThrowAnyException();
+        assertThat(failureCount()).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("[send는 비동기 전송이 실패하면 실패 콜백을 한 번 실행한다]")
+    void send_asyncFailure_runsFailureCallback() {
+        // given
+        given(kafkaTemplate.send(eq(TOPIC), eq("k"), any()))
+            .willReturn(failed(new IllegalStateException("broker down")));
+        AtomicInteger calls = new AtomicInteger();
+
+        // when
+        sender().send(TOPIC, "k", "payload", calls::incrementAndGet);
+
+        // then
+        assertThat(calls).hasValue(1);
+    }
+
+    @Test
+    @DisplayName("[send는 전송이 성공하면 실패 콜백을 실행하지 않는다]")
+    void send_success_doesNotRunFailureCallback() {
+        // given
+        given(kafkaTemplate.send(eq(TOPIC), eq("k"), any())).willReturn(sent());
+        AtomicInteger calls = new AtomicInteger();
+
+        // when
+        sender().send(TOPIC, "k", "payload", calls::incrementAndGet);
+
+        // then
+        assertThat(calls).hasValue(0);
+    }
+
+    @Test
+    @DisplayName("[실패 콜백이 예외를 던져도 send는 예외를 전파하지 않고 실패 카운터는 그대로 남는다]")
+    void send_failureCallbackThrows_isSwallowed() {
+        // given
+        given(kafkaTemplate.send(eq(TOPIC), eq("k"), any())).willThrow(new IllegalStateException("metadata timeout"));
+
+        // when & then
+        assertThatCode(() -> sender().send(TOPIC, "k", "payload", () -> {
+            throw new IllegalStateException("redis down");
+        })).doesNotThrowAnyException();
         assertThat(failureCount()).isEqualTo(1.0);
     }
 

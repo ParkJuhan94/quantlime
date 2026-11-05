@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -15,12 +16,14 @@ import com.quantlime.infra.python.PythonEngineClient;
 import com.quantlime.infra.python.dto.SummarizeApiRequest;
 import com.quantlime.infra.python.dto.SummarizeApiResponse;
 import com.quantlime.infra.python.exception.PythonEngineErrorCode;
+import com.quantlime.telegramfeed.domain.TelegramDigest;
 import com.quantlime.telegramfeed.domain.TelegramPost;
 import com.quantlime.telegramfeed.domain.TelegramPostStatus;
 import com.quantlime.telegramfeed.dto.TelegramDigestGenerateResult;
 import com.quantlime.telegramfeed.event.TelegramDigestGenerationRequestedEvent;
 import com.quantlime.telegramfeed.implement.TelegramDigestAppender;
 import com.quantlime.telegramfeed.implement.TelegramDigestGenerator;
+import com.quantlime.telegramfeed.implement.TelegramDigestReader;
 import com.quantlime.telegramfeed.implement.TelegramPostReader;
 import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.Platform;
@@ -70,6 +73,9 @@ class TelegramDigestGenerationFacadeTest {
     private TelegramDigestAppender telegramDigestAppender;
 
     @Mock
+    private TelegramDigestReader telegramDigestReader;
+
+    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     private TelegramDigestGenerationFacade telegramDigestGenerationFacade;
@@ -79,7 +85,8 @@ class TelegramDigestGenerationFacadeTest {
     void setUpService() {
         telegramDigestGenerationFacade = new TelegramDigestGenerationFacade(
             redisLockService, channelReader, telegramPostReader,
-            new TelegramDigestGenerator(pythonEngineClient), telegramDigestAppender, eventPublisher, Clock.systemDefaultZone());
+            new TelegramDigestGenerator(pythonEngineClient), telegramDigestAppender, telegramDigestReader, eventPublisher,
+            Clock.systemDefaultZone());
     }
 
     private Channel channelOf(Long id, String handle) {
@@ -110,6 +117,49 @@ class TelegramDigestGenerationFacadeTest {
         assertThat(count).isEqualTo(2);
         verify(eventPublisher).publishEvent(new TelegramDigestGenerationRequestedEvent(1L, LocalDate.now()));
         verify(eventPublisher).publishEvent(new TelegramDigestGenerationRequestedEvent(2L, LocalDate.now()));
+    }
+
+    @Test
+    @DisplayName("[전날 마지막 회차(20:30) 전에 수집됐는데 다이제스트에 반영되지 못한 글이 있으면 전날 날짜로도 다시 발행한다]")
+    void publishAll_lastRunMissedYesterday_republishesYesterday() {
+        // given
+        Channel channel = channelOf(1L, "insidertracking");
+        LocalDate yesterday = LocalDate.now().minusDays(1);
+        TelegramDigest digest = TelegramDigest.of(channel, yesterday, "gemini", "{}", 10, 10);
+        LocalDateTime updatedAt = yesterday.atTime(13, 31);
+        ReflectionTestUtils.setField(digest, "updatedAt", updatedAt);
+        given(channelReader.findActive(Platform.TELEGRAM)).willReturn(List.of(channel));
+        given(telegramDigestReader.findByChannelAndDigestDate(channel, yesterday)).willReturn(Optional.of(digest));
+        given(telegramPostReader.existsCollectedBetween(channel, TelegramPostStatus.SELECTED,
+            yesterday.atStartOfDay(), yesterday.plusDays(1).atStartOfDay(), updatedAt, yesterday.atTime(20, 30)))
+            .willReturn(true);
+
+        // when
+        int count = telegramDigestGenerationFacade.publishAll();
+
+        // then
+        assertThat(count).isEqualTo(1);
+        verify(eventPublisher).publishEvent(new TelegramDigestGenerationRequestedEvent(1L, LocalDate.now()));
+        verify(eventPublisher).publishEvent(new TelegramDigestGenerationRequestedEvent(1L, yesterday));
+    }
+
+    @Test
+    @DisplayName("[전날 다이제스트가 마지막 회차 이후에 갱신됐으면 전날은 다시 만들지 않는다(Gemini 쿼터 보호)]")
+    void publishAll_lastRunSucceededYesterday_doesNotRepublish() {
+        // given
+        Channel channel = channelOf(1L, "insidertracking");
+        LocalDate yesterday = LocalDate.now().minusDays(1);
+        TelegramDigest digest = TelegramDigest.of(channel, yesterday, "gemini", "{}", 10, 10);
+        ReflectionTestUtils.setField(digest, "updatedAt", yesterday.atTime(20, 31));
+        given(channelReader.findActive(Platform.TELEGRAM)).willReturn(List.of(channel));
+        given(telegramDigestReader.findByChannelAndDigestDate(channel, yesterday)).willReturn(Optional.of(digest));
+
+        // when
+        telegramDigestGenerationFacade.publishAll();
+
+        // then
+        verify(eventPublisher, never()).publishEvent(new TelegramDigestGenerationRequestedEvent(1L, yesterday));
+        verify(telegramPostReader, never()).existsCollectedBetween(any(), any(), any(), any(), any(), any());
     }
 
     @Test

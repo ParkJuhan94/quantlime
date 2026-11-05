@@ -38,7 +38,7 @@ public class SubscriptionRenewalConsumer {
         maxDelayExpression = RetryBackoff.MAX_DELAY_MS))
     @KafkaListener(topics = SubscriptionTopics.SUBSCRIPTION_RENEWAL_DUE, groupId = "subscription-renewal-collector")
     public void onRenewalDue(SubscriptionRenewalDueMessage message) {
-        paymentService.chargeRenewal(message.subscriptionId());
+        paymentService.chargeRenewal(message.subscriptionId(), message.billingDate());
     }
 
     // exceptionMessage 헤더는 반드시 required=false여야 한다(2026-09-30

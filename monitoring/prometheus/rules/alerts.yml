@@ -305,7 +305,19 @@ groups:
           severity: warning
         annotations:
           summary: "Kafka 발행 실패: {{ $labels.topic }}"
-          description: "{{ $labels.topic }} 토픽으로 이벤트를 보내지 못했습니다 - 브로커 장애/전송 타임아웃으로 이벤트가 유실됐을 수 있습니다. 결제 웹훅은 5xx로 응답해 Toss 재전송에 맡기고, 나머지 도메인은 다음 정기 사이클에서 복구됩니다. 브로커 상태(RedpandaDown)부터 확인하세요."
+          description: "{{ $labels.topic }} 토픽으로 이벤트를 보내지 못했습니다 - 브로커 장애/전송 타임아웃으로 이벤트가 유실됐을 수 있습니다. 결제 웹훅은 5xx로 응답해 Toss 재전송에 맡기고, 구독 갱신은 아웃박스에 남아 브로커 복구 뒤 재발행되며(OutboxPublishStalled), 나머지 도메인은 다음 정기 사이클에서 다시 만들어집니다(사분면 변화 알림은 그날 분이 사라짐). 브로커 상태(RedpandaDown)부터 확인하세요."
+
+      # 아웃박스 적체(2026-10-31) - 구독 갱신 결제 요청이 브로커로 나가지 못하고 outbox_event에 쌓여 있다.
+      # 릴레이(OutboxRelay)가 1분마다 다시 보내고 그때 이 게이지도 갱신하므로, 브로커만 살아나면 스스로 풀린다.
+      # 10분 넘게 안 풀리고 5분 더 이어지면(브로커 장애 약 15분) 사람이 볼 차례다.
+      - alert: OutboxPublishStalled
+        expr: max(outbox_pending_oldest_age_seconds) > 600
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "아웃박스 미발행 이벤트 적체"
+          description: "가장 오래된 미발행 아웃박스 이벤트(구독 자동 갱신 결제 요청)가 10분 넘게 브로커로 나가지 못했습니다 - 릴레이가 1분마다 재시도하니 브로커 상태(RedpandaDown, KafkaPublishFailed)부터 확인하세요. 남은 행은 outbox_event 테이블에서 status='PENDING'으로 조회합니다."
 
   # --- 리소스: JVM 힙 + 호스트 메모리/디스크 ---
   # 호스트 메모리/디스크 알림은 원래 CloudWatch 커스텀 메트릭+SNS로 별도

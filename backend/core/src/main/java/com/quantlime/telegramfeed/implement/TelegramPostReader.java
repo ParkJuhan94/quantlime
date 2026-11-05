@@ -33,6 +33,12 @@ public class TelegramPostReader {
         return telegramPostRepository.findByChannelAndStatusAndPublishedAtBetween(channel, status, start, end);
     }
 
+    public boolean existsCollectedBetween(Channel channel, TelegramPostStatus status, LocalDateTime publishedFrom,
+        LocalDateTime publishedTo, LocalDateTime collectedAfter, LocalDateTime collectedUntil) {
+        return telegramPostRepository.existsCollectedBetween(
+            channel, status, publishedFrom, publishedTo, collectedAfter, collectedUntil);
+    }
+
     public List<Object[]> findPublishedAtForCounting(List<Long> channelIds, TelegramPostStatus status, LocalDateTime from, LocalDateTime to) {
         return telegramPostRepository.findChannelIdAndPublishedAtForCounting(channelIds, status, from, to);
     }

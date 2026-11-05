@@ -3,6 +3,7 @@ package com.quantlime.telegramfeed.service;
 import com.quantlime.common.exception.NotFoundException;
 import com.quantlime.common.lock.RedisLockService;
 import com.quantlime.infra.python.dto.SummarizeApiResponse;
+import com.quantlime.telegramfeed.domain.TelegramDigest;
 import com.quantlime.telegramfeed.domain.TelegramPost;
 import com.quantlime.telegramfeed.domain.TelegramPostStatus;
 import com.quantlime.telegramfeed.dto.TelegramDigestGenerateResult;
@@ -10,6 +11,7 @@ import com.quantlime.telegramfeed.event.TelegramDigestGenerationRequestedEvent;
 import com.quantlime.telegramfeed.exception.TelegramFeedErrorCode;
 import com.quantlime.telegramfeed.implement.TelegramDigestAppender;
 import com.quantlime.telegramfeed.implement.TelegramDigestGenerator;
+import com.quantlime.telegramfeed.implement.TelegramDigestReader;
 import com.quantlime.telegramfeed.implement.TelegramPostReader;
 import com.quantlime.videofeed.domain.Channel;
 import com.quantlime.videofeed.domain.Platform;
@@ -17,6 +19,8 @@ import com.quantlime.videofeed.implement.ChannelReader;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -52,12 +56,15 @@ public class TelegramDigestGenerationFacade {
     // 빨리 끝난다 - TTL을 30분에서 5분으로 줄여 락이 불필요하게 오래 남지
     // 않게 한다.
     private static final Duration LOCK_TTL = Duration.ofMinutes(5);
+    // TelegramDigestGenerationScheduler cron(08:30/13:30/20:30)의 마지막 회차 - cron을 바꾸면 같이 바꿀 것.
+    static final LocalTime LAST_DAILY_RUN = LocalTime.of(20, 30);
 
     private final RedisLockService redisLockService;
     private final ChannelReader channelReader;
     private final TelegramPostReader telegramPostReader;
     private final TelegramDigestGenerator telegramDigestGenerator;
     private final TelegramDigestAppender telegramDigestAppender;
+    private final TelegramDigestReader telegramDigestReader;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
@@ -72,8 +79,30 @@ public class TelegramDigestGenerationFacade {
         LocalDate today = LocalDate.now(clock);
         channels.forEach(channel ->
             eventPublisher.publishEvent(new TelegramDigestGenerationRequestedEvent(channel.getId(), today)));
-        log.info("텔레그램 다이제스트 생성 이벤트 발행: {}건", channels.size());
+        LocalDate yesterday = today.minusDays(1);
+        List<Channel> missed = channels.stream().filter(channel -> missedLastRun(channel, yesterday)).toList();
+        missed.forEach(channel ->
+            eventPublisher.publishEvent(new TelegramDigestGenerationRequestedEvent(channel.getId(), yesterday)));
+        log.info("텔레그램 다이제스트 생성 이벤트 발행: {}건, 전날 마지막 회차 누락분 재생성: {}건", channels.size(), missed.size());
         return channels.size();
+    }
+
+    /**
+     * 그날 마지막 회차(20:30)가 실패했는지(2026-10-31). 실패하면 그날 다이제스트가 13:30 버전에 멈추는데, 자정이 지나면
+     * {@link #publishAll()}이 오늘 날짜만 다루므로 영영 갱신되지 않았다. "마지막 회차 전에 수집된 SELECTED 글 중
+     * 다이제스트 갱신 시각 이후의 글"이 있을 때만 true라, 20:30이 정상이었던 날은 Gemini 호출이 늘지 않는다.
+     * 20:30 이후에 수집된 글은 원래부터 그날 다이제스트에 들어가지 않으므로 기준에서 뺀다.
+     */
+    private boolean missedLastRun(Channel channel, LocalDate date) {
+        LocalDateTime lastRunAt = date.atTime(LAST_DAILY_RUN);
+        Optional<LocalDateTime> digestUpdatedAt = telegramDigestReader.findByChannelAndDigestDate(channel, date)
+            .map(TelegramDigest::getUpdatedAt);
+        if (digestUpdatedAt.isPresent() && !digestUpdatedAt.get().isBefore(lastRunAt)) {
+            return false;
+        }
+        LocalDateTime dayStart = date.atStartOfDay();
+        return telegramPostReader.existsCollectedBetween(channel, TelegramPostStatus.SELECTED,
+            dayStart, date.plusDays(1).atStartOfDay(), digestUpdatedAt.orElse(dayStart), lastRunAt);
     }
 
     /**

@@ -44,15 +44,33 @@ public class KafkaEventSender {
     }
 
     public void send(String topic, String key, Object payload) {
+        send(topic, key, payload, () -> { });
+    }
+
+    /**
+     * {@code onFailure}는 발행이 최종 실패했을 때 한 번 실행된다(2026-10-31) - 발행조차 못 한 이벤트를 기다리는 쪽이
+     * 있으면 그 대기를 풀어주는 용도다(예: 가격 갱신 fan-in 게이트). 프로듀서 I/O 스레드에서 돌 수 있으니 짧게 끝나야 하고,
+     * 여기서 난 예외는 로그만 남긴다.
+     */
+    public void send(String topic, String key, Object payload, Runnable onFailure) {
         try {
             var unused = kafkaTemplate.send(topic, key, payload).whenComplete((result, error) -> {
                 if (error != null) {
-                    recordFailure(topic, key, error);
+                    handleFailure(topic, key, error, onFailure);
                 }
             });
         } catch (RuntimeException e) {
             // send() 자체가 던지는 경우(예: 메타데이터 대기 타임아웃, 직렬화 예외)도 호출 스레드를 죽이지 않는다.
-            recordFailure(topic, key, e);
+            handleFailure(topic, key, e, onFailure);
+        }
+    }
+
+    private void handleFailure(String topic, String key, Throwable error, Runnable onFailure) {
+        recordFailure(topic, key, error);
+        try {
+            onFailure.run();
+        } catch (RuntimeException e) {
+            log.error("Kafka 발행 실패 후속 처리 실패: topic={}, key={}", topic, key, e);
         }
     }
 

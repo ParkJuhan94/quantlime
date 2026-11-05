@@ -59,7 +59,7 @@ tests:
               topic: payment.webhook.received
             exp_annotations:
               summary: "Kafka 발행 실패: payment.webhook.received"
-              description: "payment.webhook.received 토픽으로 이벤트를 보내지 못했습니다 - 브로커 장애/전송 타임아웃으로 이벤트가 유실됐을 수 있습니다. 결제 웹훅은 5xx로 응답해 Toss 재전송에 맡기고, 나머지 도메인은 다음 정기 사이클에서 복구됩니다. 브로커 상태(RedpandaDown)부터 확인하세요."
+              description: "payment.webhook.received 토픽으로 이벤트를 보내지 못했습니다 - 브로커 장애/전송 타임아웃으로 이벤트가 유실됐을 수 있습니다. 결제 웹훅은 5xx로 응답해 Toss 재전송에 맡기고, 구독 갱신은 아웃박스에 남아 브로커 복구 뒤 재발행되며(OutboxPublishStalled), 나머지 도메인은 다음 정기 사이클에서 다시 만들어집니다(사분면 변화 알림은 그날 분이 사라짐). 브로커 상태(RedpandaDown)부터 확인하세요."
 
   # 실패가 없으면(계속 0) 알림 없음.
   - interval: 1m
@@ -69,6 +69,35 @@ tests:
     alert_rule_test:
       - eval_time: 8m
         alertname: KafkaPublishFailed
+        exp_alerts: []
+
+  # --- 아웃박스 적체 ---
+  # 게이지는 릴레이 폴링(1분)마다 갱신된다. 600초를 넘긴 뒤 5분 이어져야 발화한다.
+  - interval: 1m
+    input_series:
+      - series: 'outbox_pending_oldest_age_seconds{application="quantlime"}'
+        values: '0 60 120 180 240 300 360 420 480 540 600 660 720 780 840 900 960 1020'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: OutboxPublishStalled
+        exp_alerts: []
+      - eval_time: 17m
+        alertname: OutboxPublishStalled
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "아웃박스 미발행 이벤트 적체"
+              description: "가장 오래된 미발행 아웃박스 이벤트(구독 자동 갱신 결제 요청)가 10분 넘게 브로커로 나가지 못했습니다 - 릴레이가 1분마다 재시도하니 브로커 상태(RedpandaDown, KafkaPublishFailed)부터 확인하세요. 남은 행은 outbox_event 테이블에서 status='PENDING'으로 조회합니다."
+
+  # 브로커가 몇 분 만에 살아나 재발행되면(나이가 0으로 돌아옴) 알림 없음.
+  - interval: 1m
+    input_series:
+      - series: 'outbox_pending_oldest_age_seconds{application="quantlime"}'
+        values: '0 60 120 180 240 0 0 0 0 0 0 0 0 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 17m
+        alertname: OutboxPublishStalled
         exp_alerts: []
 
   # --- 컨테이너 생존(scripts/report-container-metrics.sh의 quantlime_container_up) ---

@@ -12,17 +12,15 @@ import com.quantlime.event.market.MarketEventPublisher;
 import com.quantlime.event.market.PriceRefreshRequestedMessage;
 import com.quantlime.event.payment.PaymentEventPublisher;
 import com.quantlime.event.payment.PaymentWebhookReceivedMessage;
-import com.quantlime.event.subscription.SubscriptionEventPublisher;
-import com.quantlime.event.subscription.SubscriptionRenewalDueMessage;
 import com.quantlime.event.telegramfeed.TelegramDigestGenerationRequestedMessage;
 import com.quantlime.event.telegramfeed.TelegramFeedEventPublisher;
 import com.quantlime.event.videofeed.VideoFeedEventPublisher;
 import com.quantlime.event.videofeed.VideoSelectedMessage;
 import com.quantlime.event.videofeed.VideoTranscribedMessage;
 import com.quantlime.market.event.PriceRefreshRequestedEvent;
+import com.quantlime.market.service.PriceRefreshBatchGate;
 import com.quantlime.payment.event.PaymentWebhookReceivedEvent;
 import com.quantlime.score.domain.PeerGroup;
-import com.quantlime.subscription.event.SubscriptionRenewalDueEvent;
 import com.quantlime.telegramfeed.event.TelegramDigestGenerationRequestedEvent;
 import com.quantlime.videofeed.event.VideoSelectedEvent;
 import com.quantlime.videofeed.event.VideoTranscribedEvent;
@@ -43,6 +41,9 @@ class EventPublishersTest {
 
     @Mock
     private KafkaEventSender sender;
+
+    @Mock
+    private PriceRefreshBatchGate priceRefreshBatchGate;
 
     @Test
     @DisplayName("[영상 선정/자막 완료 이벤트는 videoId를 키로 각자의 토픽에 발행된다]")
@@ -68,7 +69,7 @@ class EventPublishersTest {
     @DisplayName("[가격 갱신 이벤트는 종목코드를 키로 발행되고 runId/peerGroup/스코어 산출일이 그대로 실린다]")
     void marketPublisher_mapsTopicKeyAndPayload() {
         // given
-        MarketEventPublisher publisher = new MarketEventPublisher(sender);
+        MarketEventPublisher publisher = new MarketEventPublisher(sender, priceRefreshBatchGate);
         LocalDate scoreDate = LocalDate.of(2026, 9, 30);
 
         // when
@@ -77,7 +78,7 @@ class EventPublishersTest {
 
         // then
         ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
-        verify(sender).send(eq("price.refresh.requested"), eq("005930"), payload.capture());
+        verify(sender).send(eq("price.refresh.requested"), eq("005930"), payload.capture(), any(Runnable.class));
         PriceRefreshRequestedMessage message = (PriceRefreshRequestedMessage) payload.getValue();
         assertThat(message.runId()).isEqualTo("run-1");
         assertThat(message.peerGroup()).isEqualTo("domestic");
@@ -85,18 +86,20 @@ class EventPublishersTest {
     }
 
     @Test
-    @DisplayName("[구독 갱신 이벤트는 subscriptionId를 키로 발행된다]")
-    void subscriptionPublisher_mapsTopicAndKey() {
+    @DisplayName("[가격 갱신 발행이 실패하면 그 종목을 fan-in 게이트에 최종 종료로 통지해, 배치가 대기 상한까지 기다리지 않게 한다]")
+    void marketPublisher_publishFailure_completesGate() {
         // given
-        SubscriptionEventPublisher publisher = new SubscriptionEventPublisher(sender);
+        MarketEventPublisher publisher = new MarketEventPublisher(sender, priceRefreshBatchGate);
+        publisher.onPriceRefreshRequested(
+            new PriceRefreshRequestedEvent("run-1", "005930", PeerGroup.DOMESTIC, null));
+        ArgumentCaptor<Runnable> onFailure = ArgumentCaptor.forClass(Runnable.class);
+        verify(sender).send(eq("price.refresh.requested"), eq("005930"), any(), onFailure.capture());
 
         // when
-        publisher.onRenewalDue(new SubscriptionRenewalDueEvent(42L));
+        onFailure.getValue().run();
 
         // then
-        ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
-        verify(sender).send(eq("subscription.renewal.due"), eq("42"), payload.capture());
-        assertThat(((SubscriptionRenewalDueMessage) payload.getValue()).subscriptionId()).isEqualTo(42L);
+        verify(priceRefreshBatchGate).completeOne("run-1", PeerGroup.DOMESTIC, "005930");
     }
 
     @Test
