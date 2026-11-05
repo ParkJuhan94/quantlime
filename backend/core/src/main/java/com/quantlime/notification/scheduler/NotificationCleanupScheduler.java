@@ -10,9 +10,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 // 영상/텔레그램 피드와 동일한 보존기간(14일) 정책을 따른다
 // (VideoRetentionScheduler/TelegramPostRetentionScheduler 참고). 운영 EC2가
-// 00:00~07:40 중지돼 새벽 시각은 영영 못 돈다 - 영상/텔레그램 정리는 기동
+// 22:00~07:40(주말은 금 22:00~월 07:40) 중지돼 새벽 시각은 영영 못 돈다 - 영상/텔레그램 정리는 기동
 // 캐치업(StartupCatchUpRunner)이 보충하지만 알림 정리는 캐치업에 없어
-// 21:30으로 옮겼다(구독 갱신 21:00과 겹치지 않게).
+// 21:10으로 옮겼다(구독 갱신 21:00과 겹치지 않고 21:30 DB 백업 전에 끝나게).
 @Component
 @RequiredArgsConstructor
 public class NotificationCleanupScheduler {
@@ -23,7 +23,7 @@ public class NotificationCleanupScheduler {
     private final Clock clock;
 
     @Transactional
-    @Scheduled(cron = "0 30 21 * * *", zone = "Asia/Seoul")
+    @Scheduled(cron = "0 10 21 * * *", zone = "Asia/Seoul")
     public void deleteOldNotifications() {
         notificationAppender.deleteByCreatedAtBefore(LocalDateTime.now(clock).minusDays(RETENTION_DAYS));
     }

@@ -11,7 +11,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * 구독 자동 갱신을 매일 21:00에 실행한다(운영 EC2가 00:00~07:40 중지돼 새벽 시각은 영영 못 돈다). 다른 배치(MarketDataRefreshService,
+ * 구독 자동 갱신을 매일 21:00에 실행한다(운영 EC2가 22:00~07:40(주말은 금 22:00~월 07:40) 중지돼 새벽 시각은 영영 못 돈다). 다른 배치(MarketDataRefreshService,
  * FeedCollectionFacade 등)는 전부 RedisLockService.runExclusively로 분산락을
  * 쓰는데 이 스케줄러만 락이 없었다 - 인스턴스가 2대 이상이 되면 같은 구독이
  * 동시에 이중 결제될 수 있는 구조였다(docs/00-sre/SRE.md §5-1 참고, 2026-09-24

@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * 평일 18:30에 국내 전 종목의 투자자 매매동향을 갱신한다(약 7분). 토스의 확정치는 당일 저녁에 반영되고 서버 야간
- * 중지(00:00~07:40) 전에 끝나며, 20:20 알림·21:00 구독 갱신과도 겹치지 않는다. 이 시각은
+ * 중지(22:00~07:40) 전에 끝나며, 20:20 알림·21:00 구독 갱신과도 겹치지 않는다. 이 시각은
  * {@link StockInvestorTradingRefreshService#DAILY_RUN_TIME}과 같아야 한다(기동 캐치업이 같은 값을 쓴다).
  */
 @Slf4j
