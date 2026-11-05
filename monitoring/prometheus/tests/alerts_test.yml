@@ -100,6 +100,77 @@ tests:
         alertname: OutboxPublishStalled
         exp_alerts: []
 
+  # --- 컨슈머 lag ---
+  # 멈춤: lag가 있고 stalled가 900초를 넘긴 뒤 2분 이어져야 발화한다(30초 갱신이라 1분 간격 샘플로 근사).
+  - interval: 1m
+    input_series:
+      - series: 'kafka_consumer_group_stalled_seconds{group="price-refresh-collector"}'
+        values: '0 60 120 180 240 300 360 420 480 540 600 660 720 780 840 900 960 1020 1080 1140'
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: KafkaConsumerStalled
+        exp_alerts: []
+      - eval_time: 19m
+        alertname: KafkaConsumerStalled
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              group: price-refresh-collector
+            exp_annotations:
+              summary: "Kafka 컨슈머 처리 정지: price-refresh-collector"
+              description: "price-refresh-collector 그룹에 처리 못한 메시지가 있는데 커밋 오프셋이 15분 넘게 움직이지 않았습니다 - 컨슈머 핸들러가 멈췄거나(외부 API 응답 대기 등) 리스너가 내려가 있을 가능성이 큽니다. 정상 배치는 오래 걸려도 커밋이 계속 움직여 이 알림이 나지 않습니다. 해당 그룹의 컨슈머 로그와 BackendDown, RedpandaDown, KafkaDltMessageArrived부터 확인하세요."
+
+  # 정상 배치: backlog(8,100건)가 한 시간 넘게 남아도 커밋이 계속 움직여 stalled가 0이면 어떤 lag 알림도 없다.
+  - interval: 1m
+    input_series:
+      - series: 'kafka_consumer_group_lag{group="price-refresh-collector",topic="market.price.refresh.requested"}'
+        values: '8100x70'
+      - series: 'kafka_consumer_group_stalled_seconds{group="price-refresh-collector"}'
+        values: '0x70'
+    alert_rule_test:
+      - eval_time: 65m
+        alertname: KafkaConsumerStalled
+        exp_alerts: []
+      - eval_time: 65m
+        alertname: KafkaConsumerLagHigh
+        exp_alerts: []
+
+  # 폭주: 두 토픽 합산이 2만을 넘는 상태가 10분 넘게 이어지면 발화한다(합산 단위가 그룹이다).
+  - interval: 1m
+    input_series:
+      - series: 'kafka_consumer_group_lag{group="price-refresh-collector",topic="market.price.refresh.requested"}'
+        values: '11000x20'
+      - series: 'kafka_consumer_group_lag{group="price-refresh-collector",topic="market.price.refresh.requested-retry-0"}'
+        values: '11000x20'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: KafkaConsumerLagHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              group: price-refresh-collector
+            exp_annotations:
+              summary: "Kafka 컨슈머 backlog 과다: price-refresh-collector"
+              description: "price-refresh-collector 그룹에 처리 대기 메시지가 2만 건 넘게 쌓인 채 10분 넘게 이어졌습니다 - 정상 배치 1회(전종목 약 8,100건)의 2배를 넘는 값이라 컨슈머가 발행 속도를 못 따라가고 있습니다. 처리 속도는 rate(kafka_consumer_group_committed_offsets_total[5m])로 확인하세요."
+
+  # 수집 중단: 오프셋 조회가 300초 넘게 실패한 상태가 5분 이어지면 발화한다.
+  - interval: 1m
+    input_series:
+      - series: 'kafka_consumer_group_lag_collect_age_seconds{application="quantlime"}'
+        values: '0 60 120 180 240 300 360 420 480 540 600 660'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: KafkaLagCollectStalled
+        exp_alerts: []
+      - eval_time: 11m
+        alertname: KafkaLagCollectStalled
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "Kafka 컨슈머 lag 수집 중단"
+              description: "컨슈머 그룹 오프셋 조회가 5분 넘게 실패하고 있습니다 - 그동안 위 두 알림(KafkaConsumerStalled, KafkaConsumerLagHigh)은 낡은 값을 보고 있어 신뢰할 수 없습니다. 브로커 상태(RedpandaDown)와 백엔드 로그의 '컨슈머 그룹 lag 수집 실패'를 확인하세요."
+
   # --- 컨테이너 생존(scripts/report-container-metrics.sh의 quantlime_container_up) ---
   # 이전엔 cAdvisor의 container_last_seen을 썼으나 Docker 29에서 cAdvisor가 컨테이너 이름을 못 읽어
   # 알림이 조용히 죽어 있었다(2026-10-03) - 텍스트파일 지표로 같은 신호를 다시 만들었다.

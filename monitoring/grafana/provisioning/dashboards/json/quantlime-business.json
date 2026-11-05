@@ -187,6 +187,89 @@
           "legendFormat": "{{name}}"
         }
       ]
+    },
+    {
+      "id": 11,
+      "title": "Kafka 컨슈머 lag (그룹별 합, 브로커 커밋 오프셋 기준)",
+      "description": "KafkaConsumerLagMonitor가 30초마다 갱신. 배치 때 오르고 처리되며 0으로 돌아오는 것이 정상이다.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0 }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "sum by (group) (kafka_consumer_group_lag{job=\"backend\"})",
+          "legendFormat": "{{group}}"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "Kafka 컨슈머 처리 속도 (건/초, 5분 rate)",
+      "description": "커밋 오프셋 증가율. 배치 1회 규모 추정 = 이 속도로 약 8,100건을 처리하는 시간.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops", "min": 0 }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "sum by (group) (rate(kafka_consumer_group_committed_offsets_total{job=\"backend\"}[5m]))",
+          "legendFormat": "{{group}}"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "Kafka 컨슈머 정지 시간 (lag가 있는데 커밋이 안 움직인 시간)",
+      "description": "KafkaConsumerStalled 알림 기준은 900초(15분). 정상 배치는 오래 걸려도 0에 머문다.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 40 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s", "min": 0 }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "max by (group) (kafka_consumer_group_stalled_seconds{job=\"backend\"})",
+          "legendFormat": "{{group}}"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "Redpanda 메모리 (사용 vs 한도)",
+      "description": "호스트 크론이 1분마다 찍는 스냅샷이라 1분 미만의 순간 피크는 못 본다.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 40 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "bytes", "min": 0 }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "quantlime_container_memory_usage_bytes{name=~\".*redpanda\"}",
+          "legendFormat": "사용"
+        },
+        {
+          "expr": "quantlime_container_memory_limit_bytes{name=~\".*redpanda\"}",
+          "legendFormat": "한도"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "Redpanda 재시작 · 호스트 OOM kill (5분)",
+      "description": "0이면 정상. 배치 시간대에 값이 생기면 Redpanda 메모리 한도를 의심한다.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 48 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0 }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "changes(quantlime_container_start_time_seconds{name=~\".*redpanda\"}[5m])",
+          "legendFormat": "Redpanda 재시작"
+        },
+        {
+          "expr": "increase(node_vmstat_oom_kill[5m])",
+          "legendFormat": "호스트 OOM kill"
+        }
+      ]
     }
   ]
 }
