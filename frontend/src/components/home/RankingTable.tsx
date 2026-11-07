@@ -22,13 +22,11 @@ interface RankingTableProps {
   onToggleWatch: (stockCode: string) => void
 }
 
-export type Scope = 'all' | 'domestic' | 'overseas'
+export type Scope = 'domestic' | 'overseas'
 export type SortKey = 'score' | 'amount' | 'gainers' | 'losers'
-type RankingScope = 'domestic' | 'overseas'
 export type Period = '실시간' | '1일' | '1주일' | '1개월' | '3개월' | '6개월' | '1년'
 
 const SCOPE_OPTIONS: { key: Scope; label: string }[] = [
-  { key: 'all', label: '전체' },
   { key: 'domestic', label: '국내' },
   { key: 'overseas', label: '해외' },
 ]
@@ -320,11 +318,6 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
     rankingFilterStorage.write({ scope, sortKey, period, watchlistOnly: next })
   }
 
-  // scope='all'은 기존과 동일하게 domestic으로 취급한다(2026-07-29 -
-  // 국내+해외를 진짜로 합쳐 정렬하는 기능은 이번 스코프 밖. 원래도 'all'과
-  // 'domestic'은 결과가 같았다 - 이전엔 scope 자체가 쿼리에 전달되지
-  // 않았기 때문).
-  const rankingScope: RankingScope = scope === 'overseas' ? 'overseas' : 'domestic'
   const isRealMode = sortKey === 'gainers' || sortKey === 'losers' || sortKey === 'amount'
   const isScoreMode = sortKey === 'score'
   const periodCode = PERIOD_CODES[period]
@@ -333,7 +326,7 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
   // 스코어/급상승/급하락/거래대금 4개 필터 전부 "관심종목만/전체" 토글을
   // 공통으로 둔다(2026-07-18 피드백에서 스코어·급상승·급하락까지 우선
   // 통합했고, 2026-07-19 피드백으로 거래대금도 동일하게 맞춤). 스코어
-  // 탭도 scope(전체/국내/해외)를 그대로 넘긴다 - 예전엔 scope와 무관하게
+  // 탭도 scope(국내/해외)를 그대로 넘긴다 - 예전엔 scope와 무관하게
   // 항상 전체를 섞어 정렬해, 국내/해외 스코어 분포 차이 때문에 상위 N개가
   // 한쪽 시장으로만 쏠리는 버그가 있었다(2026-07-30 수정).
   const showWatchlistOnlyToggle = isAuthenticated
@@ -343,7 +336,7 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
   // ScoreController)과 동일하다 - 스크롤로 더 볼 수 있게 하면서(2026-09-24
   // 요청) 백엔드 변경 없이 바로 올릴 수 있는 최대치라 이 값으로 맞췄다.
   const rankingQuery = useMarketRankingQuery(
-    rankingScope,
+    scope,
     sortKey === 'gainers' || sortKey === 'losers' || sortKey === 'amount' ? sortKey : 'gainers',
     50,
     isRealMode,
@@ -586,7 +579,7 @@ export function RankingTable({ watchlistCodes, onToggleWatch }: RankingTableProp
                       '관심 종목이 없거나, 관심종목 중 지금 데이터가 있는 종목이 없습니다.'}
                     {isRealMode &&
                       !effectiveWatchlistOnly &&
-                      (rankingScope === 'overseas'
+                      (scope === 'overseas'
                         ? '미국장이 열려 있지 않거나 아직 데이터가 준비되지 않았습니다.'
                         : '장이 열려 있지 않거나 아직 데이터가 준비되지 않았습니다.')}
                   </td>

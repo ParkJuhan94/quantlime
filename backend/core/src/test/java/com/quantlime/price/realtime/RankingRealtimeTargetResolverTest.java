@@ -3,6 +3,7 @@ package com.quantlime.price.realtime;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -46,10 +47,9 @@ class RankingRealtimeTargetResolverTest {
         }).toList();
     }
 
-    private static ScoreRankingResponse score(String code, boolean overseas) {
+    private static ScoreRankingResponse score(String code) {
         ScoreRankingResponse row = mock(ScoreRankingResponse.class);
         lenient().when(row.stockCode()).thenReturn(code);
-        lenient().when(row.overseas()).thenReturn(overseas);
         return row;
     }
 
@@ -89,40 +89,52 @@ class RankingRealtimeTargetResolverTest {
     }
 
     @Test
-    @DisplayName("[스코어 전체 탭은 시장별로 나눠 넣는다]")
-    void splitsAllScopeScoresByMarket() {
+    @DisplayName("[국내장이 닫혀 있으면 미국 확장 세션의 상위 행을 구독한다]")
+    void subscribesUsWhenDomesticClosed() {
+        // given
+        given(domesticCalendar.isMarketOpenNow()).willReturn(false);
+        given(overseasCalendar.isExtendedSessionOpenNow()).willReturn(true);
+        List<MarketRankingResponse> gainers = ranking("U", 10);
+        given(rankingCache.get("overseas", TossMarketRankingCache.SORT_GAINERS)).willReturn(gainers);
+
+        // when
+        Map<TossRealtimeMarket, List<String>> targets = resolver.resolve();
+
+        // then
+        assertThat(targets).containsOnlyKeys(TossRealtimeMarket.US);
+        assertThat(targets.get(TossRealtimeMarket.US)).hasSize(10);
+    }
+
+    @Test
+    @DisplayName("[국내장이 열려 있으면 미국 세션이 열려 있어도 국내만 구독한다]")
+    void domesticTakesPriorityOverUs() {
         // given
         given(domesticCalendar.isMarketOpenNow()).willReturn(true);
-        given(overseasCalendar.isMarketOpenNow()).willReturn(true);
-        List<ScoreRankingResponse> scores = List.of(score("005930", false), score("AAPL", true));
-        given(scoreService.getAllStocksScoreRanking(10, "all")).willReturn(scores);
+        List<MarketRankingResponse> domestic = ranking("K", 10);
+        given(rankingCache.get("domestic", TossMarketRankingCache.SORT_AMOUNT)).willReturn(domestic);
+
+        // when
+        Map<TossRealtimeMarket, List<String>> targets = resolver.resolve();
+
+        // then
+        assertThat(targets).containsOnlyKeys(TossRealtimeMarket.KR);
+        verify(overseasCalendar, never()).isExtendedSessionOpenNow();
+        verify(rankingCache, never()).get(eq("overseas"), anyString());
+    }
+
+    @Test
+    @DisplayName("[스코어 탭은 열린 시장의 상위 행만 넣고 전체 범위는 조회하지 않는다]")
+    void includesScoreTabOfOpenMarketOnly() {
+        // given
+        given(domesticCalendar.isMarketOpenNow()).willReturn(true);
+        List<ScoreRankingResponse> scores = List.of(score("005930"));
+        given(scoreService.getAllStocksScoreRanking(10, "domestic")).willReturn(scores);
 
         // when
         Map<TossRealtimeMarket, List<String>> targets = resolver.resolve();
 
         // then
         assertThat(targets.get(TossRealtimeMarket.KR)).containsExactly("005930");
-        assertThat(targets.get(TossRealtimeMarket.US)).containsExactly("AAPL");
-    }
-
-    @Test
-    @DisplayName("[두 시장을 합쳐 연결당 한도 100개를 넘지 않는다]")
-    void neverExceedsSubscriptionLimit() {
-        // given
-        given(domesticCalendar.isMarketOpenNow()).willReturn(true);
-        given(overseasCalendar.isMarketOpenNow()).willReturn(true);
-        for (String sort : List.of("amount", "gainers", "losers")) {
-            List<MarketRankingResponse> kr = ranking("K" + sort, 10);
-            List<MarketRankingResponse> us = ranking("U" + sort, 10);
-            given(rankingCache.get("domestic", sort)).willReturn(kr);
-            given(rankingCache.get("overseas", sort)).willReturn(us);
-        }
-
-        // when
-        Map<TossRealtimeMarket, List<String>> targets = resolver.resolve();
-
-        // then
-        int total = targets.values().stream().mapToInt(List::size).sum();
-        assertThat(total).isEqualTo(60).isLessThanOrEqualTo(RankingRealtimeTargetResolver.MAX_SUBSCRIPTIONS);
+        verify(scoreService, never()).getAllStocksScoreRanking(anyInt(), eq("all"));
     }
 }

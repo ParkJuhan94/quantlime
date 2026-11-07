@@ -31,6 +31,9 @@ import org.springframework.stereotype.Component;
  * 필요한 KIS 얘기였고 Toss 심볼 형식은 국내/해외 동일하므로 그 문제는
  * 없지만, "주간거래 시간까지 실시간가를 켜둘 필요가 있는가"는 별도
  * 판단이 필요해 우선 보류한다.
+ *
+ * <p>{@link #isExtendedSessionOpenNow()}는 프리·정규·애프터마켓까지 본다. 체결 웹소켓 구독 전용이고,
+ * REST 폴링 게이트({@link #isMarketOpenNow()})는 정규장 기준 그대로 둔다.
  */
 @Slf4j
 @Component
@@ -50,6 +53,7 @@ public class OverseasMarketCalendarCache {
 
     private volatile LocalDate cachedDate = LocalDate.MIN;
     private volatile List<TossMarketCalendarResponse.MarketSession> regularMarketSessions = List.of();
+    private volatile List<TossMarketCalendarResponse.MarketSession> extendedSessions = List.of();
     private volatile Instant retryNotBefore = Instant.MIN;
 
     public boolean isMarketOpenNow() {
@@ -60,11 +64,26 @@ public class OverseasMarketCalendarCache {
         if (!cachedDate.equals(today)) {
             refresh(today);
         }
-        if (regularMarketSessions.isEmpty()) {
+        return isWithinAny(regularMarketSessions);
+    }
+
+    public boolean isExtendedSessionOpenNow() {
+        if (SYNTHETIC_MODE.equals(priceFeedMode)) {
+            return true;
+        }
+        LocalDate today = LocalDate.now(clock);
+        if (!cachedDate.equals(today)) {
+            refresh(today);
+        }
+        return isWithinAny(extendedSessions);
+    }
+
+    private boolean isWithinAny(List<TossMarketCalendarResponse.MarketSession> sessions) {
+        if (sessions.isEmpty()) {
             return false;
         }
         OffsetDateTime now = OffsetDateTime.now(clock);
-        return regularMarketSessions.stream().anyMatch(session -> isWithin(now, session));
+        return sessions.stream().anyMatch(session -> isWithin(now, session));
     }
 
     private boolean isWithin(OffsetDateTime now, TossMarketCalendarResponse.MarketSession session) {
@@ -92,14 +111,21 @@ public class OverseasMarketCalendarCache {
         if (response == null || response.result() == null) {
             log.warn("해외 장 운영 캘린더 응답이 비어있어 장중이 아닌 것으로 처리: date={}", today);
             this.regularMarketSessions = List.of();
+            this.extendedSessions = List.of();
             this.cachedDate = today;
             return;
         }
         TossUsMarketCalendarResponse.UsMarketCalendarResult result = response.result();
-        this.regularMarketSessions = Stream.of(
+        List<TossUsMarketCalendarResponse.UsMarketDay> days = Stream.of(
                 result.previousBusinessDay(), result.today(), result.nextBusinessDay())
             .filter(Objects::nonNull)
+            .toList();
+        this.regularMarketSessions = days.stream()
             .map(TossUsMarketCalendarResponse.UsMarketDay::regularMarket)
+            .filter(Objects::nonNull)
+            .toList();
+        this.extendedSessions = days.stream()
+            .flatMap(day -> Stream.of(day.preMarket(), day.regularMarket(), day.afterMarket()))
             .filter(Objects::nonNull)
             .toList();
         this.cachedDate = today;
