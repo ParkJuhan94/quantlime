@@ -7,7 +7,6 @@ import com.quantlime.price.cache.DomesticMarketCalendarCache;
 import com.quantlime.price.cache.OverseasMarketCalendarCache;
 import com.quantlime.score.dto.response.ScoreRankingResponse;
 import com.quantlime.score.service.ScoreService;
-import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -19,9 +18,10 @@ import org.springframework.stereotype.Component;
 
 /**
  * 웹소켓으로 구독할 종목을 고른다 - 랭킹 표 각 탭의 상위 {@value #TOP_ROWS_PER_TAB}행이다.
- * 현재 탭은 국내·해외 × 거래대금·급상승·급하락·스코어라 최대 90개(스코어 "전체" 포함)이고, 연결당 한도
- * {@value #MAX_SUBSCRIPTIONS}개 안에 든다. 장이 닫힌 시장은 받을 체결이 없어 빼므로 실제로는
- * 더 적다. 앞쪽 탭부터 채우므로 한도를 넘어도 잘리는 건 뒤쪽 탭의 행이다.
+ * 탭은 거래대금·급상승·급하락·스코어라 시장당 최대 40개이고 연결당 한도 {@value #MAX_SUBSCRIPTIONS}개 안에 든다.
+ *
+ * <p>한 번에 한 시장만 구독한다. 국내장(NXT 포함)이 열려 있으면 국내만, 닫혀 있으면 미국 프리·정규·애프터마켓을
+ * 구독한다. 미국 시간대가 겹치는 국내 08:00 이후에는 국내가 우선이다.
  */
 @Component
 @RequiredArgsConstructor
@@ -31,7 +31,6 @@ public class RankingRealtimeTargetResolver {
     static final int TOP_ROWS_PER_TAB = 10;
     static final int MAX_SUBSCRIPTIONS = 100;
 
-    private static final String SCOPE_ALL = "all";
     private static final List<String> SORTS = List.of(
         TossMarketRankingCache.SORT_AMOUNT,
         TossMarketRankingCache.SORT_GAINERS,
@@ -44,25 +43,10 @@ public class RankingRealtimeTargetResolver {
 
     public Map<TossRealtimeMarket, List<String>> resolve() {
         Map<TossRealtimeMarket, List<String>> targets = new EnumMap<>(TossRealtimeMarket.class);
-        boolean domesticOpen = domesticMarketCalendarCache.isMarketOpenNow();
-        boolean overseasOpen = overseasMarketCalendarCache.isMarketOpenNow();
-        if (!domesticOpen && !overseasOpen) {
-            return targets;
-        }
-        // 스코어의 "전체" 탭은 양쪽 시장이 섞여 있어 시장별로 나눠 넣는다.
-        List<ScoreRankingResponse> allScores = scoreService.getAllStocksScoreRanking(TOP_ROWS_PER_TAB, SCOPE_ALL);
-        int remaining = MAX_SUBSCRIPTIONS;
-        if (domesticOpen) {
-            Set<String> codes = topCodes(TossMarketRankingCache.SCOPE_DOMESTIC);
-            allScores.stream().filter(score -> !score.overseas()).map(ScoreRankingResponse::stockCode).forEach(codes::add);
-            List<String> limited = limit(codes, remaining);
-            targets.put(TossRealtimeMarket.KR, limited);
-            remaining -= limited.size();
-        }
-        if (overseasOpen) {
-            Set<String> codes = topCodes(TossMarketRankingCache.SCOPE_OVERSEAS);
-            allScores.stream().filter(ScoreRankingResponse::overseas).map(ScoreRankingResponse::stockCode).forEach(codes::add);
-            targets.put(TossRealtimeMarket.US, limit(codes, remaining));
+        if (domesticMarketCalendarCache.isMarketOpenNow()) {
+            targets.put(TossRealtimeMarket.KR, limit(topCodes(TossMarketRankingCache.SCOPE_DOMESTIC)));
+        } else if (overseasMarketCalendarCache.isExtendedSessionOpenNow()) {
+            targets.put(TossRealtimeMarket.US, limit(topCodes(TossMarketRankingCache.SCOPE_OVERSEAS)));
         }
         return targets;
     }
@@ -81,8 +65,7 @@ public class RankingRealtimeTargetResolver {
         return codes;
     }
 
-    private static List<String> limit(Set<String> codes, int max) {
-        List<String> ordered = new ArrayList<>(codes);
-        return ordered.size() > max ? List.copyOf(ordered.subList(0, max)) : List.copyOf(ordered);
+    private static List<String> limit(Set<String> codes) {
+        return codes.stream().limit(MAX_SUBSCRIPTIONS).toList();
     }
 }

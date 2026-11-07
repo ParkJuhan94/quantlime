@@ -240,6 +240,39 @@ class TossRealtimeTradeRelayTest {
     }
 
     @Test
+    @DisplayName("[미국 체결은 정규장 밖이어도 확장 세션이 열려 있으면 발행한다]")
+    void publishesUsTradeDuringExtendedSession() {
+        // given
+        TossRealtimeListener listener = connectedListener();
+        given(overseasCalendar.isExtendedSessionOpenNow()).willReturn(true);
+        given(overseasPreviousClose.get(anyList())).willReturn(Map.of("AAPL", 200.0));
+        listener.onTrade(new TossRealtimeTrade(TossRealtimeMarket.US, "AAPL", 202.0, 5,
+            OffsetDateTime.ofInstant(clock.instant(), ZoneOffset.ofHours(9))));
+
+        // when
+        relay.flush();
+
+        // then
+        verify(messagingTemplate).convertAndSend(eq("/topic/price.AAPL"), any(Object.class));
+    }
+
+    @Test
+    @DisplayName("[미국 확장 세션이 닫혔으면 미국 체결을 발행하지 않는다]")
+    void skipsUsTradeWhenExtendedSessionClosed() {
+        // given
+        TossRealtimeListener listener = connectedListener();
+        given(overseasCalendar.isExtendedSessionOpenNow()).willReturn(false);
+        listener.onTrade(new TossRealtimeTrade(TossRealtimeMarket.US, "AAPL", 202.0, 5,
+            OffsetDateTime.ofInstant(clock.instant(), ZoneOffset.ofHours(9))));
+
+        // when
+        relay.flush();
+
+        // then
+        verify(messagingTemplate, never()).convertAndSend(anyString(), any(Object.class));
+    }
+
+    @Test
     @DisplayName("[연결이 끊기면 백오프가 지난 뒤에만 다시 접속한다 - 다른 쪽 연결을 밀어내는 반복을 막는다]")
     void reconnectsAfterBackoff() {
         // given

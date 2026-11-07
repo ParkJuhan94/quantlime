@@ -248,7 +248,7 @@ public class TossRealtimeTradeRelay {
     private boolean isMarketOpen(TossRealtimeMarket market) {
         return market == TossRealtimeMarket.KR
             ? domesticMarketCalendarCache.isMarketOpenNow()
-            : overseasMarketCalendarCache.isMarketOpenNow();
+            : overseasMarketCalendarCache.isExtendedSessionOpenNow();
     }
 
     private void publish(List<TossRealtimeTrade> trades, TossRealtimeMarket market, PreviousCloseCache previousCloses) {

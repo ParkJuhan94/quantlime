@@ -149,6 +149,51 @@ class OverseasMarketCalendarCacheTest {
         verify(tossApiClient, times(1)).getUsMarketCalendar();
     }
 
+    @Test
+    @DisplayName("[프리마켓 시간대는 정규장 게이트에선 닫힘, 확장 세션 게이트에선 열림이다]")
+    void isExtendedSessionOpenNow_withinPreMarket_returnsTrueWhileRegularGateStaysClosed() {
+        // given
+        OffsetDateTime now = OffsetDateTime.now();
+        MarketSession preMarket = new MarketSession(now.minusHours(1).toString(), now.plusHours(1).toString());
+        UsMarketDay today = new UsMarketDay("2026-11-06", null, preMarket, null, null);
+        UsMarketDay noSession = new UsMarketDay("x", null, null, null, null);
+        given(tossApiClient.getUsMarketCalendar()).willReturn(
+            new TossUsMarketCalendarResponse(new UsMarketCalendarResult(noSession, today, noSession)));
+
+        // when & then
+        assertThat(overseasMarketCalendarCache.isExtendedSessionOpenNow()).isTrue();
+        assertThat(overseasMarketCalendarCache.isMarketOpenNow()).isFalse();
+    }
+
+    @Test
+    @DisplayName("[전 영업일 애프터마켓이 이어지는 동안에도 확장 세션은 열림이다]")
+    void isExtendedSessionOpenNow_withinPreviousDayAfterMarket_returnsTrue() {
+        // given
+        OffsetDateTime now = OffsetDateTime.now();
+        MarketSession afterMarket = new MarketSession(now.minusHours(1).toString(), now.plusHours(1).toString());
+        UsMarketDay previous = new UsMarketDay("2026-11-05", null, null, null, afterMarket);
+        UsMarketDay noSession = new UsMarketDay("x", null, null, null, null);
+        given(tossApiClient.getUsMarketCalendar()).willReturn(
+            new TossUsMarketCalendarResponse(new UsMarketCalendarResult(previous, noSession, noSession)));
+
+        // when & then
+        assertThat(overseasMarketCalendarCache.isExtendedSessionOpenNow()).isTrue();
+    }
+
+    @Test
+    @DisplayName("[데이마켓만 열린 시간대는 확장 세션에 포함하지 않는다]")
+    void isExtendedSessionOpenNow_onlyDayMarket_returnsFalse() {
+        // given
+        OffsetDateTime now = OffsetDateTime.now();
+        MarketSession dayMarket = new MarketSession(now.minusHours(1).toString(), now.plusHours(1).toString());
+        UsMarketDay today = new UsMarketDay("2026-11-06", dayMarket, null, null, null);
+        given(tossApiClient.getUsMarketCalendar()).willReturn(
+            new TossUsMarketCalendarResponse(new UsMarketCalendarResult(today, today, today)));
+
+        // when & then
+        assertThat(overseasMarketCalendarCache.isExtendedSessionOpenNow()).isFalse();
+    }
+
     private UsMarketDay dayWithRegularMarket(OffsetDateTime start, OffsetDateTime end) {
         MarketSession regularMarket = new MarketSession(start.toString(), end.toString());
         return new UsMarketDay("2026-07-29", null, null, regularMarket, null);
